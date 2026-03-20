@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Team Dashboard</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>Team Dashboard</h1>
+    <div id="connection-status" class="status-dot" title="Disconnected"></div>
+  </header>
+
+  <main>
+    <section id="agents-panel">
+      <div class="panel-header">Agents</div>
+      <div id="agents-container">
+        <svg id="comms-overlay" aria-hidden="true"></svg>
+      </div>
+    </section>
+
+    <section id="kanban-panel">
+      <div id="active-column">
+        <div class="panel-header kanban-header-active">In Progress</div>
+        <div id="active-tasks" class="task-list"></div>
+      </div>
+      <div id="backlog-column">
+        <div class="panel-header">Backlog</div>
+        <div id="backlog-tasks" class="task-list"></div>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

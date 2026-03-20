@@ -1,0 +1,324 @@
+:root {
+  --bg:           #0d1117;
+  --surface:      #161b22;
+  --surface-2:    #21262d;
+  --border:       #30363d;
+  --border-hover: #484f58;
+  --text:         #e6edf3;
+  --text-muted:   #8b949e;
+
+  --hat-white:  #e6edf3;
+  --hat-red:    #f85149;
+  --hat-black:  #8b949e;
+  --hat-yellow: #e3b341;
+  --hat-green:  #3fb950;
+  --hat-blue:   #58a6ff;
+
+  --state-idle:       #8b949e;
+  --state-working:    #1f6feb;
+  --state-waiting:    #d29922;
+  --state-discussing: #8957e5;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Header ─────────────────────────────────────────── */
+header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 20px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  height: 44px;
+}
+
+header h1 {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--state-waiting);
+  margin-left: auto;
+  transition: background 0.3s;
+}
+.status-dot.connected { background: var(--hat-green); }
+
+/* ── Layout ──────────────────────────────────────────── */
+main {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  flex: 1;
+  overflow: hidden;
+}
+
+.panel-header {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  padding: 12px 16px 10px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.kanban-header-active { color: #58a6ff; }
+
+/* ── Agents Panel ─────────────────────────────────────── */
+#agents-panel {
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+#agents-container {
+  flex: 1;
+  overflow-y: auto;
+  position: relative;
+  padding: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 8px;
+}
+
+#comms-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 5;
+  overflow: visible;
+}
+
+/* ── Agent Cards ──────────────────────────────────────── */
+.agent-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  width: calc(50% - 4px);
+  overflow: hidden;
+  flex-shrink: 0;
+  transition: border-color 0.3s, box-shadow 0.3s;
+  position: relative;
+  z-index: 1;
+}
+
+.agent-card.communicating {
+  border-color: var(--state-discussing);
+  box-shadow: 0 0 0 1px var(--state-discussing),
+              0 4px 20px rgba(137, 87, 229, 0.25);
+}
+
+.agent-hat-bar { height: 3px; }
+
+.agent-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 11px 5px;
+}
+
+.agent-name {
+  font-size: 13px;
+  font-weight: 600;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.agent-hat-badge {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  padding: 2px 5px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+.agent-state {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 11px 6px;
+}
+
+.state-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.state-label {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.state-dot.idle         { background: var(--state-idle); }
+.state-dot.working      { background: var(--state-working);    animation: blink 1.5s infinite; }
+.state-dot.waiting_for_help { background: var(--state-waiting); animation: blink 1s infinite; }
+.state-dot.in_discussion { background: var(--state-discussing); animation: blink 0.8s infinite; }
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.25; }
+}
+
+.agent-activity {
+  padding: 0 11px 10px;
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  min-height: 30px;
+}
+
+.agent-activity-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.agent-talking-to {
+  margin-top: 3px;
+  font-size: 10px;
+  color: var(--state-discussing);
+  font-weight: 500;
+}
+
+/* ── Kanban Panel ─────────────────────────────────────── */
+#kanban-panel {
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+#active-column {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  border-bottom: 2px solid var(--border);
+}
+
+#backlog-column {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+}
+
+.task-list {
+  padding: 8px 10px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+#active-tasks { max-height: 260px; }
+#backlog-tasks { flex: 1; }
+
+/* ── Task Cards ───────────────────────────────────────── */
+.task-card {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 9px 11px;
+  transition: border-color 0.2s;
+}
+.task-card:hover { border-color: var(--border-hover); }
+
+.task-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin-bottom: 6px;
+}
+
+.task-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+.task-status-dot.pending  { background: var(--text-muted); }
+.task-status-dot.active   { background: var(--state-working); animation: blink 1.5s infinite; }
+.task-status-dot.complete { background: var(--hat-green); }
+.task-status-dot.blocked  { background: var(--hat-red); }
+
+.task-description {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text);
+  flex: 1;
+}
+
+.task-footer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.task-assignee {
+  font-size: 10px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.hat-pip {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.task-badge {
+  margin-left: auto;
+  font-size: 10px;
+  text-transform: capitalize;
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-weight: 500;
+}
+.task-badge.pending  { background: rgba(139,148,158,0.15); color: var(--text-muted); }
+.task-badge.active   { background: rgba(31,111,235,0.2);   color: #58a6ff; }
+.task-badge.complete { background: rgba(63,185,80,0.2);    color: #3fb950; }
+.task-badge.blocked  { background: rgba(248,81,73,0.2);    color: #f85149; }
+
+.empty-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 6px 0;
+  font-style: italic;
+}
+
+/* ── Scrollbars ───────────────────────────────────────── */
+::-webkit-scrollbar              { width: 5px; }
+::-webkit-scrollbar-track        { background: transparent; }
+::-webkit-scrollbar-thumb        { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover  { background: var(--border-hover); }
