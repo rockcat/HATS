@@ -17,6 +17,7 @@ export interface StoredEvent {
 export class EventStore {
   private filePath: string;
   private writeQueue: Promise<void> = Promise.resolve();
+  private subscribers: Array<(event: StoredEvent) => void> = [];
 
   constructor(filePath: string) {
     this.filePath = filePath;
@@ -27,6 +28,12 @@ export class EventStore {
     // Touch file if it doesn't exist
     const handle = await fs.open(this.filePath, 'a');
     await handle.close();
+  }
+
+  /** Subscribe to every new event as it is appended. */
+  subscribe(fn: (event: StoredEvent) => void): () => void {
+    this.subscribers.push(fn);
+    return () => { this.subscribers = this.subscribers.filter((s) => s !== fn); };
   }
 
   /** Append one event and return it (with generated id and timestamp). */
@@ -42,6 +49,11 @@ export class EventStore {
     this.writeQueue = this.writeQueue.then(() =>
       fs.appendFile(this.filePath, JSON.stringify(event) + '\n', 'utf-8'),
     );
+
+    // Notify subscribers immediately (don't wait for disk write)
+    for (const fn of this.subscribers) {
+      try { fn(event); } catch { /* subscriber errors must not break the store */ }
+    }
 
     return this.writeQueue.then(() => event);
   }

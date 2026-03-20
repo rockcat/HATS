@@ -163,6 +163,16 @@ export class TeamOrchestrator {
 
   // ── Human interface wiring ────────────────────────────────────────────────
 
+  /** Subscribe to every event appended to the event log. Returns unsubscribe fn. */
+  onEvent(fn: (event: import('../store/event-store.js').StoredEvent) => void): () => void {
+    return this.store.subscribe(fn);
+  }
+
+  /** Read events from the log (for API / replay). */
+  async readEvents(since?: string): Promise<import('../store/event-store.js').StoredEvent[]> {
+    return since ? this.store.readSince(since) : this.store.readAll();
+  }
+
   /** Called by CLI when human escalations need surfacing. */
   onEscalation(handler: (from: string, message: string, urgency: string) => void): void {
     this.onHumanEscalation = handler;

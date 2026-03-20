@@ -11,6 +11,7 @@
 import { existsSync } from 'fs';
 import { TeamOrchestrator } from './src/orchestrator/orchestrator.js';
 import { CLIInterface } from './src/human/cli-interface.js';
+import { APIServer } from './src/api/api-server.js';
 import { AnthropicProvider } from './src/providers/anthropic.js';
 import { HatType } from './src/hats/types.js';
 
@@ -133,7 +134,15 @@ async function main() {
   console.log('\nEvents logged to team-events.jsonl');
   console.log(`State will be saved to ${STATE_FILE} on exit (Ctrl+C)\n`);
 
+  // ── API server ────────────────────────────────────────────────────────────
+  const api = new APIServer(orchestrator, {
+    port: 3001,
+    kanbanPath: './kanban-board.json',
+  });
+  api.start();
+
   process.on('SIGINT', async () => {
+    api.stop();
     await orchestrator.shutdown(STATE_FILE);
     process.exit(0);
   });
