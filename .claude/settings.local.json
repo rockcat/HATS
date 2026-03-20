@@ -4,7 +4,9 @@
       "Bash(npx tsc:*)",
       "Bash(npx vitest:*)",
       "Bash(npm list:*)",
-      "Bash(npx tsx:*)"
+      "Bash(npx tsx:*)",
+      "Bash(xargs grep:*)",
+      "Bash(npm install:*)"
     ]
   }
 }
