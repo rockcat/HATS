@@ -1,31 +1,60 @@
 import OpenAI from 'openai';
-import { AIProvider, CompletionRequest, CompletionResponse, ProviderError } from './types.js';
+import {
+  AIProvider, CompletionRequest, CompletionResponse, ProviderError,
+  Message, ToolCall,
+} from './types.js';
+import { withRetry } from './retry.js';
 
 export class OpenAIProvider implements AIProvider {
-  readonly name = 'openai';
+  readonly name: string;
   private client: OpenAI;
 
-  constructor(apiKey?: string) {
-    this.client = new OpenAI({ apiKey: apiKey ?? process.env['OPENAI_API_KEY'] });
+  constructor(apiKey?: string, baseURL?: string, name = 'openai') {
+    this.name = name;
+    this.client = new OpenAI({
+      apiKey: apiKey ?? process.env['OPENAI_API_KEY'],
+      ...(baseURL ? { baseURL } : {}),
+    });
   }
 
   async complete(req: CompletionRequest): Promise<CompletionResponse> {
+    return withRetry(() => this.doComplete(req));
+  }
+
+  private async doComplete(req: CompletionRequest): Promise<CompletionResponse> {
     try {
+      const tools = req.tools?.map((t) => ({
+        type: 'function' as const,
+        function: {
+          name: t.name,
+          description: t.description,
+          parameters: t.parameters,
+        },
+      }));
+
       const response = await this.client.chat.completions.create({
         model: req.model,
         max_tokens: req.maxTokens ?? 1024,
         messages: [
           { role: 'system', content: req.systemPrompt },
-          ...req.messages,
+          ...toOpenAIMessages(req.messages),
         ],
+        ...(tools && tools.length > 0 ? { tools } : {}),
         ...(req.temperature !== undefined ? { temperature: req.temperature } : {}),
       });
 
       const choice = response.choices[0];
-      if (!choice) throw new Error('No choices returned from OpenAI');
+      if (!choice) throw new Error('No choices returned');
+
+      const toolCalls: ToolCall[] = (choice.message.tool_calls ?? []).map((tc) => ({
+        id: tc.id,
+        name: tc.function.name,
+        arguments: JSON.parse(tc.function.arguments) as Record<string, unknown>,
+      }));
 
       return {
         content: choice.message.content ?? '',
+        toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
         inputTokens: response.usage?.prompt_tokens ?? 0,
         outputTokens: response.usage?.completion_tokens ?? 0,
         stopReason: choice.finish_reason ?? 'stop',
@@ -34,11 +63,43 @@ export class OpenAIProvider implements AIProvider {
     } catch (err) {
       if (err instanceof ProviderError) throw err;
       const error = err as { status?: number; message?: string };
-      throw new ProviderError(
-        error.message ?? 'OpenAI API error',
-        this.name,
-        error.status,
-      );
+      throw new ProviderError(error.message ?? 'OpenAI API error', this.name, error.status);
     }
   }
+}
+
+/** Local Ollama via OpenAI-compatible endpoint */
+export class OllamaProvider extends OpenAIProvider {
+  constructor(baseURL = 'http://localhost:11434/v1', model?: string) {
+    super('ollama', baseURL, 'ollama');
+    void model; // model is passed per-request in CompletionRequest
+  }
+}
+
+function toOpenAIMessages(messages: Message[]): OpenAI.ChatCompletionMessageParam[] {
+  return messages.map((msg): OpenAI.ChatCompletionMessageParam => {
+    if (msg.role === 'user') {
+      return { role: 'user', content: msg.content };
+    }
+    if (msg.role === 'assistant') {
+      if (msg.toolCalls && msg.toolCalls.length > 0) {
+        return {
+          role: 'assistant',
+          content: msg.content || null,
+          tool_calls: msg.toolCalls.map((tc) => ({
+            id: tc.id,
+            type: 'function' as const,
+            function: { name: tc.name, arguments: JSON.stringify(tc.arguments) },
+          })),
+        };
+      }
+      return { role: 'assistant', content: msg.content };
+    }
+    // tool role
+    return {
+      role: 'tool',
+      tool_call_id: msg.toolCallId ?? '',
+      content: msg.content,
+    };
+  });
 }
