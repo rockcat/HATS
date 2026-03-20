@@ -1,14 +1,20 @@
 import { v4 as uuidv4 } from 'uuid';
+import { readFile, writeFile } from 'fs/promises';
 import { renderMarkdown } from '../human/markdown.js';
 import { Agent } from '../agent/agent.js';
-import { AgentConfig } from '../agent/types.js';
+import { AgentConfig, AgentMessage } from '../agent/types.js';
 import { HatType } from '../hats/types.js';
-import { ToolCall } from '../providers/types.js';
+import { AIProvider, ToolCall } from '../providers/types.js';
 import { EventStore } from '../store/event-store.js';
 import { MCPRegistry } from '../mcp/mcp-registry.js';
 import { MCPServerDef } from '../mcp/mcp-client.js';
+import { Semaphore } from '../providers/semaphore.js';
+import { TeamSnapshot, AgentSnapshot, SNAPSHOT_VERSION } from '../store/team-snapshot.js';
 import { MeetingRoom } from './meeting-room.js';
 import { TeamMessage, Task, Meeting, MeetingTurn } from './types.js';
+
+/** Called during loadState to reconstruct a provider from its saved name. */
+export type ProviderFactory = (providerName: string) => AIProvider;
 
 export interface OrchestratorConfig {
   storePath?: string;           // path to JSONL event log; default './team-events.jsonl'
@@ -26,6 +32,7 @@ export class TeamOrchestrator {
   private onHumanEscalation: ((from: string, message: string, urgency: string) => void) | null = null;
   private rebuildTimer: ReturnType<typeof setTimeout> | null = null;
   private mcp = new MCPRegistry();
+  private llmSemaphore = new Semaphore(3); // max 3 concurrent LLM calls across all agents
 
   constructor(config: OrchestratorConfig = {}) {
     this.store = new EventStore(config.storePath ?? './team-events.jsonl');
@@ -45,9 +52,92 @@ export class TeamOrchestrator {
     this.rebuildTeamContext();
   }
 
-  async shutdown(): Promise<void> {
+  async shutdown(snapshotPath?: string): Promise<void> {
+    if (snapshotPath) await this.saveState(snapshotPath);
     await this.mcp.disconnectAll();
     await this.store.append('session_end', {});
+  }
+
+  // ── State persistence ─────────────────────────────────────────────────────
+
+  /** Save full team state to a JSON file. */
+  async saveState(path: string): Promise<void> {
+    const agentSnapshots: AgentSnapshot[] = Array.from(this.agents.values()).map((agent) => ({
+      identity: agent.config.identity,
+      hatType: agent.config.hatType,
+      model: agent.config.model,
+      providerName: agent.config.provider.name,
+      teamContext: agent.config.teamContext,
+      history: agent.getHistory().map((m) => ({
+        role: m.role,
+        content: m.content,
+        timestamp: m.timestamp instanceof Date ? m.timestamp.toISOString() : String(m.timestamp),
+        toolCalls: m.toolCalls,
+        toolCallId: m.toolCallId,
+        toolName: m.toolName,
+      })),
+    }));
+
+    const snapshot: TeamSnapshot = {
+      version: SNAPSHOT_VERSION,
+      savedAt: new Date().toISOString(),
+      humanName: this.humanName,
+      agents: agentSnapshots,
+      tasks: Array.from(this.tasks.values()),
+      meetings: Array.from(this.meetings.values()),
+      mcpServers: this.mcp.getServerDefs(),
+    };
+
+    await writeFile(path, JSON.stringify(snapshot, null, 2), 'utf-8');
+    await this.store.append('state_saved', { path, agentCount: agentSnapshots.length });
+    console.log(`\n[Team] State saved to ${path}`);
+  }
+
+  /**
+   * Restore team state from a snapshot file.
+   * Call after init() but before the CLI starts.
+   * The providerFactory maps a saved providerName back to a live AIProvider instance.
+   * Returns the list of MCPServerDef that were in the snapshot so the caller can
+   * decide whether to reconnect them (they are NOT reconnected automatically — call
+   * addMCPServer yourself if you want them back).
+   */
+  async loadState(path: string, providerFactory: ProviderFactory): Promise<MCPServerDef[]> {
+    const raw = await readFile(path, 'utf-8');
+    const snapshot = JSON.parse(raw) as TeamSnapshot;
+
+    if (snapshot.version !== SNAPSHOT_VERSION) {
+      throw new Error(`Snapshot version mismatch: expected ${SNAPSHOT_VERSION}, got ${snapshot.version}`);
+    }
+
+    // Restore agents
+    for (const snap of snapshot.agents) {
+      const provider = providerFactory(snap.providerName);
+      const config: AgentConfig = {
+        identity: snap.identity,
+        hatType: snap.hatType,
+        provider,
+        model: snap.model,
+        teamContext: snap.teamContext,
+      };
+      const agent = this.registerAgent(config);
+      // Restore history (timestamps are ISO strings in the snapshot)
+      agent.setHistory(snap.history as AgentMessage[]);
+    }
+
+    // Restore tasks
+    for (const task of snapshot.tasks) {
+      this.tasks.set(task.id, task);
+    }
+
+    // Restore meeting records (read-only history — rooms are not re-opened)
+    for (const meeting of snapshot.meetings) {
+      this.meetings.set(meeting.id, meeting);
+    }
+
+    await this.store.append('state_loaded', { path, agentCount: snapshot.agents.length });
+    console.log(`[Team] State restored from ${path} (saved ${snapshot.savedAt})`);
+
+    return snapshot.mcpServers;
   }
 
   // ── Agent registration ────────────────────────────────────────────────────
@@ -57,6 +147,7 @@ export class TeamOrchestrator {
     agent.setToolExecutor(this.makeToolExecutor());
     agent.setResponseHandler(this.makeResponseHandler());
     agent.setExtraToolsProvider(() => this.mcp.getAllTools());
+    agent.setLLMSemaphore(this.llmSemaphore);
     this.agents.set(agent.name, agent);
     this.rebuildTeamContext();
     return agent;

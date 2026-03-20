@@ -7,6 +7,7 @@ import { getToolsForHat } from '../tools/definitions.js';
 import { TeamMessage } from '../orchestrator/types.js';
 import { AgentConfig, AgentMessage, AgentState, AgentEvent, ToolExecutor, ResponseHandler } from './types.js';
 import { transition } from './state-machine.js';
+import { Semaphore } from '../providers/semaphore.js';
 
 const MAX_TOOL_ROUNDS = 10; // prevent infinite tool loops
 
@@ -21,6 +22,7 @@ export class Agent {
   private toolExecutor: ToolExecutor | null = null;
   private responseHandler: ResponseHandler | null = null;
   private extraToolsProvider: (() => import('../providers/types.js').ToolDefinition[]) | null = null;
+  private llmSemaphore: Semaphore | null = null;
 
   constructor(config: AgentConfig) {
     this.id = uuidv4();
@@ -39,6 +41,11 @@ export class Agent {
 
   setResponseHandler(handler: ResponseHandler): void {
     this.responseHandler = handler;
+  }
+
+  /** Shared semaphore to cap concurrent LLM calls across all agents. */
+  setLLMSemaphore(semaphore: Semaphore): void {
+    this.llmSemaphore = semaphore;
   }
 
   /** Provider function that returns extra tools (e.g. MCP) to merge at call time. */
@@ -110,7 +117,9 @@ export class Agent {
         tools,
       };
 
-      const response = await this.config.provider.complete(req);
+      const response = await (this.llmSemaphore
+        ? this.llmSemaphore.run(() => this.config.provider.complete(req))
+        : this.config.provider.complete(req));
 
       if (response.toolCalls && response.toolCalls.length > 0) {
         // Add assistant message with tool calls to working history
@@ -165,12 +174,10 @@ export class Agent {
     ];
 
     for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-      const response = await this.config.provider.complete({
-        systemPrompt: this.systemPrompt,
-        messages: working,
-        model: this.config.model,
-        tools,
-      });
+      const req2 = { systemPrompt: this.systemPrompt, messages: working, model: this.config.model, tools };
+      const response = await (this.llmSemaphore
+        ? this.llmSemaphore.run(() => this.config.provider.complete(req2))
+        : this.config.provider.complete(req2));
 
       if (response.toolCalls && response.toolCalls.length > 0) {
         working.push({ role: 'assistant', content: response.content, toolCalls: response.toolCalls });
@@ -247,6 +254,14 @@ export class Agent {
   }
 
   getHistory(): AgentMessage[] { return [...this.conversationHistory]; }
+
+  /** Restore conversation history (e.g. from a saved snapshot). */
+  setHistory(history: AgentMessage[]): void {
+    this.conversationHistory = history.map((m) => ({
+      ...m,
+      timestamp: m.timestamp instanceof Date ? m.timestamp : new Date(m.timestamp),
+    }));
+  }
 
   toJSON(): object {
     return {
