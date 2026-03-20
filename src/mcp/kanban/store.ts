@@ -1,0 +1,152 @@
+import * as fs from 'fs/promises';
+import * as path from 'path';
+import { v4 as uuidv4 } from 'uuid';
+import { Board, Column, Comment, Priority, Ticket } from './types.js';
+
+const EMPTY_BOARD: Board = { tickets: {}, nextSeq: 1 };
+
+export class KanbanStore {
+  private board: Board = { tickets: {}, nextSeq: 1 };
+  private filePath: string;
+  private saveQueue: Promise<void> = Promise.resolve();
+
+  constructor(filePath: string) {
+    this.filePath = filePath;
+  }
+
+  async load(): Promise<void> {
+    await fs.mkdir(path.dirname(this.filePath), { recursive: true });
+    try {
+      const raw = await fs.readFile(this.filePath, 'utf-8');
+      this.board = JSON.parse(raw) as Board;
+    } catch {
+      this.board = structuredClone(EMPTY_BOARD);
+      await this.persist();
+    }
+  }
+
+  // ── Queries ────────────────────────────────────────────────────────────────
+
+  getTicket(id: string): Ticket | undefined {
+    return this.board.tickets[id];
+  }
+
+  listTickets(opts: { column?: Column; assignee?: string; tag?: string } = {}): Ticket[] {
+    return Object.values(this.board.tickets).filter((t) => {
+      if (opts.column && t.column !== opts.column) return false;
+      if (opts.assignee && t.assignee !== opts.assignee) return false;
+      if (opts.tag && !t.tags.includes(opts.tag)) return false;
+      return true;
+    }).sort((a, b) => {
+      // Sort by priority then creation date
+      const pri: Record<Priority, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+      return (pri[a.priority] - pri[b.priority]) || a.createdAt.localeCompare(b.createdAt);
+    });
+  }
+
+  getBoardSummary(): Record<Column, { count: number; tickets: Array<{ id: string; title: string; priority: Priority; assignee?: string }> }> {
+    const columns: Column[] = ['backlog', 'ready', 'in_progress', 'blocked', 'completed'];
+    const result = {} as ReturnType<typeof this.getBoardSummary>;
+    for (const col of columns) {
+      const tickets = this.listTickets({ column: col });
+      result[col] = {
+        count: tickets.length,
+        tickets: tickets.map((t) => ({ id: t.id, title: t.title, priority: t.priority, assignee: t.assignee })),
+      };
+    }
+    return result;
+  }
+
+  // ── Mutations ──────────────────────────────────────────────────────────────
+
+  createTicket(fields: {
+    title: string;
+    description: string;
+    priority?: Priority;
+    creator: string;
+    assignee?: string;
+    tags?: string[];
+  }): Ticket {
+    const id = `TKT-${String(this.board.nextSeq).padStart(3, '0')}`;
+    this.board.nextSeq++;
+
+    const ticket: Ticket = {
+      id,
+      title: fields.title,
+      description: fields.description,
+      priority: fields.priority ?? 'medium',
+      column: 'backlog',
+      creator: fields.creator,
+      assignee: fields.assignee,
+      tags: fields.tags ?? [],
+      comments: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    this.board.tickets[id] = ticket;
+    this.save();
+    return ticket;
+  }
+
+  moveTicket(id: string, column: Column): Ticket {
+    const ticket = this.requireTicket(id);
+    ticket.column = column;
+    ticket.updatedAt = new Date().toISOString();
+    this.save();
+    return ticket;
+  }
+
+  assignTicket(id: string, assignee: string): Ticket {
+    const ticket = this.requireTicket(id);
+    ticket.assignee = assignee;
+    ticket.updatedAt = new Date().toISOString();
+    this.save();
+    return ticket;
+  }
+
+  updateTicket(id: string, fields: Partial<Pick<Ticket, 'title' | 'description' | 'priority' | 'tags'>>): Ticket {
+    const ticket = this.requireTicket(id);
+    Object.assign(ticket, fields);
+    ticket.updatedAt = new Date().toISOString();
+    this.save();
+    return ticket;
+  }
+
+  addComment(id: string, author: string, text: string): Ticket {
+    const ticket = this.requireTicket(id);
+    const comment: Comment = {
+      id: uuidv4(),
+      author,
+      text,
+      ts: new Date().toISOString(),
+    };
+    ticket.comments.push(comment);
+    ticket.updatedAt = new Date().toISOString();
+    this.save();
+    return ticket;
+  }
+
+  deleteTicket(id: string): void {
+    this.requireTicket(id);
+    delete this.board.tickets[id];
+    this.save();
+  }
+
+  // ── Persistence ────────────────────────────────────────────────────────────
+
+  private requireTicket(id: string): Ticket {
+    const ticket = this.board.tickets[id];
+    if (!ticket) throw new Error(`Ticket "${id}" not found`);
+    return ticket;
+  }
+
+  private save(): void {
+    this.saveQueue = this.saveQueue.then(() =>
+      fs.writeFile(this.filePath, JSON.stringify(this.board, null, 2), 'utf-8'),
+    );
+  }
+
+  private async persist(): Promise<void> {
+    await fs.writeFile(this.filePath, JSON.stringify(this.board, null, 2), 'utf-8');
+  }
+}
