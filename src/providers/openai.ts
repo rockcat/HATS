@@ -95,7 +95,6 @@ function toOpenAIMessages(messages: Message[]): OpenAI.ChatCompletionMessagePara
       }
       return { role: 'assistant', content: msg.content };
     }
-    // tool role
     return {
       role: 'tool',
       tool_call_id: msg.toolCallId ?? '',

@@ -31,13 +31,17 @@ export class MCPClient {
   private client: Client;
   private tools: ToolDefinition[] = [];
   private connected = false;
+  private _def: MCPServerDef | null = null;
 
   constructor(serverName: string) {
     this.serverName = serverName;
     this.client = new Client({ name: 'personality-agent', version: '1.0.0' });
   }
 
+  getDef(): MCPServerDef | null { return this._def; }
+
   async connect(config: MCPServerConfig): Promise<void> {
+    this._def = { name: this.serverName, config };
     const transport = config.transport === 'stdio'
       ? new StdioClientTransport({
           command: config.command,

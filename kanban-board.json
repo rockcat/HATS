@@ -1,0 +1,183 @@
+{
+  "tickets": {
+    "TKT-001": {
+      "id": "TKT-001",
+      "title": "Define target market & ICP (Ideal Customer Profile)",
+      "description": "Research and document the Ideal Customer Profile for the GenAI training business. Focus on large organisations (500+ employees) across key sectors. Define firmographics, decision-maker personas (L&D leads, CIOs, HR Directors), and buying triggers. Identify top 10–20 target accounts to approach first.",
+      "priority": "high",
+      "column": "in_progress",
+      "creator": "Jordan",
+      "assignee": "Morgan",
+      "tags": [
+        "strategy",
+        "market-research",
+        "ICP"
+      ],
+      "comments": [],
+      "createdAt": "2026-03-20T08:06:49.411Z",
+      "updatedAt": "2026-03-20T08:10:12.129Z"
+    },
+    "TKT-002": {
+      "id": "TKT-002",
+      "title": "Design GenAI curriculum for non-technical staff",
+      "description": "Develop a structured training curriculum covering GenAI basics for non-technical employees. Should include: what GenAI is, how LLMs work at a conceptual level, practical use cases (writing, summarisation, analysis), prompt basics, and responsible AI use. Modular design preferred so content can be adapted per client. Target audience: large organisations with mixed digital literacy.",
+      "priority": "high",
+      "column": "in_progress",
+      "creator": "Jordan",
+      "assignee": "River",
+      "tags": [
+        "curriculum",
+        "product",
+        "content"
+      ],
+      "comments": [],
+      "createdAt": "2026-03-20T08:06:49.417Z",
+      "updatedAt": "2026-03-20T08:10:34.654Z"
+    },
+    "TKT-003": {
+      "id": "TKT-003",
+      "title": "Recruit and onboard human trainers",
+      "description": "Define the trainer profile required to deliver GenAI basics training to corporate audiences. Build a recruitment pipeline — consider freelance trainers, L&D professionals, and tech-literate facilitators. Create onboarding materials, a trainer handbook, and a quality standard for delivery. Target: initial cohort of 3–5 trainers ready before first client delivery.",
+      "priority": "high",
+      "column": "in_progress",
+      "creator": "Jordan",
+      "assignee": "Casey",
+      "tags": [
+        "people",
+        "trainers",
+        "recruitment"
+      ],
+      "comments": [],
+      "createdAt": "2026-03-20T08:06:49.419Z",
+      "updatedAt": "2026-03-20T08:10:26.066Z"
+    },
+    "TKT-004": {
+      "id": "TKT-004",
+      "title": "Develop commercial model & pricing strategy",
+      "description": "Define the commercial structure for selling GenAI training to large organisations. Consider: per-head pricing vs. day-rate, volume discounts, licensing of materials, retainer packages, and blended learning add-ons. Research competitor pricing. Produce a pricing deck and a draft proposal template for enterprise sales conversations.",
+      "priority": "high",
+      "column": "in_progress",
+      "creator": "Jordan",
+      "assignee": "Sam",
+      "tags": [
+        "commercial",
+        "pricing",
+        "strategy"
+      ],
+      "comments": [],
+      "createdAt": "2026-03-20T08:06:49.421Z",
+      "updatedAt": "2026-03-20T08:10:13.183Z"
+    },
+    "TKT-005": {
+      "id": "TKT-005",
+      "description": "Create the brand identity for DivaTech — our GenAI training business. Tasks include: finalise brand guidelines around the name DivaTech (visual identity, colour palette, typography, tone of voice). Produce core marketing assets: website landing page, one-page overview brochure, LinkedIn company presence, and a sales deck for enterprise prospects. Messaging should emphasise human-led delivery, practical application, and organisational readiness for the AI era.",
+      "column": "backlog",
+      "creator": "Jordan",
+      "assignee": "River",
+      "comments": [],
+      "createdAt": "2026-03-20T08:06:49.424Z",
+      "updatedAt": "2026-03-20T08:09:42.377Z"
+    },
+    "TKT-007": {
+      "id": "TKT-007",
+      "description": "Set up the legal and operational foundations for DivaTech. Tasks include: choose and register business entity type, register the name DivaTech, set up business banking, draft standard client contracts and trainer agreements, review GDPR/data protection obligations related to client employee data, and confirm IP ownership of training materials.",
+      "column": "ready",
+      "creator": "Jordan",
+      "assignee": "Alex",
+      "comments": [],
+      "createdAt": "2026-03-20T08:07:00.075Z",
+      "updatedAt": "2026-03-20T08:09:47.040Z"
+    },
+    "TKT-008": {
+      "id": "TKT-008",
+      "description": "Identify and close DivaTech's first pilot client from the large-organisation target market. A Middle Eastern bank has been identified as a warm lead — prioritise this relationship. Offer a discounted or structured pilot in exchange for a case study and testimonial. Note: banking sector in the Middle East may have specific regulatory, cultural, and language considerations — factor these into the approach. Define success criteria for the pilot, collect feedback, and use results to refine the product and commercial offer.",
+      "column": "backlog",
+      "creator": "Jordan",
+      "assignee": "Sam",
+      "tags": [
+        "sales",
+        "pilot",
+        "client",
+        "middle-east",
+        "banking"
+      ],
+      "comments": [],
+      "createdAt": "2026-03-20T08:07:00.077Z",
+      "updatedAt": "2026-03-20T08:09:42.381Z"
+    },
+    "TKT-009": {
+      "id": "TKT-009",
+      "title": "Design learner assessment & certification approach",
+      "description": "Define how learner outcomes will be measured at the end of training. Options to explore: knowledge check quizzes, practical exercises, digital badges, certificates of completion. Consider whether to partner with an awarding body for credibility with large corporate clients. Output: a learner assessment framework and a sample certificate design.",
+      "priority": "medium",
+      "column": "backlog",
+      "creator": "Jordan",
+      "assignee": "Morgan",
+      "tags": [
+        "product",
+        "assessment",
+        "certification"
+      ],
+      "comments": [],
+      "createdAt": "2026-03-20T08:07:00.080Z",
+      "updatedAt": "2026-03-20T08:09:31.280Z"
+    },
+    "TKT-010": {
+      "id": "TKT-010",
+      "title": "Define ideal trainer profile for DivaTech",
+      "description": "Develop a detailed ideal trainer profile for DivaTech GenAI training delivery. Must cover: core competencies (GenAI literacy, adult learning principles, corporate facilitation), personal qualities (empathy, adaptability, psychological safety in the room), and specialist requirements. Given the likely first client is a Middle Eastern bank, the profile should explicitly include: cultural awareness and cross-cultural communication skills, and ideally experience in financial services or regulated industries. Profile will feed directly into recruitment pipeline and screening criteria.",
+      "priority": "high",
+      "column": "backlog",
+      "creator": "Casey",
+      "assignee": "Casey",
+      "tags": [
+        "people",
+        "trainers",
+        "recruitment",
+        "cultural-awareness",
+        "financial-services"
+      ],
+      "comments": [],
+      "createdAt": "2026-03-20T08:10:26.067Z",
+      "updatedAt": "2026-03-20T08:10:26.067Z"
+    },
+    "TKT-011": {
+      "id": "TKT-011",
+      "title": "Build trainer recruitment pipeline",
+      "description": "Identify and build sourcing channels for the initial DivaTech trainer cohort (target: 3–5 trainers). Channels to explore: freelance platforms (e.g. Malt, Toptal, LinkedIn), L&D professional networks, tech-literate facilitator communities, and specialist diversity/inclusion networks given cross-cultural delivery needs. Screening process should assess GenAI knowledge, facilitation style, cultural competency (especially MENA region), and financial services familiarity where possible. Coordinate with Morgan for any market research on trainer availability and rates.",
+      "priority": "high",
+      "column": "backlog",
+      "creator": "Casey",
+      "assignee": "Casey",
+      "tags": [
+        "people",
+        "trainers",
+        "recruitment",
+        "pipeline"
+      ],
+      "comments": [],
+      "createdAt": "2026-03-20T08:10:26.069Z",
+      "updatedAt": "2026-03-20T08:10:26.069Z"
+    },
+    "TKT-012": {
+      "id": "TKT-012",
+      "title": "Produce trainer handbook and quality standards",
+      "description": "Create the DivaTech trainer handbook covering: DivaTech brand values and delivery philosophy, GenAI training content guidance, facilitation standards and quality expectations, how to handle emotionally charged AI anxiety in the room (fear of job loss, overwhelm, resistance), cultural sensitivity guidelines — with a specific section on MENA context and financial services environments. Also define quality standards: observation rubric, feedback mechanisms, and pass/fail criteria for onboarding sign-off. Should be ready before first trainer cohort completes onboarding.",
+      "priority": "high",
+      "column": "backlog",
+      "creator": "Casey",
+      "assignee": "Casey",
+      "tags": [
+        "people",
+        "trainers",
+        "handbook",
+        "quality",
+        "cultural-awareness"
+      ],
+      "comments": [],
+      "createdAt": "2026-03-20T08:10:26.071Z",
+      "updatedAt": "2026-03-20T08:10:26.071Z"
+    }
+  },
+  "nextSeq": 13
+}

@@ -29,6 +29,13 @@ export class MCPRegistry {
     return Array.from(this.clients.values()).some((c) => c.isMCPTool(toolName));
   }
 
+  /** Returns the server definitions for all connected servers (for snapshots). */
+  getServerDefs(): MCPServerDef[] {
+    return Array.from(this.clients.values())
+      .map((c) => c.getDef())
+      .filter((d): d is MCPServerDef => d !== null);
+  }
+
   /** Route a namespaced tool call to the correct MCP server. */
   async callTool(toolName: string, args: Record<string, unknown>): Promise<string> {
     const client = Array.from(this.clients.values()).find((c) => c.isMCPTool(toolName));
