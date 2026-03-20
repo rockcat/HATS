@@ -9,6 +9,7 @@
     "dev": "tsx src/index.ts",
     "test": "vitest run",
     "test:watch": "vitest",
+    "webui": "tsx webui-demo.ts",
     "postinstall": "node scripts/patch-grandiose.mjs"
   },
   "dependencies": {
