@@ -2,6 +2,10 @@ import * as http from 'node:http';
 import * as fs   from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { KanbanStore } from '../mcp/kanban/store.js';
+import type { Ticket } from '../mcp/kanban/types.js';
+
+export type { Ticket };
 
 const __dirname  = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -23,18 +27,38 @@ export interface AgentStatus {
   talkingTo?: string;
 }
 
-export interface TaskItem {
-  id:          string;
-  description: string;
-  assignedTo:  string;
-  status:      'pending' | 'active' | 'complete' | 'blocked';
-}
-
 // ── Server state ──────────────────────────────────────────────────────────────
 
 const clients: http.ServerResponse[] = [];
-let agents: AgentStatus[] = [];
-let tasks:  TaskItem[]    = [];
+let agents:  AgentStatus[] = [];
+let tickets: Ticket[]      = [];
+
+// ── Kanban store ──────────────────────────────────────────────────────────────
+
+let kanbanStore: KanbanStore | null = null;
+let watchDebounce: ReturnType<typeof setTimeout> | null = null;
+
+async function loadKanban(filePath: string) {
+  if (!kanbanStore) {
+    kanbanStore = new KanbanStore(filePath);
+    await kanbanStore.load();
+  }
+  tickets = kanbanStore.listTickets();
+}
+
+function watchKanban(filePath: string) {
+  fs.watch(filePath, () => {
+    // Debounce — the file may be written in multiple chunks
+    if (watchDebounce) clearTimeout(watchDebounce);
+    watchDebounce = setTimeout(async () => {
+      // Re-create the store so it re-reads from disk
+      kanbanStore = new KanbanStore(filePath);
+      await kanbanStore.load();
+      tickets = kanbanStore.listTickets();
+      broadcast({ type: 'kanban_update', tickets });
+    }, 150);
+  });
+}
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
@@ -43,22 +67,10 @@ export function setAgents(next: AgentStatus[]) {
   broadcast({ type: 'agent_update', agents });
 }
 
-export function setTasks(next: TaskItem[]) {
-  tasks = next;
-  broadcast({ type: 'task_update', tasks });
-}
-
 export function updateAgent(name: string, update: Partial<AgentStatus>) {
   const i = agents.findIndex(a => a.name === name);
   if (i >= 0) agents[i] = { ...agents[i], ...update };
   broadcast({ type: 'agent_update', agents });
-}
-
-export function updateTask(task: TaskItem) {
-  const i = tasks.findIndex(t => t.id === task.id);
-  if (i >= 0) tasks[i] = task;
-  else tasks.push(task);
-  broadcast({ type: 'task_update', tasks });
 }
 
 // ── Broadcast ─────────────────────────────────────────────────────────────────
@@ -73,8 +85,17 @@ function broadcast(data: object) {
 
 // ── HTTP server ───────────────────────────────────────────────────────────────
 
-export function startWebUI(opts: { demo?: boolean; port?: number } = {}) {
-  const port = opts.port ?? parseInt(process.env.WEBUI_PORT ?? '3000');
+export async function startWebUI(opts: {
+  demo?: boolean;
+  port?: number;
+  kanbanPath?: string;
+} = {}) {
+  const port       = opts.port ?? parseInt(process.env.WEBUI_PORT ?? '3000');
+  const kanbanPath = path.resolve(opts.kanbanPath ?? process.env.KANBAN_PATH ?? './kanban-board.json');
+
+  // Load kanban data before starting the server
+  await loadKanban(kanbanPath);
+  watchKanban(kanbanPath);
 
   const server = http.createServer((req, res) => {
     const url = new URL(req.url!, `http://localhost:${port}`);
@@ -87,7 +108,7 @@ export function startWebUI(opts: { demo?: boolean; port?: number } = {}) {
         'Connection':    'keep-alive',
         'Access-Control-Allow-Origin': '*',
       });
-      res.write(`data: ${JSON.stringify({ type: 'init', agents, tasks })}\n\n`);
+      res.write(`data: ${JSON.stringify({ type: 'init', agents, tickets })}\n\n`);
       clients.push(res);
       req.on('close', () => {
         const i = clients.indexOf(res);
@@ -96,16 +117,14 @@ export function startWebUI(opts: { demo?: boolean; port?: number } = {}) {
       return;
     }
 
-    // Push endpoint — orchestrator can POST full state here
+    // Push endpoint — orchestrator can POST agent state here
     if (url.pathname === '/push' && req.method === 'POST') {
       let body = '';
       req.on('data', c => body += c);
       req.on('end', () => {
         try {
           const payload = JSON.parse(body);
-          if (payload.agents) agents = payload.agents;
-          if (payload.tasks)  tasks  = payload.tasks;
-          broadcast({ type: 'full_update', agents, tasks });
+          if (payload.agents) { agents = payload.agents; broadcast({ type: 'agent_update', agents }); }
           res.writeHead(200); res.end('OK');
         } catch {
           res.writeHead(400); res.end('Bad JSON');
@@ -118,7 +137,6 @@ export function startWebUI(opts: { demo?: boolean; port?: number } = {}) {
     const rel      = url.pathname === '/' ? 'index.html' : url.pathname.slice(1);
     const filePath = path.join(PUBLIC_DIR, rel);
 
-    // Basic path traversal guard
     if (!filePath.startsWith(PUBLIC_DIR)) {
       res.writeHead(403); res.end('Forbidden');
       return;
@@ -153,17 +171,6 @@ function startDemo() {
     { name: 'Frank', hatType: 'blue',   state: 'idle', activity: 'Ready for tasks' },
   ];
 
-  tasks = [
-    { id: 't1', description: 'Analyse Q4 market data and prepare report',   assignedTo: 'Alice', status: 'active'  },
-    { id: 't2', description: 'Design new onboarding user flow',              assignedTo: 'Eve',   status: 'active'  },
-    { id: 't3', description: 'Risk assessment for v2.0 feature set',        assignedTo: 'Carol', status: 'active'  },
-    { id: 't4', description: 'Identify APAC expansion opportunities',       assignedTo: 'Dave',  status: 'pending' },
-    { id: 't5', description: 'Sprint planning: performance optimisation',   assignedTo: 'Frank', status: 'pending' },
-    { id: 't6', description: 'Update API documentation',                    assignedTo: 'Alice', status: 'pending' },
-    { id: 't7', description: 'User sentiment analysis from support tickets', assignedTo: 'Bob',   status: 'pending' },
-    { id: 't8', description: 'Brainstorm monetisation strategies',          assignedTo: 'Eve',   status: 'pending' },
-  ];
-
   const ACTIVITIES: Record<string, string[]> = {
     white:  ['Reviewing dataset from CRM export…', 'Cross-referencing figures against Q3…', 'Running statistical analysis…', 'Compiling factual summary…'],
     red:    ['This direction feels wrong to me.', 'Strong gut feeling — we should pivot.', 'Users will love this; intuition says go.', 'Something feels off about the proposal.'],
@@ -180,7 +187,6 @@ function startDemo() {
 
     const updated = agents.map(a => ({ ...a }));
 
-    // Some idle agents start working
     if (tick % 3 === 0) {
       const idle = updated.filter(a => a.state === 'idle');
       if (idle.length > 0) {
@@ -192,7 +198,6 @@ function startDemo() {
       }
     }
 
-    // Two working agents start a discussion
     if (tick % 5 === 0) {
       const free = updated.filter(a => a.state === 'working' && !a.talkingTo);
       if (free.length >= 2) {
@@ -205,7 +210,6 @@ function startDemo() {
       }
     }
 
-    // End discussions → back to idle
     if (tick % 7 === 0) {
       for (const a of updated) {
         if (a.state === 'in_discussion') {
@@ -214,15 +218,6 @@ function startDemo() {
           delete a.talkingTo;
         }
       }
-    }
-
-    // Occasionally complete a task and promote one from backlog
-    if (tick % 11 === 0) {
-      const ai = tasks.findIndex(t => t.status === 'active');
-      if (ai >= 0) tasks[ai] = { ...tasks[ai], status: 'complete' };
-      const pi = tasks.findIndex(t => t.status === 'pending');
-      if (pi >= 0) tasks[pi] = { ...tasks[pi], status: 'active' };
-      broadcast({ type: 'task_update', tasks });
     }
 
     agents = updated;

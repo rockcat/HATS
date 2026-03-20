@@ -18,7 +18,7 @@ const STATE_LABEL = {
 
 // ── State ─────────────────────────────────────────────────────────────────────
 
-let state = { agents: [], tasks: [] };
+let state = { agents: [], tickets: [] };
 
 // ── Hat helpers ───────────────────────────────────────────────────────────────
 
@@ -221,39 +221,67 @@ function updateCommsOverlay(agents, container) {
 
 // ── Kanban rendering ──────────────────────────────────────────────────────────
 
-function renderKanban(tasks) {
-  const active  = tasks.filter(t => t.status === 'active' || t.status === 'blocked');
-  const backlog = tasks.filter(t => t.status === 'pending');
-  const done    = tasks.filter(t => t.status === 'complete');
+const PRIORITY_COLOR = {
+  critical: '#f85149',
+  high:     '#e3b341',
+  medium:   '#58a6ff',
+  low:      '#8b949e',
+};
 
-  const activeEl  = document.getElementById('active-tasks');
+const COLUMN_LABEL = {
+  in_progress: 'In Progress',
+  blocked:     'Blocked',
+  ready:       'Ready',
+  backlog:     'Backlog',
+  completed:   'Done',
+};
+
+function renderKanban(tickets) {
+  const current = tickets.filter(t => t.column === 'in_progress' || t.column === 'blocked' || t.column === 'ready');
+  const backlog = tickets.filter(t => t.column === 'backlog');
+  const done    = tickets.filter(t => t.column === 'completed');
+
+  const currentEl = document.getElementById('active-tasks');
   const backlogEl = document.getElementById('backlog-tasks');
 
-  activeEl.innerHTML  = active.length  ? active.map(taskHTML).join('')              : '<p class="empty-hint">No active tasks</p>';
-  backlogEl.innerHTML = backlog.length || done.length ? [...backlog, ...done].map(taskHTML).join('') : '<p class="empty-hint">Backlog is empty</p>';
+  currentEl.innerHTML = current.length
+    ? current.map(ticketHTML).join('')
+    : '<p class="empty-hint">No active tickets</p>';
+
+  backlogEl.innerHTML = backlog.length || done.length
+    ? [...backlog, ...done].map(ticketHTML).join('')
+    : '<p class="empty-hint">Backlog is empty</p>';
 }
 
-function taskHTML(task) {
-  const agent = state.agents.find(a => a.name === task.assignedTo);
-  const c = hat(agent ? agent.hatType : 'white');
+function ticketHTML(ticket) {
+  const priority = ticket.priority ?? 'medium';
+  const priColor = PRIORITY_COLOR[priority] ?? PRIORITY_COLOR.medium;
+  const colLabel = COLUMN_LABEL[ticket.column] ?? ticket.column;
+  const title    = ticket.title ?? ticket.description?.slice(0, 60) ?? ticket.id;
+  const assignee = ticket.assignee ?? '—';
+  const tags     = (ticket.tags ?? []).slice(0, 3);
+
+  const tagsHTML = tags.map(t =>
+    `<span class="ticket-tag">${esc(t)}</span>`
+  ).join('');
+
   return `
     <div class="task-card">
-      <div class="task-body">
-        <div class="task-status-dot ${task.status}"></div>
-        <div class="task-description">${esc(task.description)}</div>
+      <div class="ticket-top">
+        <span class="ticket-id">${esc(ticket.id)}</span>
+        <span class="ticket-col col-${esc(ticket.column)}">${esc(colLabel)}</span>
       </div>
+      <div class="ticket-title">${esc(title)}</div>
       <div class="task-footer">
-        <span class="task-assignee">
-          <span class="hat-pip" style="background:${c.bar}"></span>
-          ${esc(task.assignedTo)}
-        </span>
-        <span class="task-badge ${task.status}">${task.status}</span>
+        <span class="task-assignee">${esc(assignee)}</span>
+        ${tagsHTML}
+        <span class="priority-badge" style="color:${priColor};border-color:${priColor}40">${esc(priority)}</span>
       </div>
     </div>`;
 }
 
 function esc(str) {
-  return String(str)
+  return String(str ?? '')
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
     .replace(/"/g,'&quot;');
 }
@@ -263,7 +291,7 @@ function esc(str) {
 function applyState(newState) {
   state = newState;
   renderAgents(state.agents);
-  renderKanban(state.tasks);
+  renderKanban(state.tickets);
 }
 
 // ── SSE connection ────────────────────────────────────────────────────────────
@@ -281,14 +309,14 @@ function connect() {
 
   es.onmessage = e => {
     const msg = JSON.parse(e.data);
-    if (msg.type === 'init' || msg.type === 'full_update') {
-      applyState({ agents: msg.agents, tasks: msg.tasks });
+    if (msg.type === 'init') {
+      applyState({ agents: msg.agents, tickets: msg.tickets });
     } else if (msg.type === 'agent_update') {
       state.agents = msg.agents;
       renderAgents(state.agents);
-    } else if (msg.type === 'task_update') {
-      state.tasks = msg.tasks;
-      renderKanban(state.tasks);
+    } else if (msg.type === 'kanban_update') {
+      state.tickets = msg.tickets;
+      renderKanban(state.tickets);
     }
   };
 }
