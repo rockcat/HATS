@@ -147,8 +147,13 @@ async function main() {
     process.exit(0);
   });
 
+  const providerFactory = (name: string) => {
+    if (name === 'anthropic') return claude;
+    throw new Error(`Unknown provider: "${name}"`);
+  };
+
   // Default: messages go to Jordan (Blue Hat / PM)
-  const cli = new CLIInterface(orchestrator, 'Jordan');
+  const cli = new CLIInterface(orchestrator, 'Jordan', STATE_FILE, providerFactory);
   cli.start();
 }
 

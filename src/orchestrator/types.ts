@@ -31,6 +31,8 @@ export interface Task {
   createdAt: string;
   completedAt?: string;
   summary?: string;
+  projectName?: string;
+  projectFolder?: string;
 }
 
 export interface MeetingTurn {

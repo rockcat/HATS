@@ -34,7 +34,7 @@ export class OpenAIProvider implements AIProvider {
 
       const response = await this.client.chat.completions.create({
         model: req.model,
-        max_tokens: req.maxTokens ?? 1024,
+        max_tokens: req.maxTokens ?? 8192,
         messages: [
           { role: 'system', content: req.systemPrompt },
           ...toOpenAIMessages(req.messages),

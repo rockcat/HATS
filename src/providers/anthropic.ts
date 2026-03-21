@@ -27,7 +27,7 @@ export class AnthropicProvider implements AIProvider {
 
       const response = await this.client.messages.create({
         model: req.model,
-        max_tokens: req.maxTokens ?? 1024,
+        max_tokens: req.maxTokens ?? 8192,
         system: req.systemPrompt,
         messages: toAnthropicMessages(req.messages),
         ...(tools && tools.length > 0 ? { tools } : {}),

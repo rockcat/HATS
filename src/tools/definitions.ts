@@ -45,17 +45,70 @@ const REPORT_TASK_COMPLETE: ToolDefinition = {
   },
 };
 
+// ── File tools (all agents) ───────────────────────────────────────────────────
+
+const READ_FILE: ToolDefinition = {
+  name: 'read_file',
+  description: 'Read the contents of a file. Use paths within your project folder to access saved work.',
+  parameters: {
+    type: 'object',
+    properties: {
+      path: { type: 'string', description: 'File path to read. Relative to the current working directory.' },
+    },
+    required: ['path'],
+  },
+};
+
+const WRITE_FILE: ToolDefinition = {
+  name: 'write_file',
+  description: 'Write or create a file. Save research, notes, drafts, and documents to your project folder.',
+  parameters: {
+    type: 'object',
+    properties: {
+      path: { type: 'string', description: 'File path to write. Relative to the current working directory.' },
+      content: { type: 'string', description: 'Full content to write to the file.' },
+    },
+    required: ['path', 'content'],
+  },
+};
+
+const LIST_FILES: ToolDefinition = {
+  name: 'list_files',
+  description: 'List files and subdirectories at a given path.',
+  parameters: {
+    type: 'object',
+    properties: {
+      directory: { type: 'string', description: 'Directory to list. Defaults to the current working directory.' },
+    },
+    required: [],
+  },
+};
+
+const WEB_SEARCH: ToolDefinition = {
+  name: 'web_search',
+  description: 'Search the web for up-to-date information. Returns titles, URLs, and snippets. Requires BRAVE_SEARCH_API_KEY environment variable.',
+  parameters: {
+    type: 'object',
+    properties: {
+      query: { type: 'string', description: 'Search query.' },
+      count: { type: 'number', description: 'Number of results (1–10, default 5).' },
+    },
+    required: ['query'],
+  },
+};
+
 // ── Tools available to Blue Hat (PM) only ────────────────────────────────────
 
 const ASSIGN_TASK: ToolDefinition = {
   name: 'assign_task',
-  description: 'Assign a task to a specific team member by name.',
+  description: 'Assign a task to a specific team member by name. A project folder is automatically created to store the agent\'s work.',
   parameters: {
     type: 'object',
     properties: {
       agent: { type: 'string', description: 'Name of the team member to assign the task to.' },
       task: { type: 'string', description: 'Clear description of the task.' },
       context: { type: 'string', description: 'Any background or constraints the agent should know.' },
+      projectName: { type: 'string', description: 'Short name for the project folder (e.g. "icp-research"). Auto-generated from the task if omitted.' },
     },
     required: ['agent', 'task'],
   },
@@ -81,7 +134,7 @@ const REQUEST_MEETING: ToolDefinition = {
 
 // ── Registry ──────────────────────────────────────────────────────────────────
 
-const BASE_TOOLS = [SEND_MESSAGE, ESCALATE_TO_HUMAN, REPORT_TASK_COMPLETE];
+const BASE_TOOLS = [SEND_MESSAGE, ESCALATE_TO_HUMAN, REPORT_TASK_COMPLETE, READ_FILE, WRITE_FILE, LIST_FILES, WEB_SEARCH];
 const BLUE_HAT_TOOLS = [...BASE_TOOLS, ASSIGN_TASK, REQUEST_MEETING];
 
 export function getToolsForHat(hatType: HatType): ToolDefinition[] {

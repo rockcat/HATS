@@ -6,7 +6,12 @@
       "Bash(npm list:*)",
       "Bash(npx tsx:*)",
       "Bash(xargs grep:*)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "WebSearch",
+      "Bash(node_modules/.bin/tsc --noEmit)",
+      "Read(//usr/local/**)",
+      "Read(//c/Users/pauln/.nvm/versions/**)",
+      "Bash(cmd.exe /c \"cd f:\\\\workspace\\\\personality && node node_modules\\\\typescript\\\\bin\\\\tsc --noEmit 2>&1\")"
     ]
   }
 }

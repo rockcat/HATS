@@ -9,10 +9,13 @@
 <body>
   <header>
     <h1>Team Dashboard</h1>
+    <button id="new-ticket-btn" class="header-btn" title="Create a new ticket">+ New Ticket</button>
     <div id="connection-status" class="status-dot" title="Disconnected"></div>
   </header>
 
   <main>
+
+    <!-- Top-left: Agents -->
     <section id="agents-panel">
       <div class="panel-header">Agents</div>
       <div id="agents-container">
@@ -20,17 +23,115 @@
       </div>
     </section>
 
-    <section id="kanban-panel">
-      <div id="active-column">
-        <div class="panel-header kanban-header-active">In Progress</div>
-        <div id="active-tasks" class="task-list"></div>
+    <!-- Bottom-left: Tools & MCP -->
+    <section id="tools-panel">
+      <div class="panel-header">
+        <span>Tools &amp; MCP</span>
+        <div class="panel-tabs">
+          <button class="panel-tab active" data-tab="tools">Tools</button>
+          <button class="panel-tab" data-tab="mcp">MCP Servers</button>
+        </div>
       </div>
-      <div id="backlog-column">
-        <div class="panel-header">Backlog</div>
-        <div id="backlog-tasks" class="task-list"></div>
+      <div id="tools-content" class="tab-pane active"></div>
+      <div id="mcp-content" class="tab-pane"></div>
+    </section>
+
+    <!-- Top-right: Active kanban columns -->
+    <section id="kanban-active">
+      <div class="kanban-col" id="col-ready">
+        <div class="kanban-col-header">
+          <span class="kanban-col-label col-ready">Ready</span>
+          <span class="kanban-col-count"></span>
+        </div>
+        <div class="task-list"></div>
+      </div>
+      <div class="kanban-col" id="col-in_progress">
+        <div class="kanban-col-header">
+          <span class="kanban-col-label col-in_progress">In Progress</span>
+          <span class="kanban-col-count"></span>
+        </div>
+        <div class="task-list"></div>
+      </div>
+      <div class="kanban-col" id="col-blocked">
+        <div class="kanban-col-header">
+          <span class="kanban-col-label col-blocked">Blocked</span>
+          <span class="kanban-col-count"></span>
+        </div>
+        <div class="task-list"></div>
+      </div>
+      <div class="kanban-col" id="col-completed">
+        <div class="kanban-col-header">
+          <span class="kanban-col-label col-completed">Done</span>
+          <span class="kanban-col-count"></span>
+        </div>
+        <div class="task-list"></div>
       </div>
     </section>
+
+    <!-- Bottom-right: Backlog (wide list) -->
+    <section id="backlog-panel">
+      <div class="panel-header">
+        Backlog
+        <span id="backlog-count"></span>
+      </div>
+      <div id="backlog-list"></div>
+    </section>
+
   </main>
+
+  <!-- Edit Ticket Modal -->
+  <div id="ticket-modal" class="modal-overlay" hidden>
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <span id="modal-ticket-id" class="modal-ticket-id"></span>
+        <button class="modal-close" id="modal-close" title="Close">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="field-group">
+          <label class="field-label">Title</label>
+          <input type="text" id="edit-title" class="modal-input">
+        </div>
+        <div class="field-group">
+          <label class="field-label">Description</label>
+          <textarea id="edit-description" class="modal-textarea" rows="7"></textarea>
+        </div>
+        <div class="field-row">
+          <div class="field-group">
+            <label class="field-label">Priority</label>
+            <select id="edit-priority" class="modal-select">
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+              <option value="critical">Critical</option>
+            </select>
+          </div>
+          <div class="field-group">
+            <label class="field-label">Column</label>
+            <select id="edit-column" class="modal-select">
+              <option value="backlog">Backlog</option>
+              <option value="ready">Ready</option>
+              <option value="in_progress">In Progress</option>
+              <option value="blocked">Blocked</option>
+              <option value="completed">Completed</option>
+            </select>
+          </div>
+          <div class="field-group">
+            <label class="field-label">Assignee</label>
+            <input type="text" id="edit-assignee" class="modal-input">
+          </div>
+        </div>
+        <div class="field-group">
+          <label class="field-label">Tags <span class="field-hint">(comma-separated)</span></label>
+          <input type="text" id="edit-tags" class="modal-input">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <span id="modal-error" class="modal-error"></span>
+        <button class="modal-btn secondary" id="modal-cancel">Cancel</button>
+        <button class="modal-btn primary" id="modal-save">Save changes</button>
+      </div>
+    </div>
+  </div>
 
   <script src="app.js"></script>
 </body>

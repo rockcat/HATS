@@ -14,6 +14,17 @@ export class MCPRegistry {
     this.clients.set(def.name, client);
   }
 
+  has(name: string): boolean {
+    return this.clients.has(name);
+  }
+
+  async disconnect(name: string): Promise<void> {
+    const client = this.clients.get(name);
+    if (!client) return;
+    await client.disconnect();
+    this.clients.delete(name);
+  }
+
   async disconnectAll(): Promise<void> {
     await Promise.all(Array.from(this.clients.values()).map((c) => c.disconnect()));
     this.clients.clear();
@@ -27,6 +38,18 @@ export class MCPRegistry {
   /** Returns true if the tool name belongs to any registered MCP server. */
   isMCPTool(toolName: string): boolean {
     return Array.from(this.clients.values()).some((c) => c.isMCPTool(toolName));
+  }
+
+  /** Returns tools grouped by server name (for the UI tools panel). */
+  getToolsByServer(): Array<{ server: string; tools: ToolDefinition[] }> {
+    return Array.from(this.clients.entries()).map(([name, client]) => ({
+      server: name,
+      // Strip the mcp__server__ namespace prefix for display
+      tools: client.getToolDefinitions().map((t) => ({
+        ...t,
+        name: t.name.replace(`mcp__${name}__`, ''),
+      })),
+    }));
   }
 
   /** Returns the server definitions for all connected servers (for snapshots). */

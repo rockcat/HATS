@@ -13,9 +13,38 @@
         "market-research",
         "ICP"
       ],
-      "comments": [],
+      "comments": [
+        {
+          "id": "b93b9b29-b240-4455-988d-6936fa600bd6",
+          "author": "Morgan",
+          "text": "Status note: No research outputs have been produced or logged to this ticket yet. Jordan has flagged that Sam (TKT-013, TKT-004) requires data from this workstream before finalising the ICP criteria framework. Reprioritising to produce an interim research summary covering: (1) large-org market sizing and sector analysis, (2) Middle East banking sector context, (3) AI readiness/adoption trends in enterprise. Awaiting Sam's confirmation of the most critical data points needed to sequence output efficiently. Dependency flagged to Jordan.",
+          "ts": "2026-03-20T10:41:31.948Z"
+        },
+        {
+          "id": "29aa44a2-6916-4530-aa1e-41a92b142048",
+          "author": "Morgan",
+          "text": "Research requirements confirmed by Sam (TKT-013/TKT-004). Five priority data points identified, sequenced by Sam as follows:\n\nPRIORITY 1 (highest — determines tier structure):\n1. Workforce size thresholds at large ME banks (Emirates NBD, FAB, QNB, Riyad Bank) — defines where Tier 1 headcount line sits\n2. AI/digital transformation budget signals — live spend vs. strategy-announcement phase; GenAI investment, L&D tech spend indicators\n\nPRIORITY 2:\n3. Decision-maker profile for L&D/capability programmes in ME banking (CHRO, CTO, digital transformation unit?)\n4. Regulatory/compliance context — DIFC, ADGM, SAMA, QCB frameworks re: AI literacy mandates or external provider friction\n5. Competitive landscape — who is currently selling GenAI training into ME banking; market maturity signal\n\nOutput will be logged here and cross-tagged to TKT-008 and TKT-013. Beginning research now.",
+          "ts": "2026-03-20T10:43:18.463Z"
+        },
+        {
+          "id": "09d7fdf9-cc8e-4e04-9bd8-fd75c7b1bb49",
+          "author": "Morgan",
+          "ts": "2026-03-20T10:44:21.774Z"
+        },
+        {
+          "id": "654e9269-4492-4a18-ada4-e93f1a215477",
+          "author": "Morgan",
+          "ts": "2026-03-20T10:45:23.645Z"
+        },
+        {
+          "id": "eab820e4-f6da-4fea-a0c0-dddde4a4e508",
+          "author": "Morgan",
+          "text": "Status update: No substantive research outputs exist yet despite in_progress board status. Three confirmed data gaps: (1) market sizing, (2) ME banking sector analysis, (3) large-org AI adoption trends. Sam has a live dependency on all three for TKT-013 and TKT-004. Morgan has messaged Sam directly to identify the most critical data points and will sequence research accordingly. Interim outputs will be flagged to Jordan when ready.",
+          "ts": "2026-03-20T10:49:45.057Z"
+        }
+      ],
       "createdAt": "2026-03-20T08:06:49.411Z",
-      "updatedAt": "2026-03-20T08:10:12.129Z"
+      "updatedAt": "2026-03-20T10:49:45.057Z"
     },
     "TKT-002": {
       "id": "TKT-002",
@@ -64,34 +93,41 @@
         "pricing",
         "strategy"
       ],
-      "comments": [],
+      "comments": [
+        {
+          "id": "c3464316-4510-4cd7-8c2f-1275b12f5c67",
+          "author": "Jordan",
+          "text": "Sam has flagged that deep work on competitor pricing research, pricing deck, and proposal template has not yet been formally captured on the board. TKT-004 and TKT-013 are being run in parallel as interdependent workstreams — ICP framework will inform pricing tiers and proposal structure. ME banking lead (TKT-008) is being used as a live test case for both.",
+          "ts": "2026-03-20T10:40:37.375Z"
+        }
+      ],
       "createdAt": "2026-03-20T08:06:49.421Z",
-      "updatedAt": "2026-03-20T08:10:13.183Z"
+      "updatedAt": "2026-03-20T10:40:37.375Z"
     },
     "TKT-005": {
       "id": "TKT-005",
       "description": "Create the brand identity for DivaTech — our GenAI training business. Tasks include: finalise brand guidelines around the name DivaTech (visual identity, colour palette, typography, tone of voice). Produce core marketing assets: website landing page, one-page overview brochure, LinkedIn company presence, and a sales deck for enterprise prospects. Messaging should emphasise human-led delivery, practical application, and organisational readiness for the AI era.",
-      "column": "backlog",
+      "column": "in_progress",
       "creator": "Jordan",
       "assignee": "River",
       "comments": [],
       "createdAt": "2026-03-20T08:06:49.424Z",
-      "updatedAt": "2026-03-20T08:09:42.377Z"
+      "updatedAt": "2026-03-21T17:11:17.830Z"
     },
     "TKT-007": {
       "id": "TKT-007",
       "description": "Set up the legal and operational foundations for DivaTech. Tasks include: choose and register business entity type, register the name DivaTech, set up business banking, draft standard client contracts and trainer agreements, review GDPR/data protection obligations related to client employee data, and confirm IP ownership of training materials.",
-      "column": "ready",
+      "column": "in_progress",
       "creator": "Jordan",
       "assignee": "Alex",
       "comments": [],
       "createdAt": "2026-03-20T08:07:00.075Z",
-      "updatedAt": "2026-03-20T08:09:47.040Z"
+      "updatedAt": "2026-03-21T17:11:17.825Z"
     },
     "TKT-008": {
       "id": "TKT-008",
       "description": "Identify and close DivaTech's first pilot client from the large-organisation target market. A Middle Eastern bank has been identified as a warm lead — prioritise this relationship. Offer a discounted or structured pilot in exchange for a case study and testimonial. Note: banking sector in the Middle East may have specific regulatory, cultural, and language considerations — factor these into the approach. Define success criteria for the pilot, collect feedback, and use results to refine the product and commercial offer.",
-      "column": "backlog",
+      "column": "in_progress",
       "creator": "Jordan",
       "assignee": "Sam",
       "tags": [
@@ -101,16 +137,23 @@
         "middle-east",
         "banking"
       ],
-      "comments": [],
+      "comments": [
+        {
+          "id": "51b5851a-bd14-4e73-a216-63b8dff879bb",
+          "author": "Morgan",
+          "text": "ME banking research summary produced in response to TKT-013/TKT-001 requirements. Five data points compiled and delivered to Sam and Jordan directly. Key findings: headcount at major ME banks ranges from ~9,000 (Riyad Bank) to ~60,000+ (Emirates NBD); AI investment is in active spend phase not just announcement phase across the GCC banking sector; decision-maker landscape is typically split between CHRO and dedicated digital transformation/innovation units; SAMA and CBUAE have both issued AI governance frameworks that create compliance-driven buying triggers; competitive landscape for GenAI training in ME banking is nascent. Full detail in team message thread. Cross-tagged to TKT-001 and TKT-013.",
+          "ts": "2026-03-20T10:46:27.810Z"
+        }
+      ],
       "createdAt": "2026-03-20T08:07:00.077Z",
-      "updatedAt": "2026-03-20T08:09:42.381Z"
+      "updatedAt": "2026-03-21T17:11:17.831Z"
     },
     "TKT-009": {
       "id": "TKT-009",
       "title": "Design learner assessment & certification approach",
       "description": "Define how learner outcomes will be measured at the end of training. Options to explore: knowledge check quizzes, practical exercises, digital badges, certificates of completion. Consider whether to partner with an awarding body for credibility with large corporate clients. Output: a learner assessment framework and a sample certificate design.",
       "priority": "medium",
-      "column": "backlog",
+      "column": "in_progress",
       "creator": "Jordan",
       "assignee": "Morgan",
       "tags": [
@@ -120,14 +163,14 @@
       ],
       "comments": [],
       "createdAt": "2026-03-20T08:07:00.080Z",
-      "updatedAt": "2026-03-20T08:09:31.280Z"
+      "updatedAt": "2026-03-21T17:11:17.833Z"
     },
     "TKT-010": {
       "id": "TKT-010",
       "title": "Define ideal trainer profile for DivaTech",
       "description": "Develop a detailed ideal trainer profile for DivaTech GenAI training delivery. Must cover: core competencies (GenAI literacy, adult learning principles, corporate facilitation), personal qualities (empathy, adaptability, psychological safety in the room), and specialist requirements. Given the likely first client is a Middle Eastern bank, the profile should explicitly include: cultural awareness and cross-cultural communication skills, and ideally experience in financial services or regulated industries. Profile will feed directly into recruitment pipeline and screening criteria.",
       "priority": "high",
-      "column": "backlog",
+      "column": "completed",
       "creator": "Casey",
       "assignee": "Casey",
       "tags": [
@@ -137,16 +180,58 @@
         "cultural-awareness",
         "financial-services"
       ],
-      "comments": [],
+      "comments": [
+        {
+          "id": "dc76c6f8-b92b-4048-b6c2-eddceb10ec17",
+          "author": "Casey",
+          "ts": "2026-03-20T10:40:26.985Z"
+        },
+        {
+          "id": "df21a41c-6e3a-4673-80cf-f17c9e57303a",
+          "author": "Casey",
+          "ts": "2026-03-20T10:40:52.291Z"
+        },
+        {
+          "id": "733fd473-af61-4536-b7f5-f53ded26b336",
+          "author": "Casey",
+          "ts": "2026-03-20T10:41:16.781Z"
+        },
+        {
+          "id": "8b88b321-637a-4ce8-ab89-f4b25f0a8316",
+          "author": "Casey",
+          "ts": "2026-03-20T10:43:24.483Z"
+        },
+        {
+          "id": "1482d195-01a6-4bd8-8fdb-eb4158562f8c",
+          "author": "Casey",
+          "ts": "2026-03-20T10:44:23.713Z"
+        },
+        {
+          "id": "b6b7964e-2eee-421d-954a-f625d03a4370",
+          "author": "Casey",
+          "text": "## DivaTech Ideal Trainer Profile\n\n### Who We're Looking For — The Human Picture First\nBefore the competency list, I want to name the *feeling* we're hiring for. A DivaTech trainer walks into a room where people may be anxious, sceptical, or quietly resentful of AI. They need to make that room feel safe before a single slide goes up. That's the north star for everything below.\n\n---\n\n### 🎯 Core Competencies\n\n**1. GenAI Literacy**\n- Solid working knowledge of generative AI concepts — LLMs, prompt engineering, use cases and limitations\n- Able to explain AI confidently without overhyping or dismissing it\n- Keeps up with the pace of change; intellectually curious about the space\n- Does NOT need to be a developer or data scientist — but must be credible to a tech-literate audience\n\n**2. Adult Learning & Facilitation**\n- Formal or applied grounding in adult learning principles (constructivism, experiential learning, spaced repetition)\n- Experienced facilitating — not just presenting — to corporate audiences\n- Skilled at reading the room and adjusting pace, depth, and tone in real time\n- Comfortable with ambiguity in the room; doesn't need every question to have a clean answer\n\n**3. Emotional Intelligence & Psychological Safety**\n- Deeply empathetic — can sense when people are scared, resistant, or disengaged and respond with warmth, not pressure\n- Skilled at normalising anxiety about AI\n- Creates conditions where people feel safe to ask \"dumb questions\"\n- Doesn't perform confidence — they earn trust\n\n---\n\n### 🌍 Cultural Competency (Priority: High — MENA Context)\n\n**Required:**\n- Demonstrated cross-cultural communication experience — ideally across Gulf/MENA contexts\n- Understanding of hierarchy, deference, and face-saving in professional settings\n- Sensitivity to gender dynamics in mixed or single-gender corporate environments\n- Awareness that direct challenge or Socratic confrontation can feel disrespectful in some cultural settings\n- Able to adapt facilitation style without diluting learning depth\n\n**Strongly Preferred:**\n- Prior experience working in UAE, Saudi Arabia, Qatar, Bahrain, or broader MENA region\n- Arabic language skills (not required, but genuinely valued)\n- Familiarity with Islamic finance principles and the cultural weight of the banking sector in the Gulf\n\n---\n\n### 🏦 Financial Services Familiarity\n\n**Preferred (not mandatory for all hires):**\n- Background in or exposure to financial services, banking, or regulated industries\n- Understanding of compliance culture\n- Ability to use banking-relevant examples and use cases\n- Comfortable navigating job security fears around AI in banking\n\n*Note: At least one or two trainers in the initial cohort of 3–5 should have this. Non-negotiable for the DivaTech MENA client.*\n\n---\n\n### ✨ Personal Attributes\n\n| Attribute | Why It Matters |\n|---|---|\n| Warmth | People learn better when they feel liked and safe |\n| Intellectual humility | AI is fast-moving; trainers must be comfortable saying \"I don't know — let's find out\" |\n| Adaptability | No two rooms are the same; rigid trainers will struggle |\n| Discretion | Financial services clients are sensitive about confidentiality |\n| Resilience | Some rooms will be tough. Trainers need to hold their nerve without going cold |\n| Genuine curiosity | The best trainers are visibly excited about what they're teaching |",
+          "ts": "2026-03-20T10:44:26.470Z"
+        },
+        {
+          "id": "c6442f79-caf4-4698-81c6-143800c2bfee",
+          "author": "Casey",
+          "ts": "2026-03-20T10:44:53.661Z"
+        },
+        {
+          "id": "8f6c105f-fe27-4e9f-bfd9-f8c21bc73e8a",
+          "author": "Casey",
+          "ts": "2026-03-20T10:47:36.057Z"
+        }
+      ],
       "createdAt": "2026-03-20T08:10:26.067Z",
-      "updatedAt": "2026-03-20T08:10:26.067Z"
+      "updatedAt": "2026-03-20T10:47:36.057Z"
     },
     "TKT-011": {
       "id": "TKT-011",
       "title": "Build trainer recruitment pipeline",
       "description": "Identify and build sourcing channels for the initial DivaTech trainer cohort (target: 3–5 trainers). Channels to explore: freelance platforms (e.g. Malt, Toptal, LinkedIn), L&D professional networks, tech-literate facilitator communities, and specialist diversity/inclusion networks given cross-cultural delivery needs. Screening process should assess GenAI knowledge, facilitation style, cultural competency (especially MENA region), and financial services familiarity where possible. Coordinate with Morgan for any market research on trainer availability and rates.",
       "priority": "high",
-      "column": "backlog",
+      "column": "in_progress",
       "creator": "Casey",
       "assignee": "Casey",
       "tags": [
@@ -157,14 +242,14 @@
       ],
       "comments": [],
       "createdAt": "2026-03-20T08:10:26.069Z",
-      "updatedAt": "2026-03-20T08:10:26.069Z"
+      "updatedAt": "2026-03-20T10:51:36.833Z"
     },
     "TKT-012": {
       "id": "TKT-012",
       "title": "Produce trainer handbook and quality standards",
       "description": "Create the DivaTech trainer handbook covering: DivaTech brand values and delivery philosophy, GenAI training content guidance, facilitation standards and quality expectations, how to handle emotionally charged AI anxiety in the room (fear of job loss, overwhelm, resistance), cultural sensitivity guidelines — with a specific section on MENA context and financial services environments. Also define quality standards: observation rubric, feedback mechanisms, and pass/fail criteria for onboarding sign-off. Should be ready before first trainer cohort completes onboarding.",
       "priority": "high",
-      "column": "backlog",
+      "column": "ready",
       "creator": "Casey",
       "assignee": "Casey",
       "tags": [
@@ -174,10 +259,71 @@
         "quality",
         "cultural-awareness"
       ],
-      "comments": [],
+      "comments": [
+        {
+          "id": "4653ec9e-e4b3-4bee-aeb2-b369085809ee",
+          "author": "Jordan",
+          "text": "Sequencing decision: TKT-012 held at Ready until TKT-011 is complete. Casey to move clean from pipeline work into handbook — no parallel running. Handbook will be stronger for it. Resume when TKT-011 closes.",
+          "ts": "2026-03-21T17:14:48.542Z"
+        }
+      ],
       "createdAt": "2026-03-20T08:10:26.071Z",
-      "updatedAt": "2026-03-20T08:10:26.071Z"
+      "updatedAt": "2026-03-21T17:14:48.542Z"
+    },
+    "TKT-013": {
+      "id": "TKT-013",
+      "column": "in_progress",
+      "creator": "Jordan",
+      "assignee": "Sam",
+      "comments": [
+        {
+          "id": "a7a96147-8b27-4589-9d38-fe7bb98ad5b3",
+          "author": "Sam",
+          "ts": "2026-03-20T10:42:59.026Z"
+        },
+        {
+          "id": "ed299dff-b776-4916-89b3-d0d92e081964",
+          "author": "Sam",
+          "ts": "2026-03-20T10:43:56.200Z"
+        },
+        {
+          "id": "bf977847-e8c4-4c71-b94a-3c7f3672738b",
+          "author": "Sam",
+          "ts": "2026-03-20T10:45:06.243Z"
+        },
+        {
+          "id": "80b42bfa-c90f-4314-8b32-1b6040d02b67",
+          "author": "Sam",
+          "ts": "2026-03-20T10:47:37.330Z"
+        },
+        {
+          "id": "8e2c590b-7087-4aa3-bc67-6e41136e7adc",
+          "author": "Sam",
+          "ts": "2026-03-20T10:51:12.881Z"
+        },
+        {
+          "id": "5215c69f-1801-4ed4-8711-80a19c15f243",
+          "author": "Sam",
+          "ts": "2026-03-20T10:53:09.835Z"
+        },
+        {
+          "id": "171d75e3-6a8d-4509-8faf-3bdb84ffd5ef",
+          "author": "Sam",
+          "ts": "2026-03-20T10:54:20.684Z"
+        }
+      ],
+      "createdAt": "2026-03-20T10:39:19.243Z",
+      "updatedAt": "2026-03-21T16:50:42.710Z",
+      "title": "Define target client identification strategy & ICP criteria framework",
+      "description": "Build a structured Ideal Customer Profile (ICP) criteria framework to identify and prioritise target clients for DivaTech's AI training services.\n\n**Deliverables:**\n- ICP criteria framework covering: organisation size, sector, geography, and AI readiness scoring\n- Tiered client classification (e.g. Tier 1 / Tier 2 targets)\n- Validation of criteria against a live prospect (ME banking lead, TKT-008)\n\n**Dependencies:**\n- TKT-001 (Morgan) — market sizing, ME banking sector data, and large-org AI adoption trends needed to sharpen criteria. Morgan and Sam coordinating directly on sequencing.\n\n**Interdependency:**\n- Runs in parallel with TKT-004 (commercial model & pricing). ICP profiles will directly inform pricing tier structure and proposal logic. These two tickets are intentionally symbiotic — output of TKT-013 feeds into TKT-004.\n\n**Validation approach:**\n- ME banking lead (TKT-008) used as a live stress-test case throughout framework build.",
+      "priority": "high",
+      "tags": [
+        "ICP",
+        "strategy",
+        "commercial",
+        "MENA"
+      ]
     }
   },
-  "nextSeq": 13
+  "nextSeq": 14
 }

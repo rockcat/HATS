@@ -1,9 +1,11 @@
 import { v4 as uuidv4 } from 'uuid';
-import { readFile, writeFile } from 'fs/promises';
+import { readFile, writeFile, readdir, mkdir } from 'fs/promises';
+import * as path from 'path';
 import { renderMarkdown } from '../human/markdown.js';
 import { Agent } from '../agent/agent.js';
 import { AgentConfig, AgentMessage } from '../agent/types.js';
 import { HatType } from '../hats/types.js';
+import { getToolsForHat } from '../tools/definitions.js';
 import { AIProvider, ToolCall } from '../providers/types.js';
 import { EventStore } from '../store/event-store.js';
 import { MCPRegistry } from '../mcp/mcp-registry.js';
@@ -20,6 +22,7 @@ export interface OrchestratorConfig {
   storePath?: string;           // path to JSONL event log; default './team-events.jsonl'
   humanName?: string;           // how the human appears in messages; default 'Human'
   maxTasksPerAgent?: number;    // soft cap; default 5
+  projectsRoot?: string;        // root folder for project workspaces; default './projects'
 }
 
 export class TeamOrchestrator {
@@ -29,6 +32,7 @@ export class TeamOrchestrator {
   private activeMeetingRooms: Map<string, MeetingRoom> = new Map();
   private store: EventStore;
   private humanName: string;
+  private projectsRoot: string;
   private onHumanEscalation: ((from: string, message: string, urgency: string) => void) | null = null;
   private rebuildTimer: ReturnType<typeof setTimeout> | null = null;
   private mcp = new MCPRegistry();
@@ -37,10 +41,12 @@ export class TeamOrchestrator {
   constructor(config: OrchestratorConfig = {}) {
     this.store = new EventStore(config.storePath ?? './team-events.jsonl');
     this.humanName = config.humanName ?? 'Human';
+    this.projectsRoot = path.resolve(config.projectsRoot ?? './projects');
   }
 
   async init(): Promise<void> {
     await this.store.init();
+    await mkdir(this.projectsRoot, { recursive: true });
     await this.store.append('session_start', { humanName: this.humanName });
   }
 
@@ -50,6 +56,24 @@ export class TeamOrchestrator {
     await this.store.append('mcp_server_added', { name: def.name });
     // Rebuild agent contexts so they see the new tools in their next turn
     this.rebuildTeamContext();
+  }
+
+  /** Disconnect and remove an MCP server. Agents will lose those tools on their next turn. */
+  async removeMCPServer(name: string): Promise<void> {
+    await this.mcp.disconnect(name);
+    await this.store.append('mcp_server_removed', { name });
+  }
+
+  /** Returns true if an MCP server with this name is currently connected. */
+  hasMCPServer(name: string): boolean {
+    return this.mcp.has(name);
+  }
+
+  /** Clear all agents, tasks, and meetings (use before loadState to do a full reload). */
+  clearTeam(): void {
+    this.agents.clear();
+    this.tasks.clear();
+    this.meetings.clear();
   }
 
   async shutdown(snapshotPath?: string): Promise<void> {
@@ -168,6 +192,32 @@ export class TeamOrchestrator {
     return this.store.subscribe(fn);
   }
 
+  /**
+   * Returns built-in tools (grouped by hat) and MCP tools (grouped by server).
+   * Used by the UI tools panel.
+   */
+  getToolInfo() {
+    // Built-in: collect every unique tool, note which agents have it
+    const toolMeta = new Map<string, { description: string; agents: string[] }>();
+    for (const agent of this.agents.values()) {
+      for (const tool of getToolsForHat(agent.config.hatType)) {
+        if (!toolMeta.has(tool.name)) {
+          toolMeta.set(tool.name, { description: tool.description, agents: [] });
+        }
+        toolMeta.get(tool.name)!.agents.push(agent.name);
+      }
+    }
+
+    return {
+      builtin: Array.from(toolMeta.entries()).map(([name, meta]) => ({
+        name,
+        description: meta.description,
+        agents: meta.agents,
+      })),
+      mcp: this.mcp.getToolsByServer(),
+    };
+  }
+
   /** Read events from the log (for API / replay). */
   async readEvents(since?: string): Promise<import('../store/event-store.js').StoredEvent[]> {
     return since ? this.store.readSince(since) : this.store.readAll();
@@ -186,11 +236,15 @@ export class TeamOrchestrator {
   }
 
   /** Human assigns a task directly (usually to Blue Hat). */
-  async humanAssignTask(toAgentName: string, task: string, context?: string): Promise<void> {
-    const taskId = await this.createTask(toAgentName, this.humanName, task, context);
-    const content = context ? `${task}\n\nContext: ${context}` : task;
+  async humanAssignTask(toAgentName: string, task: string, context?: string, projectName?: string): Promise<void> {
+    const taskId = await this.createTask(toAgentName, this.humanName, task, context, projectName);
+    const storedTask = this.tasks.get(taskId)!;
+    const folderNote = storedTask.projectFolder
+      ? `\n\nProject folder: ${storedTask.projectFolder}\nUse read_file, write_file, and list_files to save and retrieve work there.`
+      : '';
+    const content = (context ? `${task}\n\nContext: ${context}` : task) + folderNote;
     const msg = this.buildMessage('human', toAgentName, 'task', content, { taskId });
-    await this.store.append('task_assigned', { taskId, from: 'human', to: toAgentName, task, context });
+    await this.store.append('task_assigned', { taskId, from: 'human', to: toAgentName, task, context, projectName: storedTask.projectName });
     this.deliverToAgent(toAgentName, msg);
   }
 
@@ -259,6 +313,7 @@ export class TeamOrchestrator {
         const { to, message } = call.arguments as { to: string; message: string };
         const target = this.agents.get(to);
         if (!target) return `No agent named "${to}" on this team.`;
+        if (!message || !message.trim()) return `Message content is empty — call was rejected. Please include the full message content in the "message" argument and retry.`;
         const msg = this.buildMessage(agentName, to, 'direct', message);
         await this.store.append('direct_message', { from: agentName, to, content: message });
         this.deliverToAgent(to, msg);
@@ -302,15 +357,19 @@ export class TeamOrchestrator {
       }
 
       case 'assign_task': {
-        const { agent, task, context } = call.arguments as { agent: string; task: string; context?: string };
+        const { agent, task, context, projectName } = call.arguments as { agent: string; task: string; context?: string; projectName?: string };
         const target = this.agents.get(agent);
         if (!target) return `No agent named "${agent}" on this team.`;
-        const taskId = await this.createTask(agent, agentName, task, context);
-        const content = context ? `${task}\n\nContext: ${context}` : task;
+        const taskId = await this.createTask(agent, agentName, task, context, projectName);
+        const storedTask = this.tasks.get(taskId)!;
+        const folderNote = storedTask.projectFolder
+          ? `\n\nProject folder: ${storedTask.projectFolder}\nUse read_file, write_file, and list_files to save and retrieve work there.`
+          : '';
+        const content = (context ? `${task}\n\nContext: ${context}` : task) + folderNote;
         const msg = this.buildMessage(agentName, agent, 'task', content, { taskId });
-        await this.store.append('task_assigned', { taskId, from: agentName, to: agent, task, context });
+        await this.store.append('task_assigned', { taskId, from: agentName, to: agent, task, context, projectName: storedTask.projectName });
         this.deliverToAgent(agent, msg);
-        return `Task assigned to ${agent}.`;
+        return `Task assigned to ${agent}. Project folder: ${storedTask.projectFolder ?? 'none'}`;
       }
 
       case 'request_meeting': {
@@ -325,6 +384,64 @@ export class TeamOrchestrator {
 
         await this.startMeeting(agentName, participants, topic, agenda);
         return `Meeting "${topic}" started.`;
+      }
+
+      case 'read_file': {
+        const { path: filePath } = call.arguments as { path: string };
+        const resolved = path.resolve(filePath);
+        try {
+          const content = await readFile(resolved, 'utf-8');
+          return content;
+        } catch (err) {
+          return `Error reading file: ${(err as Error).message}`;
+        }
+      }
+
+      case 'write_file': {
+        const { path: filePath, content } = call.arguments as { path: string; content: string };
+        const resolved = path.resolve(filePath);
+        try {
+          await mkdir(path.dirname(resolved), { recursive: true });
+          await writeFile(resolved, content, 'utf-8');
+          return `File written: ${resolved}`;
+        } catch (err) {
+          return `Error writing file: ${(err as Error).message}`;
+        }
+      }
+
+      case 'list_files': {
+        const { directory } = call.arguments as { directory?: string };
+        const resolved = path.resolve(directory ?? '.');
+        try {
+          const entries = await readdir(resolved, { withFileTypes: true });
+          const lines = entries.map(e => `${e.isDirectory() ? '[dir] ' : '      '}${e.name}`);
+          return lines.length ? lines.join('\n') : '(empty directory)';
+        } catch (err) {
+          return `Error listing directory: ${(err as Error).message}`;
+        }
+      }
+
+      case 'web_search': {
+        const { query, count = 5 } = call.arguments as { query: string; count?: number };
+        const apiKey = process.env.BRAVE_SEARCH_API_KEY;
+        if (!apiKey) {
+          return 'web_search requires the BRAVE_SEARCH_API_KEY environment variable to be set. Get a free key at https://brave.com/search/api/';
+        }
+        try {
+          const url = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=${Math.min(count, 10)}`;
+          const resp = await fetch(url, {
+            headers: { 'Accept': 'application/json', 'X-Subscription-Token': apiKey },
+          });
+          if (!resp.ok) return `Search API error: ${resp.status} ${resp.statusText}`;
+          const data = await resp.json() as { web?: { results?: Array<{ title: string; url: string; description?: string }> } };
+          const results = data.web?.results ?? [];
+          if (results.length === 0) return 'No results found.';
+          return results.map((r, i) =>
+            `${i + 1}. ${r.title}\n   ${r.url}\n   ${r.description ?? ''}`,
+          ).join('\n\n');
+        } catch (err) {
+          return `Search error: ${(err as Error).message}`;
+        }
       }
 
       default:
@@ -459,8 +576,20 @@ export class TeamOrchestrator {
     assignedBy: string,
     description: string,
     context?: string,
+    projectName?: string,
   ): Promise<string> {
     const taskId = uuidv4();
+    const slug = projectName
+      ? toProjectSlug(projectName)
+      : toProjectSlug(description);
+    const projectFolder = path.join(this.projectsRoot, slug);
+
+    try {
+      await mkdir(projectFolder, { recursive: true });
+    } catch {
+      // ignore if already exists
+    }
+
     const task: Task = {
       id: taskId,
       assignedTo,
@@ -469,6 +598,8 @@ export class TeamOrchestrator {
       context,
       status: 'active',
       createdAt: new Date().toISOString(),
+      projectName: slug,
+      projectFolder,
     };
     this.tasks.set(taskId, task);
     return taskId;
@@ -504,4 +635,18 @@ export class TeamOrchestrator {
       agent.updateTeamContext(context);
     }
   }
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function toProjectSlug(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, '')
+    .trim()
+    .split(/\s+/)
+    .slice(0, 5)
+    .join('-')
+    .replace(/-+/g, '-')
+    .slice(0, 50) || 'project';
 }
