@@ -7,9 +7,10 @@
  *   RHUBARB_BIN       rhubarb executable (default: "rhubarb").
  *   RHUBARB_RECOGNIZER  "phonetic" (default) or "pocketSphinx".
  */
-import { spawn, execFile } from 'child_process';
+import { spawn } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
-import { readFile, unlink } from 'fs/promises';
+import { readFile, unlink, writeFile } from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';
 import { VisemeEvent, SpeechChunk } from './types.js';
@@ -52,6 +53,8 @@ async function runPiper(text: string, outFile: string): Promise<void> {
   const model    = process.env['PIPER_MODEL']!;
   const piperBin = process.env['PIPER_BIN'] ?? 'piper';
 
+  console.log(`[Speech] Piper: "${text.slice(0, 60)}" → ${path.basename(outFile)}`);
+
   return new Promise((resolve, reject) => {
     const child = spawn(piperBin, ['--model', model, '--output_file', outFile], {
       stdio: ['pipe', 'ignore', 'pipe'],
@@ -64,29 +67,45 @@ async function runPiper(text: string, outFile: string): Promise<void> {
     child.stdin.end();
 
     child.on('exit', (code) => {
-      if (code === 0) resolve();
-      else reject(new Error(`piper exited ${code}: ${stderr.slice(0, 200)}`));
+      if (code === 0) {
+        console.log(`[Speech] Piper done (exit 0)`);
+        resolve();
+      } else {
+        console.error(`[Speech] Piper failed (exit ${code}):\n${stderr}`);
+        reject(new Error(`piper exited ${code}: ${stderr.slice(0, 400)}`));
+      }
     });
-    child.on('error', reject);
+    child.on('error', (err) => {
+      console.error(`[Speech] Piper spawn error:`, err.message);
+      reject(err);
+    });
   });
 }
 
 // ── Rhubarb viseme extraction ─────────────────────────────────────────────────
 
-async function runRhubarb(wavFile: string, jsonFile: string, text: string): Promise<void> {
-  const rhubarbBin        = process.env['RHUBARB_BIN'] ?? 'rhubarb';
-  const recognizer        = process.env['RHUBARB_RECOGNIZER'] ?? 'phonetic';
+async function runRhubarb(wavFile: string, dialogueFile: string, jsonFile: string): Promise<void> {
+  const rhubarbBin = process.env['RHUBARB_BIN'] ?? 'rhubarb';
+  const recognizer = process.env['RHUBARB_RECOGNIZER'] ?? 'phonetic';
 
   const args = [
     '-f', 'json',
     '--recognizer', recognizer,
-    '-d', text,
+    '-d', dialogueFile,   // file path, not inline text
     '-o', jsonFile,
     wavFile,
     '--quiet',
   ];
 
-  await execFileAsync(rhubarbBin, args);
+  console.log(`[Speech] Rhubarb: ${rhubarbBin} ${args.join(' ')}`);
+
+  try {
+    await execFileAsync(rhubarbBin, args);
+    console.log(`[Speech] Rhubarb done`);
+  } catch (err) {
+    console.error(`[Speech] Rhubarb failed:`, (err as Error).message);
+    throw err;
+  }
 }
 
 interface RhubarbOutput {
@@ -111,13 +130,19 @@ async function processSentence(
   agentName: string,
   sessionId: string,
 ): Promise<SpeechChunk | null> {
-  const tmpDir  = os.tmpdir();
-  const wavFile  = path.join(tmpDir, `${sessionId}_${id}.wav`);
-  const jsonFile = path.join(tmpDir, `${sessionId}_${id}.json`);
+  const tmpDir       = os.tmpdir();
+  const wavFile      = path.join(tmpDir, `${sessionId}_${id}.wav`);
+  const jsonFile     = path.join(tmpDir, `${sessionId}_${id}.json`);
+  const dialogueFile = path.join(tmpDir, `${sessionId}_${id}.txt`);
+
+  console.log(`[Speech] Processing sentence ${id + 1}/${totalChunks}: "${sentence.slice(0, 60)}"`);
 
   try {
+    // Write dialogue hint to a temp file — Rhubarb -d expects a file path
+    await writeFile(dialogueFile, sentence, 'utf-8');
+
     await runPiper(sentence, wavFile);
-    await runRhubarb(wavFile, jsonFile, sentence);
+    await runRhubarb(wavFile, dialogueFile, jsonFile);
 
     const [audioBytes, visemeRaw] = await Promise.all([
       readFile(wavFile),
@@ -126,6 +151,8 @@ async function processSentence(
 
     const visemes  = parseVisemes(visemeRaw);
     const duration = visemes.at(-1)?.end ?? 0;
+
+    console.log(`[Speech] Sentence ${id + 1}/${totalChunks} ready — ${visemes.length} visemes, ${duration.toFixed(2)}s`);
 
     return {
       id,
@@ -143,6 +170,7 @@ async function processSentence(
     await Promise.all([
       unlink(wavFile).catch(() => {}),
       unlink(jsonFile).catch(() => {}),
+      unlink(dialogueFile).catch(() => {}),
     ]);
   }
 }
@@ -167,12 +195,18 @@ export async function processSpeech(
   if (!isSpeechAvailable()) return;
 
   const sentences = splitSentences(text);
-  if (sentences.length === 0) return;
+  if (sentences.length === 0) {
+    console.log(`[Speech] No speakable sentences found in: "${text.slice(0, 80)}"`);
+    return;
+  }
 
+  console.log(`[Speech] Starting pipeline for ${agentName} — ${sentences.length} sentence(s)`);
   const sessionId = `spk_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 
   for (let i = 0; i < sentences.length; i++) {
     const chunk = await processSentence(sentences[i], i, sentences.length, agentName, sessionId);
     if (chunk) onChunk(chunk);
   }
+
+  console.log(`[Speech] Pipeline complete for ${agentName}`);
 }

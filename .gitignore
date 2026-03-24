@@ -4,3 +4,13 @@ node_modules/
 dist/
 logs/
 projects/
+
+piper/*.exe
+piper/*.dll
+piper/*.ort
+piper/espeak-ng-data
+
+piper_voices/
+
+rhubarb/*.exe
+rhubarb/res

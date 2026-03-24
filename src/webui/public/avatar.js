@@ -1,50 +1,17 @@
-// avatar.js — Three.js GLB avatar renderer with procedural lipsync
+// avatar.js — Three.js GLB avatar renderer with audio-aligned lipsync
 // Loaded as <script type="module">; exposes window.avatarAPI for app.js.
 
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-// ── Lipsync ──────────────────────────────────────────────────────────────────
-
-const MS_PER_CHAR = 65;
-
-const CHAR_VISEME = {
-  a: 'viseme_aa', e: 'viseme_E', i: 'viseme_I', o: 'viseme_O', u: 'viseme_U',
-  m: 'viseme_PP', b: 'viseme_PP', p: 'viseme_PP',
-  f: 'viseme_FF', v: 'viseme_FF',
-  d: 'viseme_DD', t: 'viseme_DD',
-  k: 'viseme_kk', g: 'viseme_kk',
-  s: 'viseme_SS', z: 'viseme_SS',
-  n: 'viseme_nn',
-  r: 'viseme_RR',
-  ' ': 'viseme_sil', ',': 'viseme_sil', '.': 'viseme_sil', '!': 'viseme_sil', '?': 'viseme_sil',
-};
+// ── Lipsync state ─────────────────────────────────────────────────────────────
 
 let targetViseme = 'viseme_sil';
 const morphWeights = {};
-let pendingTimeouts = [];
 
-// Speech-aligned lipsync (overrides procedural when active)
+// Speech-aligned lipsync
 let speechVisemes  = null;  // VisemeEvent[] | null
 let getAudioTime   = null;  // () => number | null
-
-function scheduleVisemes(text) {
-  for (const t of pendingTimeouts) clearTimeout(t);
-  pendingTimeouts = [];
-  targetViseme = 'viseme_sil';
-
-  let delay = 50;
-  for (const ch of text) {
-    const v = CHAR_VISEME[ch.toLowerCase()] ?? null;
-    if (v) {
-      const vis = v;
-      pendingTimeouts.push(setTimeout(() => { targetViseme = vis; }, delay));
-    }
-    delay += MS_PER_CHAR;
-  }
-  // Return to silence at the end
-  pendingTimeouts.push(setTimeout(() => { targetViseme = 'viseme_sil'; }, delay + 200));
-}
 
 // ── Three.js ─────────────────────────────────────────────────────────────────
 
@@ -117,7 +84,7 @@ function loadGLB(file, camPos) {
 function renderLoop() {
   rafId = requestAnimationFrame(renderLoop);
 
-  // Determine target viseme: prefer time-aligned speech data over procedural
+  // Determine target viseme from time-aligned speech data
   if (speechVisemes && getAudioTime) {
     const t = getAudioTime();
     const cue = speechVisemes.find(v => t >= v.start && t < v.end);
@@ -170,24 +137,11 @@ window.avatarAPI = {
   },
 
   /**
-   * Animate lip-sync for the given text string (no audio required — procedural fallback).
-   * If speech-aligned data is active this is a no-op.
-   * @param {string} text
-   */
-  speak(text) {
-    if (!text || visemeMeshes.length === 0 || speechVisemes) return;
-    scheduleVisemes(text);
-  },
-
-  /**
    * Begin audio-aligned lipsync.
    * @param {Array<{viseme:string, start:number, end:number}>} visemes
    * @param {() => number} timeGetter  Returns current audio playback time in seconds.
    */
   beginSpeech(visemes, timeGetter) {
-    // Cancel any pending procedural timeouts
-    for (const t of pendingTimeouts) clearTimeout(t);
-    pendingTimeouts = [];
     speechVisemes = visemes;
     getAudioTime  = timeGetter;
   },
@@ -201,8 +155,6 @@ window.avatarAPI = {
 
   /** Hide the avatar panel and stop rendering. */
   hide() {
-    for (const t of pendingTimeouts) clearTimeout(t);
-    pendingTimeouts = [];
     speechVisemes = null;
     getAudioTime  = null;
     targetViseme  = 'viseme_sil';

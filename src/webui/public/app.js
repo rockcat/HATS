@@ -729,10 +729,6 @@ function handleSpeechChunk(chunk) {
 
 async function drainSpeechQueue(agentName) {
   speechPlaying.add(agentName);
-  // Create AudioContext on the first user-driven call (drawer open = user gesture)
-  if (!audioCtx) audioCtx = new AudioContext();
-  if (audioCtx.state === 'suspended') await audioCtx.resume();
-
   while (true) {
     const q = speechQueues.get(agentName) ?? [];
     if (q.length === 0 || agentName !== activeDetailAgent) break;
@@ -1111,6 +1107,10 @@ function openAgentDetail(name) {
   feed.innerHTML = '<p class="feed-empty">Loading…</p>';
   document.getElementById('agent-detail').hidden = false;
 
+  // Unlock AudioContext inside the user gesture (click) so it can play later
+  if (!audioCtx) audioCtx = new AudioContext();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+
   // Register interest in speech for this agent
   setSpeechAgent(name);
 
@@ -1162,11 +1162,6 @@ function appendAgentFeedEvent(agentName, ev) {
   if (empty) empty.remove();
   feed.appendChild(buildFeedItem(ev, agentName));
   feed.scrollTop = feed.scrollHeight;
-
-  // Trigger lipsync when the agent produces a response
-  if (ev.type === 'agent_response' && ev.content && window.avatarAPI) {
-    window.avatarAPI.speak(ev.content);
-  }
 }
 
 function buildFeedItem(ev, selfName) {
