@@ -1,2 +1,6 @@
 node_modules/
 .env
+*.map
+dist/
+logs/
+projects/
