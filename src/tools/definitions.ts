@@ -114,6 +114,33 @@ const ASSIGN_TASK: ToolDefinition = {
   },
 };
 
+const SCHEDULE_MEETING: ToolDefinition = {
+  name: 'schedule_meeting',
+  description: 'Schedule a meeting for a future date and time. The meeting will start automatically when the scheduled time arrives.',
+  parameters: {
+    type: 'object',
+    properties: {
+      type: {
+        type: 'string',
+        enum: ['standup', 'sprint_planning', 'retro', 'review', 'ad_hoc'],
+        description: 'The type of meeting.',
+      },
+      participants: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Names of team members to invite. Use "human" to include the human team lead.',
+      },
+      topic: { type: 'string', description: 'What the meeting is about.' },
+      agenda: { type: 'string', description: 'The agenda or questions to address.' },
+      scheduledFor: {
+        type: 'string',
+        description: 'ISO-8601 date-time when the meeting should start, e.g. "2026-04-01T09:00:00".',
+      },
+    },
+    required: ['type', 'participants', 'topic', 'scheduledFor'],
+  },
+};
+
 const REQUEST_MEETING: ToolDefinition = {
   name: 'request_meeting',
   description: 'Call a team meeting. You will facilitate. Invite specific team members and optionally the human.',
@@ -135,7 +162,7 @@ const REQUEST_MEETING: ToolDefinition = {
 // ── Registry ──────────────────────────────────────────────────────────────────
 
 const BASE_TOOLS = [SEND_MESSAGE, ESCALATE_TO_HUMAN, REPORT_TASK_COMPLETE, READ_FILE, WRITE_FILE, LIST_FILES, WEB_SEARCH];
-const BLUE_HAT_TOOLS = [...BASE_TOOLS, ASSIGN_TASK, REQUEST_MEETING];
+const BLUE_HAT_TOOLS = [...BASE_TOOLS, ASSIGN_TASK, REQUEST_MEETING, SCHEDULE_MEETING];
 
 export function getToolsForHat(hatType: HatType): ToolDefinition[] {
   return hatType === HatType.Blue ? BLUE_HAT_TOOLS : BASE_TOOLS;

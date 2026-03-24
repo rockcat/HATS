@@ -1,6 +1,7 @@
 import * as readline from 'readline';
 import { TeamOrchestrator, ProviderFactory } from '../orchestrator/orchestrator.js';
 import { HatType } from '../hats/types.js';
+import { DEFAULT_MODEL, DEFAULT_PROVIDER } from '../providers/default-provider.js';
 
 const HAT_NAMES: Record<string, HatType> = {
   white:  HatType.White,
@@ -227,10 +228,10 @@ export class CLIInterface {
       return;
     }
 
-    // Default to same model as an existing agent, fall back to claude-sonnet-4-6
+    // Default to same model as an existing agent, fall back to gpt-5-mini
     const existingAgent = this.orchestrator.listAgents()[0];
-    const model = existingAgent?.config.model ?? 'claude-sonnet-4-6';
-    const providerName = existingAgent?.config.provider.name ?? 'anthropic';
+    const providerName = existingAgent?.config.provider.name ?? DEFAULT_PROVIDER;
+    const model = existingAgent?.config.model ?? DEFAULT_MODEL;
     const provider = this.providerFactory(providerName);
 
     this.orchestrator.registerAgent({

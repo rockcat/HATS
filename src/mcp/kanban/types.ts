@@ -26,6 +26,8 @@ export interface Ticket {
   comments: Comment[];
   createdAt: string;
   updatedAt: string;
+  projectName?: string;    // human-readable project name
+  projectFolder?: string;  // absolute path to the project working folder
 }
 
 export interface Board {

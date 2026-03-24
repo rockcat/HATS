@@ -2,14 +2,15 @@ import { v4 as uuidv4 } from 'uuid';
 import { HatType } from '../hats/types.js';
 import { getHatDefinition } from '../hats/definitions.js';
 import { generateSystemPrompt } from '../prompt/generator.js';
-import { CompletionRequest, Message } from '../providers/types.js';
+import { AIProvider, CompletionRequest, Message, ToolCall } from '../providers/types.js';
 import { getToolsForHat } from '../tools/definitions.js';
 import { TeamMessage } from '../orchestrator/types.js';
 import { AgentConfig, AgentMessage, AgentState, AgentEvent, ToolExecutor, ResponseHandler } from './types.js';
 import { transition } from './state-machine.js';
 import { Semaphore } from '../providers/semaphore.js';
 
-const MAX_TOOL_ROUNDS = 10; // prevent infinite tool loops
+const MAX_TOOL_ROUNDS    = 10; // prevent infinite tool loops
+const MAX_HISTORY_MESSAGES = 20; // cap conversation history to control token usage
 
 export class Agent {
   readonly id: string;
@@ -51,6 +52,18 @@ export class Agent {
   /** Provider function that returns extra tools (e.g. MCP) to merge at call time. */
   setExtraToolsProvider(provider: () => import('../providers/types.js').ToolDefinition[]): void {
     this.extraToolsProvider = provider;
+  }
+
+  /** Hot-swap the LLM provider and model without restarting the agent. */
+  setProvider(provider: AIProvider, model: string): void {
+    this.config.provider = provider;
+    this.config.model    = model;
+  }
+
+  /** Change the agent's thinking hat and rebuild the system prompt. */
+  setHat(hatType: HatType): void {
+    this.config.hatType = hatType;
+    this.systemPrompt = this.buildSystemPrompt();
   }
 
   /** Called by orchestrator when team roster changes. */
@@ -115,6 +128,7 @@ export class Agent {
         messages: working,
         model: this.config.model,
         tools,
+        agentName: this.name,
       };
 
       const response = await (this.llmSemaphore
@@ -174,7 +188,7 @@ export class Agent {
     ];
 
     for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-      const req2 = { systemPrompt: this.systemPrompt, messages: working, model: this.config.model, tools };
+      const req2 = { systemPrompt: this.systemPrompt, messages: working, model: this.config.model, tools, agentName: this.name };
       const response = await (this.llmSemaphore
         ? this.llmSemaphore.run(() => this.config.provider.complete(req2))
         : this.config.provider.complete(req2));
@@ -236,14 +250,8 @@ export class Agent {
 
   private persistHistory(working: Message[], userContent: string): void {
     void userContent;
-    let sliced = working.slice(-40);
-
-    // Never start with a tool-result or assistant message — Anthropic requires
-    // the first message to be a regular user message (no toolCallId).
-    const firstUserIdx = sliced.findIndex((m) => m.role === 'user' && !m.toolCallId);
-    if (firstUserIdx > 0) sliced = sliced.slice(firstUserIdx);
-
-    this.conversationHistory = sliced.map((m): AgentMessage => ({
+    const sliced = working.slice(-MAX_HISTORY_MESSAGES);
+    this.conversationHistory = sanitizeHistory(sliced).map((m): AgentMessage => ({
       role: m.role,
       content: m.content,
       timestamp: new Date(),
@@ -255,12 +263,26 @@ export class Agent {
 
   getHistory(): AgentMessage[] { return [...this.conversationHistory]; }
 
-  /** Restore conversation history (e.g. from a saved snapshot). */
-  setHistory(history: AgentMessage[]): void {
-    this.conversationHistory = history.map((m) => ({
-      ...m,
-      timestamp: m.timestamp instanceof Date ? m.timestamp : new Date(m.timestamp),
+  /** Restore conversation history from a snapshot or live copy.
+   *  Accepts the snapshot shape where timestamp is an ISO string
+   *  and toolCalls may be untyped JSON. */
+  setHistory(history: Array<{
+    role: 'user' | 'assistant' | 'tool';
+    content: string;
+    timestamp: Date | string;
+    toolCalls?: ToolCall[] | unknown;
+    toolCallId?: string;
+    toolName?: string;
+  }>): void {
+    const restored: AgentMessage[] = history.map((m) => ({
+      role:        m.role,
+      content:     m.content,
+      timestamp:   m.timestamp instanceof Date ? m.timestamp : new Date(m.timestamp as string),
+      toolCalls:   m.toolCalls as ToolCall[] | undefined,
+      toolCallId:  m.toolCallId,
+      toolName:    m.toolName,
     }));
+    this.conversationHistory = sanitizeHistory(restored);
   }
 
   toJSON(): object {
@@ -278,6 +300,66 @@ export class Agent {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+/**
+ * Remove any messages that would cause an Anthropic API error:
+ *
+ * 1. Leading non-user messages (first message must be a plain user message)
+ * 2. Assistant tool-call groups where not ALL tool_use IDs have a matching
+ *    tool_result in the immediately following tool messages — the entire group
+ *    (assistant + partial results) is dropped
+ * 3. Orphaned tool-result messages that appear outside of a valid group
+ *
+ * Processes messages as groups so partial sequences are always removed together.
+ */
+function sanitizeHistory<T extends { role: string; toolCalls?: ToolCall[]; toolCallId?: string }>(
+  messages: T[],
+): T[] {
+  if (messages.length === 0) return messages;
+
+  // 1. Drop everything before the first plain user message
+  const firstUser = messages.findIndex((m) => m.role === 'user' && !m.toolCallId);
+  const msgs = firstUser > 0 ? messages.slice(firstUser) : [...messages];
+
+  const out: T[] = [];
+  let i = 0;
+
+  while (i < msgs.length) {
+    const m = msgs[i]!;
+
+    if (m.role === 'assistant' && m.toolCalls && m.toolCalls.length > 0) {
+      // Collect ALL immediately following tool-result messages
+      const results: T[] = [];
+      let j = i + 1;
+      while (j < msgs.length && msgs[j]!.role === 'tool') {
+        results.push(msgs[j]!);
+        j++;
+      }
+
+      // Valid only if every tool_call ID has a matching tool_result
+      const expectedIds = new Set(m.toolCalls.map((tc) => tc.id));
+      const coveredIds  = new Set(results.map((r) => r.toolCallId));
+      const complete    = expectedIds.size > 0 &&
+        [...expectedIds].every((id) => coveredIds.has(id));
+
+      if (complete) {
+        out.push(m);
+        for (const r of results) out.push(r);
+      }
+      // else: drop the whole group (assistant + partial results)
+      i = j; // advance past results regardless
+
+    } else if (m.role === 'tool') {
+      // Orphaned tool result outside a valid group — drop it
+      i++;
+    } else {
+      out.push(m);
+      i++;
+    }
+  }
+
+  return out;
+}
 
 function toProviderMessage(m: AgentMessage): Message {
   return {

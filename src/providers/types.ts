@@ -34,6 +34,7 @@ export interface CompletionRequest {
   tools?: ToolDefinition[];
   maxTokens?: number;
   temperature?: number;
+  agentName?: string;   // for debug logging only
 }
 
 export interface CompletionResponse {

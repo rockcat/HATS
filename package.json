@@ -9,7 +9,7 @@
     "dev": "tsx src/index.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "start": "node --env-file=.env --import tsx/esm team-demo.ts",
+    "start": "node --env-file=.env --import tsx/esm team-runner.ts",
     "webui": "tsx webui-demo.ts",
     "postinstall": "node scripts/patch-grandiose.mjs"
   },

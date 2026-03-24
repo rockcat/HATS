@@ -1,0 +1,52 @@
+{
+    "avatars": [
+        { 
+            "name": "Casey",
+            "sex": "female",
+            "file": "casey.glb",
+            "camera": [0, 1.65, 0.5]
+        },
+        { 
+            "name": "Jordan",
+            "sex": "male",
+            "file": "jordan.glb",
+            "camera": [0, 1.7, 0.5]
+        },
+        { 
+            "name": "Ella",
+            "sex": "female",
+            "file": "ella.glb",
+            "camera": [0, 1.7, 0.5]
+        },
+        { 
+            "name": "Max",
+            "sex": "female",
+            "file": "max.glb",
+            "camera": [0, 1.6, 0.5]
+        },
+        {
+            "name": "Clare",
+            "sex": "female",
+            "file": "clare.glb",
+            "camera": [0, 1.6, 0.5]
+        },
+        {
+            "name": "Dave",
+            "sex": "male",
+            "file": "dave.glb",
+            "camera": [0, 1.8, 0.5]
+        },
+        {
+            "name": "Will",
+            "sex": "male",
+            "file": "will.glb",
+            "camera": [0, 1.75, 0.5]
+        },
+        {
+            "name": "Harry",
+            "sex": "male",
+            "file": "harry.glb",
+            "camera": [0, 1.8, 0.4]
+        }
+    ]
+}

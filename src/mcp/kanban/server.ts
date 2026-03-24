@@ -161,8 +161,10 @@ function handleTool(name: string, args: Record<string, unknown>, store: KanbanSt
       return store.getBoardSummary();
 
     case 'create_ticket': {
+      const title = (args['title'] as string | undefined)?.trim();
+      if (!title) throw new Error('title is required and cannot be empty');
       const ticket = store.createTicket({
-        title:       args['title'] as string,
+        title,
         description: args['description'] as string,
         priority:    args['priority'] as Priority | undefined,
         creator:     args['creator'] as string,

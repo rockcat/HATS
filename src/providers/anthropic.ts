@@ -4,6 +4,7 @@ import {
   Message, ToolCall,
 } from './types.js';
 import { withRetry } from './retry.js';
+import { debugState } from './debug-state.js';
 
 export class AnthropicProvider implements AIProvider {
   readonly name = 'anthropic';
@@ -18,6 +19,20 @@ export class AnthropicProvider implements AIProvider {
   }
 
   private async doComplete(req: CompletionRequest): Promise<CompletionResponse> {
+    if (debugState.logPrompts) {
+      const label = req.agentName ? `[${req.agentName}]` : '[agent]';
+      const bar   = '═'.repeat(60);
+      console.log(`\n${bar}`);
+      console.log(`${label} model=${req.model}  msgs=${req.messages.length}  tools=${req.tools?.length ?? 0}`);
+      console.log(`SYSTEM: ${req.systemPrompt.slice(0, 400)}${req.systemPrompt.length > 400 ? '…' : ''}`);
+      for (const m of req.messages) {
+        const body = String(m.content ?? '').replace(/\s+/g, ' ').slice(0, 300);
+        const tc   = m.toolCalls ? ` [${m.toolCalls.map(c => c.name).join(',')}]` : '';
+        console.log(`  ${m.role.padEnd(9)} ${body}${tc}`);
+      }
+      console.log(bar);
+    }
+
     try {
       const tools = req.tools?.map((t) => ({
         name: t.name,

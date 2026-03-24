@@ -11,7 +11,22 @@
       "Bash(node_modules/.bin/tsc --noEmit)",
       "Read(//usr/local/**)",
       "Read(//c/Users/pauln/.nvm/versions/**)",
-      "Bash(cmd.exe /c \"cd f:\\\\workspace\\\\personality && node node_modules\\\\typescript\\\\bin\\\\tsc --noEmit 2>&1\")"
+      "Bash(cmd.exe /c \"cd f:\\\\workspace\\\\personality && node node_modules\\\\typescript\\\\bin\\\\tsc --noEmit 2>&1\")",
+      "Bash(npm run:*)",
+      "Bash(cmd /c \"cd f:\\\\workspace\\\\personality && npm run build 2>&1\")",
+      "Bash(cmd /c \"cd f:\\\\workspace\\\\personality && npx tsc --noEmit 2>&1\")",
+      "Bash(ls /usr/local/bin/node*)",
+      "Read(//usr/**)",
+      "Read(//c/Users/pauln/AppData/Roaming/nvm/**)",
+      "Bash(/c/Users/pauln/AppData/Roaming/nvm/v18.13.0/node.exe node_modules/.bin/tsc --noEmit)",
+      "Bash(\"/c/Program Files/nodejs/node.exe\" node_modules/typescript/bin/tsc --noEmit)",
+      "Bash(\"/c/Users/pauln/AppData/Roaming/nvm/v22.18.0/node.exe\" node_modules/typescript/bin/tsc --noEmit)",
+      "Bash(curl:*)",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); [print\\(a[''''identity''''][''''name''''], a.get\\(''''providerName'''',''''MISSING''''\\), a.get\\(''''model'''',''''MISSING''''\\)\\) for a in d[''''agents'''']]\")",
+      "Bash(node:*)",
+      "Bash(find f:/workspace/personality -name avatars* -o -name *.glb)",
+      "Bash(node -e \"import\\(''''./src/providers/gemini.js''''\\)\")",
+      "Bash(echo \"EXIT:$?\")"
     ]
   }
 }

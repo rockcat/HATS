@@ -13,7 +13,8 @@ import { MCPServerDef } from '../mcp/mcp-client.js';
 import { Semaphore } from '../providers/semaphore.js';
 import { TeamSnapshot, AgentSnapshot, SNAPSHOT_VERSION } from '../store/team-snapshot.js';
 import { MeetingRoom } from './meeting-room.js';
-import { TeamMessage, Task, Meeting, MeetingTurn } from './types.js';
+import { TeamMessage, Task, Meeting, MeetingTurn, ScheduledMeeting, MeetingType } from './types.js';
+import { MeetingStore } from './meeting-store.js';
 
 /** Called during loadState to reconstruct a provider from its saved name. */
 export type ProviderFactory = (providerName: string) => AIProvider;
@@ -23,6 +24,8 @@ export interface OrchestratorConfig {
   humanName?: string;           // how the human appears in messages; default 'Human'
   maxTasksPerAgent?: number;    // soft cap; default 5
   projectsRoot?: string;        // root folder for project workspaces; default './projects'
+  llmConcurrency?: number;      // max simultaneous LLM calls; default 2
+  llmCallIntervalMs?: number;   // min ms between each LLM call starting; default 3000
 }
 
 export class TeamOrchestrator {
@@ -30,24 +33,35 @@ export class TeamOrchestrator {
   private tasks: Map<string, Task> = new Map();
   private meetings: Map<string, Meeting> = new Map();
   private activeMeetingRooms: Map<string, MeetingRoom> = new Map();
+  private scheduledMeetingStore: MeetingStore | null = null;
   private store: EventStore;
   private humanName: string;
   private projectsRoot: string;
   private onHumanEscalation: ((from: string, message: string, urgency: string) => void) | null = null;
   private rebuildTimer: ReturnType<typeof setTimeout> | null = null;
   private mcp = new MCPRegistry();
-  private llmSemaphore = new Semaphore(3); // max 3 concurrent LLM calls across all agents
+  private llmSemaphore: Semaphore;
 
   constructor(config: OrchestratorConfig = {}) {
     this.store = new EventStore(config.storePath ?? './team-events.jsonl');
     this.humanName = config.humanName ?? 'Human';
     this.projectsRoot = path.resolve(config.projectsRoot ?? './projects');
+    this.llmSemaphore = new Semaphore(
+      config.llmConcurrency    ?? 2,
+      config.llmCallIntervalMs ?? 3000,
+    );
   }
 
   async init(): Promise<void> {
     await this.store.init();
     await mkdir(this.projectsRoot, { recursive: true });
     await this.store.append('session_start', { humanName: this.humanName });
+  }
+
+  /** Wire up the scheduled-meeting store so agents can schedule meetings. */
+  async initMeetingStore(filePath: string): Promise<void> {
+    this.scheduledMeetingStore = new MeetingStore(filePath);
+    await this.scheduledMeetingStore.load();
   }
 
   /** Connect to an MCP server. Call before or after registering agents — tools merge automatically. */
@@ -144,8 +158,7 @@ export class TeamOrchestrator {
         teamContext: snap.teamContext,
       };
       const agent = this.registerAgent(config);
-      // Restore history (timestamps are ISO strings in the snapshot)
-      agent.setHistory(snap.history as AgentMessage[]);
+      agent.setHistory(snap.history);
     }
 
     // Restore tasks
@@ -183,6 +196,28 @@ export class TeamOrchestrator {
 
   listAgents(): Agent[] {
     return Array.from(this.agents.values());
+  }
+
+  /** Hot-swap the LLM provider and model for a named agent. */
+  updateAgentConfig(name: string, provider: AIProvider, model: string): void {
+    const agent = this.agents.get(name);
+    if (!agent) throw new Error(`Agent "${name}" not found`);
+    agent.setProvider(provider, model);
+  }
+
+  /** Change an agent's thinking hat and rebuild their system prompt. */
+  changeAgentHat(name: string, hatType: HatType): void {
+    const agent = this.agents.get(name);
+    if (!agent) throw new Error(`Agent "${name}" not found`);
+    agent.setHat(hatType);
+    this.rebuildTeamContext();
+  }
+
+  /** Remove an agent from the team. */
+  removeAgent(name: string): void {
+    if (!this.agents.has(name)) throw new Error(`Agent "${name}" not found`);
+    this.agents.delete(name);
+    this.rebuildTeamContext();
   }
 
   // ── Human interface wiring ────────────────────────────────────────────────
@@ -280,6 +315,60 @@ export class TeamOrchestrator {
 
   listMeetings(): Meeting[] {
     return Array.from(this.meetings.values());
+  }
+
+  // ── Scheduled meetings ────────────────────────────────────────────────────
+
+  async createScheduledMeeting(data: {
+    type: MeetingType;
+    topic: string;
+    agenda?: string;
+    facilitator: string;
+    participants: string[];
+    scheduledFor: string;
+    createdBy: string;
+  }): Promise<ScheduledMeeting> {
+    if (!this.scheduledMeetingStore) throw new Error('Meeting store not initialised');
+    const meeting: ScheduledMeeting = {
+      id: uuidv4(),
+      ...data,
+      status: 'scheduled',
+      createdAt: new Date().toISOString(),
+    };
+    await this.scheduledMeetingStore.add(meeting);
+    await this.store.append('meeting_scheduled', { id: meeting.id, topic: data.topic, scheduledFor: data.scheduledFor, facilitator: data.facilitator });
+    return meeting;
+  }
+
+  listScheduledMeetings(): ScheduledMeeting[] {
+    return this.scheduledMeetingStore?.list() ?? [];
+  }
+
+  async cancelScheduledMeeting(id: string): Promise<void> {
+    if (!this.scheduledMeetingStore) throw new Error('Meeting store not initialised');
+    const meeting = this.scheduledMeetingStore.get(id);
+    if (!meeting) throw new Error(`Scheduled meeting "${id}" not found`);
+    if (meeting.status !== 'scheduled') throw new Error(`Meeting "${id}" is already ${meeting.status}`);
+    meeting.status = 'cancelled';
+    meeting.cancelledAt = new Date().toISOString();
+    await this.scheduledMeetingStore.update(meeting);
+  }
+
+  /** Launch a scheduled meeting immediately (called by the auto-start timer or manually). */
+  async launchScheduledMeeting(id: string): Promise<void> {
+    if (!this.scheduledMeetingStore) throw new Error('Meeting store not initialised');
+    const scheduled = this.scheduledMeetingStore.get(id);
+    if (!scheduled) throw new Error(`Scheduled meeting "${id}" not found`);
+    if (scheduled.status !== 'scheduled') return; // already launched or cancelled
+
+    const facilitator = this.agents.get(scheduled.facilitator);
+    if (!facilitator) throw new Error(`Facilitator "${scheduled.facilitator}" not found`);
+
+    await this.startMeeting(scheduled.facilitator, scheduled.participants, scheduled.topic, scheduled.agenda);
+
+    scheduled.status = 'launched';
+    scheduled.launchedAt = new Date().toISOString();
+    await this.scheduledMeetingStore.update(scheduled);
   }
 
   // ── Tool executor ─────────────────────────────────────────────────────────
@@ -384,6 +473,32 @@ export class TeamOrchestrator {
 
         await this.startMeeting(agentName, participants, topic, agenda);
         return `Meeting "${topic}" started.`;
+      }
+
+      case 'schedule_meeting': {
+        const { type, participants, topic, agenda, scheduledFor } = call.arguments as {
+          type: MeetingType;
+          participants: string[];
+          topic: string;
+          agenda?: string;
+          scheduledFor: string;
+        };
+        if (!this.scheduledMeetingStore) return 'Meeting scheduling is not available in this project.';
+        const invalid = participants.filter((p) => p !== 'human' && !this.agents.has(p));
+        if (invalid.length > 0) return `Unknown participants: ${invalid.join(', ')}`;
+        const when = new Date(scheduledFor);
+        if (isNaN(when.getTime())) return `Invalid scheduledFor date: "${scheduledFor}". Use ISO-8601 format, e.g. "2026-04-01T09:00:00".`;
+        if (when <= new Date()) return `scheduledFor must be in the future.`;
+        const scheduled = await this.createScheduledMeeting({
+          type,
+          topic,
+          agenda,
+          facilitator: agentName,
+          participants,
+          scheduledFor: when.toISOString(),
+          createdBy: agentName,
+        });
+        return `Meeting "${topic}" scheduled for ${when.toLocaleString()} (id: ${scheduled.id}).`;
       }
 
       case 'read_file': {
@@ -642,11 +757,12 @@ export class TeamOrchestrator {
 function toProjectSlug(text: string): string {
   return text
     .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, '')
+    .replace(/[^a-z0-9\s-]/g, '')   // keep dashes so TKT-001 stays tkt-001
     .trim()
     .split(/\s+/)
     .slice(0, 5)
     .join('-')
     .replace(/-+/g, '-')
-    .slice(0, 50) || 'project';
+    .replace(/^-|-$/g, '')
+    .slice(0, 60) || 'project';
 }

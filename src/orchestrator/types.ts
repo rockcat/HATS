@@ -35,6 +35,25 @@ export interface Task {
   projectFolder?: string;
 }
 
+export type MeetingType = 'standup' | 'sprint_planning' | 'retro' | 'review' | 'ad_hoc';
+export type ScheduledMeetingStatus = 'scheduled' | 'launched' | 'cancelled';
+
+export interface ScheduledMeeting {
+  id: string;
+  type: MeetingType;
+  topic: string;
+  agenda?: string;
+  facilitator: string;
+  participants: string[];
+  scheduledFor: string;         // ISO-8601
+  status: ScheduledMeetingStatus;
+  createdBy: string;
+  createdAt: string;
+  launchedAt?: string;
+  cancelledAt?: string;
+  meetingId?: string;           // set when the live Meeting is created
+}
+
 export interface MeetingTurn {
   participant: string;  // agent name or 'human'
   content: string;
