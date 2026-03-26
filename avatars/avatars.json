@@ -4,49 +4,57 @@
             "name": "Casey",
             "sex": "female",
             "file": "casey.glb",
-            "camera": [0, 1.65, 0.5]
+            "camera": [0, 1.65, 0.5],
+            "rotate": [0, 0, 0]
         },
         { 
             "name": "Jordan",
             "sex": "male",
             "file": "jordan.glb",
-            "camera": [0, 1.7, 0.5]
+            "camera": [0, 1.7, 0.5],
+            "rotate": [0, 0, 0]
         },
         { 
             "name": "Ella",
             "sex": "female",
             "file": "ella.glb",
-            "camera": [0, 1.7, 0.5]
+            "camera": [0, 1.7, 0.5],
+            "rotate": [0, 0, 0]
         },
         { 
             "name": "Max",
             "sex": "female",
             "file": "max.glb",
-            "camera": [0, 1.6, 0.5]
+            "camera": [0, 1.8, 0.5],
+            "rotate": [0, 0, 0]
         },
         {
             "name": "Clare",
             "sex": "female",
             "file": "clare.glb",
-            "camera": [0, 1.6, 0.5]
+            "camera": [0, 1.6, 0.5],
+            "rotate": [0, 90, 0]
         },
         {
             "name": "Dave",
             "sex": "male",
             "file": "dave.glb",
-            "camera": [0, 1.8, 0.5]
+            "camera": [0, 1.8, 0.5],
+            "rotate": [0, 90, 0]
         },
         {
             "name": "Will",
             "sex": "male",
             "file": "will.glb",
-            "camera": [0, 1.75, 0.5]
+            "camera": [0, 1.75, 0.5],
+            "rotate": [0, 0, 0]
         },
         {
             "name": "Harry",
             "sex": "male",
             "file": "harry.glb",
-            "camera": [0, 1.8, 0.4]
+            "camera": [0, 1.8, 0.4],
+            "rotate": [0, 0, 0]
         }
     ]
 }

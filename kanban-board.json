@@ -1,0 +1,168 @@
+{
+  "tickets": {
+    "TKT-001": {
+      "id": "TKT-001",
+      "title": "Research and Identify Key Contacts at ME Bank via LinkedIn",
+      "description": "Use LinkedIn to locate specific individuals within the identified Middle Eastern bank who are relevant decision-makers or influencers for DivaTech's pilot offer. Focus on roles related to AI, innovation, digital transformation, or relevant business units. Gather their profiles, contact info, and any relevant notes to enable highly targeted outreach. Collaborate with Morgan and River to enrich the data as needed.",
+      "priority": "high",
+      "column": "backlog",
+      "creator": "Sam",
+      "assignee": "Sam",
+      "tags": [
+        "LinkedIn",
+        "Lead Research",
+        "Pilot"
+      ],
+      "comments": [],
+      "createdAt": "2026-03-25T16:04:06.411Z",
+      "updatedAt": "2026-03-25T16:04:06.411Z"
+    },
+    "TKT-003": {
+      "id": "TKT-003",
+      "title": "LinkedIn Research for Key Contacts at ME Bank",
+      "description": "Identify unique key decision-makers and influencers in the Middle Eastern bank relevant to DivaTech's pilot offer. Focus on AI, innovation, and digital transformation roles. Compile profiles and contact information for targeted outreach. Collaborate with Morgan and River to enrich insights.",
+      "priority": "high",
+      "column": "backlog",
+      "creator": "Sam",
+      "assignee": "Sam",
+      "tags": [
+        "LinkedIn",
+        "Lead Research",
+        "Pilot"
+      ],
+      "comments": [],
+      "createdAt": "2026-03-25T16:18:29.220Z",
+      "updatedAt": "2026-03-25T16:18:29.220Z"
+    },
+    "TKT-004": {
+      "id": "TKT-004",
+      "title": "Gather sales data: lead sources, conversion rates, cycle length",
+      "description": "Provide Alex with current lead source mix, conversion rates by channel, and average sales cycle length. This data is critical for validating the website's ROI assumption and informing scope. Needed before design brief is finalised.\",\n<parameter name=\"creator\">Jordan",
+      "priority": "high",
+      "column": "backlog",
+      "assignee": "Human",
+      "tags": [
+        "website",
+        "data",
+        "sales"
+      ],
+      "comments": [],
+      "createdAt": "2026-03-26T14:22:04.462Z",
+      "updatedAt": "2026-03-26T14:22:04.462Z"
+    },
+    "TKT-005": {
+      "id": "TKT-005",
+      "title": "Define website business case: problem statement, success metrics",
+      "description": "Confirm core business problem (credibility gap vs. lead gen vs. both), define measurable success metrics (inbound lead volume, conversion uplift, cycle reduction), and establish go/no-go criteria. Input: sales data from parallel ticket.\",\n<parameter name=\"creator\">Jordan",
+      "priority": "high",
+      "column": "backlog",
+      "assignee": "Sam",
+      "tags": [
+        "website",
+        "business-case",
+        "strategy"
+      ],
+      "comments": [],
+      "createdAt": "2026-03-26T14:22:04.474Z",
+      "updatedAt": "2026-03-26T14:22:04.474Z"
+    },
+    "TKT-006": {
+      "id": "TKT-006",
+      "title": "Risk assessment: website scope, timeline, resourcing, cost exposure",
+      "description": "Once business case and sales data are in, conduct full risk scan across scope creep vectors, technical/operational dependencies, timeline realism, skill gaps (in-house vs. external), and budget buffer/overrun scenarios. Deliver risk register with mitigation options.\",\n<parameter name=\"creator\">Jordan",
+      "priority": "high",
+      "column": "backlog",
+      "assignee": "Alex",
+      "tags": [
+        "website",
+        "risk",
+        "delivery"
+      ],
+      "comments": [],
+      "createdAt": "2026-03-26T14:22:04.487Z",
+      "updatedAt": "2026-03-26T14:22:04.487Z"
+    },
+    "TKT-007": {
+      "id": "TKT-007",
+      "title": "Design homepage UI",
+      "description": "Create a modern and attractive homepage UI design for the new company website focusing on clarity, usability, and brand identity.",
+      "priority": "medium",
+      "column": "backlog",
+      "creator": "River",
+      "assignee": "",
+      "tags": [
+        "website",
+        "UI design"
+      ],
+      "comments": [],
+      "createdAt": "2026-03-26T17:07:29.633Z",
+      "updatedAt": "2026-03-26T17:07:29.633Z"
+    },
+    "TKT-008": {
+      "id": "TKT-008",
+      "title": "Develop website navigation system",
+      "description": "Create an intuitive and accessible navigation system for the new company website to enhance user experience and site exploration.",
+      "priority": "medium",
+      "column": "backlog",
+      "creator": "River",
+      "assignee": "",
+      "tags": [
+        "website",
+        "navigation"
+      ],
+      "comments": [],
+      "createdAt": "2026-03-26T17:07:29.645Z",
+      "updatedAt": "2026-03-26T17:07:29.645Z"
+    },
+    "TKT-009": {
+      "id": "TKT-009",
+      "title": "Implement responsive design",
+      "description": "Ensure the new website is fully responsive across all devices and screen sizes, including mobile, tablet, and desktop.",
+      "priority": "high",
+      "column": "backlog",
+      "creator": "River",
+      "assignee": "",
+      "tags": [
+        "website",
+        "responsive design"
+      ],
+      "comments": [],
+      "createdAt": "2026-03-26T17:07:29.657Z",
+      "updatedAt": "2026-03-26T17:07:29.657Z"
+    },
+    "TKT-010": {
+      "id": "TKT-010",
+      "title": "Create content strategy and sitemap",
+      "description": "Develop a content strategy and sitemap for the new company website to organize information and improve SEO.",
+      "priority": "medium",
+      "column": "backlog",
+      "creator": "River",
+      "assignee": "",
+      "tags": [
+        "website",
+        "content"
+      ],
+      "comments": [],
+      "createdAt": "2026-03-26T17:07:29.668Z",
+      "updatedAt": "2026-03-26T17:07:29.668Z"
+    },
+    "TKT-011": {
+      "id": "TKT-011",
+      "title": "Integrate CMS for content management",
+      "description": "Select and integrate a Content Management System that allows easy updates and scalability for the company website.",
+      "priority": "high",
+      "column": "backlog",
+      "creator": "River",
+      "assignee": "",
+      "tags": [
+        "website",
+        "CMS",
+        "integration"
+      ],
+      "comments": [],
+      "createdAt": "2026-03-26T17:07:29.678Z",
+      "updatedAt": "2026-03-26T17:07:29.678Z"
+    }
+  },
+  "nextSeq": 12
+}

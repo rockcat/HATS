@@ -57,6 +57,16 @@ export class CLIInterface {
       completer: (line: string) => this.completer(line),
     });
 
+    this.wireEscalation(orchestrator);
+  }
+
+  /** Update the orchestrator reference (e.g. after a project switch). */
+  setOrchestrator(orchestrator: TeamOrchestrator): void {
+    this.orchestrator = orchestrator;
+    this.wireEscalation(orchestrator);
+  }
+
+  private wireEscalation(orchestrator: TeamOrchestrator): void {
     // Surface escalations to console
     orchestrator.onEscalation((from, message, urgency) => {
       const icon = urgency === 'high' ? '🔴' : '🟡';

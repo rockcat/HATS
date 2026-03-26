@@ -32,7 +32,14 @@
         </div>
       </span>
     </div>
-    <button id="new-ticket-btn" class="header-btn" title="Create a new ticket">+ New Ticket</button>
+    <div class="telemetry-bar" id="telemetry-bar" title="LLM usage totals">
+      <span class="telemetry-stat"><span class="telemetry-label">In</span> <span id="tel-in">0</span></span>
+      <span class="telemetry-sep">|</span>
+      <span class="telemetry-stat"><span class="telemetry-label">Out</span> <span id="tel-out">0</span></span>
+      <span class="telemetry-sep">|</span>
+      <span class="telemetry-stat"><span class="telemetry-label">Cost</span> <span id="tel-cost">$0.0000</span></span>
+      <button id="telemetry-btn" class="telemetry-detail-btn" title="View LLM usage details">&#9432;</button>
+    </div>
     <button id="debug-log-btn" class="header-btn header-btn--ghost" title="Toggle prompt logging to console">Debug</button>
     <button id="settings-btn" class="header-btn header-btn--icon" title="Settings">⚙</button>
     <div id="connection-status" class="status-dot" title="Disconnected"></div>
@@ -45,6 +52,8 @@
       <div class="panel-header panel-header--agents">
         Agents
         <button id="add-agent-btn" class="panel-add-btn" title="Add new agent">+ Agent</button>
+        <button id="impromptu-meeting-btn" class="panel-add-btn" title="Start an impromptu meeting now">⚡ Meet</button>
+        <button class="panel-expand-btn" data-panel="agents-panel" title="Expand">&#x26F6;</button>
       </div>
       <div id="agents-container">
         <svg id="comms-overlay" aria-hidden="true"></svg>
@@ -54,23 +63,45 @@
     <!-- Bottom-left: Tools & MCP -->
     <section id="tools-panel">
       <div class="panel-header panel-header--tabs">
-        <button class="panel-tab active" data-tab="tools">Tools</button>
+        <button class="panel-tab" data-tab="tools">Tools</button>
         <button class="panel-tab" data-tab="mcp">MCP Servers</button>
-        <button class="panel-tab" data-tab="cli">CLI</button>
+        <button class="panel-tab active" data-tab="cli">CLI</button>
+        <button class="panel-tab" data-tab="files">Files</button>
+        <button class="panel-expand-btn" data-panel="tools-panel" title="Expand">&#x26F6;</button>
       </div>
-      <div id="tools-content" class="tab-pane active"></div>
+      <div id="tools-content" class="tab-pane"></div>
       <div id="mcp-content" class="tab-pane"></div>
-      <div id="cli-content" class="tab-pane">
+      <div id="cli-content" class="tab-pane active">
         <div id="cli-output"></div>
         <div id="cli-input-row">
           <span class="cli-prompt">&gt;</span>
           <input type="text" id="cli-input" placeholder="Type a command or message…" autocomplete="off" spellcheck="false">
         </div>
       </div>
+      <div id="files-content" class="tab-pane files-pane">
+        <div class="files-toolbar">
+          <span class="files-section-label">Sources</span>
+          <label class="files-upload-btn" title="Upload a file to sources/">
+            + Upload
+            <input type="file" id="files-upload-input" multiple hidden>
+          </label>
+        </div>
+        <div id="files-sources-list" class="files-list"></div>
+        <div class="files-toolbar files-toolbar--outputs">
+          <span class="files-section-label">Outputs</span>
+        </div>
+        <div id="files-outputs-list" class="files-list"></div>
+      </div>
     </section>
 
     <!-- Top-right: Active kanban columns -->
     <section id="kanban-active">
+      <div class="panel-header panel-header--kanban">
+        Board
+        <button id="new-ticket-btn" class="panel-add-btn" title="Create a new ticket">+ New Ticket</button>
+        <button class="panel-expand-btn" data-panel="kanban-active" title="Expand">&#x26F6;</button>
+      </div>
+      <div class="kanban-active-cols">
       <div class="kanban-col" id="col-ready">
         <div class="kanban-col-header">
           <span class="kanban-col-label col-ready">Ready</span>
@@ -99,6 +130,7 @@
         </div>
         <div class="task-list"></div>
       </div>
+      </div><!-- .kanban-active-cols -->
     </section>
 
     <!-- Bottom-right: Backlog / Calendar -->
@@ -117,6 +149,7 @@
           <button class="cal-view-btn" data-view="agenda">Agenda</button>
         </div>
         <button id="new-meeting-btn" class="panel-add-btn" hidden>+ Meeting</button>
+        <button class="panel-expand-btn" data-panel="backlog-panel" title="Expand">&#x26F6;</button>
       </div>
       <div id="backlog-list" class="btab-pane active"></div>
       <div id="calendar-pane" class="btab-pane" hidden></div>
@@ -124,11 +157,34 @@
 
   </main>
 
+  <!-- Meeting overlay — shown when a human-included meeting is active -->
+  <div id="meeting-overlay" class="meeting-overlay" hidden>
+    <div class="meeting-header">
+      <span class="meeting-live-dot"></span>
+      <span id="meeting-title" class="meeting-title"></span>
+      <div class="meeting-header-actions">
+        <button id="meeting-speech-toggle" class="meeting-action-btn" title="Toggle speech">🔊 Speech</button>
+        <button id="meeting-end-btn" class="meeting-action-btn meeting-end-btn" title="End meeting">End</button>
+        <button id="meeting-minimize-btn" class="meeting-action-btn" title="Minimise">⊟</button>
+      </div>
+    </div>
+    <div id="meeting-stage" class="meeting-stage">
+      <div id="meeting-avatars" class="meeting-avatars"></div>
+    </div>
+    <div id="meeting-transcript" class="meeting-transcript"></div>
+    <div id="meeting-human-input" class="meeting-human-input" hidden>
+      <span class="meeting-turn-label">Your turn</span>
+      <input id="meeting-input" class="meeting-input-field" type="text" placeholder="Type your message… (leave blank to pass)" autocomplete="off">
+      <button id="meeting-send-btn" class="meeting-send-btn">Send</button>
+      <button id="meeting-pass-btn" class="meeting-pass-btn">Pass</button>
+    </div>
+  </div>
+
   <!-- Agent detail drawer -->
   <div id="agent-detail" class="agent-detail" hidden>
     <div class="agent-detail-header">
       <div class="agent-detail-identity">
-        <span id="agent-detail-name"></span>
+        <input id="agent-detail-name" class="agent-detail-name-input" type="text" spellcheck="false" autocomplete="off" title="Click to rename">
         <span id="agent-detail-hat"></span>
       </div>
       <button id="agent-remove-btn" class="agent-remove-btn" title="Remove agent">Remove</button>
@@ -136,19 +192,35 @@
     </div>
     <div class="agent-config-row">
       <div class="agent-config-line">
-        <select id="agent-config-hat" class="agent-config-select" title="Hat type">
-          <option value="white">White — Facts</option>
-          <option value="red">Red — Emotion</option>
-          <option value="black">Black — Caution</option>
-          <option value="yellow">Yellow — Optimism</option>
-          <option value="green">Green — Creativity</option>
-          <option value="blue">Blue — Process</option>
-        </select>
+        <label class="agent-config-label">Hat</label>
+        <select id="agent-config-hat" class="agent-config-select agent-config-hat-select" title="Hat type"></select>
+      </div>
+      <div class="agent-config-line">
+        <label class="agent-config-label">Avatar</label>
         <select id="agent-config-avatar" class="agent-config-select agent-config-avatar-select" title="Avatar"></select>
       </div>
       <div class="agent-config-line">
-        <select id="agent-config-provider" class="agent-config-select"></select>
+        <label class="agent-config-label">Voice</label>
+        <select id="agent-config-voice"  class="agent-config-select agent-config-voice-select"  title="Voice"></select>
+        <select id="agent-config-speaker" class="agent-config-select agent-config-speaker-select" title="Speaker" hidden></select>
+        <button id="agent-config-preview-voice" class="agent-config-btn agent-config-preview-btn" title="Play a short voice sample">▶</button>
+      </div>
+      <div class="agent-config-line">
+        <label class="agent-config-label">Spec.</label>
+        <select id="agent-config-specialisation" class="agent-config-select">
+          <option value="">— none —</option>
+          <option value="__custom__">Custom…</option>
+        </select>
+        <input type="text" id="agent-config-specialisation-custom" class="agent-config-input" placeholder="Type your specialisation…" autocomplete="off" hidden>
+      </div>
+      <div class="agent-config-line">
+        <label class="agent-config-label">Model</label>
+        <select id="agent-config-provider" class="agent-config-select agent-config-provider-select"></select>
         <select id="agent-config-model"    class="agent-config-select agent-config-model-select"></select>
+      </div>
+      <div class="agent-config-line agent-config-line--btns">
+        <label class="agent-config-label"></label>
+        <button id="agent-config-stop-voice" class="agent-config-btn agent-config-stop-btn" title="Stop voice playback">Stop talking</button>
         <button id="agent-config-apply" class="agent-config-btn">Apply</button>
       </div>
     </div>
@@ -249,7 +321,7 @@
         <div class="field-row">
           <div class="field-group">
             <label class="field-label">Name</label>
-            <input type="text" id="add-agent-name" class="modal-input" placeholder="e.g. Taylor">
+            <input type="text" id="add-agent-name" class="modal-input" placeholder="e.g. Amara, Kenji, Priya…">
           </div>
           <div class="field-group">
             <label class="field-label">Hat</label>
@@ -265,7 +337,11 @@
         </div>
         <div class="field-group">
           <label class="field-label">Specialisation <span class="field-hint">(optional)</span></label>
-          <input type="text" id="add-agent-specialisation" class="modal-input" placeholder="e.g. financial analysis">
+          <select id="add-agent-specialisation" class="modal-select">
+            <option value="">— none —</option>
+            <option value="__custom__">Custom…</option>
+          </select>
+          <input type="text" id="add-agent-specialisation-custom" class="modal-input" placeholder="Type your specialisation…" autocomplete="off" hidden>
         </div>
         <div class="field-row">
           <div class="field-group">
@@ -337,8 +413,119 @@
     </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
+  <!-- Impromptu Meeting Modal -->
+  <div id="impromptu-modal" class="modal-overlay" hidden>
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <span class="modal-ticket-id">⚡ Start Meeting Now</span>
+        <button class="modal-close" id="impromptu-close" title="Close">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="field-group">
+          <label class="field-label">Topic</label>
+          <input type="text" id="impromptu-topic" class="modal-input" placeholder="e.g. Quick sync on Q2 priorities">
+        </div>
+        <div class="field-group">
+          <label class="field-label">Agenda <span class="field-hint">(optional)</span></label>
+          <textarea id="impromptu-agenda" class="modal-textarea" rows="2" placeholder="Key points to cover…"></textarea>
+        </div>
+        <div class="field-row">
+          <div class="field-group">
+            <label class="field-label">Facilitator</label>
+            <select id="impromptu-facilitator" class="modal-select"></select>
+          </div>
+        </div>
+        <div class="field-group">
+          <label class="field-label">Attendees</label>
+          <div id="impromptu-participants" class="meeting-participants-grid"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <span id="impromptu-error" class="modal-error"></span>
+        <button class="modal-btn secondary" id="impromptu-cancel">Cancel</button>
+        <button class="modal-btn primary" id="impromptu-start">Start Meeting</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Meeting detail modal -->
+  <div id="meeting-detail-modal" class="modal-overlay" hidden>
+    <div class="modal meeting-detail-modal" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <span class="modal-ticket-id" id="meeting-detail-topic"></span>
+        <button class="modal-close" id="meeting-detail-close" title="Close">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="meeting-detail-row"><span class="meeting-detail-label">When</span><span id="meeting-detail-time"></span></div>
+        <div class="meeting-detail-row"><span class="meeting-detail-label">People</span><span id="meeting-detail-people"></span></div>
+        <div class="meeting-detail-row" id="meeting-detail-agenda-row"><span class="meeting-detail-label">Agenda</span><span id="meeting-detail-agenda"></span></div>
+        <div class="meeting-detail-row"><span class="meeting-detail-label">Status</span><span id="meeting-detail-status"></span></div>
+      </div>
+      <div class="modal-footer">
+        <button class="modal-btn primary" id="meeting-detail-launch-btn">Launch now</button>
+        <button class="modal-btn danger" id="meeting-detail-cancel-btn">Cancel meeting</button>
+        <button class="modal-btn danger" id="meeting-detail-delete-btn">Delete record</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Telemetry Modal -->
+  <div id="telemetry-modal" class="modal-overlay" hidden>
+    <div class="modal telemetry-modal" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <span class="modal-ticket-id">LLM Telemetry</span>
+        <button class="modal-close" id="telemetry-close" title="Close">&#x2715;</button>
+      </div>
+      <div class="modal-body telemetry-body">
+        <div class="telemetry-summary-bar">
+          <div class="telemetry-summary-item">
+            <span class="telemetry-summary-label">Total Calls</span>
+            <span id="tel-total-calls" class="telemetry-summary-value">0</span>
+          </div>
+          <div class="telemetry-summary-item">
+            <span class="telemetry-summary-label">Tokens In</span>
+            <span id="tel-total-in" class="telemetry-summary-value">0</span>
+          </div>
+          <div class="telemetry-summary-item">
+            <span class="telemetry-summary-label">Tokens Out</span>
+            <span id="tel-total-out" class="telemetry-summary-value">0</span>
+          </div>
+          <div class="telemetry-summary-item">
+            <span class="telemetry-summary-label">Total Cost</span>
+            <span id="tel-total-cost" class="telemetry-summary-value">$0.0000</span>
+          </div>
+        </div>
+        <div class="telemetry-charts">
+          <div class="telemetry-chart-section">
+            <div class="telemetry-chart-title">Cost by Model</div>
+            <canvas id="tel-chart-model" width="180" height="180"></canvas>
+            <div id="tel-legend-model" class="tel-legend"></div>
+          </div>
+          <div class="telemetry-chart-section">
+            <div class="telemetry-chart-title">Cost by Agent</div>
+            <canvas id="tel-chart-agent" width="180" height="180"></canvas>
+            <div id="tel-legend-agent" class="tel-legend"></div>
+          </div>
+        </div>
+        <table class="telemetry-table">
+          <thead>
+            <tr>
+              <th>Model</th>
+              <th>Calls</th>
+              <th>Tokens In</th>
+              <th>Tokens Out</th>
+              <th>Cost</th>
+            </tr>
+          </thead>
+          <tbody id="tel-table-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+<script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
   <script src="app.js"></script>
   <script type="module" src="avatar.js"></script>
+  <script type="module" src="meeting.js"></script>
 </body>
 </html>

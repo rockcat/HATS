@@ -9,6 +9,8 @@ export interface PromptContext {
   avoidances: string[];
   teamRole: string;
   teamContext?: string;
+  projectDir?: string;     // absolute path to current project folder
+  specialisation?: string; // optional focus area (e.g. 'Marketing', 'Finance')
 }
 
 export interface SystemPrompt {

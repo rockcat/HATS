@@ -51,7 +51,7 @@ function resizeRenderer(canvas) {
   camera.updateProjectionMatrix();
 }
 
-function loadGLB(file, camPos) {
+function loadGLB(file, camPos, rotate) {
   // Remove old avatar nodes (keep lights)
   const toRemove = scene.children.filter(c => !c.isLight);
   for (const c of toRemove) scene.remove(c);
@@ -59,6 +59,12 @@ function loadGLB(file, camPos) {
 
   new GLTFLoader().load(`/avatars/${file}`, gltf => {
     scene.add(gltf.scene);
+
+    // Apply per-model rotation from avatars.json (degrees → radians)
+    if (rotate && rotate.length === 3) {
+      const DEG = Math.PI / 180;
+      gltf.scene.rotation.set(rotate[0] * DEG, rotate[1] * DEG, rotate[2] * DEG);
+    }
 
     camera.position.set(camPos[0], camPos[1], camPos[2]);
 
@@ -121,8 +127,9 @@ window.avatarAPI = {
    * Show avatar for the given GLB file.
    * @param {string} avatarFile  - filename, e.g. "casey.glb"
    * @param {[number,number,number]} cameraPos - [x, y, z] camera position
+   * @param {[number,number,number]} [rotate]  - [x, y, z] rotation in degrees (from avatars.json)
    */
-  show(avatarFile, cameraPos) {
+  show(avatarFile, cameraPos, rotate) {
     const panel  = document.getElementById('avatar-panel');
     const canvas = document.getElementById('avatar-canvas');
     if (!panel || !canvas) return;
@@ -131,7 +138,7 @@ window.avatarAPI = {
 
     if (!renderer) initRenderer(canvas);
     resizeRenderer(canvas);
-    loadGLB(avatarFile, cameraPos);
+    loadGLB(avatarFile, cameraPos, rotate);
 
     if (!rafId) renderLoop();
   },

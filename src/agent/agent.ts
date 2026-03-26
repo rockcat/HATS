@@ -8,6 +8,12 @@ import { TeamMessage } from '../orchestrator/types.js';
 import { AgentConfig, AgentMessage, AgentState, AgentEvent, ToolExecutor, ResponseHandler } from './types.js';
 import { transition } from './state-machine.js';
 import { Semaphore } from '../providers/semaphore.js';
+import { calcCost } from '../providers/pricing.js';
+
+type TelemetryRecorder = (entry: {
+  agent: string; provider: string; model: string;
+  promptLength: number; inputTokens: number; outputTokens: number; cost: number;
+}) => void;
 
 const MAX_TOOL_ROUNDS    = 10; // prevent infinite tool loops
 const MAX_HISTORY_MESSAGES = 20; // cap conversation history to control token usage
@@ -24,9 +30,10 @@ export class Agent {
   private responseHandler: ResponseHandler | null = null;
   private extraToolsProvider: (() => import('../providers/types.js').ToolDefinition[]) | null = null;
   private llmSemaphore: Semaphore | null = null;
+  private telemetryRecorder: TelemetryRecorder | null = null;
 
   constructor(config: AgentConfig) {
-    this.id = uuidv4();
+    this.id = config.id ?? uuidv4();
     this.config = config;
     this._state = AgentState.Idle;
     this.conversationHistory = [];
@@ -49,9 +56,19 @@ export class Agent {
     this.llmSemaphore = semaphore;
   }
 
+  setTelemetryRecorder(fn: TelemetryRecorder): void {
+    this.telemetryRecorder = fn;
+  }
+
   /** Provider function that returns extra tools (e.g. MCP) to merge at call time. */
   setExtraToolsProvider(provider: () => import('../providers/types.js').ToolDefinition[]): void {
     this.extraToolsProvider = provider;
+  }
+
+  /** Rename the agent and rebuild their system prompt. */
+  rename(newName: string): void {
+    this.config.identity.name = newName;
+    this.systemPrompt = this.buildSystemPrompt();
   }
 
   /** Hot-swap the LLM provider and model without restarting the agent. */
@@ -70,6 +87,27 @@ export class Agent {
   updateTeamContext(teamContext: string): void {
     this.config.teamContext = teamContext;
     this.systemPrompt = this.buildSystemPrompt();
+  }
+
+  /** Called by orchestrator when the active project changes. */
+  updateProjectDir(projectDir: string | null): void {
+    this.config.projectDir = projectDir ?? undefined;
+    this.systemPrompt = this.buildSystemPrompt();
+  }
+
+  /** Update the agent's specialisation focus and rebuild system prompt. */
+  setSpecialisation(specialisation: string | undefined): void {
+    this.config.identity.specialisation = specialisation;
+    this.systemPrompt = this.buildSystemPrompt();
+  }
+
+  setAvatar(avatar: string | undefined): void {
+    this.config.identity.avatar = avatar;
+  }
+
+  setVoice(voice: string | undefined, speakerName: string | undefined): void {
+    this.config.identity.voice = voice;
+    this.config.identity.speakerName = speakerName;
   }
 
   // ── Inbox ───────────────────────────────────────────────────────────────────
@@ -134,6 +172,7 @@ export class Agent {
       const response = await (this.llmSemaphore
         ? this.llmSemaphore.run(() => this.config.provider.complete(req))
         : this.config.provider.complete(req));
+      this.recordTelemetry(req, response.inputTokens, response.outputTokens);
 
       if (response.toolCalls && response.toolCalls.length > 0) {
         // Add assistant message with tool calls to working history
@@ -178,9 +217,11 @@ export class Agent {
    * Unlike processMessage, this doesn't route a reply — it just returns the text.
    */
   async meetingTurn(transcript: string): Promise<string> {
+    // Strip meeting-management tools — calling them inside a meeting creates duplicate meetings
+    const MEETING_TOOLS = new Set(['request_meeting', 'schedule_meeting']);
     const tools = [
-      ...getToolsForHat(this.config.hatType),
-      ...(this.extraToolsProvider?.() ?? []),
+      ...getToolsForHat(this.config.hatType).filter(t => !MEETING_TOOLS.has(t.name)),
+      ...(this.extraToolsProvider?.() ?? []).filter(t => !MEETING_TOOLS.has(t.name)),
     ];
     const working: Message[] = [
       ...this.conversationHistory.map(toProviderMessage),
@@ -192,6 +233,7 @@ export class Agent {
       const response = await (this.llmSemaphore
         ? this.llmSemaphore.run(() => this.config.provider.complete(req2))
         : this.config.provider.complete(req2));
+      this.recordTelemetry(req2, response.inputTokens, response.outputTokens);
 
       if (response.toolCalls && response.toolCalls.length > 0) {
         working.push({ role: 'assistant', content: response.content, toolCalls: response.toolCalls });
@@ -232,6 +274,21 @@ export class Agent {
 
   // ── Internals ───────────────────────────────────────────────────────────────
 
+  private recordTelemetry(req: CompletionRequest, inputTokens: number, outputTokens: number): void {
+    if (!this.telemetryRecorder) return;
+    const promptLength = req.systemPrompt.length +
+      req.messages.reduce((n, m) => n + (m.content?.length ?? 0), 0);
+    this.telemetryRecorder({
+      agent:        this.name,
+      provider:     this.config.provider.name,
+      model:        req.model,
+      promptLength,
+      inputTokens,
+      outputTokens,
+      cost: calcCost(req.model, inputTokens, outputTokens),
+    });
+  }
+
   private buildSystemPrompt(): string {
     const hat = getHatDefinition(this.config.hatType);
     return generateSystemPrompt({
@@ -245,6 +302,8 @@ export class Agent {
       avoidances: hat.avoidances,
       teamRole: hat.teamRole,
       teamContext: this.config.teamContext,
+      projectDir: this.config.projectDir,
+      specialisation: this.config.identity.specialisation,
     }).text;
   }
 

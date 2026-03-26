@@ -88,55 +88,55 @@ function makeProjectLoader(): ProjectLoader {
 
       orchestrator.registerAgent({
         identity: {
-          name: 'Jordan',
-          visualDescription: 'calm, organised, middle-aged professional in a navy blazer',
+          name: 'Amara',
+          visualDescription: 'poised, organised, warm presence in a tailored blazer',
           specialisation: 'project coordination and facilitation',
-          backstory: 'Ten years running cross-functional teams at a management consultancy.',
+          backstory: 'Grew up between Lagos and London; spent a decade running cross-functional teams at a global consultancy.',
         },
         hatType: HatType.Blue, provider: claude, model,
       });
       orchestrator.registerAgent({
         identity: {
-          name: 'Morgan',
-          visualDescription: 'precise, analytical, mid-thirties with reading glasses',
+          name: 'Kenji',
+          visualDescription: 'precise, methodical, calm energy with a researcher\'s focus',
           specialisation: 'data gathering and research',
-          backstory: 'Former data analyst, obsessed with sources and evidence quality.',
+          backstory: 'Former data scientist at a Tokyo think-tank, obsessed with source quality and evidence.',
         },
         hatType: HatType.White, provider: claude, model,
       });
       orchestrator.registerAgent({
         identity: {
-          name: 'Alex',
-          visualDescription: 'serious, direct, sharp eyes that miss nothing',
+          name: 'Nadia',
+          visualDescription: 'sharp, direct, nothing escapes her notice',
           specialisation: 'risk assessment and critical analysis',
-          backstory: 'Ex-auditor who spent a decade finding what could go wrong before it did.',
+          backstory: 'Ex-auditor from Prague who spent years finding what could go wrong before it did.',
         },
         hatType: HatType.Black, provider: claude, model,
       });
       orchestrator.registerAgent({
         identity: {
-          name: 'Sam',
-          visualDescription: 'warm, enthusiastic, always leaning forward',
+          name: 'Rafael',
+          visualDescription: 'warm, animated, always leaning forward with ideas',
           specialisation: 'opportunity identification and positive outcomes',
-          backstory: 'Serial optimist who has founded two startups and genuinely believes things work out.',
+          backstory: 'Serial entrepreneur from São Paulo who has founded three ventures and genuinely believes things work out.',
         },
         hatType: HatType.Yellow, provider: claude, model,
       });
       orchestrator.registerAgent({
         identity: {
-          name: 'River',
-          visualDescription: 'creative, lateral-thinking, colourful and a little unpredictable',
+          name: 'Priya',
+          visualDescription: 'creative, lateral-thinking, expressive and a little unpredictable',
           specialisation: 'creative solutions and idea generation',
-          backstory: "Trained as a designer, thinks in metaphors, never accepts \"that's just how it's done\".",
+          backstory: "Trained as a UX designer in Bangalore, thinks in systems and metaphors, never accepts 'that's just how it's done'.",
         },
         hatType: HatType.Green, provider: claude, model,
       });
       orchestrator.registerAgent({
         identity: {
-          name: 'Casey',
-          visualDescription: 'empathetic, intuitive, quietly observant',
+          name: 'Tariq',
+          visualDescription: 'empathetic, intuitive, quietly observant with a measured tone',
           specialisation: 'team dynamics, sentiment, and stakeholder perspective',
-          backstory: 'Spent years in organisational psychology before joining business teams.',
+          backstory: 'Spent years in organisational psychology in Amman before joining international business teams.',
         },
         hatType: HatType.Red, provider: claude, model,
       });
@@ -150,7 +150,7 @@ function makeProjectLoader(): ProjectLoader {
         },
       });
 
-      console.log('[Team] Team assembled: Jordan · Morgan · Alex · Sam · River · Casey');
+      console.log('[Team] Team assembled: Amara · Kenji · Nadia · Rafael · Priya · Tariq');
     }
 
     return orchestrator;
@@ -189,7 +189,13 @@ async function main() {
     process.exit(0);
   });
 
-  const cli = new CLIInterface(orchestrator, 'Jordan', STATE_FILE, providerFactory);
+  const cli = new CLIInterface(orchestrator, 'Amara', STATE_FILE, providerFactory);
+
+  // Keep the CLI in sync when the API server switches projects
+  api.onProjectSwitch((newOrchestrator) => {
+    cli.setOrchestrator(newOrchestrator);
+  });
+
   cli.start();
 }
 

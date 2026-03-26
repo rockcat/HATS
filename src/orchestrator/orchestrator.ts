@@ -37,10 +37,13 @@ export class TeamOrchestrator {
   private store: EventStore;
   private humanName: string;
   private projectsRoot: string;
+  private projectDir: string | null = null;
   private onHumanEscalation: ((from: string, message: string, urgency: string) => void) | null = null;
+  private onHumanMeetingTurn: ((meetingId: string, turns: MeetingTurn[], topic: string) => Promise<string | null>) | null = null;
   private rebuildTimer: ReturnType<typeof setTimeout> | null = null;
   private mcp = new MCPRegistry();
   private llmSemaphore: Semaphore;
+  private telemetryRecorder: ((entry: { agent: string; provider: string; model: string; promptLength: number; inputTokens: number; outputTokens: number; cost: number }) => void) | null = null;
 
   constructor(config: OrchestratorConfig = {}) {
     this.store = new EventStore(config.storePath ?? './team-events.jsonl');
@@ -101,6 +104,7 @@ export class TeamOrchestrator {
   /** Save full team state to a JSON file. */
   async saveState(path: string): Promise<void> {
     const agentSnapshots: AgentSnapshot[] = Array.from(this.agents.values()).map((agent) => ({
+      id: agent.id,
       identity: agent.config.identity,
       hatType: agent.config.hatType,
       model: agent.config.model,
@@ -151,6 +155,7 @@ export class TeamOrchestrator {
     for (const snap of snapshot.agents) {
       const provider = providerFactory(snap.providerName);
       const config: AgentConfig = {
+        id: snap.id,
         identity: snap.identity,
         hatType: snap.hatType,
         provider,
@@ -179,19 +184,37 @@ export class TeamOrchestrator {
 
   // ── Agent registration ────────────────────────────────────────────────────
 
+  setTelemetryRecorder(fn: NonNullable<typeof this.telemetryRecorder>): void {
+    this.telemetryRecorder = fn;
+    for (const agent of this.agents.values()) agent.setTelemetryRecorder(fn);
+  }
+
+  setHumanMeetingTurnHandler(fn: NonNullable<typeof this.onHumanMeetingTurn>): void {
+    this.onHumanMeetingTurn = fn;
+  }
+
+  setProjectDir(dir: string | null): void {
+    this.projectDir = dir;
+    for (const agent of this.agents.values()) agent.updateProjectDir(dir);
+  }
+
   registerAgent(config: AgentConfig): Agent {
+    // Inject current project dir into new agents
+    if (this.projectDir) config = { ...config, projectDir: this.projectDir };
     const agent = new Agent(config);
     agent.setToolExecutor(this.makeToolExecutor());
     agent.setResponseHandler(this.makeResponseHandler());
     agent.setExtraToolsProvider(() => this.mcp.getAllTools());
     agent.setLLMSemaphore(this.llmSemaphore);
-    this.agents.set(agent.name, agent);
+    if (this.telemetryRecorder) agent.setTelemetryRecorder(this.telemetryRecorder);
+    this.agents.set(agent.id, agent);
     this.rebuildTeamContext();
     return agent;
   }
 
+  /** Find an agent by name (case-sensitive). */
   getAgent(name: string): Agent | undefined {
-    return this.agents.get(name);
+    return this.findByName(name);
   }
 
   listAgents(): Agent[] {
@@ -200,24 +223,67 @@ export class TeamOrchestrator {
 
   /** Hot-swap the LLM provider and model for a named agent. */
   updateAgentConfig(name: string, provider: AIProvider, model: string): void {
-    const agent = this.agents.get(name);
+    const agent = this.findByName(name);
     if (!agent) throw new Error(`Agent "${name}" not found`);
     agent.setProvider(provider, model);
   }
 
   /** Change an agent's thinking hat and rebuild their system prompt. */
   changeAgentHat(name: string, hatType: HatType): void {
-    const agent = this.agents.get(name);
+    const agent = this.findByName(name);
     if (!agent) throw new Error(`Agent "${name}" not found`);
     agent.setHat(hatType);
     this.rebuildTeamContext();
   }
 
+  /** Rename an agent. No map re-keying needed — the key is the stable agent ID. */
+  renameAgent(oldName: string, newName: string): void {
+    const agent = this.findByName(oldName);
+    if (!agent) throw new Error(`Agent "${oldName}" not found`);
+    const trimmed = newName.trim();
+    if (!trimmed) throw new Error('Name cannot be empty');
+    if (this.hasAgentWithName(trimmed) && trimmed !== oldName) throw new Error(`Agent "${trimmed}" already exists`);
+    agent.rename(trimmed);
+    this.rebuildTeamContext();
+  }
+
+  /** Update an agent's specialisation focus. */
+  updateAgentSpecialisation(name: string, specialisation: string | undefined): void {
+    const agent = this.findByName(name);
+    if (!agent) throw new Error(`Agent "${name}" not found`);
+    agent.setSpecialisation(specialisation);
+    this.rebuildTeamContext();
+  }
+
+  updateAgentAvatar(name: string, avatar: string | undefined): void {
+    const agent = this.findByName(name);
+    if (!agent) throw new Error(`Agent "${name}" not found`);
+    agent.setAvatar(avatar);
+  }
+
+  updateAgentVoice(name: string, voice: string | undefined, speakerName: string | undefined): void {
+    const agent = this.findByName(name);
+    if (!agent) throw new Error(`Agent "${name}" not found`);
+    agent.setVoice(voice, speakerName);
+  }
+
   /** Remove an agent from the team. */
   removeAgent(name: string): void {
-    if (!this.agents.has(name)) throw new Error(`Agent "${name}" not found`);
-    this.agents.delete(name);
+    const agent = this.findByName(name);
+    if (!agent) throw new Error(`Agent "${name}" not found`);
+    this.agents.delete(agent.id);
     this.rebuildTeamContext();
+  }
+
+  private findByName(name: string): Agent | undefined {
+    for (const agent of this.agents.values()) {
+      if (agent.name === name) return agent;
+    }
+    return undefined;
+  }
+
+  private hasAgentWithName(name: string): boolean {
+    return this.findByName(name) !== undefined;
   }
 
   // ── Human interface wiring ────────────────────────────────────────────────
@@ -287,7 +353,7 @@ export class TeamOrchestrator {
   async humanReply(toAgentName: string, content: string): Promise<void> {
     const msg = this.buildMessage('human', toAgentName, 'human_reply', content);
     await this.store.append('human_reply', { to: toAgentName, content });
-    const agent = this.agents.get(toAgentName);
+    const agent = this.findByName(toAgentName);
     if (agent) {
       agent.markHelpReceived();
       this.deliverToAgent(toAgentName, msg);
@@ -340,6 +406,29 @@ export class TeamOrchestrator {
     return meeting;
   }
 
+  /** Record an impromptu meeting that is already running — stored as 'launched', never picked up by the scheduler. */
+  async recordImpromptuInCalendar(data: {
+    topic: string; agenda?: string; facilitator: string;
+    participants: string[]; startedAt: string;
+  }): Promise<void> {
+    if (!this.scheduledMeetingStore) return;
+    const now = data.startedAt;
+    const meeting: ScheduledMeeting = {
+      id: uuidv4(),
+      type: 'ad_hoc',
+      topic: data.topic,
+      agenda: data.agenda,
+      facilitator: data.facilitator,
+      participants: data.participants,
+      scheduledFor: now,
+      status: 'launched',
+      createdBy: 'human',
+      createdAt: now,
+      launchedAt: now,
+    };
+    await this.scheduledMeetingStore.add(meeting);
+  }
+
   listScheduledMeetings(): ScheduledMeeting[] {
     return this.scheduledMeetingStore?.list() ?? [];
   }
@@ -354,14 +443,24 @@ export class TeamOrchestrator {
     await this.scheduledMeetingStore.update(meeting);
   }
 
+  async deleteScheduledMeeting(id: string): Promise<boolean> {
+    if (!this.scheduledMeetingStore) return false;
+    return this.scheduledMeetingStore.delete(id);
+  }
+
   /** Launch a scheduled meeting immediately (called by the auto-start timer or manually). */
+  async updateScheduledMeeting(meeting: ScheduledMeeting): Promise<void> {
+    if (!this.scheduledMeetingStore) return;
+    await this.scheduledMeetingStore.update(meeting);
+  }
+
   async launchScheduledMeeting(id: string): Promise<void> {
     if (!this.scheduledMeetingStore) throw new Error('Meeting store not initialised');
     const scheduled = this.scheduledMeetingStore.get(id);
     if (!scheduled) throw new Error(`Scheduled meeting "${id}" not found`);
     if (scheduled.status !== 'scheduled') return; // already launched or cancelled
 
-    const facilitator = this.agents.get(scheduled.facilitator);
+    const facilitator = this.findByName(scheduled.facilitator);
     if (!facilitator) throw new Error(`Facilitator "${scheduled.facilitator}" not found`);
 
     await this.startMeeting(scheduled.facilitator, scheduled.participants, scheduled.topic, scheduled.agenda);
@@ -400,7 +499,7 @@ export class TeamOrchestrator {
     switch (call.name) {
       case 'send_message': {
         const { to, message } = call.arguments as { to: string; message: string };
-        const target = this.agents.get(to);
+        const target = this.findByName(to);
         if (!target) return `No agent named "${to}" on this team.`;
         if (!message || !message.trim()) return `Message content is empty — call was rejected. Please include the full message content in the "message" argument and retry.`;
         const msg = this.buildMessage(agentName, to, 'direct', message);
@@ -411,7 +510,7 @@ export class TeamOrchestrator {
 
       case 'escalate_to_human': {
         const { message, urgency } = call.arguments as { message: string; urgency: 'low' | 'high' };
-        const agent = this.agents.get(agentName);
+        const agent = this.findByName(agentName);
         agent?.markBlocked();
         await this.store.append('escalation', { from: agentName, urgency, message });
         this.onHumanEscalation?.(agentName, message, urgency);
@@ -420,7 +519,7 @@ export class TeamOrchestrator {
 
       case 'report_task_complete': {
         const { summary } = call.arguments as { summary: string };
-        const agent = this.agents.get(agentName);
+        const agent = this.findByName(agentName);
         agent?.markTaskComplete();
 
         // Update any active task for this agent
@@ -447,7 +546,7 @@ export class TeamOrchestrator {
 
       case 'assign_task': {
         const { agent, task, context, projectName } = call.arguments as { agent: string; task: string; context?: string; projectName?: string };
-        const target = this.agents.get(agent);
+        const target = this.findByName(agent);
         if (!target) return `No agent named "${agent}" on this team.`;
         const taskId = await this.createTask(agent, agentName, task, context, projectName);
         const storedTask = this.tasks.get(taskId)!;
@@ -468,7 +567,7 @@ export class TeamOrchestrator {
           agenda?: string;
         };
         // Validate participants
-        const invalid = participants.filter((p) => p !== 'human' && !this.agents.has(p));
+        const invalid = participants.filter((p) => p !== 'human' && !this.hasAgentWithName(p));
         if (invalid.length > 0) return `Unknown participants: ${invalid.join(', ')}`;
 
         await this.startMeeting(agentName, participants, topic, agenda);
@@ -484,7 +583,7 @@ export class TeamOrchestrator {
           scheduledFor: string;
         };
         if (!this.scheduledMeetingStore) return 'Meeting scheduling is not available in this project.';
-        const invalid = participants.filter((p) => p !== 'human' && !this.agents.has(p));
+        const invalid = participants.filter((p) => p !== 'human' && !this.hasAgentWithName(p));
         if (invalid.length > 0) return `Unknown participants: ${invalid.join(', ')}`;
         const when = new Date(scheduledFor);
         if (isNaN(when.getTime())) return `Invalid scheduledFor date: "${scheduledFor}". Use ISO-8601 format, e.g. "2026-04-01T09:00:00".`;
@@ -587,6 +686,24 @@ export class TeamOrchestrator {
 
   // ── Meetings ──────────────────────────────────────────────────────────────
 
+  /** Cancel a currently-running meeting. Signals the room to close and unblocks any pending human turn. */
+  cancelActiveMeeting(meetingId: string): boolean {
+    const room = this.activeMeetingRooms.get(meetingId);
+    if (!room) return false;
+    room.close();
+    return true;
+  }
+
+  /** Launch a meeting immediately (used by the web UI impromptu button). */
+  async launchImpromptuMeeting(
+    facilitatorName: string,
+    participants: string[],
+    topic: string,
+    agenda?: string,
+  ): Promise<void> {
+    return this.startMeeting(facilitatorName, participants, topic, agenda);
+  }
+
   private async startMeeting(
     facilitatorName: string,
     participants: string[],
@@ -617,26 +734,19 @@ export class TeamOrchestrator {
     console.log(`\n━━━ MEETING: ${topic} ━━━`);
     console.log(`Participants: ${[facilitatorName, ...participants].join(', ')}\n`);
 
-    // Notify all participants
-    for (const p of participants) {
-      if (p !== 'human') {
-        const agent = this.agents.get(p);
-        if (agent) {
-          const inviteMsg = this.buildMessage(facilitatorName, p, 'meeting_invite',
-            `You are invited to a meeting: "${topic}". ${agenda ? 'Agenda: ' + agenda : ''}`,
-            { meetingId },
-          );
-          agent.receive(inviteMsg);
-        }
-      }
+
+    // MeetingRoom looks up agents by name — build a name-keyed view of the agents map
+    const agentsByName = new Map<string, Agent>();
+    for (const agent of this.agents.values()) {
+      agentsByName.set(agent.name, agent);
     }
 
     const room = new MeetingRoom(
       meeting,
-      this.agents,
+      agentsByName,
       this.store,
       (transcript: MeetingTurn[], meetingTopic: string) =>
-        this.getHumanMeetingInput(transcript, meetingTopic),
+        this.getHumanMeetingInput(meetingId, transcript, meetingTopic),
     );
 
     // Wire up close signal — when facilitator calls report_task_complete inside meeting
@@ -651,10 +761,11 @@ export class TeamOrchestrator {
     });
   }
 
-  private async getHumanMeetingInput(turns: MeetingTurn[], topic: string): Promise<string | null> {
-    // Delegated to CLI interface — returns null if human passes
-    console.log(`\n[Meeting: ${topic}] Your turn (press Enter to pass):`);
-    return null; // CLI overrides this via onHumanMeetingTurn
+  private async getHumanMeetingInput(meetingId: string, turns: MeetingTurn[], topic: string): Promise<string | null> {
+    if (this.onHumanMeetingTurn) {
+      return this.onHumanMeetingTurn(meetingId, turns, topic);
+    }
+    return null;
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
@@ -678,7 +789,7 @@ export class TeamOrchestrator {
   }
 
   private deliverToAgent(name: string, message: TeamMessage): void {
-    const agent = this.agents.get(name);
+    const agent = this.findByName(name);
     if (agent) {
       agent.receive(message);
     } else {

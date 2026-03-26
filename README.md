@@ -29,34 +29,55 @@ cp .env.example .env
 
 ### Piper TTS (optional — required for avatar speech)
 
-[Piper](https://github.com/rhasspy/piper) is a fast, local text-to-speech engine. Required only if you want avatars to speak aloud.
+Install the `piper-tts` Python package:
 
-1. Download a Piper release for your platform from the [Piper releases page](https://github.com/rhasspy/piper/releases).
-2. Extract and place the `piper` executable somewhere on your PATH, or set `PIPER_BIN` in `.env`.
-3. Download a voice model (`.onnx` + `.onnx.json`) from the [Piper voices page](https://rhasspy.github.io/piper-samples/).
-4. Set `PIPER_MODEL` in `.env` to the path of the `.onnx` file:
-
-```env
-PIPER_BIN=piper
-PIPER_MODEL=/path/to/voice/en_US-lessac-medium.onnx
+```bash
+pip install piper-tts
 ```
 
-If `PIPER_MODEL` is not set, avatar speech is silently disabled and agents respond text-only.
+Download one or more voice models (`.onnx` + `.onnx.json`) from the [Piper voices page](https://rhasspy.github.io/piper-samples/) and place them in a directory (e.g. `piper_voices/`).
+
+#### Server mode (recommended)
+
+At startup the app spawns one `piper.http_server` Flask instance per voice on consecutive ports, keeping each model loaded in memory. Each agent can be assigned its own voice from a dropdown in the UI; the selection persists per-agent in the browser. If a previously selected voice is no longer present at startup the agent falls back to the first available voice.
+
+```env
+PIPER_VOICES_DIR=piper_voices        # directory containing .onnx files
+PIPER_SERVER_PORT_START=5100         # first port; each voice gets the next port
+PYTHON_BIN=python                    # python executable (default: "python")
+```
+
+`PIPER_VOICES_DIR` defaults to the directory of `PIPER_MODEL` if not set.
+
+#### Subprocess mode (fallback)
+
+If `PIPER_VOICES_DIR` is not set, a single voice can be used via subprocess. The model is loaded from disk on every sentence, which adds ~0.5 s latency per sentence.
+
+```env
+PIPER_BIN=piper/piper.exe            # native piper CLI binary
+PIPER_MODEL=piper/voices/en_GB-cori-high.onnx
+```
+
+The companion `.onnx.json` file must sit next to the `.onnx` file (used to read the model's sample rate).
+
+If neither `PIPER_VOICES_DIR` nor `PIPER_MODEL` is set, avatar speech is silently disabled and agents respond text-only.
 
 ### Rhubarb Lip Sync (optional — required for avatar lip sync)
 
 [Rhubarb Lip Sync](https://github.com/DanielSWolf/rhubarb-lip-sync) extracts mouth-shape timing from audio to drive avatar visemes. Required alongside Piper TTS if you want lip-synced avatars.
 
 1. Download a Rhubarb release for your platform from the [Rhubarb releases page](https://github.com/DanielSWolf/rhubarb-lip-sync/releases).
-2. Extract and place the `rhubarb` executable somewhere on your PATH, or set `RHUBARB_BIN` in `.env`:
+2. Set `RHUBARB_BIN` in `.env` to the path of the executable (defaults to `rhubarb`):
 
 ```env
-RHUBARB_BIN=rhubarb
+RHUBARB_BIN=rhubarb/rhubarb
 ```
 
 The phonetic recognizer is used by default — no additional dependencies (PocketSphinx, etc.) are required.
 
 ## Running
+
+If using Piper server mode, start the Piper server first, then:
 
 ```bash
 npm start

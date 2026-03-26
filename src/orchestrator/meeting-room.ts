@@ -68,7 +68,7 @@ export class MeetingRoom {
           const agent = this.agents.get(participant);
           if (!agent) continue;
           const response = await agent.meetingTurn(
-            `${prompt}\n\nIt is now your turn to contribute. Respond concisely and in character.`,
+            `${prompt}\n\nYour turn. One concise contribution (2–3 sentences max). No preamble.`,
           );
           await this.recordTurn(participant, response);
         }
@@ -78,9 +78,7 @@ export class MeetingRoom {
       if (!this.closed) {
         const summary = await facilitator.meetingTurn(
           `${buildTranscriptText(meeting.turns)}\n\n` +
-          `As facilitator, briefly summarise the discussion so far. ` +
-          `If the meeting has reached its conclusion, use report_task_complete to close it ` +
-          `and list any action items. Otherwise, guide the next round.`,
+          `As facilitator: in 1–2 sentences, summarise progress and either close the meeting with report_task_complete (listing action items) or prompt the next round. Be brief.`,
         );
         await this.recordTurn(meeting.facilitator, summary);
       }
@@ -125,10 +123,10 @@ export class MeetingRoom {
 function buildOpeningPrompt(meeting: Meeting): string {
   const participants = meeting.participants.join(', ');
   return (
-    `You are facilitating a meeting. Topic: "${meeting.topic}". ` +
+    `Facilitate this meeting. Topic: "${meeting.topic}". ` +
     (meeting.agenda ? `Agenda: ${meeting.agenda}. ` : '') +
     `Participants: ${participants}. ` +
-    `Open the meeting, state the topic and agenda clearly, and invite the first participant to speak.`
+    `Open briefly (2–3 sentences), then invite the first participant.`
   );
 }
 

@@ -139,7 +139,7 @@ export async function startKanbanServer(boardPath: string): Promise<void> {
     const { name, arguments: args = {} } = req.params;
 
     try {
-      const result = handleTool(name, args as Record<string, unknown>, store);
+      const result = await handleTool(name, args as Record<string, unknown>, store);
       return {
         content: [{ type: 'text', text: typeof result === 'string' ? result : JSON.stringify(result, null, 2) }],
       };
@@ -155,7 +155,7 @@ export async function startKanbanServer(boardPath: string): Promise<void> {
   await server.connect(transport);
 }
 
-function handleTool(name: string, args: Record<string, unknown>, store: KanbanStore): unknown {
+async function handleTool(name: string, args: Record<string, unknown>, store: KanbanStore): Promise<unknown> {
   switch (name) {
     case 'get_board':
       return store.getBoardSummary();
@@ -163,7 +163,7 @@ function handleTool(name: string, args: Record<string, unknown>, store: KanbanSt
     case 'create_ticket': {
       const title = (args['title'] as string | undefined)?.trim();
       if (!title) throw new Error('title is required and cannot be empty');
-      const ticket = store.createTicket({
+      const ticket = await store.createTicket({
         title,
         description: args['description'] as string,
         priority:    args['priority'] as Priority | undefined,
@@ -188,17 +188,17 @@ function handleTool(name: string, args: Record<string, unknown>, store: KanbanSt
       });
 
     case 'move_ticket': {
-      const ticket = store.moveTicket(args['id'] as string, args['column'] as Column);
+      const ticket = await store.moveTicket(args['id'] as string, args['column'] as Column);
       return `Moved ${ticket.id} to "${ticket.column}".`;
     }
 
     case 'assign_ticket': {
-      const ticket = store.assignTicket(args['id'] as string, args['assignee'] as string);
+      const ticket = await store.assignTicket(args['id'] as string, args['assignee'] as string);
       return `Assigned ${ticket.id} to ${ticket.assignee}.`;
     }
 
     case 'update_ticket': {
-      const ticket = store.updateTicket(args['id'] as string, {
+      const ticket = await store.updateTicket(args['id'] as string, {
         title:       args['title'] as string | undefined,
         description: args['description'] as string | undefined,
         priority:    args['priority'] as Priority | undefined,
@@ -208,7 +208,7 @@ function handleTool(name: string, args: Record<string, unknown>, store: KanbanSt
     }
 
     case 'add_comment': {
-      const ticket = store.addComment(
+      const ticket = await store.addComment(
         args['id'] as string,
         args['author'] as string,
         args['text'] as string,
@@ -217,10 +217,14 @@ function handleTool(name: string, args: Record<string, unknown>, store: KanbanSt
     }
 
     case 'delete_ticket':
-      store.deleteTicket(args['id'] as string);
+      await store.deleteTicket(args['id'] as string);
       return `Deleted ${args['id']}.`;
 
     default:
       throw new Error(`Unknown tool: ${name}`);
   }
 }
+
+// Entry point when run as a subprocess by the MCP client
+const _boardPath = process.env['KANBAN_BOARD_PATH'] ?? process.argv[2] ?? 'kanban-board.json';
+startKanbanServer(_boardPath).catch(console.error);

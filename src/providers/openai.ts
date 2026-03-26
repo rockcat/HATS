@@ -28,7 +28,7 @@ export class OpenAIProvider implements AIProvider {
         function: {
           name: t.name,
           description: t.description,
-          parameters: t.parameters,
+          parameters: t.parameters ? sanitizeSchemaForOpenAI(t.parameters as Record<string, unknown>) : undefined,
         },
       }));
 
@@ -74,6 +74,50 @@ export class OllamaProvider extends OpenAIProvider {
     super('ollama', baseURL, 'ollama');
     void model; // model is passed per-request in CompletionRequest
   }
+}
+
+/**
+ * Recursively sanitise a JSON Schema to be compatible with the OpenAI API.
+ * OpenAI rejects: tuple `items` arrays, union `type` arrays, and several
+ * JSON Schema keywords that are not part of its supported subset.
+ */
+function sanitizeSchemaForOpenAI(schema: Record<string, unknown>): Record<string, unknown> {
+  if (!schema || typeof schema !== 'object' || Array.isArray(schema)) return schema;
+
+  const out: Record<string, unknown> = { ...schema };
+
+  // type: ["string", "null"] → "string"  (OpenAI only accepts a string type)
+  if (Array.isArray(out['type'])) {
+    const types = (out['type'] as string[]).filter((t) => t !== 'null');
+    out['type'] = types.length > 0 ? types[0] : 'string';
+  }
+
+  // items: [{...}, {...}]  (tuple validation) → items: first element schema
+  if (Array.isArray(out['items'])) {
+    const tuple = out['items'] as Record<string, unknown>[];
+    out['items'] = tuple.length > 0 ? sanitizeSchemaForOpenAI(tuple[0]) : {};
+  } else if (out['items'] && typeof out['items'] === 'object') {
+    out['items'] = sanitizeSchemaForOpenAI(out['items'] as Record<string, unknown>);
+  }
+
+  // Recurse into properties
+  if (out['properties'] && typeof out['properties'] === 'object') {
+    out['properties'] = Object.fromEntries(
+      Object.entries(out['properties'] as Record<string, unknown>).map(([k, v]) => [
+        k,
+        sanitizeSchemaForOpenAI(v as Record<string, unknown>),
+      ]),
+    );
+  }
+
+  // Recurse into anyOf / oneOf / allOf
+  for (const key of ['anyOf', 'oneOf', 'allOf'] as const) {
+    if (Array.isArray(out[key])) {
+      out[key] = (out[key] as Record<string, unknown>[]).map(sanitizeSchemaForOpenAI);
+    }
+  }
+
+  return out;
 }
 
 function toOpenAIMessages(messages: Message[]): OpenAI.ChatCompletionMessageParam[] {

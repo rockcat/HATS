@@ -30,9 +30,110 @@ const STATE_LABEL = {
   in_discussion:    'In discussion',
 };
 
+
+// ── Specialisation helpers ────────────────────────────────────────────────────
+
+let specOptions = []; // populated from /api/specialisations on init
+
+async function loadSpecialisations() {
+  try {
+    const res = await fetch('/api/specialisations');
+    const data = await res.json();
+    specOptions = data.specialisations || [];
+  } catch { specOptions = []; }
+  populateSpecSelects();
+}
+
+function populateSpecSelects() {
+  for (const id of ['agent-config-specialisation', 'add-agent-specialisation']) {
+    const sel = document.getElementById(id);
+    if (!sel) continue;
+    const current = sel.value;
+    // Keep blank + options + custom
+    sel.innerHTML = '<option value="">— none —</option>';
+    for (const s of specOptions) {
+      const opt = document.createElement('option');
+      opt.value = s; opt.textContent = s;
+      sel.appendChild(opt);
+    }
+    const custom = document.createElement('option');
+    custom.value = '__custom__'; custom.textContent = 'Custom…';
+    sel.appendChild(custom);
+    // Restore previous value if still valid
+    if (current) sel.value = current;
+  }
+}
+
+function getSpecValue(selectId, customId) {
+  const sel = document.getElementById(selectId);
+  if (!sel) return '';
+  if (sel.value === '__custom__') return document.getElementById(customId)?.value.trim() || '';
+  return sel.value;
+}
+
+function setSpecValue(selectId, customId, value) {
+  const sel  = document.getElementById(selectId);
+  const cust = document.getElementById(customId);
+  if (!sel) return;
+  if (!value) {
+    sel.value = '';
+    if (cust) { cust.value = ''; cust.hidden = true; }
+  } else if (specOptions.includes(value)) {
+    sel.value = value;
+    if (cust) { cust.value = ''; cust.hidden = true; }
+  } else {
+    sel.value = '__custom__';
+    if (cust) { cust.value = value; cust.hidden = false; }
+  }
+}
+
 // ── State ─────────────────────────────────────────────────────────────────────
 
 let state = { agents: [], tickets: [] };
+
+// ── Agent config cache ────────────────────────────────────────────────────────
+// Tracks hat, voice, avatar per agent so dropdowns can show usage by others.
+
+const agentConfigs = new Map(); // name → { hatType, voice, avatar }
+
+function syncAgentConfigs() {
+  const voiceOverrides  = getVoiceOverrides();
+  const avatarOverrides = getAvatarOverrides();
+  for (const agent of state.agents) {
+    // Prefer server-side values; fall back to localStorage for backwards compat
+    const avatar = agent.avatar ?? avatarOverrides[agent.name] ?? null;
+    const voice  = agent.voice  ?? voiceOverrides[agent.name]  ?? null;
+    agentConfigs.set(agent.name, { hatType: agent.hatType, voice, avatar });
+    // Keep localStorage in sync so avatar.js / voice preview still work
+    if (agent.avatar)      setAvatarOverride(agent.name, agent.avatar);
+    if (agent.voice)       setVoiceOverride(agent.name, agent.voice);
+    if (agent.speakerName) setSpeakerOverride(agent.name, agent.speakerName);
+  }
+  // Remove stale entries
+  for (const name of agentConfigs.keys()) {
+    if (!state.agents.find(a => a.name === name)) agentConfigs.delete(name);
+  }
+}
+
+/** Count how many agents OTHER than `excludeName` have field === value. */
+function usageCount(field, value, excludeName) {
+  if (!value) return 0;
+  let n = 0;
+  for (const [name, cfg] of agentConfigs) {
+    if (name !== excludeName && cfg[field] === value) n++;
+  }
+  return n;
+}
+
+/** Return names of agents OTHER than `excludeName` that have field === value. */
+function usersOf(field, value, excludeName) {
+  if (!value) return [];
+  const names = [];
+  for (const [name, cfg] of agentConfigs) {
+    if (name !== excludeName && cfg[field] === value) names.push(name);
+  }
+  return names;
+}
 
 // ── Avatar catalogue ──────────────────────────────────────────────────────────
 
@@ -152,7 +253,7 @@ function applyCardData(el, agent) {
     if (!talkEl) {
       talkEl = document.createElement('div');
       talkEl.className = 'agent-talking-to';
-      el.querySelector('.agent-activity').appendChild(talkEl);
+      el.querySelector('.agent-activity-text').appendChild(talkEl);
     }
     talkEl.textContent = '↔ ' + agent.talkingTo;
     el.classList.add('communicating');
@@ -673,14 +774,55 @@ function renderTools(tools) {
 
 function applyState(newState) {
   state = newState;
+  syncAgentConfigs();
   renderAgents(state.agents);
   renderKanban(state.tickets);
+}
+
+// ── Voice management ──────────────────────────────────────────────────────────
+
+let cachedVoices = null;  // PiperVoice[] | null — loaded once
+
+async function getVoices() {
+  if (cachedVoices) return cachedVoices;
+  try {
+    const res = await fetch('/api/voices');
+    cachedVoices = await res.json();
+  } catch { cachedVoices = []; }
+  return cachedVoices;
+}
+
+function getVoiceOverrides() {
+  try { return JSON.parse(localStorage.getItem('agentVoices') || '{}'); } catch { return {}; }
+}
+function setVoiceOverride(agentName, voiceName) {
+  const m = getVoiceOverrides();
+  if (voiceName) m[agentName] = voiceName; else delete m[agentName];
+  localStorage.setItem('agentVoices', JSON.stringify(m));
+}
+
+function getSpeakerOverrides() {
+  try { return JSON.parse(localStorage.getItem('agentSpeakers') || '{}'); } catch { return {}; }
+}
+function setSpeakerOverride(agentName, speakerId) {
+  const m = getSpeakerOverrides();
+  if (speakerId != null) m[agentName] = speakerId; else delete m[agentName];
+  localStorage.setItem('agentSpeakers', JSON.stringify(m));
+}
+
+/** Return the voice name to use for an agent, falling back to first available. */
+function findVoiceForAgent(agentName, voices) {
+  if (!voices || voices.length === 0) return null;
+  const override = getVoiceOverrides()[agentName];
+  if (override && voices.find(v => v.name === override)) return override;
+  // Stored voice no longer available — fall back to first
+  return voices[0].name;
 }
 
 // ── Speech / TTS ──────────────────────────────────────────────────────────────
 //
 // Flow:
-//   1. When agent detail opens, send { type: 'set_speech_agent', name } over WS
+//   1. When agent detail opens, send { type: 'set_speech_agent', name, voice } over WS
 //   2. Server synthesises via Piper + Rhubarb and sends back speech_chunk messages
 //   3. Browser decodes base64 WAV, plays via Web Audio API
 //   4. Audio clock drives avatarAPI.beginSpeech(visemes, getTime) for sync lipsync
@@ -689,6 +831,7 @@ let speechWs         = null;   // WebSocket to the same host
 let audioCtx         = null;   // lazy AudioContext (requires user gesture first)
 const speechQueues   = new Map(); // agentName → SpeechChunk[]
 const speechPlaying  = new Set(); // agentName set — currently draining
+let currentSource    = null;   // active AudioBufferSourceNode (for stop)
 
 function getSpeechWs() {
   if (speechWs && speechWs.readyState <= WebSocket.OPEN) return speechWs;
@@ -705,15 +848,41 @@ function getSpeechWs() {
   return speechWs;
 }
 
-function setSpeechAgent(agentName) {
+function populateSpeakerSelect(agentName, voices, voiceName) {
+  const speakerSel = document.getElementById('agent-config-speaker');
+  if (!speakerSel) return;
+  const voice = voices.find(v => v.name === voiceName);
+  const speakers = voice?.speakers ?? [];   // [{name, id}, ...]
+  if (speakers.length === 0) {
+    speakerSel.hidden = true;
+    speakerSel.innerHTML = '';
+    return;
+  }
+  speakerSel.hidden = false;
+  speakerSel.innerHTML = '';
+  const saved = getSpeakerOverrides()[agentName];
+  const names = speakers.map(s => s.name);
+  for (const s of speakers) {
+    const opt = document.createElement('option');
+    opt.value = s.name;
+    opt.textContent = s.name;
+    speakerSel.appendChild(opt);
+  }
+  speakerSel.value = saved && names.includes(saved) ? saved : speakers[0].name;
+}
+
+function setSpeechAgent(agentName, voiceName, speakerName) {
   const ws = getSpeechWs();
+  const msg = JSON.stringify({
+    type: 'set_speech_agent',
+    name: agentName ?? null,
+    voice: voiceName ?? null,
+    speakerName: speakerName ?? null,
+  });
   if (ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ type: 'set_speech_agent', name: agentName ?? null }));
+    ws.send(msg);
   } else {
-    // Queue until open
-    ws.addEventListener('open', () => {
-      ws.send(JSON.stringify({ type: 'set_speech_agent', name: agentName ?? null }));
-    }, { once: true });
+    ws.addEventListener('open', () => ws.send(msg), { once: true });
   }
 }
 
@@ -754,6 +923,7 @@ async function playSpeechChunk(chunk) {
   const source      = audioCtx.createBufferSource();
   source.buffer = audioBuffer;
   source.connect(audioCtx.destination);
+  currentSource = source;
 
   const startAt = audioCtx.currentTime;
   source.start();
@@ -763,6 +933,7 @@ async function playSpeechChunk(chunk) {
 
   return new Promise(resolve => {
     source.onended = () => {
+      if (currentSource === source) currentSource = null;
       window.avatarAPI?.endSpeech();
       resolve();
     };
@@ -770,6 +941,16 @@ async function playSpeechChunk(chunk) {
     setTimeout(() => { window.avatarAPI?.endSpeech(); resolve(); },
       (chunk.duration + 1.5) * 1000);
   });
+}
+
+function stopSpeech(agentName) {
+  speechQueues.delete(agentName);
+  speechPlaying.delete(agentName);
+  if (currentSource) {
+    try { currentSource.stop(); } catch { /* already stopped */ }
+    currentSource = null;
+  }
+  window.avatarAPI?.endSpeech();
 }
 
 function clearSpeechQueue(agentName) {
@@ -796,6 +977,9 @@ function connect() {
       applyState({ agents: msg.agents, tickets: msg.tickets });
       if (msg.project) updateProjectBadge(msg.project.id, msg.project.dir);
       fetchTools();
+      fetchFiles();
+      fetchCalendar();
+      fetch('/api/telemetry').then(r => r.json()).then(d => applyTelemetrySummary(d.summary)).catch(() => {});
       initTabs();
       initKanbanDrag();
       initTicketEditing();
@@ -803,6 +987,7 @@ function connect() {
       initAgentDetail();
     } else if (msg.type === 'agent_update') {
       state.agents = msg.agents;
+      syncAgentConfigs();
       renderAgents(state.agents);
     } else if (msg.type === 'scheduled_meetings_update') {
       renderCalendar(msg.meetings);
@@ -820,6 +1005,26 @@ function connect() {
       appendAgentFeedEvent(msg.agent, msg.event);
     } else if (msg.type === 'cli_output') {
       appendCLIAgent(msg.from, msg.content, msg.kind);
+    } else if (msg.type === 'telemetry_update') {
+      applyTelemetrySummary(msg.summary);
+    } else if (msg.type === 'files_update') {
+      renderFilesList(msg.sources, msg.outputs);
+    } else if (msg.type === 'meeting_started') {
+      if (msg.hasHuman) {
+        const avatarMap = {}, voiceMap = {}, speakerMap = {};
+        for (const a of state.agents) {
+          if (a.avatar)      avatarMap[a.name]  = a.avatar;
+          if (a.voice)       voiceMap[a.name]   = a.voice;
+          if (a.speakerName) speakerMap[a.name] = a.speakerName;
+        }
+        window.meetingUI?.open(msg.meetingId, msg.topic, msg.participants ?? [], msg.facilitator ?? '', avatarMap, voiceMap, speakerMap);
+      }
+    } else if (msg.type === 'meeting_turn') {
+      window.meetingUI?.addTurn(msg.participant, msg.content);
+    } else if (msg.type === 'meeting_human_turn') {
+      window.meetingUI?.requestHumanTurn(msg.meetingId);
+    } else if (msg.type === 'meeting_closed') {
+      window.meetingUI?.close(msg.meetingId);
     }
   };
 }
@@ -1015,6 +1220,28 @@ function initAgentDetail() {
     if (e.key === 'Escape' && activeDetailAgent) closeAgentDetail();
   });
 
+  // Name rename — commit on Enter or blur
+  const nameInput = document.getElementById('agent-detail-name');
+  const commitRename = async () => {
+    if (!activeDetailAgent) return;
+    const newName = nameInput.value.trim();
+    if (!newName || newName === activeDetailAgent) return;
+    const res = await fetch(`/api/agents/${encodeURIComponent(activeDetailAgent)}/name`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: newName }),
+    }).then(r => r.json());
+    if (res.error) { nameInput.value = activeDetailAgent; alert(res.error); return; }
+    // Transfer any local overrides to the new name
+    const voiceO = getVoiceOverrides(); if (voiceO[activeDetailAgent]) { voiceO[newName] = voiceO[activeDetailAgent]; delete voiceO[activeDetailAgent]; localStorage.setItem('agentVoices', JSON.stringify(voiceO)); }
+    const avatarO = getAvatarOverrides(); if (avatarO[activeDetailAgent]) { avatarO[newName] = avatarO[activeDetailAgent]; delete avatarO[activeDetailAgent]; localStorage.setItem('agentAvatars', JSON.stringify(avatarO)); }
+    activeDetailAgent = newName;
+  };
+  nameInput.addEventListener('blur', commitRename);
+  nameInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); nameInput.blur(); }
+    if (e.key === 'Escape') { nameInput.value = activeDetailAgent; nameInput.blur(); }
+  });
+
   // Remove button
   document.getElementById('agent-remove-btn').addEventListener('click', () => {
     if (!activeDetailAgent) return;
@@ -1031,12 +1258,83 @@ function initAgentDetail() {
   document.getElementById('agent-config-avatar').addEventListener('change', () => {
     if (!activeDetailAgent) return;
     const file = document.getElementById('agent-config-avatar').value;
-    setAvatarOverride(activeDetailAgent, file);
+    setAvatarOverride(activeDetailAgent, file);  // keep localStorage in sync for avatar.js
+    const cfg = agentConfigs.get(activeDetailAgent);
+    if (cfg) { cfg.avatar = file || null; }
+    // Persist to server so meeting overlay and other clients see the assignment
+    fetch(`/api/agents/${encodeURIComponent(activeDetailAgent)}/avatar`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ avatar: file || null }),
+    }).catch(() => {});
     if (!file) { window.avatarAPI?.hide(); return; }
     getAvatars().then(avatars => {
       const av = avatars.find(a => a.file === file);
-      if (av && window.avatarAPI) window.avatarAPI.show(av.file, av.camera);
+      if (av && window.avatarAPI) window.avatarAPI.show(av.file, av.camera, av.rotate);
     });
+  });
+
+  // Voice select — persist and re-register speech interest
+  document.getElementById('agent-config-voice').addEventListener('change', () => {
+    if (!activeDetailAgent) return;
+    const voiceName = document.getElementById('agent-config-voice').value || null;
+    setVoiceOverride(activeDetailAgent, voiceName);
+    const cfg = agentConfigs.get(activeDetailAgent);
+    if (cfg) { cfg.voice = voiceName; }
+    // Reset speaker to default for the new voice
+    setSpeakerOverride(activeDetailAgent, null);
+    getVoices().then(voices => {
+      populateSpeakerSelect(activeDetailAgent, voices, voiceName);
+      const speakerName = getSpeakerOverrides()[activeDetailAgent] ?? null;
+      setSpeechAgent(activeDetailAgent, voiceName, speakerName);
+      fetch(`/api/agents/${encodeURIComponent(activeDetailAgent)}/voice`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ voice: voiceName, speakerName }),
+      }).catch(() => {});
+    });
+  });
+
+  // Speaker select — persist and re-register
+  document.getElementById('agent-config-speaker').addEventListener('change', () => {
+    if (!activeDetailAgent) return;
+    const speakerName = document.getElementById('agent-config-speaker').value || null;
+    setSpeakerOverride(activeDetailAgent, speakerName);
+    const voiceName = document.getElementById('agent-config-voice').value || null;
+    setSpeechAgent(activeDetailAgent, voiceName, speakerName);
+    fetch(`/api/agents/${encodeURIComponent(activeDetailAgent)}/voice`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ voice: voiceName, speakerName }),
+    }).catch(() => {});
+  });
+
+  // Voice preview button — plays a short sample for the selected voice
+  document.getElementById('agent-config-preview-voice').addEventListener('click', async () => {
+    const voiceName   = document.getElementById('agent-config-voice').value || undefined;
+    const speakerName = document.getElementById('agent-config-speaker').value || undefined;
+    const btn = document.getElementById('agent-config-preview-voice');
+    btn.disabled = true; btn.textContent = '…';
+    try {
+      const res = await fetch('/api/speech/preview', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ voice: voiceName, speakerName }),
+      });
+      if (res.ok) {
+        const arrayBuffer = await res.arrayBuffer();
+        if (!audioCtx) audioCtx = new AudioContext();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+        const source = audioCtx.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(audioCtx.destination);
+        source.start();
+      }
+    } catch { /* ignore preview errors */ }
+    btn.textContent = '▶ Preview'; btn.disabled = false;
+  });
+
+  // Stop voice button — kills current audio source and clears the queue
+  document.getElementById('agent-config-stop-voice').addEventListener('click', () => {
+    if (!activeDetailAgent) return;
+    stopSpeech(activeDetailAgent);
   });
 
   // Re-populate model list when provider changes
@@ -1053,16 +1351,24 @@ function initAgentDetail() {
     });
   });
 
-  // Apply button — sends provider+model and hat change if needed
+  // Show/hide custom spec input when "Custom…" is selected
+  document.getElementById('agent-config-specialisation').addEventListener('change', e => {
+    const cust = document.getElementById('agent-config-specialisation-custom');
+    cust.hidden = e.target.value !== '__custom__';
+    if (!cust.hidden) cust.focus();
+  });
+
+  // Single Apply button — saves hat, voice, avatar, specialisation, provider+model
   document.getElementById('agent-config-apply').addEventListener('click', async () => {
     if (!activeDetailAgent) return;
     const btn = document.getElementById('agent-config-apply');
     btn.textContent = '…'; btn.disabled = true;
     try {
-      const provider = document.getElementById('agent-config-provider').value;
-      const model    = document.getElementById('agent-config-model').value;
-      const hatType  = document.getElementById('agent-config-hat').value;
-      const agent    = state.agents.find(a => a.name === activeDetailAgent);
+      const provider       = document.getElementById('agent-config-provider').value;
+      const model          = document.getElementById('agent-config-model').value;
+      const hatType        = document.getElementById('agent-config-hat').value;
+      const specialisation = getSpecValue('agent-config-specialisation', 'agent-config-specialisation-custom') || undefined;
+      const agent          = state.agents.find(a => a.name === activeDetailAgent);
       const tasks = [];
       if (model) tasks.push(fetch(`/api/agents/${encodeURIComponent(activeDetailAgent)}/config`, {
         method: 'PATCH', headers: {'Content-Type':'application/json'},
@@ -1074,6 +1380,10 @@ function initAgentDetail() {
           body: JSON.stringify({ hatType }),
         })
       );
+      tasks.push(fetch(`/api/agents/${encodeURIComponent(activeDetailAgent)}/specialisation`, {
+        method: 'PATCH', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ specialisation }),
+      }));
       await Promise.all(tasks);
       btn.textContent = '✓';
     } catch {
@@ -1088,12 +1398,34 @@ function openAgentDetail(name) {
   const agent = state.agents.find(a => a.name === name);
   const c = agent ? hat(agent.hatType) : hat('white');
 
-  document.getElementById('agent-detail-name').textContent = name;
-  document.getElementById('agent-detail-name').style.color = c.label;
+  const nameInput = document.getElementById('agent-detail-name');
+  nameInput.value = name;
   document.getElementById('agent-detail-hat').textContent  = agent ? hatLabel(agent.hatType) : '';
-  document.getElementById('agent-detail-hat').style.color  = c.label;
+  document.getElementById('agent-detail-hat').style.color  = c.bar;
+  // Populate hat select with usage counts
   const hatSel = document.getElementById('agent-config-hat');
-  if (hatSel) hatSel.value = agent?.hatType || 'white';
+  if (hatSel) {
+    const HAT_OPTIONS = [
+      { value: 'white',  label: 'White — Facts'      },
+      { value: 'red',    label: 'Red — Emotion'       },
+      { value: 'black',  label: 'Black — Caution'     },
+      { value: 'yellow', label: 'Yellow — Optimism'   },
+      { value: 'green',  label: 'Green — Creativity'  },
+      { value: 'blue',   label: 'Blue — Process'      },
+    ];
+    hatSel.innerHTML = '';
+    for (const h of HAT_OPTIONS) {
+      const opt = document.createElement('option');
+      opt.value = h.value;
+      const n = usageCount('hatType', h.value, name);
+      opt.textContent = n > 0 ? `${h.label}  (${n})` : h.label;
+      hatSel.appendChild(opt);
+    }
+    hatSel.value = agent?.hatType || 'white';
+  }
+
+  // Set specialisation select value
+  setSpecValue('agent-config-specialisation', 'agent-config-specialisation-custom', agent?.specialisation || '');
 
   // Populate provider + model selects from the catalogue
   loadProviders().then(providers => {
@@ -1111,8 +1443,32 @@ function openAgentDetail(name) {
   if (!audioCtx) audioCtx = new AudioContext();
   if (audioCtx.state === 'suspended') audioCtx.resume();
 
-  // Register interest in speech for this agent
-  setSpeechAgent(name);
+  // Populate voice select; then register speech interest with the resolved voice
+  getVoices().then(voices => {
+    const voiceSel = document.getElementById('agent-config-voice');
+    voiceSel.innerHTML = '';
+    if (voices.length === 0) {
+      const opt = document.createElement('option');
+      opt.value = ''; opt.textContent = '(no voices)';
+      voiceSel.appendChild(opt);
+    } else {
+      for (const v of voices) {
+        const opt = document.createElement('option');
+        opt.value = v.name;
+        const users = usersOf('voice', v.name, name);
+        const multi = v.speakers && v.speakers.length > 0 ? ` [${v.speakers.length} spk]` : '';
+        opt.textContent = users.length > 0 ? `${v.name}${multi}  (${users.join(', ')})` : `${v.name}${multi}`;
+        voiceSel.appendChild(opt);
+      }
+    }
+    const current = findVoiceForAgent(name, voices);
+    voiceSel.value = current ?? '';
+    populateSpeakerSelect(name, voices, current);
+    const speakerName = getSpeakerOverrides()[name] ?? null;
+    setSpeechAgent(name, current, speakerName);
+    const previewBtn = document.getElementById('agent-config-preview-voice');
+    if (previewBtn) previewBtn.disabled = voices.length === 0;
+  });
 
   // Populate avatar select and show current avatar
   getAvatars().then(avatars => {
@@ -1121,13 +1477,14 @@ function openAgentDetail(name) {
     for (const av of avatars) {
       const opt = document.createElement('option');
       opt.value = av.file;
-      opt.textContent = av.name;
+      const users = usersOf('avatar', av.file, name);
+      opt.textContent = users.length > 0 ? `${av.name}  (${users.join(', ')})` : av.name;
       avatarSel.appendChild(opt);
     }
     const current = findAvatarForAgent(name);
     avatarSel.value = current ? current.file : '';
     if (current && window.avatarAPI) {
-      window.avatarAPI.show(current.file, current.camera);
+      window.avatarAPI.show(current.file, current.camera, current.rotate);
     } else if (window.avatarAPI) {
       window.avatarAPI.hide();
     }
@@ -1605,8 +1962,15 @@ function doSwitchProject(id) {
       if (res.error) {
         badge.textContent = prevId;
         console.error('Project switch failed:', res.error);
+        return;
       }
-      // Server broadcasts 'init' SSE which will re-render everything and update the badge
+      // Apply state directly from response (SSE init may also arrive and re-apply idempotently)
+      if (res.agents !== undefined) applyState({ agents: res.agents, tickets: res.tickets ?? [] });
+      if (res.project) updateProjectBadge(res.project.id, res.project.dir);
+      fetchTools();
+      fetchFiles();
+      fetchCalendar();
+      fetch('/api/telemetry').then(r => r.json()).then(d => applyTelemetrySummary(d.summary)).catch(() => {});
     })
     .catch(() => { badge.textContent = prevId; });
 }
@@ -1633,6 +1997,13 @@ function initAddAgent() {
     });
   });
 
+  // Show/hide custom spec input when "Custom…" is selected
+  document.getElementById('add-agent-specialisation').addEventListener('change', e => {
+    const cust = document.getElementById('add-agent-specialisation-custom');
+    cust.hidden = e.target.value !== '__custom__';
+    if (!cust.hidden) cust.focus();
+  });
+
   // Close on overlay click
   document.getElementById('add-agent-modal').addEventListener('click', e => {
     if (e.target === e.currentTarget) closeAddAgent();
@@ -1641,7 +2012,7 @@ function initAddAgent() {
 
 function openAddAgent() {
   document.getElementById('add-agent-name').value = '';
-  document.getElementById('add-agent-specialisation').value = '';
+  setSpecValue('add-agent-specialisation', 'add-agent-specialisation-custom', '');
   document.getElementById('add-agent-error').textContent = '';
   document.getElementById('add-agent-modal').hidden = false;
   document.getElementById('add-agent-name').focus();
@@ -1654,7 +2025,7 @@ function closeAddAgent() {
 async function saveAddAgent() {
   const name = document.getElementById('add-agent-name').value.trim();
   const hatType = document.getElementById('add-agent-hat').value;
-  const specialisation = document.getElementById('add-agent-specialisation').value.trim();
+  const specialisation = getSpecValue('add-agent-specialisation', 'add-agent-specialisation-custom');
   const provider = document.getElementById('add-agent-provider').value;
   const model = document.getElementById('add-agent-model').value;
   const errEl = document.getElementById('add-agent-error');
@@ -1926,19 +2297,39 @@ function buildAgendaItemHTML(m) {
   </div>`;
 }
 
-// ── Meeting popup (click on grid event) ───────────────────────────────────────
+// ── Meeting detail modal (click on grid event) ────────────────────────────────
+
+let _meetingDetailId = null;
 
 function showMeetingPopup(id) {
   const m = calMeetings.find(x => x.id === id);
   if (!m) return;
-  const when = new Date(m.scheduledFor).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+  _meetingDetailId = id;
+
+  const when = m.scheduledFor
+    ? new Date(m.scheduledFor).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+    : (m.startedAt ? new Date(m.startedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '');
   const parts = [m.facilitator, ...(m.participants || [])];
   const people = [...new Set(parts)].join(', ');
-  let msg = `${m.topic}\n${when}\n${people}`;
-  if (m.agenda) msg += `\n\nAgenda: ${m.agenda}`;
-  if (m.status === 'scheduled' && confirm(`${msg}\n\nLaunch this meeting now?`)) {
-    launchMeetingNow(id);
-  }
+
+  document.getElementById('meeting-detail-topic').textContent = m.topic;
+  document.getElementById('meeting-detail-time').textContent = when;
+  document.getElementById('meeting-detail-people').textContent = people;
+  document.getElementById('meeting-detail-agenda').textContent = m.agenda || '';
+  document.getElementById('meeting-detail-agenda').hidden = !m.agenda;
+  document.getElementById('meeting-detail-status').textContent = m.status;
+  document.getElementById('meeting-detail-status').className = `meeting-detail-status status-${m.status}`;
+
+  document.getElementById('meeting-detail-launch-btn').hidden = m.status !== 'scheduled';
+  document.getElementById('meeting-detail-cancel-btn').hidden = m.status !== 'scheduled';
+  document.getElementById('meeting-detail-delete-btn').hidden = m.status === 'scheduled';
+
+  document.getElementById('meeting-detail-modal').hidden = false;
+}
+
+function closeMeetingDetail() {
+  document.getElementById('meeting-detail-modal').hidden = true;
+  _meetingDetailId = null;
 }
 
 // ── Actions ───────────────────────────────────────────────────────────────────
@@ -1958,6 +2349,14 @@ async function cancelMeeting(id) {
     if (res.error) alert(res.error);
     else fetchCalendar();
   } catch { alert('Failed to cancel meeting.'); }
+}
+
+async function deleteMeeting(id) {
+  try {
+    const res = await fetch(`/api/scheduled-meetings/${id}`, { method: 'DELETE' }).then(r => r.json());
+    if (res.error) alert(res.error);
+    else fetchCalendar();
+  } catch { alert('Failed to delete meeting.'); }
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
@@ -1986,6 +2385,24 @@ function initCalendar() {
   document.getElementById('new-meeting-save')?.addEventListener('click', saveNewMeeting);
   document.getElementById('new-meeting-modal')?.addEventListener('click', e => {
     if (e.target === e.currentTarget) closeNewMeeting();
+  });
+
+  // Meeting detail modal
+  document.getElementById('meeting-detail-close')?.addEventListener('click', closeMeetingDetail);
+  document.getElementById('meeting-detail-modal')?.addEventListener('click', e => {
+    if (e.target === e.currentTarget) closeMeetingDetail();
+  });
+  document.getElementById('meeting-detail-launch-btn')?.addEventListener('click', async () => {
+    const id = _meetingDetailId; closeMeetingDetail();
+    await launchMeetingNow(id);
+  });
+  document.getElementById('meeting-detail-cancel-btn')?.addEventListener('click', async () => {
+    const id = _meetingDetailId; closeMeetingDetail();
+    await cancelMeeting(id);
+  });
+  document.getElementById('meeting-detail-delete-btn')?.addEventListener('click', async () => {
+    const id = _meetingDetailId; closeMeetingDetail();
+    await deleteMeeting(id);
   });
 }
 
@@ -2053,10 +2470,308 @@ async function saveNewMeeting() {
   btn.disabled = false; btn.textContent = 'Schedule';
 }
 
+// ── Impromptu Meeting ─────────────────────────────────────────────────────────
+
+function openImpromptuMeeting() {
+  // Reset fields
+  document.getElementById('impromptu-topic').value = '';
+  document.getElementById('impromptu-agenda').value = '';
+  document.getElementById('impromptu-error').textContent = '';
+
+  // Populate facilitator select — prefer first Blue Hat agent
+  const facilitatorSel = document.getElementById('impromptu-facilitator');
+  facilitatorSel.innerHTML = '';
+  const agents = state.agents ?? [];
+  const blue = agents.filter(a => a.hatType === 'blue');
+  const others = agents.filter(a => a.hatType !== 'blue');
+  for (const a of [...blue, ...others]) {
+    const opt = document.createElement('option');
+    opt.value = a.name; opt.textContent = `${a.name} (${a.hatType})`;
+    facilitatorSel.appendChild(opt);
+  }
+
+  // Populate participants grid — all checked by default (including human)
+  const grid = document.getElementById('impromptu-participants');
+  grid.innerHTML = '';
+  [...agents.map(a => a.name), 'human'].forEach(name => {
+    const lbl = document.createElement('label');
+    lbl.className = 'meeting-participant-label';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox'; cb.value = name; cb.checked = true;
+    lbl.appendChild(cb); lbl.append(' ' + name);
+    grid.appendChild(lbl);
+  });
+
+  document.getElementById('impromptu-modal').hidden = false;
+  document.getElementById('impromptu-topic').focus();
+}
+
+function closeImpromptuMeeting() {
+  document.getElementById('impromptu-modal').hidden = true;
+}
+
+async function startImpromptuMeeting() {
+  const errEl      = document.getElementById('impromptu-error');
+  const topic      = document.getElementById('impromptu-topic').value.trim();
+  const agenda     = document.getElementById('impromptu-agenda').value.trim();
+  const facilitator = document.getElementById('impromptu-facilitator').value;
+  // Facilitator is passed separately — exclude from participants to avoid duplication
+  const participants = [...document.querySelectorAll('#impromptu-participants input:checked')]
+    .map(cb => cb.value).filter(n => n !== facilitator);
+  errEl.textContent = '';
+
+  if (!topic) { errEl.textContent = 'Topic is required.'; return; }
+  if (!facilitator) { errEl.textContent = 'At least one agent is needed to facilitate.'; return; }
+
+  const btn = document.getElementById('impromptu-start');
+  btn.disabled = true; btn.textContent = 'Starting…';
+
+  try {
+    const res = await fetch('/api/meetings/start', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ topic, agenda: agenda || undefined, facilitator, participants }),
+    }).then(r => r.json());
+    if (res.error) { errEl.textContent = res.error; }
+    else { closeImpromptuMeeting(); }
+  } catch { errEl.textContent = 'Failed to start meeting.'; }
+
+  btn.disabled = false; btn.textContent = 'Start Meeting';
+}
+
+function initImpromptuMeeting() {
+  document.getElementById('impromptu-meeting-btn').addEventListener('click', openImpromptuMeeting);
+  document.getElementById('impromptu-close').addEventListener('click', closeImpromptuMeeting);
+  document.getElementById('impromptu-cancel').addEventListener('click', closeImpromptuMeeting);
+  document.getElementById('impromptu-start').addEventListener('click', startImpromptuMeeting);
+  document.getElementById('impromptu-modal').addEventListener('click', e => {
+    if (e.target === e.currentTarget) closeImpromptuMeeting();
+  });
+  document.getElementById('impromptu-topic').addEventListener('keydown', e => {
+    if (e.key === 'Enter') startImpromptuMeeting();
+  });
+}
+
 initProjectBadge();
 initDebugButton();
 initSettings();
 initAddAgent();
+loadSpecialisations();
+initImpromptuMeeting();
 initCalendar();
 initBacklogCalendarTabs();
+initPanelExpand();
+initTelemetry();
+initFileUpload();
 connect();
+
+// ── Panel expand / restore ────────────────────────────────────────────────────
+
+function collapseExpandedPanel() {
+  document.querySelectorAll('section.panel--expanded').forEach(p => {
+    p.classList.remove('panel--expanded');
+    const b = p.querySelector('.panel-expand-btn');
+    if (b) b.innerHTML = '&#x26F6;';
+  });
+  document.body.classList.remove('has-expanded-panel');
+}
+
+function initPanelExpand() {
+  document.querySelectorAll('.panel-expand-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const panelId = btn.dataset.panel;
+      const panel = document.getElementById(panelId);
+      if (!panel) return;
+      const isExpanded = panel.classList.contains('panel--expanded');
+      collapseExpandedPanel();
+      if (!isExpanded) {
+        panel.classList.add('panel--expanded');
+        btn.innerHTML = '&#x229F;'; // ⊟ squared minus — restore to normal
+        document.body.classList.add('has-expanded-panel');
+      }
+    });
+  });
+
+  // Escape collapses any expanded panel
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && document.body.classList.contains('has-expanded-panel')) {
+      collapseExpandedPanel();
+    }
+  });
+}
+
+// ── LLM Telemetry ────────────────────────────────────────────────────────────
+
+const PIE_COLORS = [
+  '#58a6ff','#3fb950','#e3b341','#f85149','#8957e5',
+  '#39d353','#db6d28','#a5d6ff','#7ee787','#ffa657',
+];
+
+function fmtTokens(n) {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(2) + 'M';
+  if (n >= 1_000)     return (n / 1_000).toFixed(1) + 'k';
+  return String(n);
+}
+
+function applyTelemetrySummary(summary) {
+  if (!summary) return;
+  document.getElementById('tel-in').textContent   = fmtTokens(summary.totalInputTokens  ?? 0);
+  document.getElementById('tel-out').textContent  = fmtTokens(summary.totalOutputTokens ?? 0);
+  document.getElementById('tel-cost').textContent = '$' + (summary.totalCost ?? 0).toFixed(4);
+}
+
+function drawPie(canvas, data) {
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+  const cx = W / 2, cy = H / 2, r = Math.min(cx, cy) - 4;
+  const total = data.reduce((s, d) => s + d.value, 0);
+  if (!total) {
+    ctx.fillStyle = '#30363d';
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+    return;
+  }
+  let angle = -Math.PI / 2;
+  data.forEach((d, i) => {
+    const slice = (d.value / total) * Math.PI * 2;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, r, angle, angle + slice);
+    ctx.closePath();
+    ctx.fillStyle = PIE_COLORS[i % PIE_COLORS.length];
+    ctx.fill();
+    angle += slice;
+  });
+}
+
+function renderTelemetryModal(data) {
+  const { summary } = data;
+  if (!summary) return;
+
+  document.getElementById('tel-total-calls').textContent = summary.totalCalls ?? 0;
+  document.getElementById('tel-total-in').textContent    = fmtTokens(summary.totalInputTokens  ?? 0);
+  document.getElementById('tel-total-out').textContent   = fmtTokens(summary.totalOutputTokens ?? 0);
+  document.getElementById('tel-total-cost').textContent  = '$' + (summary.totalCost ?? 0).toFixed(4);
+
+  // By-model pie
+  const byModel = Object.entries(summary.byModel ?? {}).map(([k, v]) => ({ label: k, value: v.cost }));
+  drawPie(document.getElementById('tel-chart-model'), byModel);
+  renderLegend('tel-legend-model', byModel, summary.totalCost);
+
+  // By-agent pie
+  const byAgent = Object.entries(summary.byAgent ?? {}).map(([k, v]) => ({ label: k, value: v.cost }));
+  drawPie(document.getElementById('tel-chart-agent'), byAgent);
+  renderLegend('tel-legend-agent', byAgent, summary.totalCost);
+
+  // Table by model
+  const tbody = document.getElementById('tel-table-body');
+  tbody.innerHTML = '';
+  for (const [model, m] of Object.entries(summary.byModel ?? {})) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${esc(model)}</td>
+      <td>${m.calls}</td>
+      <td>${fmtTokens(m.inputTokens)}</td>
+      <td>${fmtTokens(m.outputTokens)}</td>
+      <td>$${m.cost.toFixed(4)}</td>
+    `;
+    tbody.appendChild(tr);
+  }
+}
+
+function renderLegend(elId, data, total) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  el.innerHTML = data.map((d, i) => {
+    const pct = total > 0 ? ((d.value / total) * 100).toFixed(1) + '%' : '—';
+    return `<div class="tel-legend-item">
+      <span class="tel-legend-dot" style="background:${PIE_COLORS[i % PIE_COLORS.length]}"></span>
+      <span class="tel-legend-label">${esc(d.label)}</span>
+      <span class="tel-legend-pct">${pct}</span>
+    </div>`;
+  }).join('');
+}
+
+// ── Files panel ──────────────────────────────────────────────────────────────
+
+function fmtSize(bytes) {
+  if (bytes === 0) return '';
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+function fileIcon(name, isDir) {
+  if (isDir) return '📁';
+  const ext = name.split('.').pop()?.toLowerCase();
+  const icons = { pdf: '📄', docx: '📝', doc: '📝', xlsx: '📊', xls: '📊', md: '📋',
+                  txt: '📋', png: '🖼', jpg: '🖼', jpeg: '🖼', gif: '🖼', mp4: '🎬',
+                  mp3: '🎵', zip: '📦', csv: '📊', json: '⚙️', ts: '⚙️', js: '⚙️' };
+  return icons[ext] || '📄';
+}
+
+function renderFilesSection(elId, files) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  if (!files || files.length === 0) {
+    el.innerHTML = `<div class="files-list-empty">No files yet</div>`;
+    return;
+  }
+  el.innerHTML = files.map(f => {
+    const depth = (f.relativePath.match(/\//g) || []).length;
+    const indent = depth > 0 ? ` file-row--indent-${Math.min(depth, 3)}` : '';
+    const dirClass = f.isDir ? ' file-row--dir' : '';
+    return `<div class="file-row${dirClass}${indent}">
+      <span class="file-icon">${fileIcon(f.name, f.isDir)}</span>
+      <span class="file-name" title="${esc(f.relativePath)}">${esc(f.name)}</span>
+      ${!f.isDir ? `<span class="file-size">${fmtSize(f.size)}</span>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function renderFilesList(sources, outputs) {
+  renderFilesSection('files-sources-list', sources);
+  renderFilesSection('files-outputs-list', outputs);
+}
+
+function fetchFiles() {
+  fetch('/api/project/files')
+    .then(r => r.json())
+    .then(data => renderFilesList(data.sources, data.outputs))
+    .catch(() => {});
+}
+
+function initFileUpload() {
+  const input = document.getElementById('files-upload-input');
+  if (!input) return;
+  input.addEventListener('change', async () => {
+    const files = [...input.files];
+    input.value = '';
+    for (const file of files) {
+      try {
+        await fetch('/api/project/upload', {
+          method: 'POST',
+          headers: { 'X-Filename': encodeURIComponent(file.name) },
+          body: file,
+        });
+      } catch { /* ignore */ }
+    }
+    fetchFiles();
+  });
+}
+
+function initTelemetry() {
+  const btn   = document.getElementById('telemetry-btn');
+  const modal = document.getElementById('telemetry-modal');
+  const close = document.getElementById('telemetry-close');
+
+  btn.addEventListener('click', async () => {
+    modal.hidden = false;
+    try {
+      const data = await fetch('/api/telemetry').then(r => r.json());
+      renderTelemetryModal(data);
+    } catch { /* silently ignore */ }
+  });
+
+  close.addEventListener('click', () => { modal.hidden = true; });
+  modal.addEventListener('click', e => { if (e.target === modal) modal.hidden = true; });
+}

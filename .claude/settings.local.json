@@ -26,7 +26,10 @@
       "Bash(node:*)",
       "Bash(find f:/workspace/personality -name avatars* -o -name *.glb)",
       "Bash(node -e \"import\\(''''./src/providers/gemini.js''''\\)\")",
-      "Bash(echo \"EXIT:$?\")"
+      "Bash(echo \"EXIT:$?\")",
+      "Bash(grep -rn \"apiServer\\\\.start\\\\|server\\\\.start\\\\|APIServer\" F:workspacepersonalitysrc F:workspacepersonalityteam-runner.ts --include=*.ts)",
+      "Bash(npm search:*)",
+      "Bash(grep:*)"
     ]
   }
 }

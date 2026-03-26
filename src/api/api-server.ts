@@ -1,5 +1,5 @@
 import { createServer, IncomingMessage, ServerResponse } from 'http';
-import { readFile, writeFile, mkdir } from 'fs/promises';
+import { readFile, writeFile, mkdir, readdir, stat } from 'fs/promises';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
@@ -17,6 +17,9 @@ import { AIProvider } from '../providers/types.js';
 import { HatType } from '../hats/types.js';
 import { readEnvFile, writeEnvFile } from './env-manager.js';
 import { processSpeech, isSpeechAvailable } from '../speech/pipeline.js';
+import { VoiceManager } from '../speech/voice-manager.js';
+import { SPECIALISATION_DIRECTIVES } from '../prompt/generator.js';
+import { TelemetryStore } from '../store/telemetry-store.js';
 
 const __dirname  = path.dirname(fileURLToPath(import.meta.url));
 // Static files live in src/webui/public/ — one level up from src/api/
@@ -38,13 +41,19 @@ const AVATARS_DIR = path.join(process.cwd(), 'avatars');
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface AgentStatus {
-  name:       string;
-  hatType:    string;
-  state:      string;
-  activity:   string;
-  talkingTo?: string;
-  model?:     string;
-  provider?:  string;
+  name:             string;
+  hatType:          string;
+  state:            string;
+  activity:         string;
+  talkingTo?:       string;
+  model?:           string;
+  provider?:        string;
+  specialisation?:  string;
+  visualDescription?: string;
+  backstory?:       string;
+  avatar?:          string;
+  voice?:           string;
+  speakerName?:     string;
 }
 
 // ── Config ────────────────────────────────────────────────────────────────────
@@ -81,6 +90,7 @@ export class APIServer {
   private projectDir: string | null;
   private projectsRoot: string | null;
   private projectLoader: ProjectLoader | null;
+  private projectSwitchCallback: ((orchestrator: TeamOrchestrator) => void) | null = null;
   private enabledMCPIds: Set<string> = new Set();
   private meetingsPath: string | null;
   private meetingScheduler: ReturnType<typeof setInterval> | null = null;
@@ -105,8 +115,14 @@ export class APIServer {
 
   private unsubscribeEvents: (() => void) | null = null;
 
-  // Which agent name each WS client wants speech for (null = none)
-  private speechInterest = new Map<WebSocket, string>();
+  // Which agent name + voice URL each WS client wants speech for
+  private speechInterest = new Map<WebSocket, { agentName: string; voiceUrl: string | null; speakerId: number | null }>();
+
+  private voiceManager = new VoiceManager();
+  private telemetry: TelemetryStore | null = null;
+
+  // Pending human turns in active meetings: meetingId → resolve fn
+  private pendingHumanTurns = new Map<string, (input: string | null) => void>();
 
   constructor(orchestrator: TeamOrchestrator, config: APIServerConfig = {}) {
     this.orchestrator = orchestrator;
@@ -130,11 +146,45 @@ export class APIServer {
     this.wss.on('connection', (ws) => this.handleWsConnection(ws));
   }
 
-  start(): void {
+  /** Register a callback invoked whenever the active project (and orchestrator) changes. */
+  onProjectSwitch(cb: (orchestrator: TeamOrchestrator) => void): void {
+    this.projectSwitchCallback = cb;
+  }
+
+  async start(): Promise<void> {
+    // Start Piper voice servers (async — voices ready before any agent responds)
+    this.voiceManager.start().catch((err: Error) =>
+      console.warn('[API] VoiceManager start error:', err.message),
+    );
+
+    // Ensure project folder structure exists
+    if (this.projectDir) {
+      await this.ensureProjectFolders(this.projectDir);
+      this.orchestrator.setProjectDir(this.projectDir);
+    }
+
+    // Init telemetry store (project-scoped if projectDir is set)
+    const telemetryPath = this.projectDir
+      ? path.join(this.projectDir, 'telemetry.jsonl')
+      : path.join(process.cwd(), 'data', 'telemetry.jsonl');
+    await this.initTelemetryStore(telemetryPath);
+
     // Subscribe to orchestrator events
     this.unsubscribeEvents = this.orchestrator.onEvent((ev) => {
       this.handleOrchestratorEvent(ev);
       this.wsBroadcast(ev);
+    });
+
+    // Wire human meeting turn — browser resolves via POST /api/meetings/:id/human-turn
+    this.orchestrator.setHumanMeetingTurnHandler(async (meetingId, _turns, topic) => {
+      this.sseBroadcast({ type: 'meeting_human_turn', meetingId, topic });
+      return new Promise<string | null>((resolve) => {
+        this.pendingHumanTurns.set(meetingId, resolve);
+        // Auto-pass after 5 minutes
+        setTimeout(() => {
+          if (this.pendingHumanTurns.delete(meetingId)) resolve(null);
+        }, 5 * 60 * 1000);
+      });
     });
 
     // Load persisted MCP state
@@ -160,8 +210,13 @@ export class APIServer {
       console.log(`[API] UI    http://localhost:${this.port}`);
       console.log(`[API] REST  http://localhost:${this.port}/api`);
       console.log(`[API] WS    ws://localhost:${this.port}/ws`);
-      if (isSpeechAvailable()) {
-        console.log(`[API] Speech TTS enabled (model: ${process.env['PIPER_MODEL']})`);
+      if (isSpeechAvailable() || this.voiceManager.getVoices().length > 0) {
+        const voices = this.voiceManager.getVoices();
+        if (voices.length > 0) {
+          console.log(`[API] Speech TTS — ${voices.length} voice(s): ${voices.map(v => v.name).join(', ')}`);
+        } else {
+          console.log(`[API] Speech TTS enabled (model: ${process.env['PIPER_MODEL'] ?? 'server'})`);
+        }
       }
     });
   }
@@ -170,6 +225,7 @@ export class APIServer {
     this.unsubscribeEvents?.();
     this.kanbanWatcher?.close();
     if (this.meetingScheduler) { clearInterval(this.meetingScheduler); this.meetingScheduler = null; }
+    this.voiceManager.stop();
     this.wss.close();
     this.server.close();
   }
@@ -182,10 +238,21 @@ export class APIServer {
 
     ws.on('message', (raw) => {
       try {
-        const msg = JSON.parse(raw.toString()) as { type: string; name?: string };
+        const msg = JSON.parse(raw.toString()) as { type: string; name?: string; voice?: string; speakerName?: string };
         if (msg.type === 'set_speech_agent') {
-          if (msg.name) this.speechInterest.set(ws, msg.name);
-          else           this.speechInterest.delete(ws);
+          if (msg.name) {
+            const voice    = this.voiceManager.resolveVoice(msg.voice);
+            const voiceUrl = voice?.url ?? process.env['PIPER_SERVER_URL'] ?? null;
+            // Resolve speaker name → integer id; fall back to voice default
+            let speakerId: number | null = voice?.speakerId ?? null;
+            if (msg.speakerName && voice) {
+              const found = voice.speakers.find(s => s.name === msg.speakerName);
+              if (found) speakerId = found.id;
+            }
+            this.speechInterest.set(ws, { agentName: msg.name, voiceUrl, speakerId });
+          } else {
+            this.speechInterest.delete(ws);
+          }
         }
       } catch { /* ignore malformed */ }
     });
@@ -235,7 +302,7 @@ export class APIServer {
         const to = ev['to'] as string | undefined;
         const task = ev['task'] as string | undefined;
         if (to) {
-          this.setActivity(to, (task ?? 'Working on task').slice(0, 70));
+          this.setActivity(to, task ?? 'Working on task');
           changed = true;
         }
         break;
@@ -260,25 +327,34 @@ export class APIServer {
         const from    = ev['from'] as string | undefined;
         const content = ev['content'] as string | undefined;
         if (from) {
-          const snippet = (content ?? '').replace(/\s+/g, ' ').trim().slice(0, 70);
-          this.setActivity(from, snippet || 'Responded');
+          this.setActivity(from, (content ?? '').trim() || 'Responded');
           changed = true;
           this.sseBroadcast({ type: 'cli_output', kind: 'agent', from, content: content ?? '' });
 
           // Speech synthesis — send to any WS client interested in this agent
-          if (content && isSpeechAvailable()) {
+          const hasSpeech = this.voiceManager.getVoices().length > 0 || isSpeechAvailable();
+          if (content && hasSpeech) {
             const interested = [...this.speechInterest.entries()]
-              .filter(([, name]) => name === from)
-              .map(([ws]) => ws);
+              .filter(([, info]) => info.agentName === from);
             if (interested.length > 0) {
-              processSpeech(content, from, (chunk) => {
-                const msg = JSON.stringify({ type: 'speech_chunk', data: chunk });
-                for (const ws of interested) {
-                  if (ws.readyState === WebSocket.OPEN) ws.send(msg);
-                }
-              }).catch((err: Error) =>
-                console.warn(`[Speech] Pipeline error for ${from}:`, err.message),
-              );
+              // Group by voiceUrl so identical voices share one pipeline run
+              const byVoice = new Map<string | null, WebSocket[]>();
+              for (const [ws, { voiceUrl }] of interested) {
+                const key = voiceUrl ?? null;
+                if (!byVoice.has(key)) byVoice.set(key, []);
+                byVoice.get(key)!.push(ws);
+              }
+              for (const [voiceUrl, clients] of byVoice) {
+                const speakerId = interested.find(([ws]) => clients.includes(ws))?.[1]?.speakerId ?? null;
+                processSpeech(content, from, voiceUrl, speakerId, (chunk) => {
+                  const msg = JSON.stringify({ type: 'speech_chunk', data: chunk });
+                  for (const ws of clients) {
+                    if (ws.readyState === WebSocket.OPEN) ws.send(msg);
+                  }
+                }).catch((err: Error) =>
+                  console.warn(`[Speech] Pipeline error for ${from}:`, err.message),
+                );
+              }
             }
           }
         }
@@ -301,11 +377,30 @@ export class APIServer {
         const facilitator  = ev['facilitator'] as string | undefined;
         const participants = ev['participants'] as string[] | undefined;
         const topic        = ev['topic'] as string | undefined;
+        const meetingId    = ev['meetingId'] as string | undefined;
         const label = `Meeting: ${(topic ?? '').slice(0, 50)}`;
         for (const name of [facilitator, ...(participants ?? [])].filter(Boolean) as string[]) {
           this.setActivity(name, label);
         }
+        const hasHuman = (participants ?? []).includes('human');
+        this.sseBroadcast({ type: 'meeting_started', meetingId, topic, facilitator, participants, hasHuman });
         changed = true;
+        break;
+      }
+      case 'meeting_turn': {
+        const meetingId   = ev['meetingId'] as string | undefined;
+        const participant = ev['participant'] as string | undefined;
+        const content     = ev['content'] as string | undefined;
+        this.sseBroadcast({ type: 'meeting_turn', meetingId, participant, content });
+        break;
+      }
+      case 'meeting_closed': {
+        const meetingId = ev['meetingId'] as string | undefined;
+        const topic     = ev['topic'] as string | undefined;
+        this.sseBroadcast({ type: 'meeting_closed', meetingId, topic });
+        // Resolve any pending human turn (so the waiting promise unblocks)
+        const resolver = this.pendingHumanTurns.get(meetingId ?? '');
+        if (resolver) { this.pendingHumanTurns.delete(meetingId!); resolver(null); }
         break;
       }
       case 'escalation': {
@@ -376,13 +471,19 @@ export class APIServer {
     return this.orchestrator.listAgents().map((a) => {
       const extra = this.agentActivity.get(a.name);
       return {
-        name:      a.name,
-        hatType:   a.hatType,
-        state:     a.state,
-        activity:  extra?.activity ?? stateLabel(a.state),
-        talkingTo: extra?.talkingTo,
-        model:     a.config.model,
-        provider:  a.config.provider.name,
+        name:             a.name,
+        hatType:          a.hatType,
+        state:            a.state,
+        activity:         extra?.activity ?? stateLabel(a.state),
+        talkingTo:        extra?.talkingTo,
+        model:            a.config.model,
+        provider:         a.config.provider.name,
+        specialisation:   a.config.identity.specialisation,
+        visualDescription: a.config.identity.visualDescription,
+        backstory:        a.config.identity.backstory,
+        avatar:           a.config.identity.avatar,
+        voice:            a.config.identity.voice,
+        speakerName:      a.config.identity.speakerName,
       };
     });
   }
@@ -584,7 +685,7 @@ export class APIServer {
         return;
       }
       try {
-        const config = resolveConfig(entry.config);
+        const config = this.resolveMCPConfig(id, entry);
         await this.orchestrator.addMCPServer({ name: id, config });
         this.enabledMCPIds.add(id);
         await this.saveMCPEnabled();
@@ -623,7 +724,10 @@ export class APIServer {
       if (!id?.trim()) { this.json(res, 400, { error: 'id is required' }); return; }
       try {
         await this.switchProject(id.trim());
-        this.json(res, 200, { ok: true, id: this.projectId });
+        const agents  = this.buildAgentStatuses();
+        const tickets = await this.readTickets().catch(() => []);
+        const project = { id: this.projectId, dir: this.projectDir };
+        this.json(res, 200, { ok: true, id: this.projectId, agents, tickets, project });
       } catch (err) {
         this.json(res, 500, { error: (err as Error).message });
       }
@@ -691,6 +795,74 @@ export class APIServer {
         this.json(res, 200, { ok: true });
       } catch (err) {
         this.json(res, 404, { error: (err as Error).message });
+      }
+
+    } else if (pathname.match(/^\/api\/agents\/[^/]+\/name$/) && req.method === 'PATCH') {
+      const oldName = decodeURIComponent(pathname.slice('/api/agents/'.length, -'/name'.length));
+      const body = await this.readBody(req);
+      const { name: newName } = JSON.parse(body) as { name: string };
+      if (!newName?.trim()) { this.json(res, 400, { error: 'name is required' }); return; }
+      try {
+        const resolved = this.resolveAgentName(oldName);
+        this.orchestrator.renameAgent(resolved, newName.trim());
+        // Update any in-progress ticket map
+        const ticket = this.agentTicketMap.get(resolved.toLowerCase());
+        if (ticket) {
+          this.agentTicketMap.delete(resolved.toLowerCase());
+          this.agentTicketMap.set(newName.trim().toLowerCase(), ticket);
+        }
+        const activity = this.agentActivity.get(resolved);
+        if (activity) {
+          this.agentActivity.delete(resolved);
+          this.agentActivity.set(newName.trim(), activity);
+        }
+        this.sseBroadcast({ type: 'agent_update', agents: this.buildAgentStatuses() });
+        this.saveCurrentState().catch(() => {});
+        this.json(res, 200, { ok: true, name: newName.trim() });
+      } catch (err) {
+        this.json(res, 400, { error: (err as Error).message });
+      }
+
+    } else if (pathname.match(/^\/api\/agents\/[^/]+\/specialisation$/) && req.method === 'PATCH') {
+      const agentName = decodeURIComponent(pathname.slice('/api/agents/'.length, -'/specialisation'.length));
+      const body = await this.readBody(req);
+      const { specialisation } = JSON.parse(body) as { specialisation?: string };
+      try {
+        const resolved = this.resolveAgentName(agentName);
+        this.orchestrator.updateAgentSpecialisation(resolved, specialisation?.trim() || undefined);
+        this.sseBroadcast({ type: 'agent_update', agents: this.buildAgentStatuses() });
+        this.saveCurrentState().catch(() => {});
+        this.json(res, 200, { ok: true });
+      } catch (err) {
+        this.json(res, 400, { error: (err as Error).message });
+      }
+
+    } else if (pathname.match(/^\/api\/agents\/[^/]+\/voice$/) && req.method === 'PATCH') {
+      const agentName = decodeURIComponent(pathname.slice('/api/agents/'.length, -'/voice'.length));
+      const body = await this.readBody(req);
+      const { voice, speakerName } = JSON.parse(body) as { voice?: string; speakerName?: string };
+      try {
+        const resolved = this.resolveAgentName(agentName);
+        this.orchestrator.updateAgentVoice(resolved, voice?.trim() || undefined, speakerName?.trim() || undefined);
+        this.sseBroadcast({ type: 'agent_update', agents: this.buildAgentStatuses() });
+        this.saveCurrentState().catch(() => {});
+        this.json(res, 200, { ok: true });
+      } catch (err) {
+        this.json(res, 400, { error: (err as Error).message });
+      }
+
+    } else if (pathname.match(/^\/api\/agents\/[^/]+\/avatar$/) && req.method === 'PATCH') {
+      const agentName = decodeURIComponent(pathname.slice('/api/agents/'.length, -'/avatar'.length));
+      const body = await this.readBody(req);
+      const { avatar } = JSON.parse(body) as { avatar?: string };
+      try {
+        const resolved = this.resolveAgentName(agentName);
+        this.orchestrator.updateAgentAvatar(resolved, avatar?.trim() || undefined);
+        this.sseBroadcast({ type: 'agent_update', agents: this.buildAgentStatuses() });
+        this.saveCurrentState().catch(() => {});
+        this.json(res, 200, { ok: true });
+      } catch (err) {
+        this.json(res, 400, { error: (err as Error).message });
       }
 
     } else if (pathname.match(/^\/api\/agents\/[^/]+\/hat$/) && req.method === 'PATCH') {
@@ -795,6 +967,32 @@ export class APIServer {
       const output = await this.handleCLICommand(line?.trim() ?? '');
       this.json(res, 200, { output });
 
+    } else if (pathname === '/api/meetings/start' && req.method === 'POST') {
+      const body   = await this.readBody(req);
+      const fields = JSON.parse(body) as { topic?: string; agenda?: string; facilitator?: string; participants?: string[] };
+      if (!fields.topic?.trim())     { this.json(res, 400, { error: 'topic is required' }); return; }
+      if (!fields.facilitator?.trim()) { this.json(res, 400, { error: 'facilitator is required' }); return; }
+      const facilitator  = this.resolveAgentName(fields.facilitator);
+      // Strip the facilitator from participants — startMeeting handles them separately
+      const participants = (fields.participants ?? []).filter((p: string) => p !== facilitator);
+      const topic        = fields.topic.trim();
+      const agenda       = fields.agenda?.trim();
+      const now          = new Date().toISOString();
+      try {
+        // Launch meeting immediately (fire-and-forget — meeting runs async)
+        void this.orchestrator.launchImpromptuMeeting(facilitator, participants, topic, agenda);
+
+        // Record directly as 'launched' — never picked up by the scheduler
+        this.orchestrator.recordImpromptuInCalendar({ topic, agenda, facilitator, participants, startedAt: now })
+          .then(() => {
+            this.sseBroadcast({ type: 'scheduled_meetings_update', meetings: this.orchestrator.listScheduledMeetings() });
+          }).catch(() => {});
+
+        this.json(res, 201, { ok: true });
+      } catch (err) {
+        this.json(res, 400, { error: (err as Error).message });
+      }
+
     } else if (pathname === '/api/scheduled-meetings' && req.method === 'GET') {
       this.json(res, 200, this.orchestrator.listScheduledMeetings());
 
@@ -837,6 +1035,16 @@ export class APIServer {
         this.json(res, 400, { error: (err as Error).message });
       }
 
+    } else if (pathname.match(/^\/api\/scheduled-meetings\/[^/]+$/) && req.method === 'DELETE') {
+      const id = pathname.replace('/api/scheduled-meetings/', '');
+      const deleted = await this.orchestrator.deleteScheduledMeeting(id);
+      if (deleted) {
+        this.sseBroadcast({ type: 'scheduled_meetings_update', meetings: this.orchestrator.listScheduledMeetings() });
+        this.json(res, 200, { ok: true });
+      } else {
+        this.json(res, 404, { error: 'Meeting not found' });
+      }
+
     } else if (pathname.match(/^\/api\/scheduled-meetings\/[^/]+\/launch$/) && req.method === 'POST') {
       const id = pathname.replace('/api/scheduled-meetings/', '').replace('/launch', '');
       try {
@@ -847,12 +1055,131 @@ export class APIServer {
         this.json(res, 400, { error: (err as Error).message });
       }
 
+    } else if (pathname === '/api/specialisations') {
+      this.json(res, 200, { specialisations: Object.keys(SPECIALISATION_DIRECTIVES) });
+
     } else if (pathname === '/api/avatars') {
       try {
         const raw = await readFile(path.join(AVATARS_DIR, 'avatars.json'), 'utf-8');
         this.json(res, 200, JSON.parse(raw));
       } catch {
         this.json(res, 404, { avatars: [] });
+      }
+
+    } else if (pathname === '/api/voices') {
+      this.json(res, 200, this.voiceManager.getVoices());
+
+    } else if (pathname === '/api/speech/preview' && req.method === 'POST') {
+      const voices = this.voiceManager.getVoices();
+      if (voices.length === 0) { this.json(res, 404, { error: 'No voices configured' }); return; }
+      const body = await this.readBody(req);
+      const { voice: voiceName, speakerName } = JSON.parse(body) as { voice?: string; speakerName?: string };
+      const voice = this.voiceManager.resolveVoice(voiceName);
+      if (!voice) { this.json(res, 404, { error: 'Voice not found' }); return; }
+      try {
+        let speakerId: number | null = voice.speakerId;
+        if (speakerName && voice.speakers.length > 0) {
+          const found = voice.speakers.find(s => s.name === speakerName);
+          if (found) speakerId = found.id;
+        }
+        const payload: Record<string, unknown> = { text: 'Hello  I am ready to help with your project.' };
+        if (speakerId !== null) payload['speaker_id'] = speakerId;
+        const piperRes = await fetch(`${voice.url}/`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+          signal: AbortSignal.timeout(15_000),
+        });
+        if (!piperRes.ok) { this.json(res, 502, { error: `TTS error: ${piperRes.status}` }); return; }
+        const wavBuffer = Buffer.from(await piperRes.arrayBuffer());
+        res.writeHead(200, { 'Content-Type': 'audio/wav', 'Content-Length': String(wavBuffer.length) });
+        res.end(wavBuffer);
+      } catch (err) {
+        this.json(res, 500, { error: (err as Error).message });
+      }
+
+    } else if (pathname === '/api/speech/synthesise' && req.method === 'POST') {
+      // Full TTS pipeline: returns [{audioBase64, visemes, duration, sentence}]
+      const voices = this.voiceManager.getVoices();
+      if (voices.length === 0) { this.json(res, 404, { error: 'No voices configured' }); return; }
+      const body = await this.readBody(req);
+      const { text, voice: voiceName, speakerName } = JSON.parse(body) as { text?: string; voice?: string; speakerName?: string };
+      if (!text?.trim()) { this.json(res, 400, { error: 'text required' }); return; }
+      const voice = this.voiceManager.resolveVoice(voiceName);
+      if (!voice) { this.json(res, 404, { error: 'Voice not found' }); return; }
+      try {
+        let speakerId: number | null = voice.speakerId;
+        if (speakerName && voice.speakers.length > 0) {
+          const found = voice.speakers.find(s => s.name === speakerName);
+          if (found) speakerId = found.id;
+        }
+        const chunks: unknown[] = [];
+        await processSpeech(text, '__meeting__', voice.url, speakerId, (chunk) => { chunks.push(chunk); });
+        this.json(res, 200, { chunks });
+      } catch (err) {
+        this.json(res, 500, { error: (err as Error).message });
+      }
+
+    } else if (pathname.startsWith('/api/meetings/') && pathname.endsWith('/cancel') && req.method === 'POST') {
+      const meetingId = pathname.split('/')[3];
+      // Unblock any pending human turn so the room can exit
+      const resolver = this.pendingHumanTurns.get(meetingId);
+      if (resolver) { this.pendingHumanTurns.delete(meetingId); resolver(null); }
+      const cancelled = this.orchestrator.cancelActiveMeeting(meetingId);
+      this.json(res, cancelled ? 200 : 404, { ok: cancelled });
+
+    } else if (pathname.startsWith('/api/meetings/') && pathname.endsWith('/human-turn') && req.method === 'POST') {
+      const meetingId = pathname.split('/')[3];
+      const body = await this.readBody(req);
+      const { content } = JSON.parse(body) as { content?: string };
+      const resolver = this.pendingHumanTurns.get(meetingId);
+      if (resolver) {
+        this.pendingHumanTurns.delete(meetingId);
+        resolver(content?.trim() || null);
+        this.json(res, 200, { ok: true });
+      } else {
+        this.json(res, 404, { error: 'No pending human turn' });
+      }
+
+    } else if (pathname === '/api/project/files' && req.method === 'GET') {
+      if (!this.projectDir) { this.json(res, 404, { error: 'No project loaded' }); return; }
+      try {
+        const sources = await listFilesRecursive(path.join(this.projectDir, 'sources'), this.projectDir);
+        const outputs = await listFilesRecursive(path.join(this.projectDir, 'outputs'), this.projectDir);
+        this.json(res, 200, { sources, outputs });
+      } catch {
+        this.json(res, 200, { sources: [], outputs: [] });
+      }
+
+    } else if (pathname === '/api/project/upload' && req.method === 'POST') {
+      if (!this.projectDir) { this.json(res, 503, { error: 'No project loaded' }); return; }
+      const rawFilename = req.headers['x-filename'] as string | undefined;
+      if (!rawFilename?.trim()) { this.json(res, 400, { error: 'X-Filename header required' }); return; }
+      // Sanitise: strip path separators, keep only the basename
+      const filename = path.basename(decodeURIComponent(rawFilename)).replace(/[\\/:*?"<>|]/g, '_');
+      if (!filename) { this.json(res, 400, { error: 'Invalid filename' }); return; }
+      const destPath = path.join(this.projectDir, 'sources', filename);
+      try {
+        const chunks: Buffer[] = [];
+        for await (const chunk of req) chunks.push(chunk as Buffer);
+        await writeFile(destPath, Buffer.concat(chunks));
+        this.json(res, 201, { ok: true, path: `sources/${filename}` });
+        // Notify connected clients
+        const sources = await listFilesRecursive(path.join(this.projectDir, 'sources'), this.projectDir);
+        const outputs = await listFilesRecursive(path.join(this.projectDir, 'outputs'), this.projectDir);
+        this.sseBroadcast({ type: 'files_update', sources, outputs });
+      } catch (err) {
+        this.json(res, 500, { error: (err as Error).message });
+      }
+
+    } else if (pathname === '/api/telemetry') {
+      if (this.telemetry) {
+        this.json(res, 200, {
+          summary: this.telemetry.getSummary(),
+          records: this.telemetry.getAll(),
+        });
+      } else {
+        this.json(res, 200, { summary: null, records: [] });
       }
 
     } else if (pathname.startsWith('/api/')) {
@@ -912,6 +1239,19 @@ export class APIServer {
     res.end(JSON.stringify(body));
   }
 
+  /** Resolve a catalogue entry config, injecting project-specific args where needed. */
+  private resolveMCPConfig(id: string, entry: import('../mcp/mcp-catalogue.js').MCPCatalogueEntry) {
+    const config = resolveConfig(entry.config);
+    if (id === 'kanban' && this.kanbanPath && config.transport === 'stdio') {
+      return { ...config, args: [...(config.args ?? []), this.kanbanPath] };
+    }
+    if (id === 'filesystem' && this.projectDir && config.transport === 'stdio') {
+      // Give the filesystem server access to the full project dir (includes sources/ and outputs/)
+      return { ...config, args: [...(config.args ?? []), this.projectDir] };
+    }
+    return config;
+  }
+
   private async loadMCPEnabled(): Promise<void> {
     try {
       const raw = await readFile(this.mcpEnabledPath, 'utf-8');
@@ -920,7 +1260,7 @@ export class APIServer {
         const entry = MCP_CATALOGUE.find(e => e.id === id);
         if (!entry || this.orchestrator.hasMCPServer(id)) continue;
         try {
-          const config = resolveConfig(entry.config);
+          const config = this.resolveMCPConfig(id, entry);
           await this.orchestrator.addMCPServer({ name: id, config });
           this.enabledMCPIds.add(id);
         } catch (err) {
@@ -1175,6 +1515,24 @@ export class APIServer {
     await this.saveCurrentState();
   }
 
+  private async ensureProjectFolders(dir: string): Promise<void> {
+    await mkdir(path.join(dir, 'sources'), { recursive: true });
+    await mkdir(path.join(dir, 'outputs'), { recursive: true });
+  }
+
+  private async initTelemetryStore(filePath: string): Promise<void> {
+    this.telemetry = new TelemetryStore(filePath);
+    await this.telemetry.init().catch((err: Error) =>
+      console.warn('[API] Telemetry init error:', err.message),
+    );
+    this.orchestrator.setTelemetryRecorder((entry) => {
+      if (!this.telemetry) return;
+      this.telemetry.record({ ts: new Date().toISOString(), ...entry }).then(() => {
+        this.sseBroadcast({ type: 'telemetry_update', summary: this.telemetry!.getSummary() });
+      }).catch(() => {});
+    });
+  }
+
   private async switchProject(newId: string): Promise<void> {
     if (!this.projectLoader || !this.projectsRoot) throw new Error('Project loader not configured');
 
@@ -1219,6 +1577,14 @@ export class APIServer {
     this.projectDir      = newProjectDir;
     await newOrchestrator.initMeetingStore(newMeetingsFile).catch(() => {});
 
+    // Ensure project folder structure and wire project dir into agents
+    await this.ensureProjectFolders(newProjectDir);
+    newOrchestrator.setProjectDir(newProjectDir);
+
+    // Switch telemetry to new project
+    const newTelemetryFile = path.join(newProjectDir, 'telemetry.jsonl');
+    await this.initTelemetryStore(newTelemetryFile);
+
     this.unsubscribeEvents = this.orchestrator.onEvent((ev) => {
       this.handleOrchestratorEvent(ev);
       this.wsBroadcast(ev);
@@ -1232,11 +1598,15 @@ export class APIServer {
     const tickets = await this.readTickets().catch(() => []);
     const project = { id: this.projectId, dir: this.projectDir };
     this.sseBroadcast({ type: 'init', agents, tickets, project } as never);
+    this.sseBroadcast({ type: 'telemetry_update', summary: this.telemetry?.getSummary() ?? null });
 
     // 7. Dispatch in_progress kanban tickets that have no active orchestrator task
     this.dispatchUnstartedTickets().catch(() => {});
 
     console.log(`[API] Project switched to "${newId}"`);
+
+    // Notify external components (e.g. CLIInterface) of the new orchestrator
+    this.projectSwitchCallback?.(newOrchestrator);
   }
 
   private resolveAgentName(input: string): string {
@@ -1330,4 +1700,33 @@ function buildBoardSummary(board: Board, includeBacklog: boolean) {
     result[col] = { count: tickets.length, tickets };
   }
   return result;
+}
+
+
+async function listFilesRecursive(
+  dir: string,
+  projectDir: string,
+  relBase = '',
+): Promise<Array<{ name: string; relativePath: string; size: number; modified: string; isDir: boolean }>> {
+  const results: Array<{ name: string; relativePath: string; size: number; modified: string; isDir: boolean }> = [];
+  let entries: fs.Dirent[];
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch {
+    return results;
+  }
+  for (const entry of entries) {
+    const rel = relBase ? `${relBase}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) {
+      results.push({ name: entry.name, relativePath: rel, size: 0, modified: '', isDir: true });
+      const children = await listFilesRecursive(path.join(dir, entry.name), projectDir, rel);
+      results.push(...children);
+    } else {
+      try {
+        const s = await stat(path.join(dir, entry.name));
+        results.push({ name: entry.name, relativePath: rel, size: s.size, modified: s.mtime.toISOString(), isDir: false });
+      } catch { /* skip */ }
+    }
+  }
+  return results;
 }

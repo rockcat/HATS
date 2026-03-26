@@ -47,9 +47,10 @@ export const MCP_CATALOGUE: MCPCatalogueEntry[] = [
   {
     id: 'filesystem',
     name: 'Filesystem',
-    description: 'Read, write, and list files on the local filesystem',
+    description: 'Read, write, and list files in the project folder — sources/ for inputs, outputs/ for deliverables',
     category: 'files',
-    config: { transport: 'stdio', command: 'npx', args: ['-y', '@modelcontextprotocol/server-filesystem', './projects'] },
+    config: { transport: 'stdio', command: 'npx', args: ['-y', '@modelcontextprotocol/server-filesystem'] },
+    // project dir is appended at runtime by resolveMCPConfig
   },
   {
     id: 'excel',
@@ -64,6 +65,20 @@ export const MCP_CATALOGUE: MCPCatalogueEntry[] = [
     description: 'Create and edit Microsoft Word (.docx) documents using structured JSON',
     category: 'files',
     config: { transport: 'stdio', command: 'npx', args: ['-y', '@docx-mcp/docx-mcp'] },
+  },
+  {
+    id: 'pdf',
+    name: 'PDF',
+    description: 'Generate PDF files from content — supports text, layout, tables, and Unicode. Save to outputs/ for deliverables',
+    category: 'files',
+    config: { transport: 'stdio', command: 'npx', args: ['-y', '@mcp-z/mcp-pdf'] },
+  },
+  {
+    id: 'powerpoint',
+    name: 'PowerPoint / PPTX',
+    description: 'Create PowerPoint presentations — add slides, text, tables, shapes, and charts. Save .pptx to outputs/',
+    category: 'files',
+    config: { transport: 'stdio', command: 'npx', args: ['-y', '@pylogmonmcp/powerpoint-generator'] },
   },
   {
     id: 'brave-search',
@@ -93,7 +108,7 @@ export const MCP_CATALOGUE: MCPCatalogueEntry[] = [
     name: 'SQLite',
     description: 'Run queries against a local SQLite database file',
     category: 'data',
-    config: { transport: 'stdio', command: 'npx', args: ['-y', '@modelcontextprotocol/server-sqlite', '--db-path', './data.db'] },
+    config: { transport: 'stdio', command: 'npx', args: ['-y', 'mcp-sqlite', '--db-path', './data.db'] },
   },
   {
     id: 'postgres',

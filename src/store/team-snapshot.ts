@@ -6,6 +6,7 @@ import { Task, Meeting } from '../orchestrator/types.js';
 export const SNAPSHOT_VERSION = 1;
 
 export interface AgentSnapshot {
+  id: string;             // stable UUID, used as map key so renames don't break anything
   identity: AgentIdentity;
   hatType: HatType;
   model: string;

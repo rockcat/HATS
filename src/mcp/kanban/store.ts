@@ -9,6 +9,15 @@ export class KanbanStore {
   private board: Board = { tickets: {}, nextSeq: 1 };
   private filePath: string;
   private saveQueue: Promise<void> = Promise.resolve();
+  /** Serialises all mutating operations so concurrent creates never share a seq number. */
+  private opQueue: Promise<void> = Promise.resolve();
+
+  private serialise<T>(fn: () => Promise<T>): Promise<T> {
+    const p = this.opQueue.then(() => fn());
+    // Swallow errors so one failed op doesn't jam the queue
+    this.opQueue = p.then(() => undefined, () => undefined);
+    return p;
+  }
 
   constructor(filePath: string) {
     this.filePath = filePath;
@@ -66,73 +75,107 @@ export class KanbanStore {
     creator: string;
     assignee?: string;
     tags?: string[];
-  }): Ticket {
-    const id = `TKT-${String(this.board.nextSeq).padStart(3, '0')}`;
-    this.board.nextSeq++;
+  }): Promise<Ticket> {
+    return this.serialise(async () => {
+      await this.reload();
+      // Derive next seq from actual tickets in case nextSeq drifted
+      const maxExisting = Object.keys(this.board.tickets)
+        .map(k => parseInt(k.replace('TKT-', ''), 10))
+        .filter(n => !isNaN(n))
+        .reduce((m, n) => Math.max(m, n), 0);
+      const seq = Math.max(this.board.nextSeq, maxExisting + 1);
+      this.board.nextSeq = seq + 1;
 
-    const ticket: Ticket = {
-      id,
-      title: fields.title,
-      description: fields.description,
-      priority: fields.priority ?? 'medium',
-      column: 'backlog',
-      creator: fields.creator,
-      assignee: fields.assignee,
-      tags: fields.tags ?? [],
-      comments: [],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    this.board.tickets[id] = ticket;
-    this.save();
-    return ticket;
+      const id = `TKT-${String(seq).padStart(3, '0')}`;
+      const ticket: Ticket = {
+        id,
+        title: fields.title,
+        description: fields.description,
+        priority: fields.priority ?? 'medium',
+        column: 'backlog',
+        creator: fields.creator,
+        assignee: fields.assignee,
+        tags: fields.tags ?? [],
+        comments: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      this.board.tickets[id] = ticket;
+      this.save();
+      return ticket;
+    });
   }
 
-  moveTicket(id: string, column: Column): Ticket {
-    const ticket = this.requireTicket(id);
-    ticket.column = column;
-    ticket.updatedAt = new Date().toISOString();
-    this.save();
-    return ticket;
+  moveTicket(id: string, column: Column): Promise<Ticket> {
+    return this.serialise(async () => {
+      await this.reload();
+      const ticket = this.requireTicket(id);
+      ticket.column = column;
+      ticket.updatedAt = new Date().toISOString();
+      this.save();
+      return ticket;
+    });
   }
 
-  assignTicket(id: string, assignee: string): Ticket {
-    const ticket = this.requireTicket(id);
-    ticket.assignee = assignee;
-    ticket.updatedAt = new Date().toISOString();
-    this.save();
-    return ticket;
+  assignTicket(id: string, assignee: string): Promise<Ticket> {
+    return this.serialise(async () => {
+      await this.reload();
+      const ticket = this.requireTicket(id);
+      ticket.assignee = assignee;
+      ticket.updatedAt = new Date().toISOString();
+      this.save();
+      return ticket;
+    });
   }
 
-  updateTicket(id: string, fields: Partial<Pick<Ticket, 'title' | 'description' | 'priority' | 'tags'>>): Ticket {
-    const ticket = this.requireTicket(id);
-    Object.assign(ticket, fields);
-    ticket.updatedAt = new Date().toISOString();
-    this.save();
-    return ticket;
+  updateTicket(id: string, fields: Partial<Pick<Ticket, 'title' | 'description' | 'priority' | 'tags'>>): Promise<Ticket> {
+    return this.serialise(async () => {
+      await this.reload();
+      const ticket = this.requireTicket(id);
+      Object.assign(ticket, fields);
+      ticket.updatedAt = new Date().toISOString();
+      this.save();
+      return ticket;
+    });
   }
 
-  addComment(id: string, author: string, text: string): Ticket {
-    const ticket = this.requireTicket(id);
-    const comment: Comment = {
-      id: uuidv4(),
-      author,
-      text,
-      ts: new Date().toISOString(),
-    };
-    ticket.comments.push(comment);
-    ticket.updatedAt = new Date().toISOString();
-    this.save();
-    return ticket;
+  addComment(id: string, author: string, text: string): Promise<Ticket> {
+    return this.serialise(async () => {
+      await this.reload();
+      const ticket = this.requireTicket(id);
+      const comment: Comment = {
+        id: uuidv4(),
+        author,
+        text,
+        ts: new Date().toISOString(),
+      };
+      ticket.comments.push(comment);
+      ticket.updatedAt = new Date().toISOString();
+      this.save();
+      return ticket;
+    });
   }
 
-  deleteTicket(id: string): void {
-    this.requireTicket(id);
-    delete this.board.tickets[id];
-    this.save();
+  deleteTicket(id: string): Promise<void> {
+    return this.serialise(async () => {
+      await this.reload();
+      this.requireTicket(id);
+      delete this.board.tickets[id];
+      this.save();
+    });
   }
 
   // ── Persistence ────────────────────────────────────────────────────────────
+
+  /** Re-read the board file so mutations always start from the latest on-disk state. */
+  private async reload(): Promise<void> {
+    try {
+      const raw = await fs.readFile(this.filePath, 'utf-8');
+      this.board = JSON.parse(raw) as Board;
+    } catch {
+      // File missing or corrupt — keep current in-memory state
+    }
+  }
 
   private requireTicket(id: string): Ticket {
     const ticket = this.board.tickets[id];

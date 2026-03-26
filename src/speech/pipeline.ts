@@ -2,9 +2,9 @@
  * Speech synthesis pipeline: text → Piper TTS → Rhubarb visemes → SpeechChunk
  *
  * Environment variables:
- *   PIPER_MODEL       Path to the .onnx voice model (required to enable TTS).
- *   PIPER_BIN         piper executable (default: "piper").
- *   RHUBARB_BIN       rhubarb executable (default: "rhubarb").
+ *   PIPER_MODEL         Path to the .onnx voice model (required to enable TTS).
+ *   PIPER_BIN           piper executable (default: "piper").
+ *   RHUBARB_BIN         rhubarb executable (default: "rhubarb").
  *   RHUBARB_RECOGNIZER  "phonetic" (default) or "pocketSphinx".
  */
 import { spawn } from 'child_process';
@@ -35,7 +35,12 @@ function stripMarkdown(text: string): string {
     .replace(/^\d+\.\s+/gm, '')                // ordered lists
     .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')   // links → label
     .replace(/!\[.*?\]\([^)]+\)/g, '')         // images
-    .replace(/[|\\]/g, ' ');                   // table pipes, backslashes
+    .replace(/[|\\]/g, ' ')                    // table pipes, backslashes
+    .replace(/^[-─═*_~]{3,}\s*$/gm, '')        // horizontal rules / dividers
+    .replace(/[\u{1F300}-\u{1FFFF}]/gu, '')    // emoji (most ranges)
+    .replace(/[\u2600-\u27BF]/g, '')           // misc symbols, dingbats
+    .replace(/[\u{E0000}-\u{E007F}]/gu, '')    // tags block
+    .replace(/\s{2,}/g, ' ');                  // collapse extra whitespace
 }
 
 /** Split text into speakable sentences. */
@@ -47,20 +52,103 @@ export function splitSentences(text: string): string[] {
     .filter(s => s.length > 3 && /[a-zA-Z]/.test(s));
 }
 
+// ── WAV header ────────────────────────────────────────────────────────────────
+
+function buildWavBuffer(pcm: Buffer, sampleRate: number): Buffer {
+  const numChannels  = 1;
+  const bitsPerSample = 16;
+  const byteRate     = sampleRate * numChannels * (bitsPerSample / 8);
+  const blockAlign   = numChannels * (bitsPerSample / 8);
+
+  const header = Buffer.alloc(44);
+  header.write('RIFF', 0, 'ascii');
+  header.writeUInt32LE(36 + pcm.length, 4);
+  header.write('WAVE', 8, 'ascii');
+  header.write('fmt ', 12, 'ascii');
+  header.writeUInt32LE(16, 16);
+  header.writeUInt16LE(1, 20);              // PCM
+  header.writeUInt16LE(numChannels, 22);
+  header.writeUInt32LE(sampleRate, 24);
+  header.writeUInt32LE(byteRate, 28);
+  header.writeUInt16LE(blockAlign, 32);
+  header.writeUInt16LE(bitsPerSample, 34);
+  header.write('data', 36, 'ascii');
+  header.writeUInt32LE(pcm.length, 40);
+
+  return Buffer.concat([header, pcm]);
+}
+
+/** Read sample rate from the model's companion .onnx.json config. */
+async function getModelSampleRate(modelPath: string): Promise<number> {
+  try {
+    const config = JSON.parse(await readFile(modelPath + '.json', 'utf-8'));
+    const rate = config?.audio?.sample_rate as number | undefined;
+    if (rate) {
+      console.log(`[Speech] Model sample rate: ${rate} Hz`);
+      return rate;
+    }
+  } catch {
+    // fall through
+  }
+  console.warn('[Speech] Could not read model sample rate — defaulting to 22050 Hz');
+  return 22050;
+}
+
 // ── Piper TTS ─────────────────────────────────────────────────────────────────
 
-async function runPiper(text: string, outFile: string): Promise<void> {
-  const model    = process.env['PIPER_MODEL']!;
+// Sample rates cached per model path to avoid re-reading .onnx.json files.
+const sampleRateCache = new Map<string, number>();
+
+async function resolvedSampleRate(modelPath: string): Promise<number> {
+  if (sampleRateCache.has(modelPath)) return sampleRateCache.get(modelPath)!;
+  const rate = await getModelSampleRate(modelPath);
+  sampleRateCache.set(modelPath, rate);
+  return rate;
+}
+
+/**
+ * Server mode: GET from a running piper.http_server Flask instance.
+ * The server is started with: python -m piper.http_server -m <model> --port <port>
+ * Returns a WAV buffer directly — no header construction needed.
+ */
+async function runPiperServer(text: string, serverUrl: string, speakerId: number | null): Promise<Buffer> {
+  console.log(`[Speech] Piper server POST ${serverUrl} "${text.slice(0, 60)}"`);
+  const payload: Record<string, unknown> = { text };
+  if (speakerId !== null) payload['speaker_id'] = speakerId;
+  const res = await fetch(`${serverUrl}/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`Piper server ${res.status}: ${body.slice(0, 200)}`);
+  }
+  const buf = Buffer.from(await res.arrayBuffer());
+  console.log(`[Speech] Piper server done — ${buf.length} bytes`);
+  return buf;
+}
+
+/**
+ * Subprocess mode: spawn the piper CLI with --output-raw for the given model,
+ * collect PCM from stdout and return a WAV Buffer.
+ * Used when no HTTP server is available (PIPER_MODEL env var).
+ */
+async function runPiperProcess(text: string, modelPath: string, sampleRate: number): Promise<Buffer> {
   const piperBin = process.env['PIPER_BIN'] ?? 'piper';
 
-  console.log(`[Speech] Piper: "${text.slice(0, 60)}" → ${path.basename(outFile)}`);
+  console.log(`[Speech] Piper "${path.basename(modelPath)}" — "${text.slice(0, 60)}"`);
 
   return new Promise((resolve, reject) => {
-    const child = spawn(piperBin, ['--model', model, '--output_file', outFile], {
-      stdio: ['pipe', 'ignore', 'pipe'],
+    const child = spawn(piperBin, ['--model', modelPath, '--output-raw'], {
+      stdio: ['pipe', 'pipe', 'pipe'],
     });
 
+    const pcmChunks: Buffer[] = [];
     let stderr = '';
+
+    child.stdout.on('data', (d: Buffer) => pcmChunks.push(d));
     child.stderr?.on('data', (d: Buffer) => { stderr += d.toString(); });
 
     child.stdin.write(text, 'utf-8');
@@ -68,8 +156,9 @@ async function runPiper(text: string, outFile: string): Promise<void> {
 
     child.on('exit', (code) => {
       if (code === 0) {
-        console.log(`[Speech] Piper done (exit 0)`);
-        resolve();
+        const pcm = Buffer.concat(pcmChunks);
+        console.log(`[Speech] Piper done — ${pcm.length} PCM bytes`);
+        resolve(buildWavBuffer(pcm, sampleRate));
       } else {
         console.error(`[Speech] Piper failed (exit ${code}):\n${stderr}`);
         reject(new Error(`piper exited ${code}: ${stderr.slice(0, 400)}`));
@@ -91,13 +180,13 @@ async function runRhubarb(wavFile: string, dialogueFile: string, jsonFile: strin
   const args = [
     '-f', 'json',
     '--recognizer', recognizer,
-    '-d', dialogueFile,   // file path, not inline text
+    '-d', dialogueFile,   // file path — Rhubarb expects a file, not inline text
     '-o', jsonFile,
     wavFile,
     '--quiet',
   ];
 
-  console.log(`[Speech] Rhubarb: ${rhubarbBin} ${args.join(' ')}`);
+  console.log(`[Speech] Rhubarb: ${path.basename(wavFile)}`);
 
   try {
     await execFileAsync(rhubarbBin, args);
@@ -129,28 +218,39 @@ async function processSentence(
   totalChunks: number,
   agentName: string,
   sessionId: string,
+  voiceUrl: string | null,
+  modelPath: string | null,
+  speakerId: number | null,
 ): Promise<SpeechChunk | null> {
   const tmpDir       = os.tmpdir();
   const wavFile      = path.join(tmpDir, `${sessionId}_${id}.wav`);
   const jsonFile     = path.join(tmpDir, `${sessionId}_${id}.json`);
   const dialogueFile = path.join(tmpDir, `${sessionId}_${id}.txt`);
 
-  console.log(`[Speech] Processing sentence ${id + 1}/${totalChunks}: "${sentence.slice(0, 60)}"`);
+  console.log(`[Speech] Sentence ${id + 1}/${totalChunks}: "${sentence.slice(0, 60)}"`);
 
   try {
     // Write dialogue hint to a temp file — Rhubarb -d expects a file path
     await writeFile(dialogueFile, sentence, 'utf-8');
 
-    await runPiper(sentence, wavFile);
+    let wavBytes: Buffer;
+    if (voiceUrl) {
+      // Prefer HTTP server (model stays loaded between calls)
+      wavBytes = await runPiperServer(sentence, voiceUrl, speakerId);
+    } else {
+      // Fall back to subprocess
+      const model = modelPath ?? process.env['PIPER_MODEL']!;
+      const sampleRate = await resolvedSampleRate(model);
+      wavBytes = await runPiperProcess(sentence, model, sampleRate);
+    }
+
+    // Write WAV to disk for Rhubarb, then run Rhubarb
+    await writeFile(wavFile, wavBytes);
     await runRhubarb(wavFile, dialogueFile, jsonFile);
 
-    const [audioBytes, visemeRaw] = await Promise.all([
-      readFile(wavFile),
-      readFile(jsonFile, 'utf-8'),
-    ]);
-
-    const visemes  = parseVisemes(visemeRaw);
-    const duration = visemes.at(-1)?.end ?? 0;
+    const visemeRaw = await readFile(jsonFile, 'utf-8');
+    const visemes   = parseVisemes(visemeRaw);
+    const duration  = visemes.at(-1)?.end ?? 0;
 
     console.log(`[Speech] Sentence ${id + 1}/${totalChunks} ready — ${visemes.length} visemes, ${duration.toFixed(2)}s`);
 
@@ -158,13 +258,13 @@ async function processSentence(
       id,
       totalChunks,
       sentence,
-      audioBase64: audioBytes.toString('base64'),
+      audioBase64: wavBytes.toString('base64'),
       visemes,
       duration,
       agentName,
     };
   } catch (err) {
-    console.warn(`[Speech] Sentence ${id} failed:`, (err as Error).message);
+    console.warn(`[Speech] Sentence ${id + 1} failed:`, (err as Error).message);
     return null;
   } finally {
     await Promise.all([
@@ -177,26 +277,29 @@ async function processSentence(
 
 // ── Public pipeline ───────────────────────────────────────────────────────────
 
-/** Returns false if TTS is not configured (PIPER_MODEL env var not set). */
+/** Returns false if TTS is not configured. */
 export function isSpeechAvailable(): boolean {
   return !!process.env['PIPER_MODEL'];
 }
 
 /**
  * Process the full text through the TTS + viseme pipeline.
- * Calls `onChunk` for each sentence as it completes.
- * Sentences are processed sequentially so chunks arrive in order.
+ * @param voiceUrl   URL of a running piper.http_server instance for this voice.
+ *                   When null, falls back to subprocess using PIPER_MODEL.
+ * Calls `onChunk` for each sentence as it completes (sequentially, in order).
  */
 export async function processSpeech(
   text: string,
   agentName: string,
+  voiceUrl: string | null,
+  speakerId: number | null,
   onChunk: (chunk: SpeechChunk) => void,
 ): Promise<void> {
-  if (!isSpeechAvailable()) return;
+  if (!voiceUrl && !process.env['PIPER_MODEL']) return;
 
   const sentences = splitSentences(text);
   if (sentences.length === 0) {
-    console.log(`[Speech] No speakable sentences found in: "${text.slice(0, 80)}"`);
+    console.log(`[Speech] No speakable sentences in: "${text.slice(0, 80)}"`);
     return;
   }
 
@@ -204,7 +307,7 @@ export async function processSpeech(
   const sessionId = `spk_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 
   for (let i = 0; i < sentences.length; i++) {
-    const chunk = await processSentence(sentences[i], i, sentences.length, agentName, sessionId);
+    const chunk = await processSentence(sentences[i], i, sentences.length, agentName, sessionId, voiceUrl, null, speakerId);
     if (chunk) onChunk(chunk);
   }
 

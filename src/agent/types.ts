@@ -22,14 +22,19 @@ export interface AgentIdentity {
   visualDescription: string;
   specialisation?: string;  // shown in team roster, e.g. "financial analysis"
   backstory?: string;
+  avatar?: string;          // avatar file name, e.g. "morgan.glb"
+  voice?: string;           // TTS voice name
+  speakerName?: string;     // TTS speaker name (for multi-speaker voices)
 }
 
 export interface AgentConfig {
+  id?: string;             // stable UUID — if provided, preserved across save/restore
   identity: AgentIdentity;
   hatType: HatType;
   provider: AIProvider;
   model: string;
   teamContext?: string;    // injected by orchestrator after team is assembled
+  projectDir?: string;     // absolute path to current project folder
 }
 
 export interface AgentMessage {

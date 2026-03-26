@@ -54,6 +54,13 @@ export class MeetingStore {
     return Array.from(this.meetings.values());
   }
 
+  async delete(id: string): Promise<boolean> {
+    this.ensureLoaded();
+    const existed = this.meetings.delete(id);
+    if (existed) await this.save();
+    return existed;
+  }
+
   /** Return meetings whose scheduledFor time is in the past and status is 'scheduled'. */
   getDue(): ScheduledMeeting[] {
     const now = new Date();
