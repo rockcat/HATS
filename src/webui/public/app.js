@@ -217,6 +217,7 @@ function createCard(agent) {
       <div class="state-dot"></div>
       <span class="state-label"></span>
     </div>
+    <div class="agent-meta"></div>
     <div class="agent-activity">
       <div class="agent-activity-text"></div>
     </div>
@@ -246,6 +247,16 @@ function applyCardData(el, agent) {
   el.querySelector('.state-label').textContent = STATE_LABEL[agent.state] || agent.state;
 
   el.querySelector('.agent-activity-text').textContent = agent.activity || '';
+
+  // Spec + model meta line
+  const metaEl = el.querySelector('.agent-meta');
+  if (metaEl) {
+    const parts = [];
+    if (agent.specialisation) parts.push(agent.specialisation);
+    if (agent.model)          parts.push(agent.model);
+    metaEl.textContent = parts.join(' · ');
+    metaEl.hidden = parts.length === 0;
+  }
 
   // Talking-to line
   let talkEl = el.querySelector('.agent-talking-to');
@@ -356,7 +367,7 @@ function updateCommsOverlay(agents, container) {
     line.setAttribute('x1', x1); line.setAttribute('y1', y1);
     line.setAttribute('x2', x2); line.setAttribute('y2', y2);
     line.setAttribute('stroke', '#8957e5');
-    line.setAttribute('stroke-width', '1.5');
+    line.setAttribute('stroke-width', '5');
     line.setAttribute('stroke-dasharray', '5 4');
     line.setAttribute('opacity', '0.45');
     svg.appendChild(line);
@@ -418,6 +429,7 @@ function ticketHTML(ticket) {
   const assignee    = ticket.assignee ?? '—';
   const tags        = (ticket.tags ?? []).slice(0, 3);
   const projectName = ticket.projectName ?? '';
+  const blockers    = ticket.blockedBy ?? [];
 
   const tagsHTML = tags.map(t =>
     `<span class="ticket-tag">${esc(t)}</span>`
@@ -427,14 +439,19 @@ function ticketHTML(ticket) {
     ? `<div class="ticket-project" title="${esc(ticket.projectFolder ?? '')}">📁 ${esc(projectName)}</div>`
     : '';
 
+  const blockersHTML = blockers.length
+    ? `<div class="ticket-blockers" title="Blocked by: ${esc(blockers.join(', '))}">⛔ ${esc(blockers.join(', '))}</div>`
+    : '';
+
   return `
-    <div class="task-card" data-ticket-id="${esc(ticket.id)}" draggable="true" title="Drag to move · Click to edit">
+    <div class="task-card${blockers.length ? ' task-card--blocked' : ''}" data-ticket-id="${esc(ticket.id)}" draggable="true" title="Drag to move · Click to edit">
       <div class="ticket-top">
         <span class="ticket-id">${esc(ticket.id)}</span>
         <span class="priority-badge" style="color:${priColor};border-color:${priColor}40">${esc(priority)}</span>
       </div>
       <div class="ticket-title">${esc(title)}</div>
       ${projectHTML}
+      ${blockersHTML}
       <div class="task-footer">
         <span class="task-assignee">${esc(assignee)}</span>
         ${tagsHTML}
@@ -585,6 +602,7 @@ function openNewTicketModal() {
   document.getElementById('edit-column').value      = 'backlog';
   document.getElementById('edit-assignee').value    = '';
   document.getElementById('edit-tags').value        = '';
+  document.getElementById('edit-blocked-by').value  = '';
   document.getElementById('modal-error').textContent = '';
   document.getElementById('modal-save').textContent = 'Create ticket';
   document.getElementById('modal-activity-section').hidden = true;
@@ -605,6 +623,7 @@ function openTicketModal(id) {
   document.getElementById('edit-column').value      = ticket.column ?? 'backlog';
   document.getElementById('edit-assignee').value    = ticket.assignee ?? '';
   document.getElementById('edit-tags').value        = (ticket.tags ?? []).join(', ');
+  document.getElementById('edit-blocked-by').value  = (ticket.blockedBy ?? []).join(', ');
   document.getElementById('modal-error').textContent = '';
   document.getElementById('modal-save').textContent = 'Save changes';
   document.getElementById('modal-activity-section').hidden = false;
@@ -657,6 +676,8 @@ function saveTicket() {
     assignee:    document.getElementById('edit-assignee').value.trim() || null,
     tags:        document.getElementById('edit-tags').value
                    .split(',').map(t => t.trim()).filter(Boolean),
+    blockedBy:   document.getElementById('edit-blocked-by').value
+                   .split(',').map(t => t.trim().toUpperCase()).filter(Boolean),
   };
 
   const isCreate = currentEditId === null;
@@ -1154,10 +1175,52 @@ function fetchMCPCatalogue() {
 
 let activeDetailAgent = null;
 
-// ── Provider / model catalogue (loaded once) ──────────────────────────────────
+// ── Pricing ───────────────────────────────────────────────────────────────────
+
+let _pricingCache = null; // { pricing: Record<model, {input,output}>, freeProviders: string[] }
+
+async function loadPricing() {
+  if (_pricingCache) return _pricingCache;
+  try {
+    _pricingCache = await fetch('/api/pricing').then(r => r.json());
+  } catch { _pricingCache = { pricing: {}, freeProviders: [] }; }
+  return _pricingCache;
+}
+
+/** Show a price hint or unknown-model warning below the model select. */
+async function updatePricingHint(providerId, modelId) {
+  const line = document.getElementById('agent-config-pricing-line');
+  const hint = document.getElementById('agent-config-pricing-hint');
+  if (!line || !hint) return;
+  if (!modelId) { line.hidden = true; return; }
+
+  const { pricing, freeProviders } = await loadPricing();
+
+  if (freeProviders.includes(providerId)) {
+    hint.className = 'agent-config-pricing-hint agent-config-pricing-free';
+    hint.textContent = 'Free — local inference, no API cost';
+    line.hidden = false;
+    return;
+  }
+
+  const p = pricing[modelId];
+  if (p) {
+    hint.className = 'agent-config-pricing-hint agent-config-pricing-known';
+    hint.textContent = `$${p.input}/M input · $${p.output}/M output tokens`;
+    line.hidden = false;
+  } else {
+    hint.className = 'agent-config-pricing-hint agent-config-pricing-unknown';
+    hint.textContent = 'Pricing unknown for this model — costs may be incorrect in telemetry';
+    line.hidden = false;
+  }
+}
+
+// ── Provider / model catalogue ────────────────────────────────────────────────
 
 let _providersCache = null;
+let _modelsRefreshPromise = null; // in-flight refresh dedup
 
+/** Load provider metadata (fast — static models unless server cache already warm). */
 function loadProviders() {
   if (_providersCache) return Promise.resolve(_providersCache);
   return fetch('/api/providers')
@@ -1167,19 +1230,87 @@ function loadProviders() {
 }
 
 /**
+ * Fetch live models from the server (server applies per-provider TTL caching:
+ * 24 h for cloud providers, 5 min for Ollama/LM Studio).
+ * Merges results into _providersCache and calls onModelsRefreshed() if anything changed.
+ * Pass force=true to bypass the server cache and re-query provider APIs immediately.
+ */
+async function refreshProviderModels(force = false) {
+  if (_modelsRefreshPromise && !force) return _modelsRefreshPromise;
+  _modelsRefreshPromise = (async () => {
+    try {
+      const url = force ? '/api/providers/models?refresh=true' : '/api/providers/models';
+      const list = await fetch(url).then(r => r.json());
+      // Ensure base providers are loaded first
+      const providers = await loadProviders();
+      let changed = false;
+      for (const { id, models } of list) {
+        const p = providers.find(p => p.id === id);
+        if (!p) continue;
+        // Only update if the model list actually changed
+        const prev = JSON.stringify(p.models);
+        if (JSON.stringify(models) !== prev && models.length > 0) {
+          p.models = models;
+          // Also update defaultModel if it's currently pointing at a stale static default
+          if (!models.includes(p.defaultModel) && models.length > 0) {
+            p.defaultModel = models[0];
+          }
+          changed = true;
+        }
+      }
+      if (changed) onModelsRefreshed();
+    } catch { /* non-fatal — static models remain */ }
+    _modelsRefreshPromise = null;
+  })();
+  return _modelsRefreshPromise;
+}
+
+/** Called after live models are merged into _providersCache. Re-populates any open model selects. */
+function onModelsRefreshed() {
+  if (!_providersCache) return;
+  // Agent config panel
+  const agentProvSel  = document.getElementById('agent-config-provider');
+  const agentModelSel = document.getElementById('agent-config-model');
+  if (agentProvSel && agentModelSel && !agentModelSel.hidden) {
+    const pid = agentProvSel.value;
+    const current = agentModelSel.value;
+    const provider = _providersCache.find(p => p.id === pid);
+    applyLocalProviderUI(provider);
+    if (!agentModelSel.hidden) populateModelSelect(agentModelSel, _providersCache, pid, current);
+  }
+  // Add-agent panel
+  const addProvSel  = document.getElementById('add-agent-provider');
+  const addModelSel = document.getElementById('add-agent-model');
+  if (addProvSel && addModelSel && !addModelSel.closest('[hidden]')) {
+    const pid = addProvSel.value;
+    const current = addModelSel.value;
+    populateModelSelect(addModelSel, _providersCache, pid, current);
+  }
+}
+
+/**
  * Populate the provider <select> from the catalogue.
  * Only providers that have a backend implementation are shown.
  */
 function populateProviderSelect(sel, providers, selectedId) {
-  const IMPLEMENTED = ['anthropic', 'openai', 'gemini'];
   sel.innerHTML = '';
-  for (const p of providers.filter(p => IMPLEMENTED.includes(p.id))) {
+  for (const p of providers) {
     const opt = document.createElement('option');
     opt.value = p.id;
     opt.textContent = p.label;
     opt.selected = p.id === selectedId;
     sel.appendChild(opt);
   }
+}
+
+/** Switch between model dropdown vs free-text input for local providers with no model list. */
+function applyLocalProviderUI(provider) {
+  const modelSel   = document.getElementById('agent-config-model');
+  const modelInput = document.getElementById('agent-config-model-custom');
+  // Show free-text only if this is a local provider AND we have no models (live fetch returned nothing)
+  const noModels = !!provider?.baseUrlEnvKey && (!provider.models || provider.models.length === 0);
+  modelSel.hidden   = noModels;
+  modelInput.hidden = !noModels;
 }
 
 /**
@@ -1243,6 +1374,31 @@ function initAgentDetail() {
   });
 
   // Remove button
+  // Send message to agent
+  const sendBtn     = document.getElementById('agent-detail-send');
+  const messageArea = document.getElementById('agent-detail-message');
+  const doSend = async () => {
+    if (!activeDetailAgent) return;
+    const text = messageArea.value.trim();
+    if (!text) return;
+    sendBtn.disabled = true;
+    sendBtn.textContent = '…';
+    try {
+      await fetch('/api/cli', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ line: `@${activeDetailAgent} ${text}` }),
+      });
+      messageArea.value = '';
+    } catch { /* ignore */ }
+    sendBtn.disabled = false;
+    sendBtn.textContent = 'Send';
+  };
+  sendBtn.addEventListener('click', doSend);
+  messageArea.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); doSend(); }
+  });
+
   document.getElementById('agent-remove-btn').addEventListener('click', () => {
     if (!activeDetailAgent) return;
     if (!confirm(`Remove agent "${activeDetailAgent}"? Their in-progress tickets will be returned to the backlog.`)) return;
@@ -1337,19 +1493,30 @@ function initAgentDetail() {
     stopSpeech(activeDetailAgent);
   });
 
-  // Re-populate model list when provider changes
+  // Re-populate model list when provider changes; show/hide URL field for local providers
   document.getElementById('agent-config-provider').addEventListener('change', () => {
     const providerId = document.getElementById('agent-config-provider').value;
     loadProviders().then(providers => {
       const provider = providers.find(p => p.id === providerId);
-      populateModelSelect(
-        document.getElementById('agent-config-model'),
-        providers,
-        providerId,
-        provider?.defaultModel ?? provider?.models?.[0] ?? '',
-      );
+      applyLocalProviderUI(provider);
+      const modelSel = document.getElementById('agent-config-model');
+      populateModelSelect(modelSel, providers, providerId, provider?.defaultModel ?? provider?.models?.[0] ?? '');
+      updatePricingHint(providerId, modelSel.hidden ? document.getElementById('agent-config-model-custom').value : modelSel.value);
     });
   });
+
+  // Update price hint when model selection changes
+  document.getElementById('agent-config-model').addEventListener('change', () => {
+    const providerId = document.getElementById('agent-config-provider').value;
+    const modelId    = document.getElementById('agent-config-model').value;
+    updatePricingHint(providerId, modelId);
+  });
+  document.getElementById('agent-config-model-custom').addEventListener('input', () => {
+    const providerId = document.getElementById('agent-config-provider').value;
+    const modelId    = document.getElementById('agent-config-model-custom').value.trim();
+    updatePricingHint(providerId, modelId);
+  });
+
 
   // Show/hide custom spec input when "Custom…" is selected
   document.getElementById('agent-config-specialisation').addEventListener('change', e => {
@@ -1365,7 +1532,9 @@ function initAgentDetail() {
     btn.textContent = '…'; btn.disabled = true;
     try {
       const provider       = document.getElementById('agent-config-provider').value;
-      const model          = document.getElementById('agent-config-model').value;
+      const modelSel       = document.getElementById('agent-config-model');
+      const modelInput     = document.getElementById('agent-config-model-custom');
+      const model          = modelInput.hidden ? modelSel.value : modelInput.value.trim();
       const hatType        = document.getElementById('agent-config-hat').value;
       const specialisation = getSpecValue('agent-config-specialisation', 'agent-config-specialisation-custom') || undefined;
       const agent          = state.agents.find(a => a.name === activeDetailAgent);
@@ -1395,6 +1564,8 @@ function initAgentDetail() {
 
 function openAgentDetail(name) {
   activeDetailAgent = name;
+  // Kick off a background model refresh (respects server-side TTL)
+  refreshProviderModels();
   const agent = state.agents.find(a => a.name === name);
   const c = agent ? hat(agent.hatType) : hat('white');
 
@@ -1431,9 +1602,33 @@ function openAgentDetail(name) {
   loadProviders().then(providers => {
     const providerId = (agent?.provider) || 'anthropic';
     const modelId    = (agent?.model)    || '';
+    const provider   = providers.find(p => p.id === providerId);
     populateProviderSelect(document.getElementById('agent-config-provider'), providers, providerId);
     populateModelSelect(document.getElementById('agent-config-model'), providers, providerId, modelId);
+    applyLocalProviderUI(provider);
+    // For free-text model providers, prefill the text input
+    if (provider?.baseUrlEnvKey && (!provider.models || provider.models.length === 0)) {
+      document.getElementById('agent-config-model-custom').value = modelId;
+    }
+    updatePricingHint(providerId, modelId);
   });
+
+  // Populate ticket chips for this agent
+  const ticketsEl = document.getElementById('agent-detail-tickets');
+  ticketsEl.innerHTML = '';
+  const agentTickets = (state.tickets ?? []).filter(t =>
+    t.assignee === name && t.column !== 'completed'
+  );
+  for (const t of agentTickets) {
+    const chip = document.createElement('span');
+    chip.className = 'agent-ticket-chip';
+    chip.title = t.title;
+    chip.textContent = `${t.id} ${t.title}`;
+    ticketsEl.appendChild(chip);
+  }
+
+  // Clear any previous message
+  document.getElementById('agent-detail-message').value = '';
 
   const feed = document.getElementById('agent-detail-feed');
   feed.innerHTML = '<p class="feed-empty">Loading…</p>';
@@ -1719,16 +1914,20 @@ function setDebugBtn(btn, on) {
 // ── Settings modal ────────────────────────────────────────────────────────────
 
 const ENV_META = {
-  ANTHROPIC_API_KEY: { label: 'Anthropic API Key',        group: 'API Keys', secret: true,  hint: 'sk-ant-…'             },
-  OPENAI_API_KEY:    { label: 'OpenAI API Key',            group: 'API Keys', secret: true,  hint: 'sk-proj-…'            },
-  GEMINI_API_KEY:    { label: 'Google Gemini API Key',     group: 'API Keys', secret: true,  hint: 'AIzaSy…'              },
-  BRAVE_API_KEY:     { label: 'Brave Search API Key',      group: 'API Keys', secret: true,  hint: ''                     },
-  ANTHROPIC_MODEL:   { label: 'Anthropic Default Model',   group: 'Models',   secret: false, hint: 'claude-haiku-4-5-20251001' },
-  OPENAI_MODEL:      { label: 'OpenAI Default Model',      group: 'Models',   secret: false, hint: 'gpt-4.1-mini'              },
-  GEMINI_MODEL:      { label: 'Gemini Default Model',      group: 'Models',   secret: false, hint: 'gemini-2.5-flash'           },
+  ANTHROPIC_API_KEY:  { label: 'Anthropic API Key',        group: 'API Keys',     secret: true,  hint: 'sk-ant-…'             },
+  OPENAI_API_KEY:     { label: 'OpenAI API Key',            group: 'API Keys',     secret: true,  hint: 'sk-proj-…'            },
+  GEMINI_API_KEY:     { label: 'Google Gemini API Key',     group: 'API Keys',     secret: true,  hint: 'AIzaSy…'              },
+  BRAVE_API_KEY:      { label: 'Brave Search API Key',      group: 'API Keys',     secret: true,  hint: ''                     },
+  ANTHROPIC_MODEL:    { label: 'Anthropic Default Model',   group: 'Models',       secret: false, hint: 'claude-haiku-4-5-20251001' },
+  OPENAI_MODEL:       { label: 'OpenAI Default Model',      group: 'Models',       secret: false, hint: 'gpt-4.1-mini'              },
+  GEMINI_MODEL:       { label: 'Gemini Default Model',      group: 'Models',       secret: false, hint: 'gemini-2.5-flash'           },
+  OLLAMA_BASE_URL:    { label: 'Ollama Server URL',         group: 'Local Models', secret: false, hint: 'http://localhost:11434/v1'  },
+  OLLAMA_MODEL:       { label: 'Ollama Default Model',      group: 'Local Models', secret: false, hint: 'llama3.2'                   },
+  LM_STUDIO_BASE_URL: { label: 'LM Studio Server URL',      group: 'Local Models', secret: false, hint: 'http://localhost:1234/v1'   },
+  LM_STUDIO_MODEL:    { label: 'LM Studio Default Model',   group: 'Local Models', secret: false, hint: 'model name from LM Studio'  },
 };
 
-const GROUP_ORDER = ['API Keys', 'Models', 'Other'];
+const GROUP_ORDER = ['API Keys', 'Models', 'Local Models', 'Other'];
 
 function initSettings() {
   document.getElementById('settings-btn').addEventListener('click', openSettings);
@@ -1744,6 +1943,8 @@ function initSettings() {
 }
 
 function openSettings() {
+  // Kick off a background model refresh (respects server-side TTL)
+  refreshProviderModels();
   const modal = document.getElementById('settings-modal');
   const body  = document.getElementById('settings-body');
   const msg   = document.getElementById('settings-msg');
@@ -1816,16 +2017,31 @@ function renderSettingsBody(entries, providers) {
 
   // Provider status
   if (providers && providers.length) {
-    html += `<div class="settings-section"><div class="settings-section-title">Provider Status</div>`;
+    html += `<div class="settings-section"><div class="settings-section-title">Provider Status <button id="refresh-models-btn" class="modal-btn secondary" style="font-size:11px;padding:2px 8px;margin-left:8px">Refresh models</button></div>`;
     for (const p of providers) {
       const dot = p.available ? '🟢' : '🔴';
-      const modelNote = p.available ? ` · model: ${esc(p.defaultModel ?? '')}` : ' · no API key set';
-      html += `<div class="provider-status-row"><span>${dot} ${esc(p.label)}</span><span class="provider-status-note">${modelNote}</span></div>`;
+      const modelCount = p.models?.length ? ` · ${p.models.length} model${p.models.length !== 1 ? 's' : ''}` : '';
+      let note = p.available ? ` · ${esc(p.defaultModel ?? '')}${modelCount}` : ' · no API key set';
+      if (p.baseUrlEnvKey) note = ` · ${esc(p.baseUrl || p.defaultBaseUrl || '')}${p.available ? modelCount : ' · offline'}`;
+      html += `<div class="provider-status-row"><span>${dot} ${esc(p.label)}</span><span class="provider-status-note">${note}</span></div>`;
     }
     html += '</div>';
   }
 
   body.innerHTML = html;
+
+  // Wire "Refresh models" button
+  const refreshBtn = document.getElementById('refresh-models-btn');
+  if (refreshBtn) {
+    refreshBtn.addEventListener('click', async () => {
+      refreshBtn.disabled = true;
+      refreshBtn.textContent = 'Refreshing…';
+      _providersCache = null; // force reload of metadata too
+      await refreshProviderModels(true);
+      // Re-render the settings body with updated provider data
+      openSettings();
+    });
+  }
 
   // Wire eye buttons
   body.querySelectorAll('.env-eye').forEach(btn => {
@@ -1951,6 +2167,8 @@ function doSwitchProject(id) {
   switcher.hidden = true;
   const prevId = badge.textContent;
   badge.textContent = '…';
+
+  if (activeDetailAgent) closeAgentDetail();
 
   fetch('/api/project/switch', {
     method: 'POST',
@@ -2166,7 +2384,7 @@ function buildGridHTML(days) {
 
   const dayCols = days.map((d, i) => {
     const events = calMeetingsOnDay(d).map(m => buildEventHTML(m)).join('');
-    return `<div class="cal-day-col" data-day="${i}">${hourLines}${events}</div>`;
+    return `<div class="cal-day-col" data-day="${i}" style="height:${totalH}px">${hourLines}${events}</div>`;
   }).join('');
 
   const numCols = days.length;

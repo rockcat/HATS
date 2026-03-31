@@ -156,6 +156,54 @@ export class KanbanStore {
     });
   }
 
+  addBlocker(id: string, blockerId: string): Promise<Ticket> {
+    return this.serialise(async () => {
+      await this.reload();
+      const ticket = this.requireTicket(id);
+      this.requireTicket(blockerId); // ensure blocker exists
+      ticket.blockedBy = [...new Set([...(ticket.blockedBy ?? []), blockerId])];
+      if (ticket.column !== 'blocked') {
+        ticket.column = 'blocked';
+      }
+      ticket.updatedAt = new Date().toISOString();
+      this.save();
+      return ticket;
+    });
+  }
+
+  removeBlocker(id: string, blockerId: string): Promise<Ticket> {
+    return this.serialise(async () => {
+      await this.reload();
+      const ticket = this.requireTicket(id);
+      ticket.blockedBy = (ticket.blockedBy ?? []).filter(b => b !== blockerId);
+      ticket.updatedAt = new Date().toISOString();
+      this.save();
+      return ticket;
+    });
+  }
+
+  /**
+   * When a ticket completes, remove it from the blockedBy list of any dependents.
+   * Returns tickets that were unblocked (blockedBy became empty and were moved to ready).
+   */
+  unblockDependents(completedId: string): Promise<Ticket[]> {
+    return this.serialise(async () => {
+      await this.reload();
+      const unblocked: Ticket[] = [];
+      for (const ticket of Object.values(this.board.tickets)) {
+        if (!(ticket.blockedBy ?? []).includes(completedId)) continue;
+        ticket.blockedBy = ticket.blockedBy!.filter(b => b !== completedId);
+        ticket.updatedAt = new Date().toISOString();
+        if (ticket.blockedBy.length === 0 && ticket.column === 'blocked') {
+          ticket.column = 'ready';
+          unblocked.push(ticket);
+        }
+      }
+      if (unblocked.length > 0) this.save();
+      return unblocked;
+    });
+  }
+
   deleteTicket(id: string): Promise<void> {
     return this.serialise(async () => {
       await this.reload();

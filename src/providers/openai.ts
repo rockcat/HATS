@@ -70,9 +70,15 @@ export class OpenAIProvider implements AIProvider {
 
 /** Local Ollama via OpenAI-compatible endpoint */
 export class OllamaProvider extends OpenAIProvider {
-  constructor(baseURL = 'http://localhost:11434/v1', model?: string) {
-    super('ollama', baseURL, 'ollama');
-    void model; // model is passed per-request in CompletionRequest
+  constructor(baseURL?: string) {
+    super('ollama', baseURL ?? process.env['OLLAMA_BASE_URL'] ?? 'http://localhost:11434/v1', 'ollama');
+  }
+}
+
+/** LM Studio via OpenAI-compatible endpoint */
+export class LMStudioProvider extends OpenAIProvider {
+  constructor(baseURL?: string) {
+    super('lm-studio', baseURL ?? process.env['LM_STUDIO_BASE_URL'] ?? 'http://localhost:1234/v1', 'lmstudio');
   }
 }
 

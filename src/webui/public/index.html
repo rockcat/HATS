@@ -217,6 +217,11 @@
         <label class="agent-config-label">Model</label>
         <select id="agent-config-provider" class="agent-config-select agent-config-provider-select"></select>
         <select id="agent-config-model"    class="agent-config-select agent-config-model-select"></select>
+        <input  id="agent-config-model-custom" type="text" class="agent-config-input agent-config-model-input" placeholder="e.g. llama3.2" autocomplete="off" hidden>
+      </div>
+      <div class="agent-config-line agent-config-pricing-line" id="agent-config-pricing-line" hidden>
+        <label class="agent-config-label"></label>
+        <span id="agent-config-pricing-hint" class="agent-config-pricing-hint"></span>
       </div>
       <div class="agent-config-line agent-config-line--btns">
         <label class="agent-config-label"></label>
@@ -228,6 +233,13 @@
       <canvas id="avatar-canvas" class="avatar-canvas"></canvas>
     </div>
     <div id="agent-detail-feed" class="agent-detail-feed"></div>
+    <div class="agent-detail-compose">
+      <div class="agent-detail-tickets" id="agent-detail-tickets"></div>
+      <div class="agent-detail-compose-row">
+        <textarea id="agent-detail-message" class="agent-detail-textarea" placeholder="Message this agent…" rows="3"></textarea>
+        <button id="agent-detail-send" class="agent-detail-send-btn">Send</button>
+      </div>
+    </div>
   </div>
 
   <!-- Edit Ticket Modal -->
@@ -274,6 +286,10 @@
         <div class="field-group">
           <label class="field-label">Tags <span class="field-hint">(comma-separated)</span></label>
           <input type="text" id="edit-tags" class="modal-input">
+        </div>
+        <div class="field-group">
+          <label class="field-label">Blocked by <span class="field-hint">(ticket IDs, comma-separated)</span></label>
+          <input type="text" id="edit-blocked-by" class="modal-input" placeholder="e.g. TKT-001, TKT-002">
         </div>
         <div class="field-group" id="modal-activity-section">
           <label class="field-label">Activity</label>

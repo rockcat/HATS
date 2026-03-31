@@ -130,6 +130,30 @@ export async function startKanbanServer(boardPath: string): Promise<void> {
           required: ['id'],
         },
       },
+      {
+        name: 'add_blocker',
+        description: 'Mark ticket B as blocked by ticket A (A must complete before B can start). The ticket is automatically moved to "blocked" column.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            id:        { type: 'string', description: 'Ticket ID to block (the dependent).' },
+            blocker_id: { type: 'string', description: 'Ticket ID that must complete first (the dependency).' },
+          },
+          required: ['id', 'blocker_id'],
+        },
+      },
+      {
+        name: 'remove_blocker',
+        description: 'Remove a blocker from a ticket. If all blockers are removed, move it back to "ready".',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            id:        { type: 'string', description: 'Ticket ID.' },
+            blocker_id: { type: 'string', description: 'Blocker ticket ID to remove.' },
+          },
+          required: ['id', 'blocker_id'],
+        },
+      },
     ],
   }));
 
@@ -219,6 +243,19 @@ async function handleTool(name: string, args: Record<string, unknown>, store: Ka
     case 'delete_ticket':
       await store.deleteTicket(args['id'] as string);
       return `Deleted ${args['id']}.`;
+
+    case 'add_blocker': {
+      const ticket = await store.addBlocker(args['id'] as string, args['blocker_id'] as string);
+      return `${ticket.id} is now blocked by ${args['blocker_id']}. blockedBy: [${(ticket.blockedBy ?? []).join(', ')}]`;
+    }
+
+    case 'remove_blocker': {
+      const ticket = await store.removeBlocker(args['id'] as string, args['blocker_id'] as string);
+      const remaining = ticket.blockedBy ?? [];
+      return remaining.length === 0
+        ? `Removed blocker from ${ticket.id}. All blockers cleared — ticket is now ready.`
+        : `Removed blocker from ${ticket.id}. Remaining blockers: [${remaining.join(', ')}]`;
+    }
 
     default:
       throw new Error(`Unknown tool: ${name}`);

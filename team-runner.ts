@@ -24,7 +24,7 @@ import { TeamOrchestrator } from './src/orchestrator/orchestrator.js';
 import { CLIInterface } from './src/human/cli-interface.js';
 import { APIServer, ProjectLoader } from './src/api/api-server.js';
 import { AnthropicProvider } from './src/providers/anthropic.js';
-import { OpenAIProvider } from './src/providers/openai.js';
+import { OpenAIProvider, OllamaProvider, LMStudioProvider } from './src/providers/openai.js';
 import { GeminiProvider } from './src/providers/gemini.js';
 import { HatType } from './src/hats/types.js';
 
@@ -49,6 +49,8 @@ function providerFactory(name: string) {
   if (name === 'anthropic') return claude;
   if (name === 'openai')    return new OpenAIProvider();
   if (name === 'gemini')    return new GeminiProvider();
+  if (name === 'ollama')    return new OllamaProvider();
+  if (name === 'lmstudio')  return new LMStudioProvider();
   throw new Error(`Unknown provider in snapshot: "${name}"`);
 }
 
@@ -71,7 +73,15 @@ function makeProjectLoader(): ProjectLoader {
     if (existsSync(stateFile)) {
       console.log(`[Team] Restoring state from ${stateFile}`);
       const mcpDefs = await orchestrator.loadState(stateFile, providerFactory);
-      for (const def of mcpDefs) await orchestrator.addMCPServer(def);
+      for (const def of mcpDefs) {
+        // Always repoint the kanban MCP to the correct project-specific file,
+        // in case the saved path is stale (e.g. './kanban-board.json' from root)
+        if (def.name === 'kanban' && def.config.transport === 'stdio') {
+          const args = (def.config.args ?? []).filter((a: string) => !a.endsWith('.json'));
+          def.config.args = [...args, kanbanFile];
+        }
+        await orchestrator.addMCPServer(def);
+      }
 
       const activeTasks = orchestrator.listTasks().filter(t => t.status === 'active');
       if (activeTasks.length > 0) {

@@ -26,6 +26,7 @@ export interface Ticket {
   comments: Comment[];
   createdAt: string;
   updatedAt: string;
+  blockedBy?: string[];    // ticket IDs that must complete before this one
   projectName?: string;    // human-readable project name
   projectFolder?: string;  // absolute path to the project working folder
 }

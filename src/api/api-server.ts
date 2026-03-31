@@ -16,6 +16,7 @@ import { GeminiProvider } from '../providers/gemini.js';
 import { AIProvider } from '../providers/types.js';
 import { HatType } from '../hats/types.js';
 import { readEnvFile, writeEnvFile } from './env-manager.js';
+import { getPricingTable, FREE_PROVIDERS } from '../providers/pricing.js';
 import { processSpeech, isSpeechAvailable } from '../speech/pipeline.js';
 import { VoiceManager } from '../speech/voice-manager.js';
 import { SPECIALISATION_DIRECTIVES } from '../prompt/generator.js';
@@ -113,6 +114,9 @@ export class APIServer {
   private kanbanWatcher: fs.FSWatcher | null = null;
   private kanbanDebounce: ReturnType<typeof setTimeout> | null = null;
 
+  // Periodic nudge for stale tickets
+  private nudgeScheduler: ReturnType<typeof setInterval> | null = null;
+
   private unsubscribeEvents: (() => void) | null = null;
 
   // Which agent name + voice URL each WS client wants speech for
@@ -203,6 +207,11 @@ export class APIServer {
     // Dispatch any in_progress kanban tickets that have no active orchestrator task
     if (this.kanbanPath) this.dispatchUnstartedTickets().catch(() => {});
 
+    // Periodic nudge: every 30 minutes, remind agents about stale in_progress/blocked tickets
+    this.nudgeScheduler = setInterval(() => {
+      this.nudgeStaleTickets().catch(() => {});
+    }, 30 * 60 * 1000);
+
     // Watch kanban file
     if (this.kanbanPath) this.watchKanban(this.kanbanPath);
 
@@ -225,6 +234,7 @@ export class APIServer {
     this.unsubscribeEvents?.();
     this.kanbanWatcher?.close();
     if (this.meetingScheduler) { clearInterval(this.meetingScheduler); this.meetingScheduler = null; }
+    if (this.nudgeScheduler)   { clearInterval(this.nudgeScheduler);   this.nudgeScheduler   = null; }
     this.voiceManager.stop();
     this.wss.close();
     this.server.close();
@@ -576,7 +586,7 @@ export class APIServer {
       const body   = await this.readBody(req);
       const fields = JSON.parse(body) as {
         title: string; description?: string; priority?: string;
-        column?: string; assignee?: string; tags?: string[];
+        column?: string; assignee?: string; tags?: string[]; blockedBy?: string[];
       };
       if (!fields.title?.trim()) { this.json(res, 400, { error: 'Title is required' }); return; }
       const board  = await this.readKanban();
@@ -592,6 +602,7 @@ export class APIServer {
         creator:     'human',
         assignee:    fields.assignee || undefined,
         tags:        fields.tags ?? [],
+        blockedBy:   fields.blockedBy?.length ? fields.blockedBy : undefined,
         comments:    [],
         createdAt:   now,
         updatedAt:   now,
@@ -633,7 +644,7 @@ export class APIServer {
       const body   = await this.readBody(req);
       const fields = JSON.parse(body) as Partial<{
         title: string; description: string; priority: string;
-        column: string; assignee: string | null; tags: string[];
+        column: string; assignee: string | null; tags: string[]; blockedBy: string[];
       }>;
       const board  = await this.readKanban();
       const ticket = board.tickets[id];
@@ -646,13 +657,18 @@ export class APIServer {
       if (fields.column      !== undefined) ticket.column      = fields.column   as never;
       if (fields.assignee    !== undefined) ticket.assignee    = fields.assignee ?? undefined;
       if (fields.tags        !== undefined) ticket.tags        = fields.tags;
+      if (fields.blockedBy   !== undefined) ticket.blockedBy   = fields.blockedBy;
       ticket.updatedAt = new Date().toISOString();
       await writeFile(this.kanbanPath, JSON.stringify(board, null, 2), 'utf-8');
       this.json(res, 200, ticket);
 
-      // Dispatch to agent if ticket is now in_progress and either column or assignee changed
+      // Fan-out: if ticket just completed, unblock dependents
       const columnChanged   = fields.column   !== undefined && prevColumn   !== ticket.column;
       const assigneeChanged = fields.assignee !== undefined && prevAssignee !== ticket.assignee;
+      if (columnChanged && ticket.column === 'completed') {
+        this.unblockDependents(id).catch(() => {});
+      }
+      // Dispatch to agent if ticket is now in_progress and either column or assignee changed
       if (ticket.column === 'in_progress' && ticket.assignee && (columnChanged || assigneeChanged)) {
         this.dispatchTicket(ticket).catch(() => {});
       }
@@ -752,12 +768,45 @@ export class APIServer {
       }
 
     } else if (pathname === '/api/providers' && req.method === 'GET') {
-      const providers = KNOWN_PROVIDERS.map(p => ({
-        ...p,
-        available: !!process.env[p.envKey],
-        defaultModel: process.env[p.modelEnvKey] ?? p.models[0],
+      const providers = await Promise.all(KNOWN_PROVIDERS.map(async p => {
+        const baseUrl = p.baseUrlEnvKey ? (process.env[p.baseUrlEnvKey] ?? p.defaultBaseUrl ?? '') : undefined;
+        let available: boolean;
+        if (p.envKey) {
+          available = !!process.env[p.envKey];
+        } else if (baseUrl) {
+          available = await probeLocalLLM(baseUrl);
+        } else {
+          available = false;
+        }
+        // Return cached live models if available, otherwise static list
+        const cached = modelCache.get(p.id);
+        const models = (cached && (Date.now() - cached.ts) < modelCacheTtl(p.id)) ? cached.models : p.models;
+        return {
+          ...p,
+          models,
+          available,
+          defaultModel: process.env[p.modelEnvKey] ?? models[0] ?? '',
+          baseUrl,
+        };
       }));
       this.json(res, 200, providers);
+
+    } else if (pathname === '/api/providers/models' && req.method === 'GET') {
+      // Fetch live models for all providers (respects per-provider TTL cache).
+      // Pass ?refresh=true to force re-fetch and ignore cached values.
+      if (url.searchParams.get('refresh') === 'true') {
+        for (const p of KNOWN_PROVIDERS) modelCache.delete(p.id);
+      }
+      const results = await Promise.all(
+        KNOWN_PROVIDERS.map(async p => ({ id: p.id, models: await getCachedModels(p) })),
+      );
+      this.json(res, 200, results);
+
+    } else if (pathname === '/api/pricing' && req.method === 'GET') {
+      this.json(res, 200, {
+        pricing:       getPricingTable(),
+        freeProviders: [...FREE_PROVIDERS],
+      });
 
     } else if (pathname === '/api/env' && req.method === 'GET') {
       const entries = await readEnvFile(this.envPath);
@@ -1410,6 +1459,66 @@ export class APIServer {
     ticket.updatedAt = new Date().toISOString();
     await writeFile(this.kanbanPath, JSON.stringify(board, null, 2), 'utf-8');
     console.log(`[API] Ticket ${ticketId} → ${column}`);
+    if (column === 'completed') {
+      this.unblockDependents(ticketId).catch(() => {});
+    }
+  }
+
+  /** When a ticket completes, remove it from dependents' blockedBy; auto-ready any fully unblocked tickets. */
+  private async unblockDependents(completedId: string): Promise<void> {
+    if (!this.kanbanPath) return;
+    const board = await this.readKanban();
+    const unblocked: Array<typeof board.tickets[string]> = [];
+    let changed = false;
+    for (const ticket of Object.values(board.tickets)) {
+      if (!(ticket.blockedBy ?? []).includes(completedId)) continue;
+      ticket.blockedBy = ticket.blockedBy!.filter(b => b !== completedId);
+      ticket.updatedAt = new Date().toISOString();
+      changed = true;
+      if (ticket.blockedBy.length === 0 && ticket.column === 'blocked') {
+        ticket.column = 'ready';
+        unblocked.push(ticket);
+        console.log(`[API] ${ticket.id} unblocked by completion of ${completedId} → ready`);
+      }
+    }
+    if (changed) await writeFile(this.kanbanPath, JSON.stringify(board, null, 2), 'utf-8');
+
+    // Notify assigned agents that their dependency is resolved
+    for (const ticket of unblocked) {
+      if (!ticket.assignee) continue;
+      const agentName = this.resolveAgentName(ticket.assignee);
+      const isKnown = this.orchestrator.listAgents().some(a => a.name.toLowerCase() === agentName.toLowerCase());
+      if (!isKnown) continue;
+      this.orchestrator.humanMessage(agentName,
+        `Good news! ${completedId} has been completed, which unblocks your ticket ${ticket.id}: "${ticket.title}". It's now ready to start.`,
+      ).catch(() => {});
+    }
+  }
+
+  /** Every 30 minutes, nudge agents about stale in_progress or blocked tickets. */
+  private async nudgeStaleTickets(): Promise<void> {
+    if (!this.kanbanPath) return;
+    const board = await this.readKanban();
+    const STALE_MS = 30 * 60 * 1000;
+    const now = Date.now();
+    for (const ticket of Object.values(board.tickets)) {
+      if (ticket.column !== 'in_progress' && ticket.column !== 'blocked') continue;
+      if (!ticket.assignee) continue;
+      const age = now - new Date(ticket.updatedAt).getTime();
+      if (age < STALE_MS) continue;
+      const agentName = this.resolveAgentName(ticket.assignee);
+      const isKnown = this.orchestrator.listAgents().some(a => a.name.toLowerCase() === agentName.toLowerCase());
+      if (!isKnown) continue;
+      // Only nudge if agent is currently idle
+      const activity = this.agentActivity.get(agentName)?.activity ?? '';
+      if (activity.toLowerCase().includes('working')) continue;
+      const blockers = (ticket.blockedBy ?? []).join(', ');
+      const msg = ticket.column === 'blocked' && blockers
+        ? `Checking in on ${ticket.id}: "${ticket.title}". It's blocked on [${blockers}]. Are those blockers resolved? If so, update the ticket status.`
+        : `Checking in on ${ticket.id}: "${ticket.title}". It's been in progress for a while. Any updates? Please move it to completed if done, or add a comment on current status.`;
+      this.orchestrator.humanMessage(agentName, msg).catch(() => {});
+      console.log(`[API] Nudged ${agentName} about stale ticket ${ticket.id}`);
+    }
   }
 
   private async dispatchUnstartedTickets(): Promise<void> {
@@ -1660,13 +1769,138 @@ const KNOWN_PROVIDERS = [
       "gemini-3.1-pro-preview",
       "gemini-3.1-flash-lite-preview",
       "gemini-3.1-flash-preview",
-      "gemini-2.5-pro", 
-      "gemini-2.5-flash", 
-      "gemini-2.0-flash", 
+      "gemini-2.5-pro",
+      "gemini-2.5-flash",
+      "gemini-2.0-flash",
       "gemini-1.5-pro"
     ],
   },
+  {
+    id: 'ollama', label: 'Ollama (local)',
+    envKey: '', modelEnvKey: 'OLLAMA_MODEL',
+    baseUrlEnvKey: 'OLLAMA_BASE_URL',
+    defaultBaseUrl: 'http://localhost:11434/v1',
+    models: ['llama3.3', 'llama3.2', 'llama3.1', 'mistral', 'mixtral', 'phi4', 'phi3', 'gemma3', 'qwen2.5', 'deepseek-r1'],
+  },
+  {
+    id: 'lmstudio', label: 'LM Studio (local)',
+    envKey: '', modelEnvKey: 'LM_STUDIO_MODEL',
+    baseUrlEnvKey: 'LM_STUDIO_BASE_URL',
+    defaultBaseUrl: 'http://localhost:1234/v1',
+    models: [],
+  },
 ];
+
+/** Probe an OpenAI-compatible local LLM server with a 2s timeout. */
+async function probeLocalLLM(baseUrl: string): Promise<boolean> {
+  try {
+    const url = baseUrl.replace(/\/+$/, '') + '/models';
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 2000);
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(timer);
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+// ── Live model fetching with TTL cache ────────────────────────────────────────
+
+const TTL_DEFAULT = 24 * 60 * 60 * 1000; // 24 hours for cloud providers
+const TTL_LOCAL   =  5 * 60 * 1000;       // 5 minutes for local servers
+
+const modelCache = new Map<string, { models: string[]; ts: number }>();
+
+function modelCacheTtl(providerId: string): number {
+  return (providerId === 'ollama' || providerId === 'lmstudio') ? TTL_LOCAL : TTL_DEFAULT;
+}
+
+type KnownProvider = typeof KNOWN_PROVIDERS[number];
+
+/** Fetch live model IDs from a provider's API. Returns [] on any error. */
+async function fetchLiveModels(p: KnownProvider): Promise<string[]> {
+  try {
+    const abort = new AbortController();
+    const timer = setTimeout(() => abort.abort(), 5000);
+
+    let models: string[] = [];
+
+    if (p.id === 'anthropic') {
+      const key = process.env['ANTHROPIC_API_KEY'];
+      if (!key) return [];
+      const r = await fetch('https://api.anthropic.com/v1/models', {
+        headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01' },
+        signal: abort.signal,
+      });
+      clearTimeout(timer);
+      if (!r.ok) return [];
+      const data = await r.json() as { data: Array<{ id: string }> };
+      models = data.data.map(m => m.id).sort();
+
+    } else if (p.id === 'openai') {
+      const key = process.env['OPENAI_API_KEY'];
+      if (!key) return [];
+      const r = await fetch('https://api.openai.com/v1/models', {
+        headers: { 'Authorization': `Bearer ${key}` },
+        signal: abort.signal,
+      });
+      clearTimeout(timer);
+      if (!r.ok) return [];
+      const data = await r.json() as { data: Array<{ id: string }> };
+      models = data.data
+        .map(m => m.id)
+        .filter(id => /^(gpt-|o1|o3|o4)/.test(id))
+        .sort();
+
+    } else if (p.id === 'gemini') {
+      const key = process.env['GEMINI_API_KEY'];
+      if (!key) return [];
+      const r = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models?key=${key}`,
+        { signal: abort.signal },
+      );
+      clearTimeout(timer);
+      if (!r.ok) return [];
+      const data = await r.json() as { models: Array<{ name: string; supportedGenerationMethods?: string[] }> };
+      models = data.models
+        .filter(m => (m.supportedGenerationMethods ?? []).includes('generateContent'))
+        .map(m => m.name.replace(/^models\//, ''))
+        .sort();
+
+    } else if (p.id === 'ollama' || p.id === 'lmstudio') {
+      const baseUrl = (p.baseUrlEnvKey ? process.env[p.baseUrlEnvKey] : undefined) ?? p.defaultBaseUrl ?? '';
+      if (!baseUrl) return [];
+      const r = await fetch(baseUrl.replace(/\/+$/, '') + '/models', { signal: abort.signal });
+      clearTimeout(timer);
+      if (!r.ok) return [];
+      const data = await r.json() as { data?: Array<{ id: string }>; models?: Array<{ name: string }> };
+      // OpenAI-compat format (LM Studio, Ollama /v1/models)
+      if (data.data) models = data.data.map(m => m.id).sort();
+      // Ollama native /api/tags fallback
+      else if (data.models) models = data.models.map(m => m.name).sort();
+    }
+
+    return models;
+  } catch {
+    return [];
+  }
+}
+
+/** Return cached models for a provider, fetching live if the cache is stale. Falls back to static list. */
+async function getCachedModels(p: KnownProvider): Promise<string[]> {
+  const cached = modelCache.get(p.id);
+  if (cached && (Date.now() - cached.ts) < modelCacheTtl(p.id)) {
+    return cached.models;
+  }
+  const live = await fetchLiveModels(p);
+  if (live.length > 0) {
+    modelCache.set(p.id, { models: live, ts: Date.now() });
+    return live;
+  }
+  // Don't cache failures — try again next time
+  return p.models;
+}
 
 function stateLabel(state: string): string {
   switch (state) {

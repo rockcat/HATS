@@ -285,7 +285,7 @@ export class Agent {
       promptLength,
       inputTokens,
       outputTokens,
-      cost: calcCost(req.model, inputTokens, outputTokens),
+      cost: calcCost(req.model, inputTokens, outputTokens, this.config.provider.name),
     });
   }
 

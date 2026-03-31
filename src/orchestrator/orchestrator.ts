@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
-import { readFile, writeFile, readdir, mkdir } from 'fs/promises';
+import { readFile, writeFile, rename, readdir, mkdir } from 'fs/promises';
 import * as path from 'path';
 import { renderMarkdown } from '../human/markdown.js';
 import { Agent } from '../agent/agent.js';
@@ -130,7 +130,10 @@ export class TeamOrchestrator {
       mcpServers: this.mcp.getServerDefs(),
     };
 
-    await writeFile(path, JSON.stringify(snapshot, null, 2), 'utf-8');
+    // Write to a temp file then rename atomically to avoid corrupting on partial write
+    const tmp = path + '.tmp';
+    await writeFile(tmp, JSON.stringify(snapshot, null, 2), 'utf-8');
+    await rename(tmp, path);
     await this.store.append('state_saved', { path, agentCount: agentSnapshots.length });
     console.log(`\n[Team] State saved to ${path}`);
   }
@@ -145,7 +148,12 @@ export class TeamOrchestrator {
    */
   async loadState(path: string, providerFactory: ProviderFactory): Promise<MCPServerDef[]> {
     const raw = await readFile(path, 'utf-8');
-    const snapshot = JSON.parse(raw) as TeamSnapshot;
+    let snapshot: TeamSnapshot;
+    try {
+      snapshot = JSON.parse(raw) as TeamSnapshot;
+    } catch (err) {
+      throw new Error(`State file "${path}" is corrupt (${(err as Error).message}). Delete it to start fresh.`);
+    }
 
     if (snapshot.version !== SNAPSHOT_VERSION) {
       throw new Error(`Snapshot version mismatch: expected ${SNAPSHOT_VERSION}, got ${snapshot.version}`);
@@ -602,7 +610,7 @@ export class TeamOrchestrator {
 
       case 'read_file': {
         const { path: filePath } = call.arguments as { path: string };
-        const resolved = path.resolve(filePath);
+        const resolved = this.resolveAgentPath(agentName, filePath);
         try {
           const content = await readFile(resolved, 'utf-8');
           return content;
@@ -613,7 +621,7 @@ export class TeamOrchestrator {
 
       case 'write_file': {
         const { path: filePath, content } = call.arguments as { path: string; content: string };
-        const resolved = path.resolve(filePath);
+        const resolved = this.resolveAgentPath(agentName, filePath);
         try {
           await mkdir(path.dirname(resolved), { recursive: true });
           await writeFile(resolved, content, 'utf-8');
@@ -625,7 +633,7 @@ export class TeamOrchestrator {
 
       case 'list_files': {
         const { directory } = call.arguments as { directory?: string };
-        const resolved = path.resolve(directory ?? '.');
+        const resolved = this.resolveAgentPath(agentName, directory ?? '.');
         try {
           const entries = await readdir(resolved, { withFileTypes: true });
           const lines = entries.map(e => `${e.isDirectory() ? '[dir] ' : '      '}${e.name}`);
@@ -829,6 +837,20 @@ export class TeamOrchestrator {
     };
     this.tasks.set(taskId, task);
     return taskId;
+  }
+
+  /**
+   * Resolve a file path for an agent tool call.
+   * Absolute paths are used as-is. Relative paths are resolved against the
+   * agent's active task projectFolder (if any), falling back to process.cwd().
+   */
+  private resolveAgentPath(agentName: string, filePath: string): string {
+    if (path.isAbsolute(filePath)) return filePath;
+    const activeTask = Array.from(this.tasks.values()).find(
+      t => t.status === 'active' && t.assignedTo.toLowerCase() === agentName.toLowerCase(),
+    );
+    const base = activeTask?.projectFolder ?? process.cwd();
+    return path.resolve(base, filePath);
   }
 
   private findBlueHat(): Agent | undefined {
