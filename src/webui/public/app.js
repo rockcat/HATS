@@ -638,13 +638,23 @@ function initTicketEditing() {
   });
 }
 
+function populateAssigneeDropdown(selected) {
+  const sel = document.getElementById('edit-assignee');
+  const names = ['', ...(state.agents ?? []).map(a => a.name), 'human'];
+  // Keep any existing value that isn't in the list (e.g. stale assignee from another project)
+  if (selected && !names.includes(selected)) names.push(selected);
+  sel.innerHTML = names.map(n =>
+    `<option value="${esc(n)}"${n === selected ? ' selected' : ''}>${n ? esc(n) : '— unassigned —'}</option>`
+  ).join('');
+}
+
 function openNewTicketModal() {
   document.getElementById('modal-ticket-id').textContent = 'New Ticket';
   document.getElementById('edit-title').value       = '';
   document.getElementById('edit-description').value = '';
   document.getElementById('edit-priority').value    = 'medium';
   document.getElementById('edit-column').value      = 'backlog';
-  document.getElementById('edit-assignee').value    = '';
+  populateAssigneeDropdown('');
   document.getElementById('edit-tags').value        = '';
   document.getElementById('edit-blocked-by').value  = '';
   document.getElementById('modal-error').textContent = '';
@@ -665,7 +675,7 @@ function openTicketModal(id) {
   document.getElementById('edit-description').value = ticket.description ?? '';
   document.getElementById('edit-priority').value    = ticket.priority ?? 'medium';
   document.getElementById('edit-column').value      = ticket.column ?? 'backlog';
-  document.getElementById('edit-assignee').value    = ticket.assignee ?? '';
+  populateAssigneeDropdown(ticket.assignee ?? '');
   document.getElementById('edit-tags').value        = (ticket.tags ?? []).join(', ');
   document.getElementById('edit-blocked-by').value  = (ticket.blockedBy ?? []).join(', ');
   document.getElementById('modal-error').textContent = '';
@@ -2216,6 +2226,10 @@ function doSwitchProject(id) {
 
   if (activeDetailAgent) closeAgentDetail();
 
+  const switchModal = document.getElementById('project-switching-modal');
+  document.getElementById('project-switching-name').textContent = id;
+  switchModal.hidden = false;
+
   fetch('/api/project/switch', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -2223,6 +2237,7 @@ function doSwitchProject(id) {
   })
     .then(r => r.json())
     .then(res => {
+      switchModal.hidden = true;
       if (res.error) {
         badge.textContent = prevId;
         console.error('Project switch failed:', res.error);
@@ -2236,7 +2251,10 @@ function doSwitchProject(id) {
       fetchCalendar();
       fetch('/api/telemetry').then(r => r.json()).then(d => applyTelemetrySummary(d.summary)).catch(() => {});
     })
-    .catch(() => { badge.textContent = prevId; });
+    .catch(() => {
+      switchModal.hidden = true;
+      badge.textContent = prevId;
+    });
 }
 
 // ── Add Agent modal ───────────────────────────────────────────────────────────
@@ -2918,6 +2936,7 @@ initBacklogCalendarTabs();
 initPanelExpand();
 initTelemetry();
 initFileUpload();
+initFileViewer();
 connect();
 
 // ── Panel expand / restore ────────────────────────────────────────────────────
@@ -3065,6 +3084,12 @@ function fileIcon(name, isDir) {
   return icons[ext] || '📄';
 }
 
+const VIEWABLE_EXTS = new Set(['txt', 'md', 'pdf', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg']);
+
+function fileExt(name) {
+  return name.split('.').pop()?.toLowerCase() ?? '';
+}
+
 function renderFilesSection(elId, files) {
   const el = document.getElementById(elId);
   if (!el) return;
@@ -3073,16 +3098,82 @@ function renderFilesSection(elId, files) {
     return;
   }
   el.innerHTML = files.map(f => {
-    const depth = (f.relativePath.match(/\//g) || []).length;
+    // relativePath includes the section prefix (sources/ or outputs/) — subtract 1 for visual depth
+    const depth = Math.max(0, (f.relativePath.match(/\//g) || []).length - 1);
     const indent = depth > 0 ? ` file-row--indent-${Math.min(depth, 3)}` : '';
     const dirClass = f.isDir ? ' file-row--dir' : '';
+    const actions = f.isDir ? '' : buildFileActions(f);
     return `<div class="file-row${dirClass}${indent}">
       <span class="file-icon">${fileIcon(f.name, f.isDir)}</span>
       <span class="file-name" title="${esc(f.relativePath)}">${esc(f.name)}</span>
       ${!f.isDir ? `<span class="file-size">${fmtSize(f.size)}</span>` : ''}
+      ${actions}
     </div>`;
   }).join('');
 }
+
+function buildFileActions(f) {
+  const url = `/api/project/file?path=${encodeURIComponent(f.relativePath)}`;
+  const canView = VIEWABLE_EXTS.has(fileExt(f.name));
+  const viewBtn = canView
+    ? `<button class="file-action-btn file-view-btn" title="View" data-name="${esc(f.name)}" data-path="${esc(f.relativePath)}">👁</button>`
+    : `<span class="file-action-placeholder"></span>`;
+  const dlBtn = `<a class="file-action-btn" title="Download" href="${esc(url)}" download="${esc(f.name)}">⬇</a>`;
+  return `<span class="file-actions">${viewBtn}${dlBtn}</span>`;
+}
+
+function initFileViewer() {
+  // Delegated listener — handles view buttons in both sources and outputs lists
+  document.addEventListener('click', e => {
+    const btn = e.target.closest('.file-view-btn');
+    if (!btn) return;
+    openFileViewer(btn.dataset.name, btn.dataset.path);
+  });
+
+  document.getElementById('file-viewer-close').addEventListener('click', () => {
+    document.getElementById('file-viewer-modal').hidden = true;
+  });
+  document.getElementById('file-viewer-modal').addEventListener('click', e => {
+    if (e.target === e.currentTarget) document.getElementById('file-viewer-modal').hidden = true;
+  });
+}
+
+function openFileViewer(name, relativePath) {
+  const url = `/api/project/file?path=${encodeURIComponent(relativePath)}`;
+  const ext = fileExt(name);
+  const modal = document.getElementById('file-viewer-modal');
+  const body  = document.getElementById('file-viewer-body');
+  const dl    = document.getElementById('file-viewer-download');
+
+  document.getElementById('file-viewer-name').textContent = name;
+  dl.href     = url;
+  dl.download = name;
+  body.innerHTML = '';
+
+  const imgExts = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg']);
+  if (ext === 'pdf') {
+    body.innerHTML = `<iframe src="${esc(url)}" class="file-viewer-iframe"></iframe>`;
+  } else if (imgExts.has(ext)) {
+    body.innerHTML = `<div class="file-viewer-img-wrap"><img src="${esc(url)}" class="file-viewer-img" alt="${esc(name)}"></div>`;
+  } else {
+    // txt or md — fetch and render
+    body.innerHTML = `<div class="file-viewer-loading">Loading…</div>`;
+    fetch(url)
+      .then(r => r.text())
+      .then(text => {
+        if (ext === 'md') {
+          const html = window.marked ? window.marked.parse(text) : `<pre>${esc(text)}</pre>`;
+          body.innerHTML = `<div class="file-viewer-md">${html}</div>`;
+        } else {
+          body.innerHTML = `<pre class="file-viewer-pre">${esc(text)}</pre>`;
+        }
+      })
+      .catch(() => { body.innerHTML = `<div class="file-viewer-loading">Failed to load file.</div>`; });
+  }
+
+  modal.hidden = false;
+}
+
 
 function renderFilesList(sources, outputs) {
   renderFilesSection('files-sources-list', sources);

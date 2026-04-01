@@ -282,7 +282,9 @@ window.meetingUI = {
     // Reset UI
     document.getElementById('meeting-title').textContent = `Meeting: ${topic}`;
     document.getElementById('meeting-transcript').innerHTML = '';
-    document.getElementById('meeting-human-input').hidden = true;
+    document.getElementById('meeting-human-input').hidden = false;
+    document.getElementById('meeting-turn-label').hidden = true;
+    document.getElementById('meeting-pass-btn').hidden = true;
     document.getElementById('meeting-avatars').innerHTML = '';
     document.getElementById('meeting-overlay').hidden = false;
 
@@ -377,11 +379,9 @@ window.meetingUI = {
 
   requestHumanTurn(meetingId) {
     if (meetingId !== activeMeetingId) return;
-    const inputEl = document.getElementById('meeting-human-input');
-    if (inputEl) {
-      inputEl.hidden = false;
-      document.getElementById('meeting-input')?.focus();
-    }
+    document.getElementById('meeting-turn-label').hidden = false;
+    document.getElementById('meeting-pass-btn').hidden = false;
+    document.getElementById('meeting-input')?.focus();
   },
 
   close(meetingId) {
@@ -404,6 +404,8 @@ window.meetingUI = {
     document.getElementById('meeting-overlay').hidden = true;
     document.getElementById('meeting-transcript').innerHTML = '';
     document.getElementById('meeting-human-input').hidden = true;
+    document.getElementById('meeting-turn-label').hidden = true;
+    document.getElementById('meeting-pass-btn').hidden = true;
   },
 
   setSpeechEnabled(enabled) {
@@ -441,7 +443,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const inputEl = document.getElementById('meeting-input');
     const content = pass ? '' : (inputEl?.value.trim() ?? '');
     inputEl && (inputEl.value = '');
-    document.getElementById('meeting-human-input').hidden = true;
+    document.getElementById('meeting-turn-label').hidden = true;
+    document.getElementById('meeting-pass-btn').hidden = true;
 
     if (!pass && content) appendTranscriptTurn('human', content);
 

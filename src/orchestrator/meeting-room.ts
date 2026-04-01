@@ -68,7 +68,7 @@ export class MeetingRoom {
           const agent = this.agents.get(participant);
           if (!agent) continue;
           const response = await agent.meetingTurn(
-            `${prompt}\n\nYour turn. One concise contribution (2–3 sentences max). No preamble.`,
+            `${prompt}\n\nYour turn. State your concrete position, decision, or specific action — not what "we should explore" or how "we should approach" it. No process talk, no agreement echo, no preamble. 1–2 sentences max.`,
           );
           await this.recordTurn(participant, response);
         }
@@ -78,7 +78,7 @@ export class MeetingRoom {
       if (!this.closed) {
         const summary = await facilitator.meetingTurn(
           `${buildTranscriptText(meeting.turns)}\n\n` +
-          `As facilitator: in 1–2 sentences, summarise progress and either close the meeting with report_task_complete (listing action items) or prompt the next round. Be brief.`,
+          `As facilitator: state what has been decided and what is still unresolved. If there is enough to act on, close now with report_task_complete listing concrete action items and owners. If not, name the single specific question still blocking a decision. No summaries of who said what. 1–2 sentences.`,
         );
         await this.recordTurn(meeting.facilitator, summary);
       }
@@ -126,7 +126,7 @@ function buildOpeningPrompt(meeting: Meeting): string {
     `Facilitate this meeting. Topic: "${meeting.topic}". ` +
     (meeting.agenda ? `Agenda: ${meeting.agenda}. ` : '') +
     `Participants: ${participants}. ` +
-    `Open briefly (2–3 sentences), then invite the first participant.`
+    `State the problem in one sentence and your opening position or recommendation. No pleasantries, no agenda recap. Drive toward a decision immediately.`
   );
 }
 

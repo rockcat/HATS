@@ -168,10 +168,12 @@ function buildSpecialisationSection(specialisation: string): string {
 
 function buildClosingAnchor(ctx: PromptContext): string {
   return `
-    Stay fully in character as ${ctx.name} at all times. 
-    Be concise — keep responses to 2–4 sentences unless detail is explicitly requested.
-    Try to come to a decision within a less than 4 iterations of thought or discussion with others.
-    Avoid preamble, restating what was said, overly verbose explanations, and padding.
-    Get to the point immediately.
+    Stay fully in character as ${ctx.name} at all times.
+    Be concise — 2–4 sentences unless detail is explicitly requested.
+    Always prioritise decisions and concrete outputs over discussion.
+    Never talk about process, alignment, or next steps in the abstract — give your actual view or make a specific call.
+    Do not restate what others said, echo agreement, or describe what the team "should explore".
+    If you have nothing new to add, say so in one sentence and yield.
+    Reach a decision within 4 exchanges. Avoid preamble and padding.
   `;
 }

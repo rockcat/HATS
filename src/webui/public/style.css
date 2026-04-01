@@ -2233,6 +2233,144 @@ main {
 .file-row--indent-2 { padding-left: 36px; }
 .file-row--indent-3 { padding-left: 48px; }
 
+.file-actions {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+.file-row:hover .file-actions { opacity: 1; }
+
+.file-action-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 1px 4px;
+  font-size: 11px;
+  border-radius: 3px;
+  color: var(--text-muted);
+  text-decoration: none;
+  line-height: 1;
+}
+.file-action-btn:hover { background: var(--surface-3, var(--surface-2)); color: var(--text); }
+
+.file-action-placeholder {
+  display: inline-block;
+  width: 22px; /* matches .file-action-btn width */
+}
+
+.file-viewer-modal {
+  width: min(860px, 92vw);
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.file-viewer-body {
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
+}
+
+.file-viewer-iframe {
+  width: 100%;
+  height: 70vh;
+  border: none;
+  display: block;
+}
+
+.file-viewer-pre {
+  margin: 0;
+  padding: 16px;
+  font-size: 12px;
+  font-family: ui-monospace, monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.5;
+}
+
+.file-viewer-md {
+  padding: 16px 20px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text);
+}
+.file-viewer-md h1, .file-viewer-md h2, .file-viewer-md h3 { margin: 16px 0 8px; }
+.file-viewer-md h1 { font-size: 20px; }
+.file-viewer-md h2 { font-size: 16px; }
+.file-viewer-md h3 { font-size: 14px; }
+.file-viewer-md p { margin: 0 0 10px; }
+.file-viewer-md ul { padding-left: 20px; margin: 0 0 10px; }
+.file-viewer-md code { background: var(--surface-2); padding: 1px 4px; border-radius: 3px; font-size: 11px; }
+.file-viewer-md pre { background: var(--surface-2); padding: 10px; border-radius: 4px; overflow-x: auto; margin: 0 0 10px; }
+.file-viewer-md pre code { background: none; padding: 0; }
+
+.file-viewer-img-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  min-height: 200px;
+}
+.file-viewer-img {
+  max-width: 100%;
+  max-height: 65vh;
+  object-fit: contain;
+  border-radius: 4px;
+}
+
+.file-viewer-loading {
+  padding: 24px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+/* ── Project switching overlay ──────────────────────── */
+
+.project-switching-overlay {
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(2px);
+}
+
+.project-switching-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 32px 40px;
+  min-width: 220px;
+  text-align: center;
+}
+
+.project-switching-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent, #5b9cf6);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.project-switching-label {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.project-switching-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
 /* ── Telemetry header bar ───────────────────────────── */
 
 .telemetry-bar {

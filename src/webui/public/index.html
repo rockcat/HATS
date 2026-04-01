@@ -180,11 +180,11 @@
     </div>
     <div id="meeting-transcript" class="meeting-transcript"></div>
     <div id="meeting-human-input" class="meeting-human-input" hidden>
-      <span class="meeting-turn-label">Your turn</span>
-      <input id="meeting-input" class="meeting-input-field" type="text" placeholder="Type your message… (leave blank to pass)" autocomplete="off">
+      <span class="meeting-turn-label" id="meeting-turn-label" hidden>Your turn</span>
+      <input id="meeting-input" class="meeting-input-field" type="text" placeholder="Say something…" autocomplete="off">
       <button id="meeting-mic-btn" class="mic-btn" title="Hold to speak (Whisper)">🎙</button>
       <button id="meeting-send-btn" class="meeting-send-btn">Send</button>
-      <button id="meeting-pass-btn" class="meeting-pass-btn">Pass</button>
+      <button id="meeting-pass-btn" class="meeting-pass-btn" hidden>Pass</button>
     </div>
   </div>
 
@@ -288,7 +288,7 @@
           </div>
           <div class="field-group">
             <label class="field-label">Assignee</label>
-            <input type="text" id="edit-assignee" class="modal-input">
+            <select id="edit-assignee" class="modal-select"></select>
           </div>
         </div>
         <div class="field-group">
@@ -434,6 +434,29 @@
         <button class="modal-btn secondary" id="new-meeting-cancel">Cancel</button>
         <button class="modal-btn primary" id="new-meeting-save">Schedule</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Project Switching Modal -->
+  <div id="project-switching-modal" class="modal-overlay project-switching-overlay" hidden>
+    <div class="project-switching-box">
+      <div class="project-switching-spinner"></div>
+      <div class="project-switching-label">Switching project…</div>
+      <div id="project-switching-name" class="project-switching-name"></div>
+    </div>
+  </div>
+
+  <!-- File Viewer Modal -->
+  <div id="file-viewer-modal" class="modal-overlay" hidden>
+    <div class="modal file-viewer-modal" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <span class="modal-ticket-id" id="file-viewer-name"></span>
+        <div style="display:flex;gap:8px;align-items:center">
+          <a id="file-viewer-download" class="modal-btn secondary" style="text-decoration:none;padding:4px 10px;font-size:11px">⬇ Download</a>
+          <button class="modal-close" id="file-viewer-close" title="Close">✕</button>
+        </div>
+      </div>
+      <div id="file-viewer-body" class="file-viewer-body"></div>
     </div>
   </div>
 

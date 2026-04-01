@@ -1,5 +1,5 @@
 import { createServer, IncomingMessage, ServerResponse } from 'http';
-import { readFile, writeFile, mkdir, readdir, stat } from 'fs/promises';
+import { readFile, writeFile, rename, mkdir, readdir, stat } from 'fs/promises';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
@@ -613,7 +613,7 @@ export class APIServer {
         createdAt:   now,
         updatedAt:   now,
       };
-      await writeFile(this.kanbanPath, JSON.stringify(board, null, 2), 'utf-8');
+      await this.writeKanban(board);
       this.json(res, 201, board.tickets[id]);
       if (board.tickets[id].column === 'in_progress' && board.tickets[id].assignee) {
         this.dispatchTicket(board.tickets[id]).catch(() => {});
@@ -641,7 +641,7 @@ export class APIServer {
       const comment = { id: `c${Date.now()}`, author: author?.trim() || 'human', text: text.trim(), ts: new Date().toISOString() };
       ticket.comments.push(comment);
       ticket.updatedAt = comment.ts;
-      await writeFile(this.kanbanPath, JSON.stringify(board, null, 2), 'utf-8');
+      await this.writeKanban(board);
       this.json(res, 201, comment);
 
     } else if (pathname.startsWith('/api/kanban/tickets/') && req.method === 'PATCH') {
@@ -665,7 +665,7 @@ export class APIServer {
       if (fields.tags        !== undefined) ticket.tags        = fields.tags;
       if (fields.blockedBy   !== undefined) ticket.blockedBy   = fields.blockedBy;
       ticket.updatedAt = new Date().toISOString();
-      await writeFile(this.kanbanPath, JSON.stringify(board, null, 2), 'utf-8');
+      await this.writeKanban(board);
       this.json(res, 200, ticket);
 
       // Fan-out: if ticket just completed, unblock dependents
@@ -991,7 +991,7 @@ export class APIServer {
                 changed = true;
               }
             }
-            if (changed) await writeFile(this.kanbanPath, JSON.stringify(board, null, 2), 'utf-8');
+            if (changed) await this.writeKanban(board);
           } catch { /* non-fatal */ }
         }
         this.agentActivity.delete(resolved);
@@ -1232,8 +1232,8 @@ export class APIServer {
     } else if (pathname === '/api/project/files' && req.method === 'GET') {
       if (!this.projectDir) { this.json(res, 404, { error: 'No project loaded' }); return; }
       try {
-        const sources = await listFilesRecursive(path.join(this.projectDir, 'sources'), this.projectDir);
-        const outputs = await listFilesRecursive(path.join(this.projectDir, 'outputs'), this.projectDir);
+        const sources = await listFilesRecursive(path.join(this.projectDir, 'sources'), this.projectDir, 'sources');
+        const outputs = await listFilesRecursive(path.join(this.projectDir, 'outputs'), this.projectDir, 'outputs');
         this.json(res, 200, { sources, outputs });
       } catch {
         this.json(res, 200, { sources: [], outputs: [] });
@@ -1253,11 +1253,41 @@ export class APIServer {
         await writeFile(destPath, Buffer.concat(chunks));
         this.json(res, 201, { ok: true, path: `sources/${filename}` });
         // Notify connected clients
-        const sources = await listFilesRecursive(path.join(this.projectDir, 'sources'), this.projectDir);
-        const outputs = await listFilesRecursive(path.join(this.projectDir, 'outputs'), this.projectDir);
+        const sources = await listFilesRecursive(path.join(this.projectDir, 'sources'), this.projectDir, 'sources');
+        const outputs = await listFilesRecursive(path.join(this.projectDir, 'outputs'), this.projectDir, 'outputs');
         this.sseBroadcast({ type: 'files_update', sources, outputs });
       } catch (err) {
         this.json(res, 500, { error: (err as Error).message });
+      }
+
+    } else if (pathname === '/api/project/file' && req.method === 'GET') {
+      if (!this.projectDir) { this.json(res, 404, { error: 'No project loaded' }); return; }
+      const rel = url.searchParams.get('path') ?? '';
+      if (!rel || rel.includes('..')) { this.json(res, 400, { error: 'Invalid path' }); return; }
+      const abs = path.join(this.projectDir, rel);
+      // Must stay inside projectDir
+      if (!abs.startsWith(this.projectDir + path.sep) && abs !== this.projectDir) {
+        this.json(res, 403, { error: 'Forbidden' }); return;
+      }
+      try {
+        const data = await readFile(abs);
+        const ext = path.extname(abs).toLowerCase().slice(1);
+        const mimeMap: Record<string, string> = {
+          pdf: 'application/pdf', txt: 'text/plain', md: 'text/plain',
+          png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif',
+          webp: 'image/webp', svg: 'image/svg+xml',
+          json: 'application/json', csv: 'text/csv',
+        };
+        const mime = mimeMap[ext] ?? 'application/octet-stream';
+        const inline = ['pdf', 'txt', 'md', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(ext);
+        res.writeHead(200, {
+          'Content-Type': mime,
+          'Content-Disposition': `${inline ? 'inline' : 'attachment'}; filename="${path.basename(abs)}"`,
+          'Content-Length': data.length,
+        });
+        res.end(data);
+      } catch {
+        this.json(res, 404, { error: 'File not found' });
       }
 
     } else if (pathname === '/api/telemetry') {
@@ -1320,6 +1350,13 @@ export class APIServer {
   private async readKanban(): Promise<Board> {
     const raw = await readFile(this.kanbanPath!, 'utf-8');
     return JSON.parse(raw) as Board;
+  }
+
+  /** Write the board atomically (temp file + rename) to prevent partial-write corruption. */
+  private async writeKanban(board: Board): Promise<void> {
+    const tmp = this.kanbanPath! + '.tmp';
+    await writeFile(tmp, JSON.stringify(board, null, 2), 'utf-8');
+    await rename(tmp, this.kanbanPath!);
   }
 
   private json(res: ServerResponse, status: number, body: unknown): void {
@@ -1509,7 +1546,7 @@ export class APIServer {
       createdAt:   now,
       updatedAt:   now,
     };
-    await writeFile(this.kanbanPath, JSON.stringify(board, null, 2), 'utf-8');
+    await this.writeKanban(board);
     console.log(`[API] Created escalation ticket ${id} for human from ${from}`);
     // watchKanban fires on file change and broadcasts kanban_update with fresh tickets
   }
@@ -1521,7 +1558,7 @@ export class APIServer {
     if (!ticket) return;
     ticket.comments.push({ id: `c${Date.now()}`, author, text, ts: new Date().toISOString() });
     ticket.updatedAt = new Date().toISOString();
-    await writeFile(this.kanbanPath, JSON.stringify(board, null, 2), 'utf-8');
+    await this.writeKanban(board);
   }
 
   private async updateKanbanColumn(ticketId: string, column: string): Promise<void> {
@@ -1531,7 +1568,7 @@ export class APIServer {
     if (!ticket || ticket.column === column) return;
     ticket.column    = column as never;
     ticket.updatedAt = new Date().toISOString();
-    await writeFile(this.kanbanPath, JSON.stringify(board, null, 2), 'utf-8');
+    await this.writeKanban(board);
     console.log(`[API] Ticket ${ticketId} → ${column}`);
     if (column === 'completed') {
       this.unblockDependents(ticketId).catch(() => {});
@@ -1555,7 +1592,7 @@ export class APIServer {
         console.log(`[API] ${ticket.id} unblocked by completion of ${completedId} → ready`);
       }
     }
-    if (changed) await writeFile(this.kanbanPath, JSON.stringify(board, null, 2), 'utf-8');
+    if (changed) await this.writeKanban(board);
 
     // Notify assigned agents that their dependency is resolved
     for (const ticket of unblocked) {
@@ -1639,7 +1676,7 @@ export class APIServer {
           kt.projectName   = stored.projectName ?? projectName;
           kt.projectFolder = stored.projectFolder;
           kt.updatedAt     = new Date().toISOString();
-          await writeFile(this.kanbanPath, JSON.stringify(board, null, 2), 'utf-8');
+          await this.writeKanban(board);
         }
       } catch { /* non-fatal */ }
 
