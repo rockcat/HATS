@@ -25,13 +25,17 @@ export class KanbanStore {
 
   async load(): Promise<void> {
     await fs.mkdir(path.dirname(this.filePath), { recursive: true });
+    let raw: string;
     try {
-      const raw = await fs.readFile(this.filePath, 'utf-8');
-      this.board = JSON.parse(raw) as Board;
+      raw = await fs.readFile(this.filePath, 'utf-8');
     } catch {
+      // File doesn't exist yet — start fresh
       this.board = structuredClone(EMPTY_BOARD);
       await this.persist();
+      return;
     }
+    // File exists — parse it; throw rather than silently wipe on corruption
+    this.board = JSON.parse(raw) as Board;
   }
 
   // ── Queries ────────────────────────────────────────────────────────────────
