@@ -143,7 +143,10 @@ export class APIServer {
     this.server = createServer((req, res) => {
       this.handleRequest(req, res).catch((err) => {
         console.error('[API] Request error:', err);
-        if (!res.headersSent) { res.writeHead(500); res.end('Internal error'); }
+        if (!res.headersSent) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: (err as Error).message ?? 'Internal error' }));
+        }
       });
     });
     this.wss = new WebSocketServer({ server: this.server });
@@ -416,6 +419,7 @@ export class APIServer {
       case 'escalation': {
         const from    = ev['from'] as string | undefined;
         const message = ev['message'] as string | undefined;
+        const urgency = ev['urgency'] as string | undefined;
         if (from) {
           this.setActivity(from, 'Waiting for human…');
           changed = true;
@@ -425,6 +429,8 @@ export class APIServer {
             this.updateKanbanColumn(ticketId, 'blocked').catch(() => {});
             if (message) this.addTicketComment(ticketId, from, `Blocked: ${message}`).catch(() => {});
           }
+          // Create a human-assigned ticket for the escalation
+          this.createEscalationTicket(from, message ?? '', urgency ?? 'medium').catch(() => {});
         }
         break;
       }
@@ -1147,6 +1153,39 @@ export class APIServer {
         this.json(res, 500, { error: (err as Error).message });
       }
 
+    } else if (pathname === '/api/speech/transcribe' && req.method === 'POST') {
+      // Whisper STT: accepts raw audio body (webm/ogg/mp4/wav), returns { text }
+      const apiKey = process.env['OPENAI_API_KEY'];
+      if (!apiKey) { this.json(res, 400, { error: 'OPENAI_API_KEY not set — Whisper unavailable' }); return; }
+      const audioBuffer = await this.readBodyBuffer(req);
+      if (!audioBuffer.length) { this.json(res, 400, { error: 'No audio data received' }); return; }
+      try {
+        // Build multipart form — Node's fetch supports FormData with Blob
+        const contentType = req.headers['content-type'] ?? 'audio/webm';
+        const ext = contentType.includes('mp4') ? 'mp4'
+                  : contentType.includes('ogg')  ? 'ogg'
+                  : contentType.includes('wav')  ? 'wav'
+                  : 'webm';
+        const blob = new Blob([audioBuffer], { type: contentType });
+        const form = new FormData();
+        form.append('file', blob, `recording.${ext}`);
+        form.append('model', 'whisper-1');
+        const whisperRes = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${apiKey}` },
+          body: form,
+          signal: AbortSignal.timeout(30_000),
+        });
+        if (!whisperRes.ok) {
+          const err = await whisperRes.text();
+          this.json(res, 502, { error: `Whisper API error: ${whisperRes.status} — ${err}` }); return;
+        }
+        const data = await whisperRes.json() as { text: string };
+        this.json(res, 200, { text: data.text?.trim() ?? '' });
+      } catch (err) {
+        this.json(res, 500, { error: (err as Error).message });
+      }
+
     } else if (pathname === '/api/speech/synthesise' && req.method === 'POST') {
       // Full TTS pipeline: returns [{audioBase64, visemes, duration, sentence}]
       const voices = this.voiceManager.getVoices();
@@ -1335,6 +1374,15 @@ export class APIServer {
     });
   }
 
+  private readBodyBuffer(req: IncomingMessage): Promise<Buffer> {
+    return new Promise((resolve, reject) => {
+      const chunks: Buffer[] = [];
+      req.on('data', chunk => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));
+      req.on('end', () => resolve(Buffer.concat(chunks)));
+      req.on('error', reject);
+    });
+  }
+
   // ── Web CLI command handler ────────────────────────────────────────────────
 
   private async handleCLICommand(line: string): Promise<string> {
@@ -1438,6 +1486,32 @@ export class APIServer {
     const defaultAgent = agents.find(a => String(a.hatType).toLowerCase() === 'blue') ?? agents[0];
     await this.orchestrator.humanMessage(defaultAgent.name, line);
     return `→ Sent to ${defaultAgent.name}`;
+  }
+
+  private async createEscalationTicket(from: string, message: string, urgency: string): Promise<void> {
+    if (!this.kanbanPath) return;
+    const board = await this.readKanban();
+    const id    = `TKT-${String(board.nextSeq).padStart(3, '0')}`;
+    board.nextSeq++;
+    const now   = new Date().toISOString();
+    const shortMsg = message.length > 80 ? `${message.slice(0, 77)}…` : message;
+    const priority = urgency === 'high' || urgency === 'critical' ? 'high' : 'medium';
+    board.tickets[id] = {
+      id,
+      title:       `Escalation from ${from}: ${shortMsg}`,
+      description: message,
+      priority:    priority as never,
+      column:      'ready' as never,
+      creator:     from,
+      assignee:    'human',
+      tags:        ['escalation'],
+      comments:    [],
+      createdAt:   now,
+      updatedAt:   now,
+    };
+    await writeFile(this.kanbanPath, JSON.stringify(board, null, 2), 'utf-8');
+    console.log(`[API] Created escalation ticket ${id} for human from ${from}`);
+    // watchKanban fires on file change and broadcasts kanban_update with fresh tickets
   }
 
   private async addTicketComment(ticketId: string, author: string, text: string): Promise<void> {
