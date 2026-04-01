@@ -29,7 +29,8 @@
       "Bash(echo \"EXIT:$?\")",
       "Bash(grep -rn \"apiServer\\\\.start\\\\|server\\\\.start\\\\|APIServer\" F:workspacepersonalitysrc F:workspacepersonalityteam-runner.ts --include=*.ts)",
       "Bash(npm search:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(python -c \"import sys,json; [print\\(json.loads\\(l\\)[''''id'''']\\) for l in sys.stdin]\")"
     ]
   }
 }

@@ -1747,6 +1747,12 @@ export class APIServer {
     this.talkingTimers.clear();
     this.enabledMCPIds.clear();
 
+    // Disconnect project-scoped MCP servers from the old orchestrator so they
+    // can be restarted with the new project dir by loadMCPEnabled() below.
+    if (this.orchestrator.hasMCPServer('filesystem')) {
+      await this.orchestrator.removeMCPServer('filesystem').catch(() => {});
+    }
+
     // 4. Load new project via the factory
     console.log(`[API] Switching to project "${newId}" (${newProjectDir})`);
     const newOrchestrator = await this.projectLoader(newProjectDir, newKanbanFile, newStateFile);
