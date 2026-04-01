@@ -397,12 +397,47 @@ const PRIORITY_COLOR = {
 // Active kanban columns (top-right)
 const ACTIVE_COLUMNS = ['ready', 'in_progress', 'blocked', 'completed'];
 
+let kanbanFilterUser = '';
+let kanbanFilterTag  = '';
+
+function populateKanbanFilters(tickets) {
+  const users = [...new Set(tickets.map(t => t.assignee).filter(Boolean))].sort();
+  const tags  = [...new Set(tickets.flatMap(t => t.tags ?? []))].sort();
+
+  const userSel = document.getElementById('kanban-filter-user');
+  const tagSel  = document.getElementById('kanban-filter-tag');
+  if (!userSel || !tagSel) return;
+
+  const prevUser = userSel.value;
+  const prevTag  = tagSel.value;
+
+  userSel.innerHTML = '<option value="">All users</option>' +
+    users.map(u => `<option value="${esc(u)}"${u === prevUser ? ' selected' : ''}>${esc(u)}</option>`).join('');
+  tagSel.innerHTML  = '<option value="">All tags</option>' +
+    tags.map(t => `<option value="${esc(t)}"${t === prevTag ? ' selected' : ''}>${esc(t)}</option>`).join('');
+
+  // Restore selection if still valid
+  if (users.includes(prevUser)) userSel.value = prevUser;
+  if (tags.includes(prevTag))   tagSel.value  = prevTag;
+}
+
+function applyKanbanFilters(tickets) {
+  return tickets.filter(t => {
+    if (kanbanFilterUser && t.assignee !== kanbanFilterUser) return false;
+    if (kanbanFilterTag  && !(t.tags ?? []).includes(kanbanFilterTag))  return false;
+    return true;
+  });
+}
+
 function renderKanban(tickets) {
+  populateKanbanFilters(tickets);
+  const visible = applyKanbanFilters(tickets);
+
   // Active columns
   for (const colId of ACTIVE_COLUMNS) {
     const colEl = document.getElementById(`col-${colId}`);
     if (!colEl) continue;
-    const colTickets = tickets.filter(t => t.column === colId);
+    const colTickets = visible.filter(t => t.column === colId);
     colEl.querySelector('.kanban-col-count').textContent = colTickets.length || '';
     const list = colEl.querySelector('.task-list');
     list.innerHTML = colTickets.length
@@ -411,7 +446,7 @@ function renderKanban(tickets) {
   }
 
   // Backlog (wide list)
-  const backlog = tickets.filter(t => t.column === 'backlog');
+  const backlog = visible.filter(t => t.column === 'backlog');
   const countEl = document.getElementById('backlog-count');
   if (countEl) countEl.textContent = backlog.length || '';
   const listEl = document.getElementById('backlog-list');
@@ -421,6 +456,15 @@ function renderKanban(tickets) {
       : '<p class="backlog-empty">No tickets in backlog</p>';
   }
 }
+
+document.getElementById('kanban-filter-user')?.addEventListener('change', e => {
+  kanbanFilterUser = e.target.value;
+  renderKanban(state.tickets);
+});
+document.getElementById('kanban-filter-tag')?.addEventListener('change', e => {
+  kanbanFilterTag = e.target.value;
+  renderKanban(state.tickets);
+});
 
 function ticketHTML(ticket) {
   const priority    = ticket.priority ?? 'medium';
@@ -685,10 +729,12 @@ function saveTicket() {
   const method = isCreate ? 'POST' : 'PATCH';
 
   fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-    .then(r => r.json())
-    .then(result => {
-      if (result.error) {
-        document.getElementById('modal-error').textContent = result.error;
+    .then(async r => {
+      const text = await r.text();
+      let result;
+      try { result = JSON.parse(text); } catch { result = { error: text || `HTTP ${r.status}` }; }
+      if (!r.ok || result.error) {
+        document.getElementById('modal-error').textContent = result.error ?? `HTTP ${r.status}`;
       } else {
         closeTicketModal();
       }
@@ -2414,9 +2460,13 @@ function buildEventHTML(m) {
   </div>`;
 }
 
+function toLocalDateStr(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 function calMeetingsOnDay(d) {
-  const dayStr = d.toISOString().slice(0, 10);
-  return calMeetings.filter(m => m.scheduledFor.slice(0, 10) === dayStr);
+  const dayStr = toLocalDateStr(d);
+  return calMeetings.filter(m => toLocalDateStr(new Date(m.scheduledFor)) === dayStr);
 }
 
 // ── Week view ─────────────────────────────────────────────────────────────────
@@ -2769,6 +2819,93 @@ function initImpromptuMeeting() {
   });
 }
 
+// ── Push-to-talk (Whisper STT) ────────────────────────────────────────────────
+
+/**
+ * Wire a mic button to an input field.
+ * Hold the button (mousedown/touchstart) to record; release to transcribe.
+ * The transcript is appended to the input value (so typed text is preserved).
+ */
+function initMicBtn(btnId, inputId) {
+  const btn = document.getElementById(btnId);
+  const inp = document.getElementById(inputId);
+  if (!btn || !inp) return;
+
+  let mediaRecorder = null;
+  let chunks = [];
+
+  function setState(state) {
+    btn.classList.toggle('recording',   state === 'recording');
+    btn.classList.toggle('processing',  state === 'processing');
+    btn.disabled = state === 'processing';
+    btn.title = state === 'recording'  ? 'Release to transcribe'
+              : state === 'processing' ? 'Transcribing…'
+              : 'Hold to speak (Whisper)';
+  }
+
+  async function startRecording() {
+    chunks = [];
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorder = new MediaRecorder(stream);
+      mediaRecorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+      mediaRecorder.start();
+      setState('recording');
+    } catch (err) {
+      console.warn('[mic] getUserMedia failed:', err);
+      setState('idle');
+    }
+  }
+
+  async function stopAndTranscribe() {
+    if (!mediaRecorder || mediaRecorder.state === 'inactive') { setState('idle'); return; }
+    setState('processing');
+
+    await new Promise(resolve => {
+      mediaRecorder.onstop = resolve;
+      mediaRecorder.stop();
+      mediaRecorder.stream.getTracks().forEach(t => t.stop());
+    });
+
+    if (chunks.length === 0) { setState('idle'); return; }
+
+    try {
+      const mimeType = chunks[0].type || 'audio/webm';
+      const blob = new Blob(chunks, { type: mimeType });
+      const res = await fetch('/api/speech/transcribe', {
+        method: 'POST',
+        headers: { 'Content-Type': mimeType },
+        body: blob,
+      });
+      const data = await res.json();
+      if (data.text) {
+        const sep = inp.value && !inp.value.endsWith(' ') ? ' ' : '';
+        inp.value += sep + data.text;
+        inp.focus();
+      }
+    } catch (err) {
+      console.warn('[mic] transcription failed:', err);
+    }
+
+    setState('idle');
+    mediaRecorder = null;
+    chunks = [];
+  }
+
+  // Mouse events
+  btn.addEventListener('mousedown', e => { e.preventDefault(); startRecording(); });
+  window.addEventListener('mouseup', () => { if (mediaRecorder?.state === 'recording') stopAndTranscribe(); });
+
+  // Touch events (mobile)
+  btn.addEventListener('touchstart', e => { e.preventDefault(); startRecording(); }, { passive: false });
+  window.addEventListener('touchend', () => { if (mediaRecorder?.state === 'recording') stopAndTranscribe(); });
+}
+
+function initMicButtons() {
+  initMicBtn('cli-mic-btn',     'cli-input');
+  initMicBtn('meeting-mic-btn', 'meeting-input');
+}
+
 initProjectBadge();
 initDebugButton();
 initSettings();
@@ -2776,6 +2913,7 @@ initAddAgent();
 loadSpecialisations();
 initImpromptuMeeting();
 initCalendar();
+initMicButtons();
 initBacklogCalendarTabs();
 initPanelExpand();
 initTelemetry();
