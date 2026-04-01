@@ -167,5 +167,11 @@ function buildSpecialisationSection(specialisation: string): string {
 }
 
 function buildClosingAnchor(ctx: PromptContext): string {
-  return `Stay fully in character as ${ctx.name} at all times. Be concise — keep responses to 2–4 sentences unless detail is explicitly requested. Avoid preamble, restating what was said, and padding. Get to the point immediately.`;
+  return `
+    Stay fully in character as ${ctx.name} at all times. 
+    Be concise — keep responses to 2–4 sentences unless detail is explicitly requested.
+    Try to come to a decision within a less than 4 iterations of thought or discussion with others.
+    Avoid preamble, restating what was said, overly verbose explanations, and padding.
+    Get to the point immediately.
+  `;
 }
