@@ -106,6 +106,30 @@ function renderAllSlots() {
   rafId = requestAnimationFrame(renderAllSlots);
 
   for (const slot of Object.values(slots)) {
+    // Resolve target viseme from audio-aligned speech state (same approach as avatar.js)
+    if (slot.speechCtx) {
+      const t = Math.max(0, slot.speechCtx.currentTime - slot.speechStartAt);
+      const withinAudio = t < (slot.speechDuration ?? 0);
+      if (slot.speechVisemes) {
+        // Real Rhubarb viseme data — find the cue at time t
+        const cue = slot.speechVisemes.find(v => t >= v.start && t < v.end);
+        if (cue) {
+          slot.targetViseme = cue.viseme;
+        } else if (withinAudio) {
+          // t is within audio but no cue matched — gap in Rhubarb data or timing
+          // drift; fall back to synthetic oscillation so lips keep moving
+          slot.targetViseme = Math.floor(t / 0.18) % 2 === 0 ? 'viseme_aa' : 'viseme_sil';
+        } else {
+          slot.targetViseme = 'viseme_sil';
+        }
+      } else {
+        // No viseme data — synthetic oscillation for entire audio duration
+        slot.targetViseme = withinAudio
+          ? (Math.floor(t / 0.18) % 2 === 0 ? 'viseme_aa' : 'viseme_sil')
+          : 'viseme_sil';
+      }
+    }
+
     // Lerp morph weights
     for (const key of Object.keys(slot.morphWeights)) {
       slot.morphWeights[key] *= (1 - BLEND);
@@ -135,6 +159,9 @@ function renderAllSlots() {
 function getAudioContext() {
   if (!audioCtx || audioCtx.state === 'closed') {
     audioCtx = new AudioContext();
+  }
+  if (audioCtx.state === 'suspended') {
+    audioCtx.resume().catch(() => {});
   }
   return audioCtx;
 }
@@ -169,33 +196,35 @@ async function playSpeechChunk(chunk, name) {
         source.connect(ctx.destination);
         currentSource = source;
 
-        // Drive lipsync: synthetic mouth-open oscillation (replaced by real visemes after start)
-        const visemes = chunk.visemes ?? [];
-        let flip = true;
-        let lipsyncInterval = setInterval(() => {
-          setSpeakingViseme(name, flip ? 'viseme_aa' : 'viseme_sil');
-          flip = !flip;
-        }, 160);
+        // Schedule start explicitly so lipsync base time is deterministic
+        const startAt = ctx.currentTime;
+        source.start(startAt);
 
-        const startTime = ctx.currentTime;
+        // Store speech state on the slot so renderAllSlots drives visemes via RAF
+        const visemes = chunk.visemes ?? [];
+        const audioDuration = decoded.duration;
+        // Shift viseme clock back by output latency so lips match what is *heard*
+        // rather than when audio is scheduled into the processing pipeline
+        const latency = (ctx.outputLatency ?? 0) + (ctx.baseLatency ?? 0);
+        console.log(`[Meeting Lipsync] ${name}: ${visemes.length} visemes, audio=${audioDuration.toFixed(2)}s, latency=${latency.toFixed(3)}s, slot=${!!slots[name]}, meshes=${slots[name]?.visemeMeshes?.length ?? 0}`);
+        if (slots[name]) {
+          slots[name].speechVisemes    = visemes.length > 0 ? visemes : null;
+          slots[name].speechStartAt    = startAt + latency;
+          slots[name].speechCtx        = ctx;
+          slots[name].speechDuration   = audioDuration;
+        }
+
         source.onended = () => {
-          clearInterval(lipsyncInterval);
+          if (slots[name]) {
+            slots[name].speechVisemes  = null;
+            slots[name].speechStartAt  = null;
+            slots[name].speechCtx     = null;
+            slots[name].speechDuration = null;
+          }
           setSpeakingViseme(name, 'viseme_sil');
           currentSource = null;
           resolve();
         };
-
-        if (visemes.length > 0) {
-          // Replace the interval with a closure over startTime
-          clearInterval(lipsyncInterval);
-          lipsyncInterval = setInterval(() => {
-            const t = ctx.currentTime - startTime;
-            const cue = visemes.find(v => t >= v.start && t < v.end);
-            setSpeakingViseme(name, cue ? cue.viseme : 'viseme_sil');
-          }, 16);
-        }
-
-        source.start();
       }, () => resolve()); // decode error — skip
     } catch { resolve(); }
   });
@@ -210,7 +239,10 @@ async function drainSpeechQueue() {
     if (!activeMeetingId) break;
 
     const { participant, content } = entry;
-    if (participant === 'human') { continue; } // no TTS for human
+    if (participant === 'human') { continue; }
+
+    // Show transcript entry now — just before audio starts (or immediately if speech off)
+    appendTranscriptTurn(participant, content);
 
     if (!speechEnabled) {
       continue; // skip audio but keep processing
@@ -274,7 +306,7 @@ function appendTranscriptTurn(participant, content) {
 
 window.meetingUI = {
 
-  async open(meetingId, topic, participants, facilitator, serverAvatars = {}, serverVoices = {}, serverSpeakers = {}) {
+  async open(meetingId, topic, participants, facilitator, serverAvatars = {}, serverVoices = {}, serverSpeakers = {}, serverBackgrounds = {}) {
     activeMeetingId = meetingId;
     agentVoiceMap   = serverVoices;
     agentSpeakerMap = serverSpeakers;
@@ -324,14 +356,26 @@ window.meetingUI = {
         icon.textContent = '🧑';
         slotEl.appendChild(icon);
       } else if (hasThree) {
+        // Frame div — holds background image and clips canvas to rounded corners
+        const frameEl = document.createElement('div');
+        frameEl.className = 'meeting-avatar-frame';
+        const bgFile = serverBackgrounds[name];
+        if (bgFile) {
+          frameEl.style.backgroundImage = `url('/backgrounds/${encodeURIComponent(bgFile)}')`;
+        }
+        slotEl.appendChild(frameEl);
+
         const canvas = document.createElement('canvas');
         canvas.className = 'meeting-avatar-canvas';
         canvas.width  = CANVAS_SIZE;
         canvas.height = CANVAS_SIZE;
-        slotEl.appendChild(canvas);
+        frameEl.appendChild(canvas);
 
         // Init Three.js slot
         const slot = createSlotRenderer(canvas);
+        slot.speechVisemes = null;
+        slot.speechStartAt = null;
+        slot.speechCtx     = null;
         slots[name] = slot;
 
         // Find avatar: server config → localStorage override → name match → hash fallback
@@ -349,7 +393,7 @@ window.meetingUI = {
         }
         if (av) loadSlotGLB(slot, av.file, av.camera, av.rotate);
       } else {
-        // Fallback: coloured initials circle when Three.js is unavailable
+        // Fallback: coloured initials box when Three.js is unavailable
         const icon = document.createElement('div');
         icon.className = 'meeting-avatar-human';
         icon.textContent = name.slice(0, 2).toUpperCase();
@@ -370,8 +414,11 @@ window.meetingUI = {
 
   addTurn(participant, content) {
     if (!activeMeetingId) return;
-    appendTranscriptTurn(participant, content);
-    if (participant !== 'human') {
+    if (participant === 'human') {
+      // Human turns show immediately (no audio to wait for)
+      appendTranscriptTurn(participant, content);
+    } else {
+      // Queue the turn — transcript entry is added just before audio plays
       speechQueue.push({ participant, content });
       drainSpeechQueue();
     }
