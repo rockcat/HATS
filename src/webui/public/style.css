@@ -2667,7 +2667,7 @@ body.has-expanded-panel main > section:not(.panel--expanded) {
   height: clamp(130px, 22vh, 200px);
   display: flex;
   justify-content: center;
-  align-items: center;
+  align-items: stretch;
   background: var(--bg);
   border-bottom: 1px solid var(--border);
   padding: 10px 16px;
@@ -2679,9 +2679,9 @@ body.has-expanded-panel main > section:not(.panel--expanded) {
   gap: 12px;
   justify-content: center;
   align-items: flex-end;
+  width: 100%;
   height: 100%;
-  overflow-x: auto;
-  overflow-y: hidden;
+  overflow: visible;
 }
 
 .meeting-avatar-slot {

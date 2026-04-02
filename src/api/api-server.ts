@@ -1289,6 +1289,14 @@ export class APIServer {
         this.json(res, 404, { error: 'No pending human turn' });
       }
 
+    } else if (pathname.startsWith('/api/meetings/') && pathname.endsWith('/human-interject') && req.method === 'POST') {
+      const meetingId = pathname.split('/')[3];
+      const body = await this.readBody(req);
+      const { content } = JSON.parse(body) as { content?: string };
+      if (!content?.trim()) { this.json(res, 400, { error: 'content is required' }); return; }
+      this.orchestrator.humanMeetingInterjection(meetingId, content.trim());
+      this.json(res, 200, { ok: true });
+
     } else if (pathname === '/api/project/files' && req.method === 'GET') {
       if (!this.projectDir) { this.json(res, 404, { error: 'No project loaded' }); return; }
       try {

@@ -415,13 +415,13 @@ window.meetingUI = {
   addTurn(participant, content) {
     if (!activeMeetingId) return;
     if (participant === 'human') {
-      // Human turns show immediately (no audio to wait for)
-      appendTranscriptTurn(participant, content);
-    } else {
-      // Queue the turn — transcript entry is added just before audio plays
-      speechQueue.push({ participant, content });
-      drainSpeechQueue();
+      // Human turns are shown immediately by submitHumanTurn; server echo is ignored
+      // to avoid double display.
+      return;
     }
+    // Queue the turn — transcript entry is added just before audio plays
+    speechQueue.push({ participant, content });
+    drainSpeechQueue();
   },
 
   requestHumanTurn(meetingId) {
@@ -489,19 +489,33 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!activeMeetingId) return;
     const inputEl = document.getElementById('meeting-input');
     const content = pass ? '' : (inputEl?.value.trim() ?? '');
+    if (!pass && !content) return; // nothing to send
     inputEl && (inputEl.value = '');
     document.getElementById('meeting-turn-label').hidden = true;
     document.getElementById('meeting-pass-btn').hidden = true;
 
+    const id = activeMeetingId;
+
+    // Show immediately in transcript (server echo is suppressed in addTurn)
     if (!pass && content) appendTranscriptTurn('human', content);
 
     try {
-      await fetch(`/api/meetings/${encodeURIComponent(activeMeetingId)}/human-turn`, {
+      // Try to fulfil a pending scheduled turn first
+      const res = await fetch(`/api/meetings/${encodeURIComponent(id)}/human-turn`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content }),
+        body: JSON.stringify({ content: pass ? '' : content }),
       });
-    } catch { /* ignore */ }
+      if (!pass && content && !res.ok) {
+        // Not the human's scheduled turn — inject as an interjection instead so
+        // agents hear it in their next prompt context
+        await fetch(`/api/meetings/${encodeURIComponent(id)}/human-interject`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content }),
+        }).catch(() => {});
+      }
+    } catch { /* ignore network errors */ }
   }
 
   document.getElementById('meeting-send-btn')?.addEventListener('click', () => submitHumanTurn(false));
