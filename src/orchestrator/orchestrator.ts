@@ -269,6 +269,12 @@ export class TeamOrchestrator {
     agent.setAvatar(avatar);
   }
 
+  updateAgentBackground(name: string, background: string | undefined): void {
+    const agent = this.findByName(name);
+    if (!agent) throw new Error(`Agent "${name}" not found`);
+    agent.setBackground(background);
+  }
+
   updateAgentVoice(name: string, voice: string | undefined, speakerName: string | undefined): void {
     const agent = this.findByName(name);
     if (!agent) throw new Error(`Agent "${name}" not found`);

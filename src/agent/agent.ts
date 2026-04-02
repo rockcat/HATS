@@ -105,6 +105,10 @@ export class Agent {
     this.config.identity.avatar = avatar;
   }
 
+  setBackground(background: string | undefined): void {
+    this.config.identity.background = background;
+  }
+
   setVoice(voice: string | undefined, speakerName: string | undefined): void {
     this.config.identity.voice = voice;
     this.config.identity.speakerName = speakerName;

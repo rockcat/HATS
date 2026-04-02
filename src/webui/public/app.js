@@ -94,16 +94,17 @@ let state = { agents: [], tickets: [] };
 // ── Agent config cache ────────────────────────────────────────────────────────
 // Tracks hat, voice, avatar per agent so dropdowns can show usage by others.
 
-const agentConfigs = new Map(); // name → { hatType, voice, avatar }
+const agentConfigs = new Map(); // name → { hatType, voice, avatar, background }
 
 function syncAgentConfigs() {
   const voiceOverrides  = getVoiceOverrides();
   const avatarOverrides = getAvatarOverrides();
   for (const agent of state.agents) {
     // Prefer server-side values; fall back to localStorage for backwards compat
-    const avatar = agent.avatar ?? avatarOverrides[agent.name] ?? null;
-    const voice  = agent.voice  ?? voiceOverrides[agent.name]  ?? null;
-    agentConfigs.set(agent.name, { hatType: agent.hatType, voice, avatar });
+    const avatar     = agent.avatar      ?? avatarOverrides[agent.name] ?? null;
+    const voice      = agent.voice       ?? voiceOverrides[agent.name]  ?? null;
+    const background = agent.background  ?? null;
+    agentConfigs.set(agent.name, { hatType: agent.hatType, voice, avatar, background });
     // Keep localStorage in sync so avatar.js / voice preview still work
     if (agent.avatar)      setAvatarOverride(agent.name, agent.avatar);
     if (agent.voice)       setVoiceOverride(agent.name, agent.voice);
@@ -149,6 +150,34 @@ async function getAvatars() {
     avatarList = [];
   }
   return avatarList;
+}
+
+// ── Background catalogue ───────────────────────────────────────────────────────
+
+let backgroundList = null; // cached filenames from /api/images/backgrounds
+
+async function getBackgrounds(forceRefresh = false) {
+  if (backgroundList && !forceRefresh) return backgroundList;
+  try {
+    const res = await fetch('/api/images/backgrounds');
+    const data = await res.json();
+    backgroundList = data.backgrounds || [];
+  } catch {
+    backgroundList = [];
+  }
+  return backgroundList;
+}
+
+function applyAvatarBackground(filename) {
+  const panel = document.getElementById('avatar-panel');
+  if (!panel) return;
+  if (filename) {
+    panel.style.backgroundImage = `url('/backgrounds/${encodeURIComponent(filename)}')`;
+    panel.style.backgroundSize  = 'cover';
+    panel.style.backgroundPosition = 'center';
+  } else {
+    panel.style.backgroundImage = '';
+  }
 }
 
 function findAvatarForAgent(name) {
@@ -1003,20 +1032,28 @@ async function playSpeechChunk(chunk) {
   currentSource = source;
 
   const startAt = audioCtx.currentTime;
-  source.start();
+  source.start(startAt); // explicit scheduled start for deterministic lipsync alignment
 
-  // Hand audio clock to the avatar for aligned lipsync
-  window.avatarAPI?.beginSpeech(chunk.visemes, () => audioCtx.currentTime - startAt);
+  // Shift viseme clock back by output latency so lips match what is *heard*
+  const latency = (audioCtx.outputLatency ?? 0) + (audioCtx.baseLatency ?? 0);
+
+  // Hand audio clock to the avatar for aligned lipsync; pass actual decoded duration
+  console.log(`[Lipsync] Agent: ${chunk.visemes?.length ?? 0} visemes, audio=${audioBuffer.duration.toFixed(2)}s, last viseme end=${chunk.visemes?.at(-1)?.end?.toFixed(2) ?? 'none'}s, latency=${latency.toFixed(3)}s`);
+  window.avatarAPI?.beginSpeech(chunk.visemes, () => audioCtx.currentTime - startAt - latency, audioBuffer.duration);
 
   return new Promise(resolve => {
-    source.onended = () => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      clearTimeout(safetyTimer);
       if (currentSource === source) currentSource = null;
       window.avatarAPI?.endSpeech();
       resolve();
     };
+    source.onended = finish;
     // Safety fallback — resolve after duration + buffer
-    setTimeout(() => { window.avatarAPI?.endSpeech(); resolve(); },
-      (chunk.duration + 1.5) * 1000);
+    const safetyTimer = setTimeout(finish, (chunk.duration + 1.5) * 1000);
   });
 }
 
@@ -1485,6 +1522,31 @@ function initAgentDetail() {
     });
   });
 
+  // Background select — live preview + persist
+  document.getElementById('agent-config-background').addEventListener('change', () => {
+    if (!activeDetailAgent) return;
+    const file = document.getElementById('agent-config-background').value;
+    const cfg = agentConfigs.get(activeDetailAgent);
+    if (cfg) { cfg.background = file || null; }
+    applyAvatarBackground(file || null);
+    fetch(`/api/agents/${encodeURIComponent(activeDetailAgent)}/background`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ background: file || null }),
+    }).catch(() => {});
+  });
+
+  // Generate Background button
+  document.getElementById('agent-config-gen-bg').addEventListener('click', () => {
+    const modal = document.getElementById('gen-bg-modal');
+    document.getElementById('gen-bg-prompt').value = '';
+    document.getElementById('gen-bg-error').textContent = '';
+    document.getElementById('gen-bg-preview').hidden = true;
+    document.getElementById('gen-bg-spinner').hidden = true;
+    document.getElementById('gen-bg-submit').disabled = false;
+    modal.hidden = false;
+    document.getElementById('gen-bg-prompt').focus();
+  });
+
   // Voice select — persist and re-register speech interest
   document.getElementById('agent-config-voice').addEventListener('change', () => {
     if (!activeDetailAgent) return;
@@ -1741,6 +1803,12 @@ function openAgentDetail(name) {
     }
   });
 
+  // Populate background select and apply current background
+  const currentBg = agentConfigs.get(name)?.background ?? null;
+  populateBackgroundSelect(currentBg).then(() => {
+    applyAvatarBackground(currentBg);
+  });
+
   fetch(`/api/agents/${encodeURIComponent(name)}/feed`)
     .then(r => r.json())
     .then(events => {
@@ -1760,6 +1828,7 @@ function closeAgentDetail() {
   setSpeechAgent(null);
   activeDetailAgent = null;
   document.getElementById('agent-detail').hidden = true;
+  applyAvatarBackground(null);
   if (window.avatarAPI) window.avatarAPI.hide();
 }
 
@@ -2937,6 +3006,7 @@ initPanelExpand();
 initTelemetry();
 initFileUpload();
 initFileViewer();
+initGenBgModal();
 connect();
 
 // ── Panel expand / restore ────────────────────────────────────────────────────
@@ -3136,6 +3206,81 @@ function initFileViewer() {
   document.getElementById('file-viewer-modal').addEventListener('click', e => {
     if (e.target === e.currentTarget) document.getElementById('file-viewer-modal').hidden = true;
   });
+}
+
+function initGenBgModal() {
+  const modal     = document.getElementById('gen-bg-modal');
+  const closeBtn  = document.getElementById('gen-bg-close');
+  const cancelBtn = document.getElementById('gen-bg-cancel');
+  const submitBtn = document.getElementById('gen-bg-submit');
+  const spinner   = document.getElementById('gen-bg-spinner');
+  const preview   = document.getElementById('gen-bg-preview');
+  const errorEl   = document.getElementById('gen-bg-error');
+
+  const close = () => { modal.hidden = true; };
+  closeBtn.addEventListener('click', close);
+  cancelBtn.addEventListener('click', close);
+  modal.addEventListener('click', e => { if (e.target === modal) close(); });
+
+  document.getElementById('gen-bg-prompt').addEventListener('keydown', e => {
+    if (e.key === 'Enter') submitBtn.click();
+  });
+
+  submitBtn.addEventListener('click', async () => {
+    const prompt = document.getElementById('gen-bg-prompt').value.trim();
+    if (!prompt) { errorEl.textContent = 'Please enter a scene description.'; return; }
+    errorEl.textContent = '';
+    submitBtn.disabled = true;
+    preview.hidden = true;
+    spinner.hidden = false;
+
+    try {
+      const res  = await fetch('/api/images/generate', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) { errorEl.textContent = data.error ?? 'Generation failed'; return; }
+
+      // Show preview
+      const img = document.getElementById('gen-bg-img');
+      img.src = `/backgrounds/${encodeURIComponent(data.filename)}`;
+      preview.hidden = false;
+
+      // Refresh background list and select the new file for the active agent
+      await getBackgrounds(true);
+      populateBackgroundSelect(data.filename);
+      applyAvatarBackground(data.filename);
+      if (activeDetailAgent) {
+        const cfg = agentConfigs.get(activeDetailAgent);
+        if (cfg) cfg.background = data.filename;
+        fetch(`/api/agents/${encodeURIComponent(activeDetailAgent)}/background`, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ background: data.filename }),
+        }).catch(() => {});
+      }
+      close();
+    } catch (err) {
+      errorEl.textContent = err.message || 'Generation failed';
+    } finally {
+      spinner.hidden = true;
+      submitBtn.disabled = false;
+    }
+  });
+}
+
+async function populateBackgroundSelect(selectedFile) {
+  const sel = document.getElementById('agent-config-background');
+  if (!sel) return;
+  const backgrounds = await getBackgrounds();
+  sel.innerHTML = '<option value="">(no background)</option>';
+  for (const f of backgrounds) {
+    const opt = document.createElement('option');
+    opt.value = f;
+    opt.textContent = f.replace(/^bg-\d+\./, 'bg.').replace(/\.\w+$/, '');  // tidy display name
+    sel.appendChild(opt);
+  }
+  if (selectedFile) sel.value = selectedFile;
 }
 
 function openFileViewer(name, relativePath) {

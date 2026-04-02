@@ -23,6 +23,7 @@ export interface AgentIdentity {
   specialisation?: string;  // shown in team roster, e.g. "financial analysis"
   backstory?: string;
   avatar?: string;          // avatar file name, e.g. "morgan.glb"
+  background?: string;      // background image filename, e.g. "bg-office.png"
   voice?: string;           // TTS voice name
   speakerName?: string;     // TTS speaker name (for multi-speaker voices)
 }

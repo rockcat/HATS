@@ -37,7 +37,8 @@ const MIME: Record<string, string> = {
   '.json': 'application/json',
 };
 
-const AVATARS_DIR = path.join(process.cwd(), 'avatars');
+const AVATARS_DIR     = path.join(process.cwd(), 'avatars');
+const BACKGROUNDS_DIR = path.join(process.cwd(), 'avatars', 'backgrounds');
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -498,6 +499,7 @@ export class APIServer {
         visualDescription: a.config.identity.visualDescription,
         backstory:        a.config.identity.backstory,
         avatar:           a.config.identity.avatar,
+        background:       a.config.identity.background,
         voice:            a.config.identity.voice,
         speakerName:      a.config.identity.speakerName,
       };
@@ -920,6 +922,64 @@ export class APIServer {
         this.json(res, 400, { error: (err as Error).message });
       }
 
+    } else if (pathname.match(/^\/api\/agents\/[^/]+\/background$/) && req.method === 'PATCH') {
+      const agentName = decodeURIComponent(pathname.slice('/api/agents/'.length, -'/background'.length));
+      const body = await this.readBody(req);
+      const { background } = JSON.parse(body) as { background?: string };
+      try {
+        const resolved = this.resolveAgentName(agentName);
+        this.orchestrator.updateAgentBackground(resolved, background?.trim() || undefined);
+        this.sseBroadcast({ type: 'agent_update', agents: this.buildAgentStatuses() });
+        this.saveCurrentState().catch(() => {});
+        this.json(res, 200, { ok: true });
+      } catch (err) {
+        this.json(res, 400, { error: (err as Error).message });
+      }
+
+    } else if (pathname === '/api/images/backgrounds' && req.method === 'GET') {
+      try {
+        await mkdir(BACKGROUNDS_DIR, { recursive: true });
+        const files = await readdir(BACKGROUNDS_DIR);
+        const images = files.filter(f => /\.(png|jpg|jpeg|webp)$/i.test(f)).sort();
+        this.json(res, 200, { backgrounds: images });
+      } catch {
+        this.json(res, 200, { backgrounds: [] });
+      }
+
+    } else if (pathname === '/api/images/generate' && req.method === 'POST') {
+      const apiKey = process.env['OPENAI_API_KEY'];
+      if (!apiKey) { this.json(res, 400, { error: 'OPENAI_API_KEY not configured' }); return; }
+      const body = await this.readBody(req);
+      const { prompt } = JSON.parse(body) as { prompt?: string };
+      if (!prompt?.trim()) { this.json(res, 400, { error: 'prompt is required' }); return; }
+      try {
+        // Call DALL-E 3 via the OpenAI REST API using built-in fetch
+        const response = await fetch('https://api.openai.com/v1/images/generations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+          body: JSON.stringify({
+            model: 'dall-e-3',
+            prompt: prompt.trim(),
+            n: 1,
+            size: '1792x1024',
+            response_format: 'b64_json',
+          }),
+        });
+        if (!response.ok) {
+          const err = await response.text();
+          this.json(res, 502, { error: `OpenAI error: ${err}` }); return;
+        }
+        const data = await response.json() as { data: Array<{ b64_json: string }> };
+        const b64 = data.data[0]?.b64_json;
+        if (!b64) { this.json(res, 502, { error: 'No image data returned' }); return; }
+        await mkdir(BACKGROUNDS_DIR, { recursive: true });
+        const filename = `bg-${Date.now()}.png`;
+        await writeFile(path.join(BACKGROUNDS_DIR, filename), Buffer.from(b64, 'base64'));
+        this.json(res, 200, { filename });
+      } catch (err) {
+        this.json(res, 500, { error: (err as Error).message });
+      }
+
     } else if (pathname.match(/^\/api\/agents\/[^/]+\/hat$/) && req.method === 'PATCH') {
       const agentName = decodeURIComponent(pathname.slice('/api/agents/'.length, -'/hat'.length));
       const body = await this.readBody(req);
@@ -1314,6 +1374,21 @@ export class APIServer {
       fs.readFile(filePath, (err, data) => {
         if (err) { res.writeHead(404); res.end('Not found'); return; }
         const ct = MIME[path.extname(filePath)] ?? 'application/octet-stream';
+        res.writeHead(200, { 'Content-Type': ct });
+        res.end(data);
+      });
+
+    // ── Static: generated background images ──────────────────────────────────
+
+    } else if (pathname.startsWith('/backgrounds/')) {
+      const rel      = pathname.slice('/backgrounds/'.length);
+      const filePath = path.join(BACKGROUNDS_DIR, rel);
+      if (!filePath.startsWith(BACKGROUNDS_DIR)) {
+        res.writeHead(403); res.end('Forbidden'); return;
+      }
+      fs.readFile(filePath, (err, data) => {
+        if (err) { res.writeHead(404); res.end('Not found'); return; }
+        const ct = MIME[path.extname(filePath)] ?? 'image/png';
         res.writeHead(200, { 'Content-Type': ct });
         res.end(data);
       });

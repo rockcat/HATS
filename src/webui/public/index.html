@@ -208,6 +208,11 @@
         <select id="agent-config-avatar" class="agent-config-select agent-config-avatar-select" title="Avatar"></select>
       </div>
       <div class="agent-config-line">
+        <label class="agent-config-label">Background</label>
+        <select id="agent-config-background" class="agent-config-select agent-config-background-select" title="Background"></select>
+        <button id="agent-config-gen-bg" class="agent-config-btn" title="Generate a new background with DALL-E 3">Generate…</button>
+      </div>
+      <div class="agent-config-line">
         <label class="agent-config-label">Voice</label>
         <select id="agent-config-voice"  class="agent-config-select agent-config-voice-select"  title="Voice"></select>
         <select id="agent-config-speaker" class="agent-config-select agent-config-speaker-select" title="Speaker" hidden></select>
@@ -443,6 +448,32 @@
       <div class="project-switching-spinner"></div>
       <div class="project-switching-label">Switching project…</div>
       <div id="project-switching-name" class="project-switching-name"></div>
+    </div>
+  </div>
+
+  <!-- Generate Background Modal -->
+  <div id="gen-bg-modal" class="modal-overlay" hidden>
+    <div class="modal gen-bg-modal-box" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <span class="modal-ticket-id">Generate Background</span>
+        <button class="modal-close" id="gen-bg-close" title="Close">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="field-group">
+          <label class="field-label">Scene description</label>
+          <input type="text" id="gen-bg-prompt" class="modal-input"
+                 placeholder="e.g. modern open-plan office, blurred bokeh, warm lighting">
+        </div>
+        <div id="gen-bg-preview" class="gen-bg-preview" hidden>
+          <img id="gen-bg-img" class="gen-bg-img" src="" alt="Generated background">
+        </div>
+        <div id="gen-bg-spinner" class="gen-bg-spinner" hidden>Generating…</div>
+      </div>
+      <div class="modal-footer">
+        <span id="gen-bg-error" class="modal-error"></span>
+        <button class="modal-btn secondary" id="gen-bg-cancel">Cancel</button>
+        <button class="modal-btn primary" id="gen-bg-submit">Generate</button>
+      </div>
     </div>
   </div>
 
