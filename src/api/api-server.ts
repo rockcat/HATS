@@ -208,6 +208,9 @@ export class APIServer {
       this.launchDueMeetings().catch(() => {});
     }, 60_000);
 
+    // Assign avatars/backgrounds to agents that don't have them yet
+    if (this.projectDir) this.assignDefaultVisuals().catch(() => {});
+
     // Dispatch any in_progress kanban tickets that have no active orchestrator task
     if (this.kanbanPath) this.dispatchUnstartedTickets().catch(() => {});
 
@@ -1812,6 +1815,66 @@ export class APIServer {
     await this.orchestrator.saveState(stateFile);
   }
 
+  /** Assign a random avatar and/or background to any agent that is missing one. */
+  private async assignDefaultVisuals(): Promise<void> {
+    // Load avatar catalogue
+    let avatarFiles: string[] = [];
+    try {
+      const raw = await readFile(path.join(AVATARS_DIR, 'avatars.json'), 'utf-8');
+      const catalogue = JSON.parse(raw).avatars ?? [];
+      avatarFiles = catalogue.map((a: { file: string }) => a.file);
+    } catch { /* no avatars — skip */ }
+
+    // Load background filenames
+    let backgroundFiles: string[] = [];
+    try {
+      await mkdir(BACKGROUNDS_DIR, { recursive: true });
+      const entries = await readdir(BACKGROUNDS_DIR);
+      backgroundFiles = entries.filter(f => /\.(png|jpg|jpeg|webp)$/i.test(f));
+    } catch { /* no backgrounds — skip */ }
+
+    if (avatarFiles.length === 0 && backgroundFiles.length === 0) return;
+
+    const agents = this.orchestrator.listAgents();
+    let changed = false;
+
+    // Build sets of already-assigned values so we spread them out
+    const usedAvatars = new Set<string>(
+      agents.map(a => a.config.identity.avatar).filter((v): v is string => !!v),
+    );
+    const usedBgs = new Set<string>(
+      agents.map(a => a.config.identity.background).filter((v): v is string => !!v),
+    );
+
+    // Helper: prefer unused values; if all used, allow repeats
+    const nextFrom = (pool: string[], used: Set<string>): string => {
+      const unused = pool.filter(x => !used.has(x));
+      return unused.length > 0
+        ? unused[Math.floor(Math.random() * unused.length)]
+        : pool[Math.floor(Math.random() * pool.length)];
+    };
+
+    for (const agent of agents) {
+      if (!agent.config.identity.avatar && avatarFiles.length > 0) {
+        const file = nextFrom(avatarFiles, usedAvatars);
+        this.orchestrator.updateAgentAvatar(agent.name, file);
+        usedAvatars.add(file);
+        changed = true;
+      }
+      if (!agent.config.identity.background && backgroundFiles.length > 0) {
+        const file = nextFrom(backgroundFiles, usedBgs);
+        this.orchestrator.updateAgentBackground(agent.name, file);
+        usedBgs.add(file);
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      console.log('[API] Assigned default avatars/backgrounds to agents');
+      await this.saveCurrentState().catch(() => {});
+    }
+  }
+
   /** Graceful shutdown — saves current project state then stops the server. */
   async shutdown(): Promise<void> {
     this.stop();
@@ -1901,6 +1964,9 @@ export class APIServer {
 
     this.watchKanban(newKanbanFile);
     await this.loadMCPEnabled().catch(() => {});
+
+    // Assign avatars/backgrounds to any agents that don't have them
+    await this.assignDefaultVisuals().catch(() => {});
 
     // 6. Push a full init event to all connected browser tabs
     const agents  = this.buildAgentStatuses();
