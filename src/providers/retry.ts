@@ -1,4 +1,5 @@
 import { ProviderError } from './types.js';
+import { log } from '../util/logger.js';
 
 /**
  * Retry an async operation on rate-limit (429) errors with exponential backoff.
@@ -16,7 +17,7 @@ export async function withRetry<T>(
       if (err instanceof ProviderError && err.statusCode === 429 && attempt < maxRetries) {
         const jitter = Math.random() * 1000;
         const delay = baseDelayMs * Math.pow(2, attempt) + jitter;
-        console.warn(`[Rate limit] waiting ${Math.round(delay / 1000)}s before retry ${attempt + 1}/${maxRetries}...`);
+        log.warn(`[Rate limit] waiting ${Math.round(delay / 1000)}s before retry ${attempt + 1}/${maxRetries}...`);
         await sleep(delay);
         continue;
       }

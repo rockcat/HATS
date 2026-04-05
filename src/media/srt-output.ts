@@ -1,6 +1,7 @@
 import ffmpeg from 'fluent-ffmpeg';
 import { PassThrough } from 'stream';
 import { MediaOutput } from './types.js';
+import { log } from '../util/logger.js';
 
 export interface SRTOutputConfig {
   port?: number;           // default 9000
@@ -54,12 +55,12 @@ export class SRTOutput implements MediaOutput {
       ])
       .output(`srt://0.0.0.0:${port}?mode=listener&transtype=live&latency=${latency}`)
       .on('start', (cmd: string) => {
-        console.log(`[SRT] Listening on srt://localhost:${port}`);
-        console.log(`[SRT] OBS: add Media Source with URL srt://localhost:${port}`);
+        log.info(`[SRT] Listening on srt://localhost:${port}`);
+        log.info(`[SRT] OBS: add Media Source with URL srt://localhost:${port}`);
       })
       .on('error', (err: Error) => {
         if (!err.message.includes('End of file')) {
-          console.error('[SRT] FFmpeg error:', err.message);
+          log.error('[SRT] FFmpeg error:', err.message);
         }
       });
 

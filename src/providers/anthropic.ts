@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
+import { log } from '../util/logger.js';
 import {
   AIProvider, CompletionRequest, CompletionResponse, ProviderError,
   Message, ToolCall,
@@ -22,15 +23,15 @@ export class AnthropicProvider implements AIProvider {
     if (debugState.logPrompts) {
       const label = req.agentName ? `[${req.agentName}]` : '[agent]';
       const bar   = '═'.repeat(60);
-      console.log(`\n${bar}`);
-      console.log(`${label} model=${req.model}  msgs=${req.messages.length}  tools=${req.tools?.length ?? 0}`);
-      console.log(`SYSTEM: ${req.systemPrompt.slice(0, 400)}${req.systemPrompt.length > 400 ? '…' : ''}`);
+      log.info(`\n${bar}`);
+      log.info(`${label} model=${req.model}  msgs=${req.messages.length}  tools=${req.tools?.length ?? 0}`);
+      log.info(`SYSTEM: ${req.systemPrompt.slice(0, 400)}${req.systemPrompt.length > 400 ? '…' : ''}`);
       for (const m of req.messages) {
         const body = String(m.content ?? '').replace(/\s+/g, ' ').slice(0, 300);
         const tc   = m.toolCalls ? ` [${m.toolCalls.map(c => c.name).join(',')}]` : '';
-        console.log(`  ${m.role.padEnd(9)} ${body}${tc}`);
+        log.info(`  ${m.role.padEnd(9)} ${body}${tc}`);
       }
-      console.log(bar);
+      log.info(bar);
     }
 
     try {

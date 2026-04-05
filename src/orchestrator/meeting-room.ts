@@ -2,6 +2,7 @@ import { Meeting, MeetingTurn } from './types.js';
 import { Agent } from '../agent/agent.js';
 import { EventStore } from '../store/event-store.js';
 import { renderMarkdown } from '../human/markdown.js';
+import { log } from '../util/logger.js';
 
 const MAX_ROUNDS = 6;
 
@@ -116,7 +117,7 @@ export class MeetingRoom {
       content,
     });
 
-    console.log(`\n\x1b[1m[${this.meeting.topic}] ${participant}\x1b[0m\n${renderMarkdown(content)}`);
+    log.info(`\n\x1b[1m[${this.meeting.topic}] ${participant}\x1b[0m\n${renderMarkdown(content)}`);
   }
 }
 

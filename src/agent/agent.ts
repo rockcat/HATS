@@ -1,4 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
+import { log } from '../util/logger.js';
 import { HatType } from '../hats/types.js';
 import { getHatDefinition } from '../hats/definitions.js';
 import { generateSystemPrompt } from '../prompt/generator.js';
@@ -121,7 +122,7 @@ export class Agent {
     this.inbox.push(message);
     // Fire-and-forget — errors surface via console
     this.processInbox().catch((err) => {
-      console.error(`[${this.name}] inbox processing error:`, err);
+      log.error(`[${this.name}] inbox processing error:`, err);
     });
   }
 

@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { readFile, writeFile, rename, readdir, mkdir } from 'fs/promises';
 import * as path from 'path';
 import { renderMarkdown } from '../human/markdown.js';
+import { log } from '../util/logger.js';
 import { Agent } from '../agent/agent.js';
 import { AgentConfig, AgentMessage } from '../agent/types.js';
 import { HatType } from '../hats/types.js';
@@ -135,7 +136,7 @@ export class TeamOrchestrator {
     await writeFile(tmp, JSON.stringify(snapshot, null, 2), 'utf-8');
     await rename(tmp, path);
     await this.store.append('state_saved', { path, agentCount: agentSnapshots.length });
-    console.log(`\n[Team] State saved to ${path}`);
+    log.info(`\n[Team] State saved to ${path}`);
   }
 
   /**
@@ -185,7 +186,7 @@ export class TeamOrchestrator {
     }
 
     await this.store.append('state_loaded', { path, agentCount: snapshot.agents.length });
-    console.log(`[Team] State restored from ${path} (saved ${snapshot.savedAt})`);
+    log.info(`[Team] State restored from ${path} (saved ${snapshot.savedAt})`);
 
     return snapshot.mcpServers;
   }
@@ -689,7 +690,7 @@ export class TeamOrchestrator {
 
       // Route reply: if message came from human, surface it
       if (incomingMessage.from === 'human') {
-        console.log(`\n\x1b[1m${agentName}\x1b[0m\n${renderMarkdown(response)}`);
+        log.info(`\n\x1b[1m${agentName}\x1b[0m\n${renderMarkdown(response)}`);
       } else if (incomingMessage.from !== agentName) {
         // Route reply back to sender
         const replyMsg = this.buildMessage(agentName, incomingMessage.from, 'direct', response);
@@ -745,8 +746,8 @@ export class TeamOrchestrator {
       agenda,
     });
 
-    console.log(`\n━━━ MEETING: ${topic} ━━━`);
-    console.log(`Participants: ${[facilitatorName, ...participants].join(', ')}\n`);
+    log.info(`\n━━━ MEETING: ${topic} ━━━`);
+    log.info(`Participants: ${[facilitatorName, ...participants].join(', ')}\n`);
 
 
     // MeetingRoom looks up agents by name — build a name-keyed view of the agents map
@@ -770,7 +771,7 @@ export class TeamOrchestrator {
     room.run().then(() => {
       this.activeMeetingRooms.delete(meetingId);
     }).catch((err) => {
-      console.error(`[Meeting ${meetingId}] error:`, err);
+      log.error(`[Meeting ${meetingId}] error:`, err);
       this.activeMeetingRooms.delete(meetingId);
     });
   }
@@ -807,7 +808,7 @@ export class TeamOrchestrator {
     if (agent) {
       agent.receive(message);
     } else {
-      console.warn(`[Orchestrator] No agent "${name}" to deliver message to`);
+      log.warn(`[Orchestrator] No agent "${name}" to deliver message to`);
     }
   }
 

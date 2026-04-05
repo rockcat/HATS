@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import { log } from '../util/logger.js';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import type { FaceBounds } from './types.js';
@@ -38,7 +39,7 @@ export async function generateHeadTexture(config: TextureGeneratorConfig): Promi
 
   await fs.mkdir(path.dirname(config.outputPath), { recursive: true });
   await fs.writeFile(config.outputPath, buffer);
-  console.log(`Texture saved: ${config.outputPath}`);
+  log.info(`Texture saved: ${config.outputPath}`);
   return config.outputPath;
 }
 
@@ -82,6 +83,6 @@ export async function detectFaceBounds(imagePath: string, apiKey?: string): Prom
   const match = text.match(/\{[\s\S]*\}/);
   if (!match) throw new Error(`GPT-4o did not return JSON: ${text}`);
   const bounds = JSON.parse(match[0]) as FaceBounds;
-  console.log(`Face bounds detected: top=${bounds.top.toFixed(3)} bottom=${bounds.bottom.toFixed(3)} left=${bounds.left.toFixed(3)} right=${bounds.right.toFixed(3)}`);
+  log.info(`Face bounds detected: top=${bounds.top.toFixed(3)} bottom=${bounds.bottom.toFixed(3)} left=${bounds.left.toFixed(3)} right=${bounds.right.toFixed(3)}`);
   return bounds;
 }

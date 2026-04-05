@@ -1124,16 +1124,14 @@ function connect() {
     } else if (msg.type === 'files_update') {
       renderFilesList(msg.sources, msg.outputs);
     } else if (msg.type === 'meeting_started') {
-      if (msg.hasHuman) {
-        const avatarMap = {}, voiceMap = {}, speakerMap = {}, backgroundMap = {};
-        for (const a of state.agents) {
-          if (a.avatar)      avatarMap[a.name]      = a.avatar;
-          if (a.voice)       voiceMap[a.name]       = a.voice;
-          if (a.speakerName) speakerMap[a.name]     = a.speakerName;
-          if (a.background)  backgroundMap[a.name]  = a.background;
-        }
-        window.meetingUI?.open(msg.meetingId, msg.topic, msg.participants ?? [], msg.facilitator ?? '', avatarMap, voiceMap, speakerMap, backgroundMap);
+      const avatarMap = {}, voiceMap = {}, speakerMap = {}, backgroundMap = {};
+      for (const a of state.agents) {
+        if (a.avatar)      avatarMap[a.name]      = a.avatar;
+        if (a.voice)       voiceMap[a.name]       = a.voice;
+        if (a.speakerName) speakerMap[a.name]     = a.speakerName;
+        if (a.background)  backgroundMap[a.name]  = a.background;
       }
+      window.meetingUI?.open(msg.meetingId, msg.topic, msg.participants ?? [], msg.facilitator ?? '', avatarMap, voiceMap, speakerMap, backgroundMap);
     } else if (msg.type === 'meeting_turn') {
       window.meetingUI?.addTurn(msg.participant, msg.content);
     } else if (msg.type === 'meeting_human_turn') {

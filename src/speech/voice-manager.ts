@@ -14,6 +14,7 @@
 import { spawn, ChildProcess } from 'child_process';
 import { readdir, readFile } from 'fs/promises';
 import * as path from 'path';
+import { log } from '../util/logger.js';
 
 export interface PiperSpeaker {
   name: string;   // human-readable key from speaker_id_map, e.g. "p239" or "03"
@@ -50,12 +51,12 @@ export class VoiceManager {
         .filter(f => f.endsWith('.onnx') && !f.endsWith('.onnx.json'))
         .sort();
     } catch (err) {
-      console.warn(`[VoiceManager] Cannot read voices dir "${voicesDir}":`, (err as Error).message);
+      log.warn(`[VoiceManager] Cannot read voices dir "${voicesDir}":`, (err as Error).message);
       return;
     }
 
     if (files.length === 0) {
-      console.warn(`[VoiceManager] No .onnx files found in "${voicesDir}"`);
+      log.warn(`[VoiceManager] No .onnx files found in "${voicesDir}"`);
       return;
     }
 
@@ -70,8 +71,8 @@ export class VoiceManager {
 
       const { speakerId, speakers } = await this.resolveSpeakers(modelPath);
       if (speakers.length > 0)
-        console.log(`[VoiceManager] "${name}" is multi-speaker (${speakers.length} speakers) — default: "${speakerId}"`);
-      console.log(`[VoiceManager] Starting "${name}" on port ${port}`);
+        log.info(`[VoiceManager] "${name}" is multi-speaker (${speakers.length} speakers) — default: "${speakerId}"`);
+      log.info(`[VoiceManager] Starting "${name}" on port ${port}`);
 
       const proc = spawn(
         python,
@@ -83,7 +84,7 @@ export class VoiceManager {
       proc.stderr?.on('data', (d: Buffer) => process.stderr.write(`[Piper:${name}] ${d}`));
       proc.on('exit', (code) => {
         if (code !== null && code !== 0)
-          console.warn(`[VoiceManager] "${name}" exited ${code}`);
+          log.warn(`[VoiceManager] "${name}" exited ${code}`);
         this.procs.delete(name);
         this.voices = this.voices.filter(v => v.name !== name);
       });
@@ -94,12 +95,12 @@ export class VoiceManager {
     }
 
     await Promise.all(readyPromises);
-    console.log(`[VoiceManager] ${this.voices.length} voice(s) ready`);
+    log.info(`[VoiceManager] ${this.voices.length} voice(s) ready`);
   }
 
   stop(): void {
     for (const [name, proc] of this.procs) {
-      console.log(`[VoiceManager] Stopping "${name}"`);
+      log.info(`[VoiceManager] Stopping "${name}"`);
       proc.kill();
     }
     this.procs.clear();
@@ -120,7 +121,7 @@ export class VoiceManager {
     if (v) return v;
     const fallback = this.getDefaultVoice();
     if (fallback)
-      console.warn(`[VoiceManager] Voice "${preferred}" not available — falling back to "${fallback.name}"`);
+      log.warn(`[VoiceManager] Voice "${preferred}" not available — falling back to "${fallback.name}"`);
     return fallback;
   }
 
@@ -149,13 +150,13 @@ export class VoiceManager {
           body: JSON.stringify(body),
           signal: AbortSignal.timeout(2000),
         });
-        console.log(`[VoiceManager] "${name}" ready`);
+        log.info(`[VoiceManager] "${name}" ready`);
         return;
       } catch {
         await new Promise(r => setTimeout(r, 500));
       }
     }
-    console.warn(`[VoiceManager] "${name}" did not respond within ${READY_TIMEOUT_MS}ms`);
+    log.warn(`[VoiceManager] "${name}" did not respond within ${READY_TIMEOUT_MS}ms`);
   }
 
   /** Read the .onnx.json config and return all speakers (empty = single-speaker model). */

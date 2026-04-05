@@ -1,5 +1,6 @@
 import ffmpeg from 'fluent-ffmpeg';
 import { PassThrough } from 'stream';
+import { log } from '../util/logger.js';
 
 export interface OBSOutputConfig {
   width: number;
@@ -42,7 +43,7 @@ export class OBSOutput {
       .on('error', (err: Error) => {
         // Only log unexpected errors — stream end is normal
         if (!err.message.includes('pipe:0: End of file')) {
-          console.error('[OBSOutput] FFmpeg error:', err.message);
+          log.error('[OBSOutput] FFmpeg error:', err.message);
         }
       });
 

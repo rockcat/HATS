@@ -5,6 +5,7 @@ import {
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { KanbanStore } from './store.js';
+import { log } from '../../util/logger.js';
 import { Column, Priority } from './types.js';
 
 const COLUMNS: Column[] = ['backlog', 'ready', 'in_progress', 'blocked', 'completed'];
@@ -264,4 +265,4 @@ async function handleTool(name: string, args: Record<string, unknown>, store: Ka
 
 // Entry point when run as a subprocess by the MCP client
 const _boardPath = process.env['KANBAN_BOARD_PATH'] ?? process.argv[2] ?? 'kanban-board.json';
-startKanbanServer(_boardPath).catch(console.error);
+startKanbanServer(_boardPath).catch(e => log.error(e));

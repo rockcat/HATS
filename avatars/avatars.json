@@ -32,15 +32,15 @@
             "name": "Clare",
             "sex": "female",
             "file": "clare.glb",
-            "camera": [0, 1.6, 0.5],
-            "rotate": [0, 90, 0]
+            "camera": [0, 1.6, 2.5],
+            "rotate": [0, 90, 90]
         },
         {
             "name": "Dave",
             "sex": "male",
             "file": "dave.glb",
-            "camera": [0, 1.8, 0.5],
-            "rotate": [0, 90, 0]
+            "camera": [0, 1.8, 2.5],
+            "rotate": [0, 90, 90]
         },
         {
             "name": "Will",

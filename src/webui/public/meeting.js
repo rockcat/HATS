@@ -314,7 +314,8 @@ window.meetingUI = {
     // Reset UI
     document.getElementById('meeting-title').textContent = `Meeting: ${topic}`;
     document.getElementById('meeting-transcript').innerHTML = '';
-    document.getElementById('meeting-human-input').hidden = false;
+    const hasHuman = participants.includes('human');
+    document.getElementById('meeting-human-input').hidden = !hasHuman;
     document.getElementById('meeting-turn-label').hidden = true;
     document.getElementById('meeting-pass-btn').hidden = true;
     document.getElementById('meeting-avatars').innerHTML = '';
@@ -353,7 +354,10 @@ window.meetingUI = {
       if (name === 'human') {
         const icon = document.createElement('div');
         icon.className = 'meeting-avatar-human';
-        icon.textContent = '🧑';
+        icon.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="50%" height="50%" aria-hidden="true">
+          <circle cx="50" cy="36" r="22" fill="currentColor" opacity="0.7"/>
+          <ellipse cx="50" cy="95" rx="36" ry="26" fill="currentColor" opacity="0.7"/>
+        </svg>`;
         slotEl.appendChild(icon);
       } else if (hasThree) {
         // Frame div — holds background image and clips canvas to rounded corners

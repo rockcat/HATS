@@ -21,6 +21,7 @@ import { processSpeech, isSpeechAvailable } from '../speech/pipeline.js';
 import { VoiceManager } from '../speech/voice-manager.js';
 import { SPECIALISATION_DIRECTIVES } from '../prompt/generator.js';
 import { TelemetryStore } from '../store/telemetry-store.js';
+import { log } from '../util/logger.js';
 
 const __dirname  = path.dirname(fileURLToPath(import.meta.url));
 // Static files live in src/webui/public/ — one level up from src/api/
@@ -143,7 +144,7 @@ export class APIServer {
 
     this.server = createServer((req, res) => {
       this.handleRequest(req, res).catch((err) => {
-        console.error('[API] Request error:', err);
+        log.error('[API] Request error:', err);
         if (!res.headersSent) {
           res.writeHead(500, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: (err as Error).message ?? 'Internal error' }));
@@ -162,7 +163,7 @@ export class APIServer {
   async start(): Promise<void> {
     // Start Piper voice servers (async — voices ready before any agent responds)
     this.voiceManager.start().catch((err: Error) =>
-      console.warn('[API] VoiceManager start error:', err.message),
+      log.warn('[API] VoiceManager start error:', err.message),
     );
 
     // Ensure project folder structure exists
@@ -223,15 +224,15 @@ export class APIServer {
     if (this.kanbanPath) this.watchKanban(this.kanbanPath);
 
     this.server.listen(this.port, () => {
-      console.log(`[API] UI    http://localhost:${this.port}`);
-      console.log(`[API] REST  http://localhost:${this.port}/api`);
-      console.log(`[API] WS    ws://localhost:${this.port}/ws`);
+      log.info(`[API] UI    http://localhost:${this.port}`);
+      log.info(`[API] REST  http://localhost:${this.port}/api`);
+      log.info(`[API] WS    ws://localhost:${this.port}/ws`);
       if (isSpeechAvailable() || this.voiceManager.getVoices().length > 0) {
         const voices = this.voiceManager.getVoices();
         if (voices.length > 0) {
-          console.log(`[API] Speech TTS — ${voices.length} voice(s): ${voices.map(v => v.name).join(', ')}`);
+          log.info(`[API] Speech TTS — ${voices.length} voice(s): ${voices.map(v => v.name).join(', ')}`);
         } else {
-          console.log(`[API] Speech TTS enabled (model: ${process.env['PIPER_MODEL'] ?? 'server'})`);
+          log.info(`[API] Speech TTS enabled (model: ${process.env['PIPER_MODEL'] ?? 'server'})`);
         }
       }
     });
@@ -369,7 +370,7 @@ export class APIServer {
                     if (ws.readyState === WebSocket.OPEN) ws.send(msg);
                   }
                 }).catch((err: Error) =>
-                  console.warn(`[Speech] Pipeline error for ${from}:`, err.message),
+                  log.warn(`[Speech] Pipeline error for ${from}:`, err.message),
                 );
               }
             }
@@ -1075,7 +1076,7 @@ export class APIServer {
         const body = await this.readBody(req);
         const { enabled } = JSON.parse(body) as { enabled: boolean };
         debugState.logPrompts = enabled;
-        console.log(`[Debug] Prompt logging ${enabled ? 'ON' : 'OFF'}`);
+        log.info(`[Debug] Prompt logging ${enabled ? 'ON' : 'OFF'}`);
       }
       this.json(res, 200, { logPrompts: debugState.logPrompts });
 
@@ -1475,7 +1476,7 @@ export class APIServer {
           await this.orchestrator.addMCPServer({ name: id, config });
           this.enabledMCPIds.add(id);
         } catch (err) {
-          console.warn(`[MCP] Failed to reconnect "${id}":`, (err as Error).message);
+          log.warn(`[MCP] Failed to reconnect "${id}":`, (err as Error).message);
         }
       }
     } catch {
@@ -1633,7 +1634,7 @@ export class APIServer {
       updatedAt:   now,
     };
     await this.writeKanban(board);
-    console.log(`[API] Created escalation ticket ${id} for human from ${from}`);
+    log.info(`[API] Created escalation ticket ${id} for human from ${from}`);
     // watchKanban fires on file change and broadcasts kanban_update with fresh tickets
   }
 
@@ -1655,7 +1656,7 @@ export class APIServer {
     ticket.column    = column as never;
     ticket.updatedAt = new Date().toISOString();
     await this.writeKanban(board);
-    console.log(`[API] Ticket ${ticketId} → ${column}`);
+    log.info(`[API] Ticket ${ticketId} → ${column}`);
     if (column === 'completed') {
       this.unblockDependents(ticketId).catch(() => {});
     }
@@ -1675,7 +1676,7 @@ export class APIServer {
       if (ticket.blockedBy.length === 0 && ticket.column === 'blocked') {
         ticket.column = 'ready';
         unblocked.push(ticket);
-        console.log(`[API] ${ticket.id} unblocked by completion of ${completedId} → ready`);
+        log.info(`[API] ${ticket.id} unblocked by completion of ${completedId} → ready`);
       }
     }
     if (changed) await this.writeKanban(board);
@@ -1714,7 +1715,7 @@ export class APIServer {
         ? `Checking in on ${ticket.id}: "${ticket.title}". It's blocked on [${blockers}]. Are those blockers resolved? If so, update the ticket status.`
         : `Checking in on ${ticket.id}: "${ticket.title}". It's been in progress for a while. Any updates? Please move it to completed if done, or add a comment on current status.`;
       this.orchestrator.humanMessage(agentName, msg).catch(() => {});
-      console.log(`[API] Nudged ${agentName} about stale ticket ${ticket.id}`);
+      log.info(`[API] Nudged ${agentName} about stale ticket ${ticket.id}`);
     }
   }
 
@@ -1788,7 +1789,7 @@ export class APIServer {
       } catch { /* non-fatal */ }
     }
 
-    console.log(`[API] Dispatched ${ticket.id} → ${agentName} (project: ${stored?.projectFolder ?? '?'})`);
+    log.info(`[API] Dispatched ${ticket.id} → ${agentName} (project: ${stored?.projectFolder ?? '?'})`);
   }
 
   // ── Project switching ─────────────────────────────────────────────────────
@@ -1800,11 +1801,11 @@ export class APIServer {
     });
     for (const m of due) {
       try {
-        console.log(`[API] Auto-launching scheduled meeting "${m.topic}" (${m.id})`);
+        log.info(`[API] Auto-launching scheduled meeting "${m.topic}" (${m.id})`);
         await this.orchestrator.launchScheduledMeeting(m.id);
         this.sseBroadcast({ type: 'scheduled_meetings_update', meetings: this.orchestrator.listScheduledMeetings() });
       } catch (err) {
-        console.warn(`[API] Failed to launch meeting ${m.id}:`, (err as Error).message);
+        log.warn(`[API] Failed to launch meeting ${m.id}:`, (err as Error).message);
       }
     }
   }
@@ -1870,7 +1871,7 @@ export class APIServer {
     }
 
     if (changed) {
-      console.log('[API] Assigned default avatars/backgrounds to agents');
+      log.info('[API] Assigned default avatars/backgrounds to agents');
       await this.saveCurrentState().catch(() => {});
     }
   }
@@ -1889,7 +1890,7 @@ export class APIServer {
   private async initTelemetryStore(filePath: string): Promise<void> {
     this.telemetry = new TelemetryStore(filePath);
     await this.telemetry.init().catch((err: Error) =>
-      console.warn('[API] Telemetry init error:', err.message),
+      log.warn('[API] Telemetry init error:', err.message),
     );
     this.orchestrator.setTelemetryRecorder((entry) => {
       if (!this.telemetry) return;
@@ -1914,7 +1915,7 @@ export class APIServer {
     if (this.projectDir) {
       const oldStateFile = path.join(this.projectDir, 'team-state.json');
       await this.orchestrator.saveState(oldStateFile);
-      console.log(`[API] Saved state for project "${this.projectId}"`);
+      log.info(`[API] Saved state for project "${this.projectId}"`);
     }
 
     // 2. Unsubscribe events and stop kanban watcher
@@ -1937,7 +1938,7 @@ export class APIServer {
     }
 
     // 4. Load new project via the factory
-    console.log(`[API] Switching to project "${newId}" (${newProjectDir})`);
+    log.info(`[API] Switching to project "${newId}" (${newProjectDir})`);
     const newOrchestrator = await this.projectLoader(newProjectDir, newKanbanFile, newStateFile);
 
     // 5. Wire up the new orchestrator
@@ -1978,7 +1979,7 @@ export class APIServer {
     // 7. Dispatch in_progress kanban tickets that have no active orchestrator task
     this.dispatchUnstartedTickets().catch(() => {});
 
-    console.log(`[API] Project switched to "${newId}"`);
+    log.info(`[API] Project switched to "${newId}"`);
 
     // Notify external components (e.g. CLIInterface) of the new orchestrator
     this.projectSwitchCallback?.(newOrchestrator);

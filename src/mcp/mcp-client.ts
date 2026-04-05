@@ -2,6 +2,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import { ToolDefinition } from '../providers/types.js';
+import { log } from '../util/logger.js';
 
 export interface MCPServerConfigStdio {
   transport: 'stdio';
@@ -53,7 +54,7 @@ export class MCPClient {
     await this.client.connect(transport);
     this.connected = true;
     await this.refreshTools();
-    console.log(`[MCP] Connected to "${this.serverName}" (${this.tools.length} tools)`);
+    log.info(`[MCP] Connected to "${this.serverName}" (${this.tools.length} tools)`);
   }
 
   async disconnect(): Promise<void> {

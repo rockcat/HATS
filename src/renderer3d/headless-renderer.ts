@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { log } from '../util/logger.js';
 import createGl from 'gl';
 import * as fs from 'fs/promises';
 import { loadImage } from '@napi-rs/canvas';
@@ -79,7 +80,7 @@ export class HeadlessRenderer {
   async loadTexture(imagePath: string): Promise<THREE.DataTexture> {
     const data = await fs.readFile(imagePath);
     const img = await loadImage(data);
-    console.log(`[Texture] Loaded ${imagePath} — ${img.width}x${img.height}`);
+    log.info(`[Texture] Loaded ${imagePath} — ${img.width}x${img.height}`);
 
     // Use @napi-rs/canvas to decode to raw RGBA
     const { createCanvas } = await import('@napi-rs/canvas');

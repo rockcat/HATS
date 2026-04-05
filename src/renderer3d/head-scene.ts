@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { log } from '../util/logger.js';
 import * as fs from 'fs/promises';
 import { HeadlessRenderer } from './headless-renderer.js';
 import { VisemeId } from '../avatar/types.js';
@@ -106,12 +107,12 @@ export class HeadScene {
     });
 
     if (!this.headMesh) {
-      console.warn('No mesh with morph targets found — viseme animation disabled');
+      log.warn('No mesh with morph targets found — viseme animation disabled');
     } else {
       const matType = Array.isArray(this.headMesh.material)
         ? this.headMesh.material.map((m: any) => m?.type).join(', ')
         : (this.headMesh.material as any)?.type;
-      console.log(`Loaded model with ${this.morphTargetNames.length} morph targets (material: ${matType})`);
+      log.info(`Loaded model with ${this.morphTargetNames.length} morph targets (material: ${matType})`);
     }
 
     // Recompute normals and apply world-space cylindrical UV projection.
@@ -137,7 +138,7 @@ export class HeadScene {
           meshCount++;
         }
       });
-      console.log(`[Texture] Applied to ${meshCount} mesh(es)`);
+      log.info(`[Texture] Applied to ${meshCount} mesh(es)`);
     }
   }
 

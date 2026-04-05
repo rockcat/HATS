@@ -1,4 +1,5 @@
 import { MediaOutput } from './types.js';
+import { log } from '../util/logger.js';
 
 export class NDIOutput implements MediaOutput {
   readonly name = 'ndi';
@@ -21,9 +22,9 @@ export class NDIOutput implements MediaOutput {
         clockAudio: false,
       });
       this._isRunning = true;
-      console.log(`[NDI] Sending as "${this.sourceName}"`);
+      log.info(`[NDI] Sending as "${this.sourceName}"`);
     } catch (err) {
-      console.warn('[NDI] grandiose unavailable — NDI output disabled:', (err as Error).message);
+      log.warn('[NDI] grandiose unavailable — NDI output disabled:', (err as Error).message);
     }
   }
 

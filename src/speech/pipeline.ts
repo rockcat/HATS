@@ -15,6 +15,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { VisemeEvent, SpeechChunk } from './types.js';
 import { RHUBARB_TO_ARKIT } from './rhubarb-map.js';
+import { log } from '../util/logger.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -84,13 +85,13 @@ async function getModelSampleRate(modelPath: string): Promise<number> {
     const config = JSON.parse(await readFile(modelPath + '.json', 'utf-8'));
     const rate = config?.audio?.sample_rate as number | undefined;
     if (rate) {
-      console.log(`[Speech] Model sample rate: ${rate} Hz`);
+      log.info(`[Speech] Model sample rate: ${rate} Hz`);
       return rate;
     }
   } catch {
     // fall through
   }
-  console.warn('[Speech] Could not read model sample rate — defaulting to 22050 Hz');
+  log.warn('[Speech] Could not read model sample rate — defaulting to 22050 Hz');
   return 22050;
 }
 
@@ -112,7 +113,7 @@ async function resolvedSampleRate(modelPath: string): Promise<number> {
  * Returns a WAV buffer directly — no header construction needed.
  */
 async function runPiperServer(text: string, serverUrl: string, speakerId: number | null): Promise<Buffer> {
-  console.log(`[Speech] Piper server POST ${serverUrl} "${text.slice(0, 60)}"`);
+  log.info(`[Speech] Piper server POST ${serverUrl} "${text.slice(0, 60)}"`);
   const payload: Record<string, unknown> = { text };
   if (speakerId !== null) payload['speaker_id'] = speakerId;
   const res = await fetch(`${serverUrl}/`, {
@@ -126,7 +127,7 @@ async function runPiperServer(text: string, serverUrl: string, speakerId: number
     throw new Error(`Piper server ${res.status}: ${body.slice(0, 200)}`);
   }
   const buf = Buffer.from(await res.arrayBuffer());
-  console.log(`[Speech] Piper server done — ${buf.length} bytes`);
+  log.info(`[Speech] Piper server done — ${buf.length} bytes`);
   return buf;
 }
 
@@ -138,7 +139,7 @@ async function runPiperServer(text: string, serverUrl: string, speakerId: number
 async function runPiperProcess(text: string, modelPath: string, sampleRate: number): Promise<Buffer> {
   const piperBin = process.env['PIPER_BIN'] ?? 'piper';
 
-  console.log(`[Speech] Piper "${path.basename(modelPath)}" — "${text.slice(0, 60)}"`);
+  log.info(`[Speech] Piper "${path.basename(modelPath)}" — "${text.slice(0, 60)}"`);
 
   return new Promise((resolve, reject) => {
     const child = spawn(piperBin, ['--model', modelPath, '--output-raw'], {
@@ -157,15 +158,15 @@ async function runPiperProcess(text: string, modelPath: string, sampleRate: numb
     child.on('exit', (code) => {
       if (code === 0) {
         const pcm = Buffer.concat(pcmChunks);
-        console.log(`[Speech] Piper done — ${pcm.length} PCM bytes`);
+        log.info(`[Speech] Piper done — ${pcm.length} PCM bytes`);
         resolve(buildWavBuffer(pcm, sampleRate));
       } else {
-        console.error(`[Speech] Piper failed (exit ${code}):\n${stderr}`);
+        log.error(`[Speech] Piper failed (exit ${code}):\n${stderr}`);
         reject(new Error(`piper exited ${code}: ${stderr.slice(0, 400)}`));
       }
     });
     child.on('error', (err) => {
-      console.error(`[Speech] Piper spawn error:`, err.message);
+      log.error(`[Speech] Piper spawn error:`, err.message);
       reject(err);
     });
   });
@@ -186,13 +187,13 @@ async function runRhubarb(wavFile: string, dialogueFile: string, jsonFile: strin
     '--quiet',
   ];
 
-  console.log(`[Speech] Rhubarb: ${path.basename(wavFile)}`);
+  log.info(`[Speech] Rhubarb: ${path.basename(wavFile)}`);
 
   try {
     await execFileAsync(rhubarbBin, args);
-    console.log(`[Speech] Rhubarb done`);
+    log.info(`[Speech] Rhubarb done`);
   } catch (err) {
-    console.error(`[Speech] Rhubarb failed:`, (err as Error).message);
+    log.error(`[Speech] Rhubarb failed:`, (err as Error).message);
     throw err;
   }
 }
@@ -227,7 +228,7 @@ async function processSentence(
   const jsonFile     = path.join(tmpDir, `${sessionId}_${id}.json`);
   const dialogueFile = path.join(tmpDir, `${sessionId}_${id}.txt`);
 
-  console.log(`[Speech] Sentence ${id + 1}/${totalChunks}: "${sentence.slice(0, 60)}"`);
+  log.info(`[Speech] Sentence ${id + 1}/${totalChunks}: "${sentence.slice(0, 60)}"`);
 
   try {
     // Write dialogue hint to a temp file — Rhubarb -d expects a file path
@@ -252,7 +253,7 @@ async function processSentence(
     const visemes   = parseVisemes(visemeRaw);
     const duration  = visemes.at(-1)?.end ?? 0;
 
-    console.log(`[Speech] Sentence ${id + 1}/${totalChunks} ready — ${visemes.length} visemes, ${duration.toFixed(2)}s`);
+    log.info(`[Speech] Sentence ${id + 1}/${totalChunks} ready — ${visemes.length} visemes, ${duration.toFixed(2)}s`);
 
     return {
       id,
@@ -264,7 +265,7 @@ async function processSentence(
       agentName,
     };
   } catch (err) {
-    console.warn(`[Speech] Sentence ${id + 1} failed:`, (err as Error).message);
+    log.warn(`[Speech] Sentence ${id + 1} failed:`, (err as Error).message);
     return null;
   } finally {
     await Promise.all([
@@ -299,11 +300,11 @@ export async function processSpeech(
 
   const sentences = splitSentences(text);
   if (sentences.length === 0) {
-    console.log(`[Speech] No speakable sentences in: "${text.slice(0, 80)}"`);
+    log.info(`[Speech] No speakable sentences in: "${text.slice(0, 80)}"`);
     return;
   }
 
-  console.log(`[Speech] Starting pipeline for ${agentName} — ${sentences.length} sentence(s)`);
+  log.info(`[Speech] Starting pipeline for ${agentName} — ${sentences.length} sentence(s)`);
   const sessionId = `spk_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 
   for (let i = 0; i < sentences.length; i++) {
@@ -311,5 +312,5 @@ export async function processSpeech(
     if (chunk) onChunk(chunk);
   }
 
-  console.log(`[Speech] Pipeline complete for ${agentName}`);
+  log.info(`[Speech] Pipeline complete for ${agentName}`);
 }

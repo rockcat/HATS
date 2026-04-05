@@ -1,4 +1,5 @@
 import * as readline from 'readline';
+import { log } from '../util/logger.js';
 import { TeamOrchestrator, ProviderFactory } from '../orchestrator/orchestrator.js';
 import { HatType } from '../hats/types.js';
 import { DEFAULT_MODEL, DEFAULT_PROVIDER } from '../providers/default-provider.js';
@@ -70,8 +71,8 @@ export class CLIInterface {
     // Surface escalations to console
     orchestrator.onEscalation((from, message, urgency) => {
       const icon = urgency === 'high' ? '🔴' : '🟡';
-      console.log(`\n${icon} ESCALATION from ${from}: ${message}`);
-      console.log(`   Reply with: reply ${from}: your response`);
+      log.info(`\n${icon} ESCALATION from ${from}: ${message}`);
+      log.info(`   Reply with: reply ${from}: your response`);
       this.rl.prompt();
     });
   }
@@ -80,15 +81,15 @@ export class CLIInterface {
     if (this.running) return;
     this.running = true;
 
-    console.log('\n━━━ Team CLI ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('Type "help" for commands. Default target: ' + this.defaultAgent);
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+    log.info('\n━━━ Team CLI ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    log.info('Type "help" for commands. Default target: ' + this.defaultAgent);
+    log.info('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 
     this.rl.prompt();
 
     this.rl.on('line', (line) => {
       this.handleLine(line.trim()).catch((err) => {
-        console.error('Error:', err);
+        log.error('Error:', err);
       }).finally(() => {
         this.rl.prompt();
       });
@@ -96,7 +97,7 @@ export class CLIInterface {
 
     this.rl.on('close', () => {
       this.running = false;
-      console.log('\nGoodbye.');
+      log.info('\nGoodbye.');
       process.exit(0);
     });
   }
@@ -107,7 +108,7 @@ export class CLIInterface {
     // @AgentName message
     if (line.startsWith('@')) {
       const spaceIdx = line.indexOf(' ');
-      if (spaceIdx === -1) { console.log('Usage: @AgentName message'); return; }
+      if (spaceIdx === -1) { log.info('Usage: @AgentName message'); return; }
       const name = this.resolveAgentName(line.slice(1, spaceIdx));
       const message = line.slice(spaceIdx + 1);
       await this.orchestrator.humanMessage(name, message);
@@ -118,7 +119,7 @@ export class CLIInterface {
     if (line.startsWith('task ')) {
       const rest = line.slice(5);
       const colonIdx = rest.indexOf(':');
-      if (colonIdx === -1) { console.log('Usage: task AgentName [project-name]: description'); return; }
+      if (colonIdx === -1) { log.info('Usage: task AgentName [project-name]: description'); return; }
       const beforeColon = rest.slice(0, colonIdx).trim();
       const task = rest.slice(colonIdx + 1).trim();
       // Optional project name in square brackets: "AgentName [project-name]"
@@ -128,7 +129,7 @@ export class CLIInterface {
       await this.orchestrator.humanAssignTask(name, task, undefined, projectName);
       const storedTask = this.orchestrator.listTasks().find(t => t.assignedTo === name && t.description === task);
       const folder = storedTask?.projectFolder ?? '?';
-      console.log(`Task assigned to ${name}. Project folder: ${folder}`);
+      log.info(`Task assigned to ${name}. Project folder: ${folder}`);
       return;
     }
 
@@ -136,7 +137,7 @@ export class CLIInterface {
     if (line.startsWith('reply ')) {
       const rest = line.slice(6);
       const colonIdx = rest.indexOf(':');
-      if (colonIdx === -1) { console.log('Usage: reply AgentName: message'); return; }
+      if (colonIdx === -1) { log.info('Usage: reply AgentName: message'); return; }
       const name = this.resolveAgentName(rest.slice(0, colonIdx).trim());
       const message = rest.slice(colonIdx + 1).trim();
       await this.orchestrator.humanReply(name, message);
@@ -206,8 +207,8 @@ export class CLIInterface {
     // rest = "Name hat: description"
     const colonIdx = rest.indexOf(':');
     if (colonIdx === -1) {
-      console.log('Usage: agent Name hat: description of skills');
-      console.log('Hats:  white  red  black  yellow  green  blue');
+      log.info('Usage: agent Name hat: description of skills');
+      log.info('Hats:  white  red  black  yellow  green  blue');
       return;
     }
 
@@ -215,7 +216,7 @@ export class CLIInterface {
     const description = rest.slice(colonIdx + 1).trim();
 
     if (beforeColon.length < 2) {
-      console.log('Usage: agent Name hat: description of skills');
+      log.info('Usage: agent Name hat: description of skills');
       return;
     }
 
@@ -224,17 +225,17 @@ export class CLIInterface {
     const hatType = HAT_NAMES[hatKey];
 
     if (!hatType) {
-      console.log(`Unknown hat "${hatKey}". Choose from: ${Object.keys(HAT_NAMES).join(', ')}`);
+      log.info(`Unknown hat "${hatKey}". Choose from: ${Object.keys(HAT_NAMES).join(', ')}`);
       return;
     }
 
     if (!description) {
-      console.log('Please provide a description of the agent\'s skills.');
+      log.info('Please provide a description of the agent\'s skills.');
       return;
     }
 
     if (!this.providerFactory) {
-      console.log('No provider factory configured — cannot create agents at runtime.');
+      log.info('No provider factory configured — cannot create agents at runtime.');
       return;
     }
 
@@ -255,18 +256,18 @@ export class CLIInterface {
       model,
     });
 
-    console.log(`Agent ${name} (${hatKey} hat) added to the team.`);
+    log.info(`Agent ${name} (${hatKey} hat) added to the team.`);
   }
 
   // ── load command ──────────────────────────────────────────────────────────
 
   private async loadTeam(path: string): Promise<void> {
     if (!this.providerFactory) {
-      console.log('No provider factory configured — cannot load state.');
+      log.info('No provider factory configured — cannot load state.');
       return;
     }
 
-    console.log(`Loading team state from ${path}…`);
+    log.info(`Loading team state from ${path}…`);
     this.orchestrator.clearTeam();
 
     try {
@@ -277,7 +278,7 @@ export class CLIInterface {
       this.showStatus();
       await this.resumeActiveTasks();
     } catch (err) {
-      console.log(`Load failed: ${(err as Error).message}`);
+      log.info(`Load failed: ${(err as Error).message}`);
     }
   }
 
@@ -286,15 +287,15 @@ export class CLIInterface {
   private async resumeActiveTasks(): Promise<void> {
     const active = this.orchestrator.listTasks().filter(t => t.status === 'active');
     if (active.length === 0) {
-      console.log('No active tasks to resume.');
+      log.info('No active tasks to resume.');
       return;
     }
 
-    console.log(`\nResuming ${active.length} active task(s)…`);
+    log.info(`\nResuming ${active.length} active task(s)…`);
     for (const task of active) {
       const name = this.resolveAgentName(task.assignedTo);
       const msg = `You have an active task to continue: ${task.description}${task.context ? `\n\nContext: ${task.context}` : ''}`;
-      console.log(`  → ${name}: ${task.description.slice(0, 60)}`);
+      log.info(`  → ${name}: ${task.description.slice(0, 60)}`);
       await this.orchestrator.humanMessage(name, msg);
     }
   }
@@ -303,41 +304,41 @@ export class CLIInterface {
 
   private showStatus(): void {
     const agents = this.orchestrator.listAgents();
-    if (agents.length === 0) { console.log('No agents.'); return; }
-    console.log('\n── Team Status ──────────────────────────────');
+    if (agents.length === 0) { log.info('No agents.'); return; }
+    log.info('\n── Team Status ──────────────────────────────');
     for (const agent of agents) {
       const info = agent.toJSON() as Record<string, unknown>;
       const spec = agent.config.identity.specialisation;
       const detail = spec ? `  ${spec}` : '';
-      console.log(`  ${info['name']} (${String(info['hatType']).padEnd(6)} hat) — ${info['state']}${detail}`);
+      log.info(`  ${info['name']} (${String(info['hatType']).padEnd(6)} hat) — ${info['state']}${detail}`);
     }
-    console.log('─────────────────────────────────────────────');
+    log.info('─────────────────────────────────────────────');
   }
 
   private showTasks(): void {
     const tasks = this.orchestrator.listTasks();
-    if (tasks.length === 0) { console.log('No tasks.'); return; }
-    console.log('\n── Tasks ────────────────────────────────────');
+    if (tasks.length === 0) { log.info('No tasks.'); return; }
+    log.info('\n── Tasks ────────────────────────────────────');
     for (const t of tasks) {
       const done = t.status === 'complete' ? ` ✓ ${t.summary?.slice(0, 40)}` : '';
-      console.log(`  [${t.status.padEnd(8)}] ${t.assignedTo}: ${t.description.slice(0, 50)}${done}`);
+      log.info(`  [${t.status.padEnd(8)}] ${t.assignedTo}: ${t.description.slice(0, 50)}${done}`);
     }
-    console.log('─────────────────────────────────────────────');
+    log.info('─────────────────────────────────────────────');
   }
 
   private showMeetings(): void {
     const meetings = this.orchestrator.listMeetings();
-    if (meetings.length === 0) { console.log('No meetings.'); return; }
-    console.log('\n── Meetings ─────────────────────────────────');
+    if (meetings.length === 0) { log.info('No meetings.'); return; }
+    log.info('\n── Meetings ─────────────────────────────────');
     for (const m of meetings) {
-      console.log(`  [${m.status}] "${m.topic}" — ${m.turns.length} turns`);
+      log.info(`  [${m.status}] "${m.topic}" — ${m.turns.length} turns`);
     }
-    console.log('─────────────────────────────────────────────');
+    log.info('─────────────────────────────────────────────');
   }
 
   private showHelp(): void {
     const sp = this.statePath ?? './team-state.json';
-    console.log(`
+    log.info(`
 Commands:
   @AgentName message             — DM a specific agent
   task AgentName: text           — assign a task (auto-creates project folder)

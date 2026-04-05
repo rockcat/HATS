@@ -12,6 +12,7 @@ const morphWeights = {};
 // Speech-aligned lipsync
 let speechVisemes  = null;  // VisemeEvent[] | null
 let getAudioTime   = null;  // () => number | null
+let speechDuration = 0;     // seconds — decoded audio duration of current chunk
 
 // ── Three.js ─────────────────────────────────────────────────────────────────
 
@@ -91,10 +92,23 @@ function renderLoop() {
   rafId = requestAnimationFrame(renderLoop);
 
   // Determine target viseme from time-aligned speech data
-  if (speechVisemes && getAudioTime) {
-    const t = getAudioTime();
-    const cue = speechVisemes.find(v => t >= v.start && t < v.end);
-    targetViseme = cue ? cue.viseme : 'viseme_sil';
+  if (getAudioTime) {
+    const t = Math.max(0, getAudioTime());
+    const withinAudio = t < speechDuration;
+    if (speechVisemes && speechVisemes.length > 0) {
+      const cue = speechVisemes.find(v => t >= v.start && t < v.end);
+      if (cue) {
+        targetViseme = cue.viseme;
+      } else if (withinAudio) {
+        targetViseme = Math.floor(t / 0.18) % 2 === 0 ? 'viseme_aa' : 'viseme_sil';
+      } else {
+        targetViseme = 'viseme_sil';
+      }
+    } else {
+      targetViseme = withinAudio
+        ? (Math.floor(t / 0.18) % 2 === 0 ? 'viseme_aa' : 'viseme_sil')
+        : 'viseme_sil';
+    }
   }
 
   // Lerp morph weights toward target
@@ -148,16 +162,18 @@ window.avatarAPI = {
    * @param {Array<{viseme:string, start:number, end:number}>} visemes
    * @param {() => number} timeGetter  Returns current audio playback time in seconds.
    */
-  beginSpeech(visemes, timeGetter) {
-    speechVisemes = visemes;
-    getAudioTime  = timeGetter;
+  beginSpeech(visemes, timeGetter, duration = 0) {
+    speechVisemes  = visemes?.length > 0 ? visemes : null;
+    getAudioTime   = timeGetter;
+    speechDuration = duration;
   },
 
   /** Stop audio-aligned lipsync and return to silence. */
   endSpeech() {
-    speechVisemes = null;
-    getAudioTime  = null;
-    targetViseme  = 'viseme_sil';
+    speechVisemes  = null;
+    getAudioTime   = null;
+    speechDuration = 0;
+    targetViseme   = 'viseme_sil';
   },
 
   /** Hide the avatar panel and stop rendering. */

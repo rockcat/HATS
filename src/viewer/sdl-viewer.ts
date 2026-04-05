@@ -1,4 +1,5 @@
 import sdl from '@kmamal/sdl';
+import { log } from '../util/logger.js';
 import { MediaOutput } from '../media/types.js';
 
 export interface SDLViewerConfig {
@@ -54,7 +55,7 @@ export class SDLViewer implements MediaOutput {
     });
 
     this._isRunning = true;
-    console.log('[SDL] Window open — press Escape or close to stop');
+    log.info('[SDL] Window open — press Escape or close to stop');
   }
 
   pushFrame(rgbaBuffer: Buffer, width: number, height: number): void {
