@@ -57,20 +57,30 @@ if [[ -n "$UNFILLED" ]]; then
   done <<< "$UNFILLED"
 fi
 
-# ── Python / piper-tts ────────────────────────────────────────────────────────
+# ── Piper TTS ────────────────────────────────────────────────────────────────
 echo ""
-echo "── Python / piper-tts (optional — required for avatar speech)"
+echo "── Piper TTS (optional — required for avatar speech)"
 
-PYTHON_BIN="${PYTHON_BIN:-python}"
-if ! command -v "$PYTHON_BIN" &>/dev/null; then
-  warn "python not found — avatar speech will be disabled"
-  warn "  Install Python 3.10+ and run: pip install piper-tts"
+# Check for native binary (subprocess / default mode)
+PIPER_BIN_PATH="${PIPER_BIN:-piper/piper}"
+if [[ -f "$ROOT/$PIPER_BIN_PATH" ]] || [[ -f "$ROOT/${PIPER_BIN_PATH}.exe" ]]; then
+  ok "piper binary found at $PIPER_BIN_PATH"
 else
-  ok "Python $($PYTHON_BIN --version 2>&1 | awk '{print $2}')"
-  if "$PYTHON_BIN" -c "import piper" &>/dev/null 2>&1; then
-    ok "piper-tts installed"
+  warn "piper binary not found at $ROOT/$PIPER_BIN_PATH"
+  warn "  Download from https://github.com/rhasspy/piper/releases"
+  warn "  and extract to $ROOT/piper/"
+
+  # Also check for Python server mode as an alternative
+  PYTHON_BIN="${PYTHON_BIN:-python}"
+  if command -v "$PYTHON_BIN" &>/dev/null; then
+    if "$PYTHON_BIN" -c "import piper" &>/dev/null 2>&1; then
+      ok "piper-tts Python package found (server mode available)"
+    else
+      warn "piper-tts Python package not installed either"
+      warn "  For server mode run: pip install piper-tts"
+    fi
   else
-    warn "piper-tts not installed — run: pip install piper-tts"
+    warn "  (Python not found — server mode also unavailable)"
   fi
 fi
 
@@ -106,5 +116,5 @@ echo ""
 echo "=== Done ==="
 echo ""
 echo "Run the app:  npm start"
-echo "Web UI at:    http://localhost:3000"
+echo "Web UI at:    http://localhost:3001"
 echo ""
