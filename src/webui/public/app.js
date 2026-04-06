@@ -2086,12 +2086,13 @@ function openSettings() {
   Promise.all([
     fetch('/api/env').then(r => r.json()),
     fetch('/api/providers').then(r => r.json()),
+    fetch('/api/project/human-name').then(r => r.json()).catch(() => ({ humanName: 'Human' })),
   ])
-    .then(([entries, providers]) => renderSettingsBody(entries, providers))
+    .then(([entries, providers, { humanName }]) => renderSettingsBody(entries, providers, humanName))
     .catch(() => { body.innerHTML = '<p class="settings-loading">Failed to load settings.</p>'; });
 }
 
-function renderSettingsBody(entries, providers) {
+function renderSettingsBody(entries, providers, humanName) {
   const body = document.getElementById('settings-body');
 
   // Group entries
@@ -2112,7 +2113,15 @@ function renderSettingsBody(entries, providers) {
     }
   }
 
-  let html = '';
+  let html = `
+    <div class="settings-section">
+      <div class="settings-section-title">Profile</div>
+      <div class="env-field">
+        <label class="env-label" for="setting-human-name">Your name</label>
+        <input type="text" id="setting-human-name" class="env-input" data-setting="humanName"
+               value="${esc(humanName ?? 'Human')}" placeholder="Human" autocomplete="off" spellcheck="false">
+      </div>
+    </div>`;
   for (const group of GROUP_ORDER) {
     const items = grouped[group];
     if (!items || items.length === 0) continue;
@@ -2193,18 +2202,31 @@ function saveSettings() {
   const updates = {};
   inputs.forEach(inp => { updates[inp.dataset.key] = inp.value; });
 
+  // Collect profile settings (data-setting attribute)
+  const profileInputs = document.getElementById('settings-body').querySelectorAll('[data-setting]');
+  const profileUpdates = {};
+  profileInputs.forEach(inp => { profileUpdates[inp.dataset.setting] = inp.value; });
+
   const saveBtn = document.getElementById('settings-save');
   const msg     = document.getElementById('settings-msg');
   saveBtn.disabled = true;
   msg.textContent = '';
 
-  fetch('/api/env', {
+  const envSave = fetch('/api/env', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(updates),
-  })
-    .then(r => r.json())
-    .then(res => {
+  }).then(r => r.json());
+
+  const humanName = (profileUpdates['humanName'] ?? '').trim() || 'Human';
+  const profileSave = fetch('/api/project/human-name', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ humanName }),
+  }).then(r => r.json());
+
+  Promise.all([envSave, profileSave])
+    .then(([res]) => {
       if (res.error) {
         msg.textContent = res.error;
         msg.className = 'settings-msg settings-msg--error';
@@ -2214,7 +2236,7 @@ function saveSettings() {
         setTimeout(closeSettings, 800);
       }
     })
-    .catch(err => {
+    .catch(() => {
       msg.textContent = 'Save failed.';
       msg.className = 'settings-msg settings-msg--error';
     })

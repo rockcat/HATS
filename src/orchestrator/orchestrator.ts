@@ -186,6 +186,8 @@ export class TeamOrchestrator {
       this.meetings.set(meeting.id, meeting);
     }
 
+    if (snapshot.humanName) this.humanName = snapshot.humanName;
+
     await this.store.append('state_loaded', { path, agentCount: snapshot.agents.length });
     log.info(`[Team] State restored from ${path} (saved ${snapshot.savedAt})`);
 
@@ -211,6 +213,11 @@ export class TeamOrchestrator {
   setProjectGoal(goal: string | null): void {
     this.projectGoal = goal;
     for (const agent of this.agents.values()) agent.updateProjectGoal(goal);
+  }
+
+  setHumanName(name: string): void {
+    this.humanName = name || 'Human';
+    this.rebuildTeamContext();
   }
 
   registerAgent(config: AgentConfig): Agent {

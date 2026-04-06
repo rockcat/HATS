@@ -172,6 +172,8 @@ export class APIServer {
       this.orchestrator.setProjectDir(this.projectDir);
       const goal = await this.getProjectGoal();
       if (goal) this.orchestrator.setProjectGoal(goal);
+      const humanName = await this.getProjectMeta('humanName');
+      if (humanName) this.orchestrator.setHumanName(humanName);
     }
 
     // Init telemetry store (project-scoped if projectDir is set)
@@ -297,10 +299,10 @@ export class APIServer {
       'Connection':    'keep-alive',
       'Access-Control-Allow-Origin': '*',
     });
-    const agents  = this.buildAgentStatuses();
-    const tickets = this.kanbanPath ? await this.readTickets() : [];
-    const goal    = await this.getProjectGoal();
-    const project = { id: this.projectId, dir: this.projectDir, goal };
+    const agents     = this.buildAgentStatuses();
+    const tickets    = this.kanbanPath ? await this.readTickets() : [];
+    const meta       = await this.readProjectMeta();
+    const project    = { id: this.projectId, dir: this.projectDir, goal: meta['goal'] ?? '', humanName: meta['humanName'] ?? 'Human' };
     res.write(`data: ${JSON.stringify({ type: 'init', agents, tickets, project })}\n\n`);
     this.sseClients.push(res);
   }
@@ -757,8 +759,8 @@ export class APIServer {
         await this.switchProject(id.trim());
         const agents  = this.buildAgentStatuses();
         const tickets = await this.readTickets().catch(() => []);
-        const goal    = await this.getProjectGoal();
-        const project = { id: this.projectId, dir: this.projectDir, goal };
+        const meta    = await this.readProjectMeta();
+        const project = { id: this.projectId, dir: this.projectDir, goal: meta['goal'] ?? '', humanName: meta['humanName'] ?? 'Human' };
         this.json(res, 200, { ok: true, id: this.projectId, agents, tickets, project });
       } catch (err) {
         this.json(res, 500, { error: (err as Error).message });
@@ -774,6 +776,18 @@ export class APIServer {
       const trimmed = (goal ?? '').trim();
       await this.setProjectGoal(trimmed);
       this.orchestrator.setProjectGoal(trimmed || null);
+      this.json(res, 200, { ok: true });
+
+    } else if (pathname === '/api/project/human-name' && req.method === 'GET') {
+      const humanName = await this.getProjectMeta('humanName') ?? 'Human';
+      this.json(res, 200, { humanName });
+
+    } else if (pathname === '/api/project/human-name' && req.method === 'PUT') {
+      const body = await this.readBody(req);
+      const { humanName } = JSON.parse(body) as { humanName: string };
+      const name = (humanName ?? '').trim() || 'Human';
+      await this.setProjectMeta('humanName', name);
+      this.orchestrator.setHumanName(name);
       this.json(res, 200, { ok: true });
 
     } else if (pathname === '/api/projects' && req.method === 'GET') {
@@ -1905,26 +1919,39 @@ export class APIServer {
     }
   }
 
-  private goalFilePath(): string | null {
+  private metaFilePath(): string | null {
     return this.projectDir ? path.join(this.projectDir, 'project-meta.json') : null;
   }
 
+  private async readProjectMeta(): Promise<Record<string, string>> {
+    const fp = this.metaFilePath();
+    if (!fp) return {};
+    try { return JSON.parse(await readFile(fp, 'utf-8')) as Record<string, string>; }
+    catch { return {}; }
+  }
+
+  private async writeProjectMeta(meta: Record<string, string>): Promise<void> {
+    const fp = this.metaFilePath();
+    if (!fp) return;
+    await writeFile(fp, JSON.stringify(meta, null, 2), 'utf-8');
+  }
+
+  private async getProjectMeta(key: string): Promise<string | undefined> {
+    return (await this.readProjectMeta())[key];
+  }
+
+  private async setProjectMeta(key: string, value: string): Promise<void> {
+    const meta = await this.readProjectMeta();
+    meta[key] = value;
+    await this.writeProjectMeta(meta);
+  }
+
   private async getProjectGoal(): Promise<string> {
-    const fp = this.goalFilePath();
-    if (!fp) return '';
-    try {
-      const raw = await readFile(fp, 'utf-8');
-      return (JSON.parse(raw) as { goal?: string }).goal ?? '';
-    } catch { return ''; }
+    return (await this.getProjectMeta('goal')) ?? '';
   }
 
   private async setProjectGoal(goal: string): Promise<void> {
-    const fp = this.goalFilePath();
-    if (!fp) return;
-    let meta: Record<string, unknown> = {};
-    try { meta = JSON.parse(await readFile(fp, 'utf-8')); } catch { /* new file */ }
-    meta['goal'] = goal;
-    await writeFile(fp, JSON.stringify(meta, null, 2), 'utf-8');
+    await this.setProjectMeta('goal', goal);
   }
 
   /** Graceful shutdown — saves current project state then stops the server. */
@@ -2001,9 +2028,12 @@ export class APIServer {
     this.projectDir      = newProjectDir;
     await newOrchestrator.initMeetingStore(newMeetingsFile).catch(() => {});
 
-    // Ensure project folder structure and wire project dir into agents
+    // Ensure project folder structure and wire project dir/goal/humanName into agents
     await this.ensureProjectFolders(newProjectDir);
     newOrchestrator.setProjectDir(newProjectDir);
+    const newMeta = await this.readProjectMeta();
+    if (newMeta['goal']) newOrchestrator.setProjectGoal(newMeta['goal']);
+    if (newMeta['humanName']) newOrchestrator.setHumanName(newMeta['humanName']);
 
     // Switch telemetry to new project
     const newTelemetryFile = path.join(newProjectDir, 'telemetry.jsonl');
@@ -2021,9 +2051,10 @@ export class APIServer {
     await this.assignDefaultVisuals().catch(() => {});
 
     // 6. Push a full init event to all connected browser tabs
-    const agents  = this.buildAgentStatuses();
-    const tickets = await this.readTickets().catch(() => []);
-    const project = { id: this.projectId, dir: this.projectDir };
+    const agents       = this.buildAgentStatuses();
+    const tickets      = await this.readTickets().catch(() => []);
+    const broadcastMeta = await this.readProjectMeta();
+    const project      = { id: this.projectId, dir: this.projectDir, goal: broadcastMeta['goal'] ?? '', humanName: broadcastMeta['humanName'] ?? 'Human' };
     this.sseBroadcast({ type: 'init', agents, tickets, project } as never);
     this.sseBroadcast({ type: 'telemetry_update', summary: this.telemetry?.getSummary() ?? null });
 
