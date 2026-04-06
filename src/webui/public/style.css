@@ -2795,16 +2795,20 @@ body.has-expanded-panel main > section:not(.panel--expanded) {
   min-height: 0;
   background: var(--bg);
   padding: 12px;
-  overflow: hidden;
+  overflow-y: auto;
+  display: flex;
+  align-items: flex-start;
+  align-content: flex-start;
 }
 
 .meeting-avatars {
   display: flex;
+  flex-wrap: wrap;
   gap: 12px;
   justify-content: center;
-  align-items: center;
+  align-items: flex-start;
+  align-content: flex-start;
   width: 100%;
-  height: 100%;
   box-sizing: border-box;
 }
 
@@ -2813,8 +2817,8 @@ body.has-expanded-panel main > section:not(.panel--expanded) {
   flex-direction: column;
   align-items: center;
   gap: 6px;
-  flex: 1 1 0;
-  min-width: 0;
+  flex: 1 1 160px;
+  min-width: 120px;
   max-width: min(30vh, 280px);
 }
 
