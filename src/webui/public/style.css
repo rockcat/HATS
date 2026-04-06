@@ -2817,9 +2817,9 @@ body.has-expanded-panel main > section:not(.panel--expanded) {
   flex-direction: column;
   align-items: center;
   gap: 6px;
-  flex: 1 1 160px;
+  flex: 0 1 220px;
   min-width: 120px;
-  max-width: min(30vh, 280px);
+  max-width: 220px;
 }
 
 /* Wrapper frame — holds background image, clips canvas to rounded corners */
