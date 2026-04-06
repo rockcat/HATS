@@ -687,6 +687,11 @@ export class TeamOrchestrator {
         }
       }
 
+      case 'get_current_datetime': {
+        const now = new Date();
+        return `Current date and time: ${now.toISOString()} (local: ${now.toLocaleString()})`;
+      }
+
       default:
         return `Unknown tool: ${call.name}`;
     }

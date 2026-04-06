@@ -97,6 +97,12 @@ const WEB_SEARCH: ToolDefinition = {
   },
 };
 
+const GET_CURRENT_DATETIME: ToolDefinition = {
+  name: 'get_current_datetime',
+  description: 'Get the current date and time.',
+  parameters: { type: 'object', properties: {}, required: [] },
+};
+
 // ── Tools available to Blue Hat (PM) only ────────────────────────────────────
 
 const ASSIGN_TASK: ToolDefinition = {
@@ -161,7 +167,7 @@ const REQUEST_MEETING: ToolDefinition = {
 
 // ── Registry ──────────────────────────────────────────────────────────────────
 
-const BASE_TOOLS = [SEND_MESSAGE, ESCALATE_TO_HUMAN, REPORT_TASK_COMPLETE, READ_FILE, WRITE_FILE, LIST_FILES, WEB_SEARCH];
+const BASE_TOOLS = [SEND_MESSAGE, ESCALATE_TO_HUMAN, REPORT_TASK_COMPLETE, READ_FILE, WRITE_FILE, LIST_FILES, WEB_SEARCH, GET_CURRENT_DATETIME];
 const BLUE_HAT_TOOLS = [...BASE_TOOLS, ASSIGN_TASK, REQUEST_MEETING, SCHEDULE_MEETING];
 
 export function getToolsForHat(hatType: HatType): ToolDefinition[] {
