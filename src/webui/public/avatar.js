@@ -52,7 +52,7 @@ function resizeRenderer(canvas) {
   camera.updateProjectionMatrix();
 }
 
-function loadGLB(file, camPos, rotate) {
+function loadGLB(file, camPos, rotate, fov, scale) {
   // Remove old avatar nodes (keep lights)
   const toRemove = scene.children.filter(c => !c.isLight);
   for (const c of toRemove) scene.remove(c);
@@ -61,30 +61,27 @@ function loadGLB(file, camPos, rotate) {
   new GLTFLoader().load(`/avatars/${file}`, gltf => {
     scene.add(gltf.scene);
 
-    // Apply per-model rotation from avatars.json (degrees → radians)
     if (rotate && rotate.length === 3) {
       const DEG = Math.PI / 180;
       gltf.scene.rotation.set(rotate[0] * DEG, rotate[1] * DEG, rotate[2] * DEG);
     }
 
+    if (scale != null) gltf.scene.scale.setScalar(scale);
+
+    camera.fov = fov ?? 50;
+    camera.updateProjectionMatrix();
     camera.position.set(camPos[0], camPos[1], camPos[2]);
+    camera.lookAt(new THREE.Vector3(camPos[0], camPos[1] - 0.08, 0));
 
     gltf.scene.traverse(obj => {
       if (!obj.isMesh) return;
-
-      // Collect morph-target meshes that have viseme targets
       if (obj.morphTargetDictionary) {
         const hasViseme = Object.keys(obj.morphTargetDictionary).some(k => k.startsWith('viseme_'));
         if (hasViseme && !visemeMeshes.includes(obj)) visemeMeshes.push(obj);
       }
-
-      // Hide body parts — only the head/face should be visible
       const low = obj.name.toLowerCase();
       if (BODY_KEYWORDS.some(kw => low.includes(kw))) obj.visible = false;
     });
-
-    // Point camera toward where the face should be (slightly below the camera y)
-    camera.lookAt(new THREE.Vector3(camPos[0], camPos[1] - 0.08, 0));
   });
 }
 
@@ -143,16 +140,19 @@ window.avatarAPI = {
    * @param {[number,number,number]} cameraPos - [x, y, z] camera position
    * @param {[number,number,number]} [rotate]  - [x, y, z] rotation in degrees (from avatars.json)
    */
-  show(avatarFile, cameraPos, rotate) {
+  show(avatarFile, cameraPos, rotate, fov, scale, bgFile) {
     const panel  = document.getElementById('avatar-panel');
     const canvas = document.getElementById('avatar-canvas');
     if (!panel || !canvas) return;
 
     panel.hidden = false;
+    panel.style.backgroundImage = bgFile
+      ? `url('/backgrounds/${encodeURIComponent(bgFile)}')`
+      : '';
 
     if (!renderer) initRenderer(canvas);
     resizeRenderer(canvas);
-    loadGLB(avatarFile, cameraPos, rotate);
+    loadGLB(avatarFile, cameraPos, rotate, fov, scale);
 
     if (!rafId) renderLoop();
   },

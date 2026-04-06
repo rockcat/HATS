@@ -1,60 +1,76 @@
 {
     "avatars": [
-        { 
+        {
             "name": "Casey",
             "sex": "female",
             "file": "casey.glb",
             "camera": [0, 1.65, 0.5],
-            "rotate": [0, 0, 0]
+            "rotate": [0, 0, 0],
+            "fov": 50,
+            "scale": 1
         },
-        { 
+        {
             "name": "Jordan",
             "sex": "male",
             "file": "jordan.glb",
             "camera": [0, 1.7, 0.5],
-            "rotate": [0, 0, 0]
+            "rotate": [0, 0, 0],
+            "fov": 50,
+            "scale": 1
         },
-        { 
+        {
             "name": "Ella",
             "sex": "female",
             "file": "ella.glb",
             "camera": [0, 1.7, 0.5],
-            "rotate": [0, 0, 0]
+            "rotate": [0, 0, 0],
+            "fov": 50,
+            "scale": 1
         },
-        { 
+        {
             "name": "Max",
             "sex": "female",
             "file": "max.glb",
             "camera": [0, 1.8, 0.5],
-            "rotate": [0, 0, 0]
+            "rotate": [0, 0, 0],
+            "fov": 50,
+            "scale": 1
         },
         {
             "name": "Clare",
-            "sex": "female",
+            "sex": "male",
             "file": "clare.glb",
-            "camera": [0, 1.6, 2.5],
-            "rotate": [0, 90, 90]
+            "camera": [ 0, 8.05, 3.9 ],
+            "rotate": [ 0, 0, 0 ],
+            "fov": 50,
+            "scale": 0.05
         },
         {
             "name": "Dave",
             "sex": "male",
             "file": "dave.glb",
-            "camera": [0, 1.8, 2.5],
-            "rotate": [0, 90, 90]
+            "camera": [ 0, 8.6, 3.05 ],
+            "rotate": [ 0, 0, 0 ],
+            "fov": 50,
+            "scale": 0.05
         },
         {
             "name": "Will",
             "sex": "male",
             "file": "will.glb",
             "camera": [0, 1.75, 0.5],
-            "rotate": [0, 0, 0]
+            "rotate": [0, 0, 0],
+            "fov": 50,
+            "scale": 1
         },
         {
             "name": "Harry",
             "sex": "male",
             "file": "harry.glb",
             "camera": [0, 1.8, 0.4],
-            "rotate": [0, 0, 0]
+            "rotate": [0, 0, 0],
+            "fov": 50,
+            "scale": 1
         }
     ]
 }

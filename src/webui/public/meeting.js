@@ -73,7 +73,7 @@ function createSlotRenderer(canvas) {
   return { renderer, scene, camera, visemeMeshes: [], morphWeights: {}, targetViseme: 'viseme_sil' };
 }
 
-function loadSlotGLB(slot, file, camPos, rotate) {
+function loadSlotGLB(slot, file, camPos, rotate, fov, scale) {
   if (!slot || !GLTFLoader) return;
   const toRemove = slot.scene.children.filter(c => !c.isLight);
   for (const c of toRemove) slot.scene.remove(c);
@@ -87,6 +87,10 @@ function loadSlotGLB(slot, file, camPos, rotate) {
       gltf.scene.rotation.set(rotate[0] * DEG, rotate[1] * DEG, rotate[2] * DEG);
     }
 
+    if (scale != null) gltf.scene.scale.setScalar(scale);
+
+    slot.camera.fov = fov ?? 50;
+    slot.camera.updateProjectionMatrix();
     slot.camera.position.set(camPos[0], camPos[1], camPos[2]);
     slot.camera.lookAt(new THREE.Vector3(camPos[0], camPos[1] - 0.08, 0));
 
@@ -395,7 +399,7 @@ window.meetingUI = {
           const hash = [...name].reduce((h, c) => (h * 31 + c.charCodeAt(0)) & 0xffff, 0);
           av = avatarCatalogue[hash % avatarCatalogue.length];
         }
-        if (av) loadSlotGLB(slot, av.file, av.camera, av.rotate);
+        if (av) loadSlotGLB(slot, av.file, av.camera, av.rotate, av.fov, av.scale);
       } else {
         // Fallback: coloured initials box when Three.js is unavailable
         const icon = document.createElement('div');
@@ -485,8 +489,26 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   document.getElementById('meeting-minimize-btn')?.addEventListener('click', () => {
-    // Just hide the overlay without closing the meeting
     document.getElementById('meeting-overlay').hidden = true;
+  });
+
+  document.getElementById('meeting-download-btn')?.addEventListener('click', () => {
+    const turns = document.querySelectorAll('#meeting-transcript .meeting-turn');
+    if (!turns.length) return;
+    const topic = document.getElementById('meeting-title')?.textContent.replace(/^Meeting:\s*/i, '') ?? 'Meeting';
+    const date  = new Date().toISOString().slice(0, 10);
+    let md = `# ${topic}\n_${date}_\n\n`;
+    turns.forEach(turn => {
+      const speaker = turn.querySelector('.meeting-turn-speaker')?.textContent ?? '';
+      const content = turn.querySelector('.meeting-turn-content')?.textContent ?? '';
+      md += `**${speaker}**\n${content}\n\n`;
+    });
+    const blob = new Blob([md], { type: 'text/markdown' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${topic.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-${date}.md`;
+    a.click();
+    URL.revokeObjectURL(a.href);
   });
 
   async function submitHumanTurn(pass = false) {
