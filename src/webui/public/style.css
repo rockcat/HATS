@@ -670,6 +670,8 @@ main {
   transition: border-color 0.2s;
 }
 .backlog-row:hover { border-color: var(--border-hover); }
+.backlog-row--human { border-color: rgba(230,140,30,0.55); }
+.backlog-row--human:hover { border-color: rgba(230,140,30,0.9); }
 
 .backlog-id {
   font-family: ui-monospace, monospace;
@@ -738,6 +740,8 @@ main {
 .task-card:hover { border-color: var(--border-hover); }
 .task-card--blocked { border-color: rgba(248,81,73,0.4); }
 .task-card--blocked:hover { border-color: rgba(248,81,73,0.7); }
+.task-card--human { border-color: rgba(230,140,30,0.55); }
+.task-card--human:hover { border-color: rgba(230,140,30,0.9); }
 
 .ticket-blockers {
   font-size: 10px;

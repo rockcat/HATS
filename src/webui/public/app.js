@@ -89,7 +89,7 @@ function setSpecValue(selectId, customId, value) {
 
 // ── State ─────────────────────────────────────────────────────────────────────
 
-let state = { agents: [], tickets: [] };
+let state = { agents: [], tickets: [], humanName: 'human' };
 
 // ── Agent config cache ────────────────────────────────────────────────────────
 // Tracks hat, voice, avatar per agent so dropdowns can show usage by others.
@@ -496,6 +496,11 @@ document.getElementById('kanban-filter-tag')?.addEventListener('change', e => {
   renderKanban(state.tickets);
 });
 
+function isHumanTicket(ticket) {
+  const name = (state.humanName ?? 'human').toLowerCase();
+  return (ticket.assignee ?? '').toLowerCase() === name;
+}
+
 function ticketHTML(ticket) {
   const priority    = ticket.priority ?? 'medium';
   const priColor    = PRIORITY_COLOR[priority] ?? PRIORITY_COLOR.medium;
@@ -504,6 +509,7 @@ function ticketHTML(ticket) {
   const tags        = (ticket.tags ?? []).slice(0, 3);
   const projectName = ticket.projectName ?? '';
   const blockers    = ticket.blockedBy ?? [];
+  const human       = isHumanTicket(ticket);
 
   const tagsHTML = tags.map(t =>
     `<span class="ticket-tag">${esc(t)}</span>`
@@ -518,7 +524,7 @@ function ticketHTML(ticket) {
     : '';
 
   return `
-    <div class="task-card${blockers.length ? ' task-card--blocked' : ''}" data-ticket-id="${esc(ticket.id)}" draggable="true" title="Drag to move · Click to edit">
+    <div class="task-card${blockers.length ? ' task-card--blocked' : ''}${human ? ' task-card--human' : ''}" data-ticket-id="${esc(ticket.id)}" draggable="true" title="Drag to move · Click to edit">
       <div class="ticket-top">
         <span class="ticket-id">${esc(ticket.id)}</span>
         <span class="priority-badge" style="color:${priColor};border-color:${priColor}40">${esc(priority)}</span>
@@ -541,9 +547,10 @@ function backlogRowHTML(ticket) {
   const tags        = (ticket.tags ?? []).slice(0, 2)
     .map(t => `<span class="ticket-tag">${esc(t)}</span>`).join('');
   const projectName = ticket.projectName ?? '';
+  const human       = isHumanTicket(ticket);
 
   return `
-    <div class="backlog-row" data-ticket-id="${esc(ticket.id)}" draggable="true" title="Drag to move · Click to edit">
+    <div class="backlog-row${human ? ' backlog-row--human' : ''}" data-ticket-id="${esc(ticket.id)}" draggable="true" title="Drag to move · Click to edit">
       <span class="backlog-id">${esc(ticket.id)}</span>
       <span class="backlog-title">${esc(title)}</span>
       <span class="backlog-project">${projectName ? `📁 ${esc(projectName)}` : ''}</span>
@@ -1090,7 +1097,7 @@ function connect() {
   es.onmessage = e => {
     const msg = JSON.parse(e.data);
     if (msg.type === 'init') {
-      applyState({ agents: msg.agents, tickets: msg.tickets });
+      applyState({ agents: msg.agents, tickets: msg.tickets, humanName: msg.project?.humanName ?? 'human' });
       if (msg.project) updateProjectBadge(msg.project.id, msg.project.dir);
       updateGoalBar(msg.project?.goal, msg.tickets);
       fetchTools();
@@ -2382,7 +2389,7 @@ function doSwitchProject(id) {
         return;
       }
       // Apply state directly from response (SSE init may also arrive and re-apply idempotently)
-      if (res.agents !== undefined) applyState({ agents: res.agents, tickets: res.tickets ?? [] });
+      if (res.agents !== undefined) applyState({ agents: res.agents, tickets: res.tickets ?? [], humanName: res.project?.humanName ?? 'human' });
       if (res.project) updateProjectBadge(res.project.id, res.project.dir);
       updateGoalBar(res.project?.goal, res.tickets);
       fetchTools();
