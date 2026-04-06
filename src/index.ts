@@ -60,6 +60,5 @@ export { HeadScene } from './renderer3d/head-scene.js';
 
 // Media Server
 export type { MediaOutput } from './media/types.js';
-export { NDIOutput } from './media/ndi-output.js';
 export { SRTOutput } from './media/srt-output.js';
 export { MediaServer } from './media/media-server.js';

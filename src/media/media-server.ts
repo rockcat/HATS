@@ -1,5 +1,4 @@
 import { MediaOutput } from './types.js';
-import { NDIOutput } from './ndi-output.js';
 import { SRTOutput, SRTOutputConfig } from './srt-output.js';
 import { SDLViewer, SDLViewerConfig } from '../viewer/sdl-viewer.js';
 
@@ -7,7 +6,6 @@ export interface MediaServerConfig {
   sourceName?: string;
   srt?: SRTOutputConfig;
   viewer?: SDLViewerConfig;
-  enableNDI?: boolean;    // default true
   enableSRT?: boolean;    // default true
   enableViewer?: boolean; // default true
 }
@@ -16,9 +14,6 @@ export class MediaServer {
   private outputs: MediaOutput[] = [];
 
   constructor(config: MediaServerConfig = {}) {
-    if (config.enableNDI !== false) {
-      this.outputs.push(new NDIOutput(config.sourceName ?? 'Personality Agent'));
-    }
     if (config.enableSRT !== false) {
       this.outputs.push(new SRTOutput(config.srt ?? {}));
     }
