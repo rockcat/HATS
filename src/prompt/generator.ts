@@ -8,6 +8,7 @@ export function generateSystemPrompt(context: PromptContext): SystemPrompt {
   const directives = buildDirectives(context);
   const avoidances = buildAvoidances(context);
   const teamRole = context.teamContext ? buildTeamRole(context) : undefined;
+  const projectGoal = context.projectGoal?.trim() ? buildProjectGoalSection(context.projectGoal) : undefined;
   const workspace = context.projectDir ? buildWorkspaceSection(context) : undefined;
   const specialisation = context.specialisation ? buildSpecialisationSection(context.specialisation) : undefined;
   const closingAnchor = buildClosingAnchor(context);
@@ -20,6 +21,7 @@ export function generateSystemPrompt(context: PromptContext): SystemPrompt {
     directives,
     avoidances,
     ...(teamRole ? [teamRole] : []),
+    ...(projectGoal ? [projectGoal] : []),
     ...(workspace ? [workspace] : []),
     ...(specialisation ? [specialisation] : []),
     closingAnchor,
@@ -72,6 +74,10 @@ function buildAvoidances(ctx: PromptContext): string {
 
 function buildTeamRole(ctx: PromptContext): string {
   return `## Your team context\n\n${ctx.teamContext}\n\n**Your role in this team**: ${ctx.teamRole}`;
+}
+
+function buildProjectGoalSection(goal: string): string {
+  return `## Project goal\n\n${goal}\n\nKeep this goal in mind at all times. Every task, recommendation, and decision should serve it.`;
 }
 
 function buildWorkspaceSection(ctx: PromptContext): string {

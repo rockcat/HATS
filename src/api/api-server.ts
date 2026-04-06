@@ -170,6 +170,8 @@ export class APIServer {
     if (this.projectDir) {
       await this.ensureProjectFolders(this.projectDir);
       this.orchestrator.setProjectDir(this.projectDir);
+      const goal = await this.getProjectGoal();
+      if (goal) this.orchestrator.setProjectGoal(goal);
     }
 
     // Init telemetry store (project-scoped if projectDir is set)
@@ -769,7 +771,9 @@ export class APIServer {
     } else if (pathname === '/api/project/goal' && req.method === 'PUT') {
       const body = await this.readBody(req);
       const { goal } = JSON.parse(body) as { goal: string };
-      await this.setProjectGoal(goal ?? '');
+      const trimmed = (goal ?? '').trim();
+      await this.setProjectGoal(trimmed);
+      this.orchestrator.setProjectGoal(trimmed || null);
       this.json(res, 200, { ok: true });
 
     } else if (pathname === '/api/projects' && req.method === 'GET') {

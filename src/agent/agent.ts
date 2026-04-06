@@ -96,6 +96,12 @@ export class Agent {
     this.systemPrompt = this.buildSystemPrompt();
   }
 
+  /** Called by orchestrator when the project goal is set or cleared. */
+  updateProjectGoal(goal: string | null): void {
+    this.config.projectGoal = goal ?? undefined;
+    this.systemPrompt = this.buildSystemPrompt();
+  }
+
   /** Update the agent's specialisation focus and rebuild system prompt. */
   setSpecialisation(specialisation: string | undefined): void {
     this.config.identity.specialisation = specialisation;
@@ -308,6 +314,7 @@ export class Agent {
       teamRole: hat.teamRole,
       teamContext: this.config.teamContext,
       projectDir: this.config.projectDir,
+      projectGoal: this.config.projectGoal,
       specialisation: this.config.identity.specialisation,
     }).text;
   }

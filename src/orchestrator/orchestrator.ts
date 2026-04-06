@@ -39,6 +39,7 @@ export class TeamOrchestrator {
   private humanName: string;
   private projectsRoot: string;
   private projectDir: string | null = null;
+  private projectGoal: string | null = null;
   private onHumanEscalation: ((from: string, message: string, urgency: string) => void) | null = null;
   private onHumanMeetingTurn: ((meetingId: string, turns: MeetingTurn[], topic: string) => Promise<string | null>) | null = null;
   private rebuildTimer: ReturnType<typeof setTimeout> | null = null;
@@ -207,9 +208,15 @@ export class TeamOrchestrator {
     for (const agent of this.agents.values()) agent.updateProjectDir(dir);
   }
 
+  setProjectGoal(goal: string | null): void {
+    this.projectGoal = goal;
+    for (const agent of this.agents.values()) agent.updateProjectGoal(goal);
+  }
+
   registerAgent(config: AgentConfig): Agent {
-    // Inject current project dir into new agents
+    // Inject current project dir and goal into new agents
     if (this.projectDir) config = { ...config, projectDir: this.projectDir };
+    if (this.projectGoal) config = { ...config, projectGoal: this.projectGoal };
     const agent = new Agent(config);
     agent.setToolExecutor(this.makeToolExecutor());
     agent.setResponseHandler(this.makeResponseHandler());

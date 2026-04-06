@@ -36,6 +36,7 @@ export interface AgentConfig {
   model: string;
   teamContext?: string;    // injected by orchestrator after team is assembled
   projectDir?: string;     // absolute path to current project folder
+  projectGoal?: string;    // optional goal statement injected into every prompt
 }
 
 export interface AgentMessage {
