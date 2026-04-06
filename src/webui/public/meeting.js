@@ -234,45 +234,84 @@ async function playSpeechChunk(chunk, name) {
   });
 }
 
+function getVoiceParams(participant) {
+  const voiceId = agentVoiceMap[participant]
+    ?? (() => { try { return JSON.parse(localStorage.getItem('agentVoices') || '{}')[participant] ?? null; } catch { return null; } })();
+  const speakerName = agentSpeakerMap[participant]
+    ?? (() => { try { return JSON.parse(localStorage.getItem('agentSpeakers') || '{}')[participant] ?? null; } catch { return null; } })();
+  return { voiceId, speakerName };
+}
+
+async function fetchSpeechChunks(participant, content) {
+  const { voiceId, speakerName } = getVoiceParams(participant);
+  try {
+    const resp = await fetch('/api/speech/synthesise', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: content, voice: voiceId, speakerName }),
+    });
+    if (resp.ok) {
+      const { chunks } = await resp.json();
+      return chunks ?? [];
+    }
+  } catch { /* synthesis failed */ }
+  return [];
+}
+
 async function drainSpeechQueue() {
   if (speechPlaying) return;
   speechPlaying = true;
+
+  // Pre-fetch state: tracks a synthesis request started for the next queue entry
+  // so it runs in parallel with the current speaker's playback.
+  let prefetch = null; // { participant, content, promise }
 
   while (speechQueue.length > 0) {
     const entry = speechQueue.shift();
     if (!activeMeetingId) break;
 
     const { participant, content } = entry;
-    if (participant === 'human') { continue; }
 
-    // Show transcript entry now — just before audio starts (or immediately if speech off)
-    appendTranscriptTurn(participant, content);
-
-    if (!speechEnabled) {
-      continue; // skip audio but keep processing
+    if (participant === 'human') {
+      // Human turns have no audio; kick off prefetch for next agent turn
+      if (speechEnabled && speechQueue.length > 0 && speechQueue[0].participant !== 'human') {
+        const next = speechQueue[0];
+        if (!prefetch || prefetch.participant !== next.participant || prefetch.content !== next.content) {
+          prefetch = { participant: next.participant, content: next.content, promise: fetchSpeechChunks(next.participant, next.content) };
+        }
+      }
+      continue;
     }
 
-    // Look up voice for this agent — prefer server config, fall back to localStorage
-    const voiceId   = agentVoiceMap[participant]
-      ?? (() => { try { return JSON.parse(localStorage.getItem('agentVoices') || '{}')[participant] ?? null; } catch { return null; } })();
-    const speakerName = agentSpeakerMap[participant]
-      ?? (() => { try { return JSON.parse(localStorage.getItem('agentSpeakers') || '{}')[participant] ?? null; } catch { return null; } })();
+    appendTranscriptTurn(participant, content);
+
+    if (!speechEnabled) continue;
 
     setSlotSpeaking(participant, true);
 
     try {
-      const resp = await fetch('/api/speech/synthesise', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: content, voice: voiceId, speakerName }),
-      });
+      // Resolve chunks: use pre-fetched promise if it matches, else fetch now
+      let chunksPromise;
+      if (prefetch && prefetch.participant === participant && prefetch.content === content) {
+        chunksPromise = prefetch.promise;
+        prefetch = null;
+      } else {
+        chunksPromise = fetchSpeechChunks(participant, content);
+      }
 
-      if (resp.ok) {
-        const { chunks } = await resp.json();
-        for (const chunk of (chunks ?? [])) {
-          if (!activeMeetingId) break;
-          await playSpeechChunk(chunk, participant);
-        }
+      // Immediately kick off synthesis for the next entry in parallel —
+      // it runs while we await + play the current chunks, eliminating the gap.
+      if (speechQueue.length > 0 && speechQueue[0].participant !== 'human') {
+        const next = speechQueue[0];
+        prefetch = { participant: next.participant, content: next.content, promise: fetchSpeechChunks(next.participant, next.content) };
+      } else {
+        prefetch = null;
+      }
+
+      const chunks = await chunksPromise;
+      for (const chunk of (chunks ?? [])) {
+        if (!activeMeetingId) break;
+        await playSpeechChunk(chunk, participant);
       }
     } catch { /* speech failed — continue silently */ }
 
