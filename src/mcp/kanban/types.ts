@@ -3,6 +3,7 @@ export type Column =
   | 'ready'       // ready to start
   | 'in_progress'
   | 'blocked'
+  | 'review'      // awaiting review before completion
   | 'completed';
 
 export type Priority = 'low' | 'medium' | 'high' | 'critical';

@@ -424,7 +424,7 @@ const PRIORITY_COLOR = {
 };
 
 // Active kanban columns (top-right)
-const ACTIVE_COLUMNS = ['ready', 'in_progress', 'blocked', 'completed'];
+const ACTIVE_COLUMNS = ['ready', 'in_progress', 'blocked', 'review', 'completed'];
 
 let kanbanFilterUser = '';
 let kanbanFilterTag  = '';
@@ -459,6 +459,7 @@ function applyKanbanFilters(tickets) {
 }
 
 function renderKanban(tickets) {
+  updateGoalBar(document.getElementById('goal-text')?.textContent, tickets);
   populateKanbanFilters(tickets);
   const visible = applyKanbanFilters(tickets);
 
@@ -1090,6 +1091,7 @@ function connect() {
     if (msg.type === 'init') {
       applyState({ agents: msg.agents, tickets: msg.tickets });
       if (msg.project) updateProjectBadge(msg.project.id, msg.project.dir);
+      updateGoalBar(msg.project?.goal, msg.tickets);
       fetchTools();
       fetchFiles();
       fetchCalendar();
@@ -1517,7 +1519,10 @@ function initAgentDetail() {
     if (!file) { window.avatarAPI?.hide(); return; }
     getAvatars().then(avatars => {
       const av = avatars.find(a => a.file === file);
-      if (av && window.avatarAPI) window.avatarAPI.show(av.file, av.camera, av.rotate);
+      if (av && window.avatarAPI) {
+        const bgFile = agentConfigs.get(activeDetailAgent)?.background ?? null;
+        window.avatarAPI.show(av.file, av.camera, av.rotate, av.fov, av.scale, bgFile);
+      }
     });
   });
 
@@ -1796,7 +1801,8 @@ function openAgentDetail(name) {
     const current = findAvatarForAgent(name);
     avatarSel.value = current ? current.file : '';
     if (current && window.avatarAPI) {
-      window.avatarAPI.show(current.file, current.camera, current.rotate);
+      const bgFile = agentConfigs.get(name)?.background ?? null;
+      window.avatarAPI.show(current.file, current.camera, current.rotate, current.fov, current.scale, bgFile);
     } else if (window.avatarAPI) {
       window.avatarAPI.hide();
     }
@@ -2215,6 +2221,64 @@ function saveSettings() {
     .finally(() => { saveBtn.disabled = false; });
 }
 
+// ── Goal bar ──────────────────────────────────────────────────────────────────
+
+function updateGoalBar(goal, tickets) {
+  const text = document.getElementById('goal-text');
+  if (text) text.textContent = goal ?? '';
+
+  const all    = (tickets ?? []).length;
+  const done   = (tickets ?? []).filter(t => t.column === 'completed').length;
+  const active = (tickets ?? []).filter(t => ['ready','in_progress','blocked','review'].includes(t.column)).length;
+  const todo   = all - done - active;
+
+  const pDone   = all > 0 ? (done   / all * 100).toFixed(1) : 0;
+  const pActive = all > 0 ? (active / all * 100).toFixed(1) : 0;
+  const pTodo   = all > 0 ? (todo   / all * 100).toFixed(1) : 0;
+
+  const setW = (id, pct) => { const el = document.getElementById(id); if (el) el.style.width = pct + '%'; };
+  setW('kp-done',   pDone);
+  setW('kp-active', pActive);
+  setW('kp-todo',   pTodo);
+
+  const bar = document.getElementById('kanban-progress');
+  if (bar) bar.title = all === 0 ? 'No tickets' : `Done: ${done}  Active: ${active}  Todo: ${todo}`;
+}
+
+function initGoalBar() {
+  const editBtn = document.getElementById('goal-edit-btn');
+  const saveBtn = document.getElementById('goal-save-btn');
+  const textEl  = document.getElementById('goal-text');
+  const input   = document.getElementById('goal-input');
+  if (!editBtn || !saveBtn || !textEl || !input) return;
+
+  editBtn.addEventListener('click', () => {
+    input.value = textEl.textContent;
+    textEl.hidden  = true;
+    editBtn.hidden = true;
+    input.hidden   = false;
+    saveBtn.hidden = false;
+    input.focus();
+  });
+
+  const doSave = () => {
+    const goal = input.value.trim();
+    fetch('/api/project/goal', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ goal }),
+    }).catch(() => {});
+    textEl.textContent = goal;
+    input.hidden   = true;
+    saveBtn.hidden = true;
+    textEl.hidden  = false;
+    editBtn.hidden = false;
+  };
+
+  saveBtn.addEventListener('click', doSave);
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') doSave(); if (e.key === 'Escape') { input.hidden = true; saveBtn.hidden = true; textEl.hidden = false; editBtn.hidden = false; } });
+}
+
 // ── Project switcher ──────────────────────────────────────────────────────────
 
 function updateProjectBadge(id, dir) {
@@ -2314,6 +2378,7 @@ function doSwitchProject(id) {
       // Apply state directly from response (SSE init may also arrive and re-apply idempotently)
       if (res.agents !== undefined) applyState({ agents: res.agents, tickets: res.tickets ?? [] });
       if (res.project) updateProjectBadge(res.project.id, res.project.dir);
+      updateGoalBar(res.project?.goal, res.tickets);
       fetchTools();
       fetchFiles();
       fetchCalendar();
@@ -2993,6 +3058,7 @@ function initMicButtons() {
 }
 
 initProjectBadge();
+initGoalBar();
 initDebugButton();
 initSettings();
 initAddAgent();

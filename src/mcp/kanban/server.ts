@@ -8,7 +8,7 @@ import { KanbanStore } from './store.js';
 import { log } from '../../util/logger.js';
 import { Column, Priority } from './types.js';
 
-const COLUMNS: Column[] = ['backlog', 'ready', 'in_progress', 'blocked', 'completed'];
+const COLUMNS: Column[] = ['backlog', 'ready', 'in_progress', 'blocked', 'review', 'completed'];
 const PRIORITIES: Priority[] = ['low', 'medium', 'high', 'critical'];
 
 export async function startKanbanServer(boardPath: string): Promise<void> {
@@ -70,7 +70,7 @@ export async function startKanbanServer(boardPath: string): Promise<void> {
       },
       {
         name: 'move_ticket',
-        description: 'Move a ticket to a different column.',
+        description: 'Move a ticket to a different column. Use "review" before marking complete; move back to "in_progress" if review fails.',
         inputSchema: {
           type: 'object',
           properties: {

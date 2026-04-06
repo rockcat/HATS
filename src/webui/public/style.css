@@ -50,6 +50,82 @@ header h1 {
   letter-spacing: 0.02em;
 }
 
+/* ── Goal bar ─────────────────────────────────────────── */
+#goal-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  min-height: 28px;
+}
+
+#goal-text-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.goal-text {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+  font-style: italic;
+}
+
+.goal-text:empty::before {
+  content: 'No project goal set — click ✎ to add one';
+  opacity: 0.4;
+}
+
+.goal-edit-btn, .goal-save-btn {
+  font-size: 11px;
+  padding: 1px 7px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.goal-edit-btn:hover, .goal-save-btn:hover { color: var(--text); border-color: var(--text-muted); }
+.goal-save-btn { color: #3fb950; border-color: #3fb95060; }
+
+.goal-input {
+  font-size: 11px;
+  flex: 1;
+  min-width: 0;
+  background: var(--input-bg, var(--bg));
+  border: 1px solid #388bfd80;
+  border-radius: 4px;
+  color: var(--text);
+  padding: 1px 6px;
+}
+
+.kanban-progress {
+  display: flex;
+  width: 180px;
+  height: 8px;
+  border-radius: 4px;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: var(--border);
+}
+
+.kp-seg { height: 100%; transition: width 0.3s ease; }
+.kp-done   { background: #3fb950; }
+.kp-active { background: #e09400; }
+.kp-todo   { background: #484f58; }
+
 .header-btn {
   font-size: 11px;
   font-weight: 600;
@@ -692,6 +768,7 @@ main {
 .col-blocked     { background: rgba(248,81,73,0.2);    color: #f85149; }
 .col-ready       { background: rgba(63,185,80,0.2);    color: #3fb950; }
 .col-backlog     { background: rgba(139,148,158,0.15); color: var(--text-muted); }
+.col-review      { background: rgba(210,153,34,0.2);   color: #d4a017; }
 .col-completed   { background: rgba(63,185,80,0.12);   color: #3fb950; opacity: 0.7; }
 
 .ticket-title {
@@ -1844,18 +1921,23 @@ main {
 
 .avatar-panel {
   flex-shrink: 0;
-  width: 100%;
-  background: #0a0d11;
-  border-bottom: 1px solid var(--border);
-  position: relative;
+  align-self: center;
+  width: min(100%, 260px);
+  aspect-ratio: 1 / 1;
+  margin: 12px auto;
+  border-radius: 14px;
   overflow: hidden;
+  background: var(--surface);
+  background-size: cover;
+  background-position: center;
+  border: 2px solid var(--border);
+  position: relative;
 }
 
 .avatar-canvas {
   display: block;
   width: 100%;
-  aspect-ratio: 4 / 3;
-  max-height: 260px;
+  height: 100%;
 }
 
 /* ── Calendar nav & view tabs (in backlog panel header) ── */
@@ -2662,12 +2744,50 @@ body.has-expanded-panel main > section:not(.panel--expanded) {
 .meeting-end-btn { color: #f85149; border-color: #f85149; }
 .meeting-end-btn:hover { color: #ff7b72; border-color: #ff7b72; background: rgba(248,81,73,0.1); }
 
-.meeting-stage {
-  flex: 0 0 auto;
-  height: clamp(130px, 22vh, 200px);
-  background: var(--bg);
+/* ── Meeting body: left avatars 75% + right conversation 25% ── */
+.meeting-body {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  min-height: 0;
+}
+
+.meeting-left {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border);
+}
+
+.meeting-right {
+  flex: 0 0 25%;
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.meeting-right-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
   border-bottom: 1px solid var(--border);
-  padding: 10px 16px;
+  background: var(--surface);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  flex-shrink: 0;
+}
+
+.meeting-stage {
+  flex: 1;
+  min-height: 0;
+  background: var(--bg);
+  padding: 12px;
   overflow: hidden;
 }
 
@@ -2688,7 +2808,7 @@ body.has-expanded-panel main > section:not(.panel--expanded) {
   gap: 6px;
   flex: 1 1 0;
   min-width: 0;
-  max-width: 160px;
+  max-width: min(30vh, 280px);
 }
 
 /* Wrapper frame — holds background image, clips canvas to rounded corners */

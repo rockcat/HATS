@@ -297,7 +297,8 @@ export class APIServer {
     });
     const agents  = this.buildAgentStatuses();
     const tickets = this.kanbanPath ? await this.readTickets() : [];
-    const project = { id: this.projectId, dir: this.projectDir };
+    const goal    = await this.getProjectGoal();
+    const project = { id: this.projectId, dir: this.projectDir, goal };
     res.write(`data: ${JSON.stringify({ type: 'init', agents, tickets, project })}\n\n`);
     this.sseClients.push(res);
   }
@@ -754,11 +755,22 @@ export class APIServer {
         await this.switchProject(id.trim());
         const agents  = this.buildAgentStatuses();
         const tickets = await this.readTickets().catch(() => []);
-        const project = { id: this.projectId, dir: this.projectDir };
+        const goal    = await this.getProjectGoal();
+        const project = { id: this.projectId, dir: this.projectDir, goal };
         this.json(res, 200, { ok: true, id: this.projectId, agents, tickets, project });
       } catch (err) {
         this.json(res, 500, { error: (err as Error).message });
       }
+
+    } else if (pathname === '/api/project/goal' && req.method === 'GET') {
+      const goal = await this.getProjectGoal();
+      this.json(res, 200, { goal });
+
+    } else if (pathname === '/api/project/goal' && req.method === 'PUT') {
+      const body = await this.readBody(req);
+      const { goal } = JSON.parse(body) as { goal: string };
+      await this.setProjectGoal(goal ?? '');
+      this.json(res, 200, { ok: true });
 
     } else if (pathname === '/api/projects' && req.method === 'GET') {
       // List all project IDs found in the projects root
@@ -1818,12 +1830,25 @@ export class APIServer {
 
   /** Assign a random avatar and/or background to any agent that is missing one. */
   private async assignDefaultVisuals(): Promise<void> {
-    // Load avatar catalogue
+    // Load avatar catalogue and prune entries whose GLB file is missing
     let avatarFiles: string[] = [];
     try {
-      const raw = await readFile(path.join(AVATARS_DIR, 'avatars.json'), 'utf-8');
-      const catalogue = JSON.parse(raw).avatars ?? [];
-      avatarFiles = catalogue.map((a: { file: string }) => a.file);
+      const avatarsJsonPath = path.join(AVATARS_DIR, 'avatars.json');
+      const raw = await readFile(avatarsJsonPath, 'utf-8');
+      const parsed = JSON.parse(raw);
+      const catalogue: { file: string }[] = parsed.avatars ?? [];
+
+      const valid: { file: string }[] = [];
+      for (const entry of catalogue) {
+        try { await stat(path.join(AVATARS_DIR, entry.file)); valid.push(entry); }
+        catch { log.warn(`[API] Avatar GLB missing, removing from catalogue: ${entry.file}`); }
+      }
+      if (valid.length < catalogue.length) {
+        parsed.avatars = valid;
+        await writeFile(avatarsJsonPath, JSON.stringify(parsed, null, 4), 'utf-8');
+      }
+
+      avatarFiles = valid.map(a => a.file);
     } catch { /* no avatars — skip */ }
 
     // Load background filenames
@@ -1874,6 +1899,28 @@ export class APIServer {
       log.info('[API] Assigned default avatars/backgrounds to agents');
       await this.saveCurrentState().catch(() => {});
     }
+  }
+
+  private goalFilePath(): string | null {
+    return this.projectDir ? path.join(this.projectDir, 'project-meta.json') : null;
+  }
+
+  private async getProjectGoal(): Promise<string> {
+    const fp = this.goalFilePath();
+    if (!fp) return '';
+    try {
+      const raw = await readFile(fp, 'utf-8');
+      return (JSON.parse(raw) as { goal?: string }).goal ?? '';
+    } catch { return ''; }
+  }
+
+  private async setProjectGoal(goal: string): Promise<void> {
+    const fp = this.goalFilePath();
+    if (!fp) return;
+    let meta: Record<string, unknown> = {};
+    try { meta = JSON.parse(await readFile(fp, 'utf-8')); } catch { /* new file */ }
+    meta['goal'] = goal;
+    await writeFile(fp, JSON.stringify(meta, null, 2), 'utf-8');
   }
 
   /** Graceful shutdown — saves current project state then stops the server. */

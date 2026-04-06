@@ -58,7 +58,7 @@ export class KanbanStore {
   }
 
   getBoardSummary(): Record<Column, { count: number; tickets: Array<{ id: string; title: string; priority: Priority; assignee?: string }> }> {
-    const columns: Column[] = ['backlog', 'ready', 'in_progress', 'blocked', 'completed'];
+    const columns: Column[] = ['backlog', 'ready', 'in_progress', 'blocked', 'review', 'completed'];
     const result = {} as ReturnType<typeof this.getBoardSummary>;
     for (const col of columns) {
       const tickets = this.listTickets({ column: col });

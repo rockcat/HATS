@@ -45,6 +45,21 @@
     <div id="connection-status" class="status-dot" title="Disconnected"></div>
   </header>
 
+  <!-- Project goal + kanban progress bar -->
+  <div id="goal-bar">
+    <div id="goal-text-wrap">
+      <span id="goal-text" class="goal-text" title="Click to set project goal"></span>
+      <button id="goal-edit-btn" class="goal-edit-btn" title="Edit goal">&#9998;</button>
+      <input id="goal-input" class="goal-input" type="text" placeholder="Enter project goal…" hidden>
+      <button id="goal-save-btn" class="goal-save-btn" hidden>Save</button>
+    </div>
+    <div id="kanban-progress" class="kanban-progress" title="Kanban progress">
+      <div id="kp-done"    class="kp-seg kp-done"></div>
+      <div id="kp-active" class="kp-seg kp-active"></div>
+      <div id="kp-todo"   class="kp-seg kp-todo"></div>
+    </div>
+  </div>
+
   <main>
 
     <!-- Top-left: Agents -->
@@ -130,6 +145,13 @@
         </div>
         <div class="task-list"></div>
       </div>
+      <div class="kanban-col" id="col-review">
+        <div class="kanban-col-header">
+          <span class="kanban-col-label col-review">Review</span>
+          <span class="kanban-col-count"></span>
+        </div>
+        <div class="task-list"></div>
+      </div>
       <div class="kanban-col" id="col-completed">
         <div class="kanban-col-header">
           <span class="kanban-col-label col-completed">Done</span>
@@ -164,7 +186,7 @@
 
   </main>
 
-  <!-- Meeting overlay — shown when a human-included meeting is active -->
+  <!-- Meeting overlay — shown when a meeting is active -->
   <div id="meeting-overlay" class="meeting-overlay" hidden>
     <div class="meeting-header">
       <span class="meeting-live-dot"></span>
@@ -175,16 +197,26 @@
         <button id="meeting-minimize-btn" class="meeting-action-btn" title="Minimise">⊟</button>
       </div>
     </div>
-    <div id="meeting-stage" class="meeting-stage">
-      <div id="meeting-avatars" class="meeting-avatars"></div>
-    </div>
-    <div id="meeting-transcript" class="meeting-transcript"></div>
-    <div id="meeting-human-input" class="meeting-human-input" hidden>
-      <span class="meeting-turn-label" id="meeting-turn-label" hidden>Your turn</span>
-      <input id="meeting-input" class="meeting-input-field" type="text" placeholder="Say something…" autocomplete="off">
-      <button id="meeting-mic-btn" class="mic-btn" title="Hold to speak (Whisper)">🎙</button>
-      <button id="meeting-send-btn" class="meeting-send-btn">Send</button>
-      <button id="meeting-pass-btn" class="meeting-pass-btn" hidden>Pass</button>
+    <div class="meeting-body">
+      <div class="meeting-left">
+        <div id="meeting-stage" class="meeting-stage">
+          <div id="meeting-avatars" class="meeting-avatars"></div>
+        </div>
+      </div>
+      <div class="meeting-right">
+        <div class="meeting-right-header">
+          <span>Conversation</span>
+          <button id="meeting-download-btn" class="meeting-action-btn" title="Download transcript as Markdown">⬇ Save</button>
+        </div>
+        <div id="meeting-transcript" class="meeting-transcript"></div>
+        <div id="meeting-human-input" class="meeting-human-input" hidden>
+          <span class="meeting-turn-label" id="meeting-turn-label" hidden>Your turn</span>
+          <input id="meeting-input" class="meeting-input-field" type="text" placeholder="Say something…" autocomplete="off">
+          <button id="meeting-mic-btn" class="mic-btn" title="Hold to speak (Whisper)">🎙</button>
+          <button id="meeting-send-btn" class="meeting-send-btn">Send</button>
+          <button id="meeting-pass-btn" class="meeting-pass-btn" hidden>Pass</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -288,6 +320,7 @@
               <option value="ready">Ready</option>
               <option value="in_progress">In Progress</option>
               <option value="blocked">Blocked</option>
+              <option value="review">Review</option>
               <option value="completed">Completed</option>
             </select>
           </div>
