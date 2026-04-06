@@ -1079,9 +1079,10 @@ function connect() {
   const dot = document.getElementById('connection-status');
   const es = new EventSource('/events');
 
-  es.onopen = () => dot.classList.add('connected');
+  es.onopen = () => { dot.classList.add('connected'); dot.title = 'Connected'; };
   es.onerror = () => {
     dot.classList.remove('connected');
+    dot.title = 'Disconnected — reconnecting…';
     es.close();
     setTimeout(connect, 3000);
   };
@@ -2011,35 +2012,6 @@ function initTabs() {
   });
 }
 
-// ── Debug logging toggle ──────────────────────────────────────────────────────
-
-function initDebugButton() {
-  const btn = document.getElementById('debug-log-btn');
-  if (!btn) return;
-
-  // Sync with server state on load
-  fetch('/api/debug/logging')
-    .then(r => r.json())
-    .then(({ logPrompts }) => setDebugBtn(btn, logPrompts))
-    .catch(() => {});
-
-  btn.addEventListener('click', () => {
-    const next = !btn.classList.contains('active');
-    fetch('/api/debug/logging', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ enabled: next }),
-    })
-      .then(r => r.json())
-      .then(({ logPrompts }) => setDebugBtn(btn, logPrompts))
-      .catch(() => {});
-  });
-}
-
-function setDebugBtn(btn, on) {
-  btn.classList.toggle('active', on);
-  btn.title = on ? 'Prompt logging ON — click to disable' : 'Toggle prompt logging to console';
-}
 
 // ── Settings modal ────────────────────────────────────────────────────────────
 
@@ -2087,12 +2059,13 @@ function openSettings() {
     fetch('/api/env').then(r => r.json()),
     fetch('/api/providers').then(r => r.json()),
     fetch('/api/project/human-name').then(r => r.json()).catch(() => ({ humanName: 'Human' })),
+    fetch('/api/debug/logging').then(r => r.json()).catch(() => ({ logPrompts: false })),
   ])
-    .then(([entries, providers, { humanName }]) => renderSettingsBody(entries, providers, humanName))
+    .then(([entries, providers, { humanName }, { logPrompts }]) => renderSettingsBody(entries, providers, humanName, logPrompts))
     .catch(() => { body.innerHTML = '<p class="settings-loading">Failed to load settings.</p>'; });
 }
 
-function renderSettingsBody(entries, providers, humanName) {
+function renderSettingsBody(entries, providers, humanName, logPrompts) {
   const body = document.getElementById('settings-body');
 
   // Group entries
@@ -2120,6 +2093,10 @@ function renderSettingsBody(entries, providers, humanName) {
         <label class="env-label" for="setting-human-name">Your name</label>
         <input type="text" id="setting-human-name" class="env-input" data-setting="humanName"
                value="${esc(humanName ?? 'Human')}" placeholder="Human" autocomplete="off" spellcheck="false">
+      </div>
+      <div class="env-field env-field--toggle">
+        <label class="env-label" for="setting-debug-logging">Prompt debug logging</label>
+        <input type="checkbox" id="setting-debug-logging" data-setting="debugLogging"${logPrompts ? ' checked' : ''}>
       </div>
     </div>`;
   for (const group of GROUP_ORDER) {
@@ -2224,6 +2201,13 @@ function saveSettings() {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ humanName }),
   }).then(r => r.json());
+
+  const debugEnabled = document.getElementById('setting-debug-logging')?.checked ?? false;
+  fetch('/api/debug/logging', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ enabled: debugEnabled }),
+  }).catch(() => {});
 
   Promise.all([envSave, profileSave])
     .then(([res]) => {
@@ -3081,7 +3065,6 @@ function initMicButtons() {
 
 initProjectBadge();
 initGoalBar();
-initDebugButton();
 initSettings();
 initAddAgent();
 loadSpecialisations();

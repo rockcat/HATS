@@ -1820,6 +1820,9 @@ main {
   margin-bottom: 10px;
 }
 .env-field:last-child { margin-bottom: 0; }
+.env-field--toggle { display: flex; align-items: center; gap: 8px; }
+.env-field--toggle .env-label { display: inline; margin-bottom: 0; }
+.env-field--toggle input[type="checkbox"] { width: 14px; height: 14px; cursor: pointer; accent-color: #3fb950; }
 
 .env-label {
   display: block;
