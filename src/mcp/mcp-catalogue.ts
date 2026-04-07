@@ -133,4 +133,13 @@ export const MCP_CATALOGUE: MCPCatalogueEntry[] = [
     config: { transport: 'stdio', command: 'npx', args: ['-y', '@modelcontextprotocol/server-slack'], env: { SLACK_BOT_TOKEN: '', SLACK_TEAM_ID: '' } },
     envVars: ['SLACK_BOT_TOKEN', 'SLACK_TEAM_ID'],
   },
+  {
+    id: 'linkedin',
+    name: 'LinkedIn',
+    description: 'Search LinkedIn profiles and jobs, retrieve profile details, and message connections',
+    category: 'web',
+    config: { transport: 'stdio', command: 'node', args: ['linkedin-mcpserver/build/index.js'], env: { LINKEDIN_CLIENT_ID: '', LINKEDIN_CLIENT_SECRET: '' } },
+    envVars: ['LINKEDIN_CLIENT_ID', 'LINKEDIN_CLIENT_SECRET'],
+    notes: 'Requires manual setup: git clone https://github.com/felipfr/linkedin-mcpserver, then npm install && npm run build inside the cloned folder. Place the folder alongside this project. Create a LinkedIn app at https://www.linkedin.com/developers/apps to obtain credentials.',
+  },
 ];

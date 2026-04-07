@@ -31,7 +31,8 @@
       "Bash(npm search:*)",
       "Bash(grep:*)",
       "Bash(python -c \"import sys,json; [print\\(json.loads\\(l\\)[''''id'''']\\) for l in sys.stdin]\")",
-      "Bash(npm uninstall:*)"
+      "Bash(npm uninstall:*)",
+      "WebFetch(domain:mcpservers.org)"
     ]
   }
 }
