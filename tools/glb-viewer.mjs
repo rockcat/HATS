@@ -85,7 +85,6 @@ const HTML = /* html */`<!DOCTYPE html>
   #meeting-frame {
     display: none; position: absolute; z-index: 20; pointer-events: none;
     border-radius: 14px; border: 2px solid rgba(137,87,229,0.6);
-    box-shadow: 0 0 0 9999px rgba(10,10,20,0.72);
   }
   #canvas-wrap.show-preview #meeting-frame { display: block; }
 </style>
@@ -101,6 +100,13 @@ const HTML = /* html */`<!DOCTYPE html>
   <button id="open-btn">📂 Open GLB…</button>
   <input type="file" accept=".glb" id="file-input" style="display:none">
   <div id="status">No model loaded</div>
+
+  <div class="section">
+    <h3>Avatar</h3>
+    <select id="avatar-select">
+      <option value="">Load from library…</option>
+    </select>
+  </div>
 
   <div class="section">
     <h3>Avatar info</h3>
@@ -123,9 +129,9 @@ const HTML = /* html */`<!DOCTYPE html>
 
   <div class="section">
     <h3>Camera position</h3>
-    <div class="row"><label>X</label><input type="range" id="cam-x" min="-20" max="20" value="0" step="0.05"><span class="val" id="cam-x-v">0.00</span></div>
-    <div class="row"><label>Y</label><input type="range" id="cam-y" min="-20" max="20" value="1.7" step="0.05"><span class="val" id="cam-y-v">1.70</span></div>
-    <div class="row"><label>Z</label><input type="range" id="cam-z" min="0.1" max="20" value="0.5" step="0.05"><span class="val" id="cam-z-v">0.50</span></div>
+    <div class="row"><label>X</label><input type="range" id="cam-x" min="-20" max="20" value="0" step="0.01"><span class="val" id="cam-x-v">0.00</span></div>
+    <div class="row"><label>Y</label><input type="range" id="cam-y" min="-20" max="20" value="1.7" step="0.01"><span class="val" id="cam-y-v">1.70</span></div>
+    <div class="row"><label>Z</label><input type="range" id="cam-z" min="0.1" max="20" value="0.5" step="0.01"><span class="val" id="cam-z-v">0.50</span></div>
     <div class="row"><label>FOV</label><input type="range" id="fov" min="10" max="90" value="50" step="1"><span class="val" id="fov-v">50</span></div>
   </div>
 
@@ -145,6 +151,7 @@ const HTML = /* html */`<!DOCTYPE html>
     <button id="preview-btn">Show meeting preview</button>
     <button id="reset-btn">Reset all</button>
     <button id="copy-btn">Copy avatars.json entry</button>
+    <button id="save-avatar-btn">💾 Save to library</button>
   </div>
 
   <div class="section">
@@ -181,7 +188,9 @@ function applyCamera() {
 function resize() {
   const w = canvas.clientWidth, h = canvas.clientHeight;
   if (canvas.width !== w || canvas.height !== h) {
-    renderer.setSize(w, h, false); camera.aspect = w/h; camera.updateProjectionMatrix();
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
   }
 }
 
@@ -267,7 +276,8 @@ let previewOn = false;
 function updatePreviewFrame() {
   if (!previewOn) return;
   const cw = canvas.clientWidth, ch = canvas.clientHeight;
-  const size = Math.round(Math.min(cw, ch) * 0.72);
+  // Square = full min dimension, matching the 1:1 meeting canvas
+  const size = Math.min(cw, ch);
   const left = Math.round((cw - size) / 2);
   const top  = Math.round((ch - size) / 2);
   meetingFrame.style.width  = size + 'px';
@@ -281,44 +291,155 @@ document.getElementById('preview-btn').addEventListener('click', () => {
   canvasWrap.classList.toggle('show-preview', previewOn);
   document.getElementById('preview-btn').classList.toggle('active', previewOn);
   document.getElementById('preview-btn').textContent = previewOn ? 'Hide meeting preview' : 'Show meeting preview';
-  if (previewOn) updatePreviewFrame();
+  if (previewOn) {
+    updatePreviewFrame();
+  } else {
+    // Restore full aspect ratio
+    camera.aspect = canvas.clientWidth / canvas.clientHeight;
+    camera.updateProjectionMatrix();
+  }
+});
+
+// ── Load and manage avatars library ────────────────────────────────────────
+
+let currentAvatarName = null;
+
+async function loadAvatarsLibrary() {
+  try {
+    const res = await fetch('/api/avatars');
+    const data = await res.json();
+    const select = document.getElementById('avatar-select');
+    data.avatars.forEach(av => {
+      const opt = document.createElement('option');
+      opt.value = av.name;
+      opt.textContent = av.name;
+      select.appendChild(opt);
+    });
+  } catch (err) {
+    console.error('Failed to load avatars:', err);
+  }
+}
+
+document.getElementById('avatar-select').addEventListener('change', async (e) => {
+  const name = e.target.value;
+  if (!name) return;
+
+  try {
+    const res = await fetch('/api/avatars/' + encodeURIComponent(name));
+    const avatar = await res.json();
+    currentAvatarName = name;
+
+    // Populate info fields
+    document.getElementById('av-name').value = avatar.name;
+    document.getElementById('av-sex').value = avatar.sex;
+
+    // loadGLB with savedParams applies all camera/rotation/scale exactly as the meeting app does
+    loadGLB('/avatars/' + avatar.file, avatar.file, avatar);
+  } catch (err) {
+    alert('Failed to load avatar: ' + err.message);
+  }
+});
+
+document.getElementById('save-avatar-btn').addEventListener('click', async () => {
+  const name = document.getElementById('av-name').value.trim();
+  if (!name) {
+    alert('Enter an avatar name');
+    return;
+  }
+
+  const avatar = {
+    name,
+    sex: document.getElementById('av-sex').value,
+    file: currentFile || 'model.glb',
+    camera: [+getCamX().toFixed(3), +getCamY().toFixed(3), +getCamZ().toFixed(3)],
+    rotate: [+getRx().toFixed(1), +getRy().toFixed(1), +getRz().toFixed(1)],
+    fov: +getFov().toFixed(0),
+    scale: +getScale().toFixed(3),
+  };
+
+  try {
+    const res = await fetch('/api/avatars', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(avatar),
+    });
+    if (!res.ok) throw new Error(await res.text());
+
+    currentAvatarName = name;
+    document.getElementById('save-avatar-btn').textContent = '✓ Saved!';
+    setTimeout(() => {
+      document.getElementById('save-avatar-btn').textContent = '💾 Save to library';
+      // Reload avatar select
+      document.getElementById('avatar-select').innerHTML = '<option value="">Load from library…</option>';
+      loadAvatarsLibrary();
+    }, 1500);
+  } catch (err) {
+    alert('Failed to save avatar: ' + err.message);
+  }
 });
 
 const loader = new GLTFLoader();
-function loadGLB(url, name) {
+
+// setSlider is used both in loadGLB and the avatar loader
+function setSlider(id, v, dec) {
+  const el = document.getElementById(id);
+  el.value = v;
+  document.getElementById(id + '-v').textContent = Number(v).toFixed(dec);
+}
+
+// savedParams: avatar object from avatars.json — if provided, skip auto-frame and use its values.
+// This mirrors exactly how the meeting app applies the params via loadSlotGLB().
+function loadGLB(url, name, savedParams) {
   currentFile = name;
   if(model){scene.remove(model);model=null;}
   document.getElementById('status').textContent='Loading…';
   document.getElementById('info').textContent='';
   loader.load(url, gltf=>{
     model=gltf.scene;
-    model.rotation.set(THREE.MathUtils.degToRad(getRx()),THREE.MathUtils.degToRad(getRy()),THREE.MathUtils.degToRad(getRz()));
-    model.scale.setScalar(getScale());
-    scene.add(model);
 
-    // Auto-frame: compute bounding sphere and position camera to fit
-    const box = new THREE.Box3().setFromObject(model);
-    const sphere = new THREE.Sphere();
-    box.getBoundingSphere(sphere);
-    const center = sphere.center;
-    const r = sphere.radius;
-    // Place camera in front of model centre, far enough to see it all
-    const fovRad = THREE.MathUtils.degToRad(getFov());
-    const dist = (r / Math.tan(fovRad / 2)) * 1.2;
-    const cx = +center.x.toFixed(3);
-    const cy = +center.y.toFixed(3);
-    const cz = +(center.z + dist).toFixed(3);
-    // Sync sliders
-    const setSlider = (id, v, dec) => {
-      const el = document.getElementById(id);
-      el.value = v;
-      document.getElementById(id + '-v').textContent = Number(v).toFixed(dec);
-    };
-    setSlider('cam-x', cx, 2);
-    setSlider('cam-y', cy, 2);
-    setSlider('cam-z', cz, 2);
+    if (savedParams) {
+      // Apply saved rotation & scale — same as meeting app
+      const rot = savedParams.rotate ?? [0,0,0];
+      model.rotation.set(
+        THREE.MathUtils.degToRad(rot[0]),
+        THREE.MathUtils.degToRad(rot[1]),
+        THREE.MathUtils.degToRad(rot[2])
+      );
+      model.scale.setScalar(savedParams.scale ?? 1);
+
+      // Apply saved camera — same formula as meeting app:
+      //   camera.position.set(camPos[0], camPos[1], camPos[2])
+      //   camera.lookAt(camPos[0], camPos[1] - 0.08, 0)
+      const cam = savedParams.camera ?? [0, 1.7, 0.5];
+      setSlider('cam-x', cam[0], 2);
+      setSlider('cam-y', cam[1], 2);
+      setSlider('cam-z', cam[2], 2);
+      setSlider('fov', savedParams.fov ?? 50, 0);
+      setSlider('rx', rot[0], 1);
+      setSlider('ry', rot[1], 1);
+      setSlider('rz', rot[2], 1);
+      setSlider('scale', savedParams.scale ?? 1, 3);
+    } else {
+      // New model via drag/drop or file picker — apply current slider values then auto-frame
+      model.rotation.set(THREE.MathUtils.degToRad(getRx()),THREE.MathUtils.degToRad(getRy()),THREE.MathUtils.degToRad(getRz()));
+      model.scale.setScalar(getScale());
+
+      const box = new THREE.Box3().setFromObject(model);
+      const sphere = new THREE.Sphere();
+      box.getBoundingSphere(sphere);
+      const center = sphere.center;
+      const r = sphere.radius;
+      const fovRad = THREE.MathUtils.degToRad(getFov());
+      const dist = (r / Math.tan(fovRad / 2)) * 1.2;
+      setSlider('cam-x', +center.x.toFixed(3), 2);
+      setSlider('cam-y', +center.y.toFixed(3), 2);
+      setSlider('cam-z', +(center.z + dist).toFixed(3), 2);
+    }
+
+    scene.add(model);
     applyCamera();
 
+    const box = new THREE.Box3().setFromObject(model);
     const meshes=[],morphMeshes=[];
     model.traverse(n=>{
       if(n.isMesh||n.isSkinnedMesh){
@@ -327,7 +448,7 @@ function loadGLB(url, name) {
           morphMeshes.push('<b>'+(n.name||'mesh')+'</b>:<br>'+Object.keys(n.morphTargetDictionary).join(', '));
       }
     });
-    const sz=box.getSize(new THREE.Vector3()), ctr=center;
+    const sz=box.getSize(new THREE.Vector3()), ctr=box.getCenter(new THREE.Vector3());
     document.getElementById('canvas-wrap').classList.add('has-model');
     document.getElementById('status').textContent='✓ '+name;
     document.getElementById('info').innerHTML=
@@ -354,12 +475,53 @@ document.addEventListener('drop', e=>{
   const f=e.dataTransfer.files[0]; if(f) loadGLB(URL.createObjectURL(f),f.name);
 });
 
-(function animate(){ requestAnimationFrame(animate); resize(); updatePreviewFrame(); renderer.render(scene,camera); })();
+// Load avatars library on startup
+loadAvatarsLibrary();
+
+(function animate(){
+  requestAnimationFrame(animate);
+  resize();
+  updatePreviewFrame();
+
+  if (previewOn) {
+    // Render only into the square region — camera aspect = 1 matches meeting exactly
+    const cw = canvas.clientWidth, ch = canvas.clientHeight;
+    const size = Math.min(cw, ch);
+    const x = Math.round((cw - size) / 2);
+    const y = Math.round((ch - size) / 2);
+    renderer.setScissorTest(true);
+    renderer.setScissor(x, y, size, size);
+    renderer.setViewport(x, y, size, size);
+    camera.aspect = 1;
+    camera.updateProjectionMatrix();
+    renderer.render(scene, camera);
+    renderer.setScissorTest(false);
+    // Restore full viewport for next non-preview frame
+    renderer.setViewport(0, 0, cw, ch);
+  } else {
+    renderer.render(scene, camera);
+  }
+})();
 </script>
 </body>
 </html>`;
 
 // ── HTTP server ───────────────────────────────────────────────────────────────
+
+const AVATARS_FILE = path.join(ROOT, 'avatars', 'avatars.json');
+const AVATARS_DIR = path.join(ROOT, 'avatars');
+
+function readAvatars() {
+  try {
+    return JSON.parse(fs.readFileSync(AVATARS_FILE, 'utf-8'));
+  } catch {
+    return { avatars: [] };
+  }
+}
+
+function writeAvatars(data) {
+  fs.writeFileSync(AVATARS_FILE, JSON.stringify(data, null, 2), 'utf-8');
+}
 
 const server = http.createServer((req, res) => {
   const url = req.url.split('?')[0];
@@ -368,6 +530,66 @@ const server = http.createServer((req, res) => {
   if (url === '/' || url === '/index.html') {
     res.writeHead(200, { 'Content-Type': 'text/html' });
     return res.end(HTML);
+  }
+
+  // API: GET /api/avatars — list all avatars
+  if (req.method === 'GET' && url === '/api/avatars') {
+    const data = readAvatars();
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify(data));
+  }
+
+  // API: GET /api/avatars/:name — get one avatar
+  if (req.method === 'GET' && url.startsWith('/api/avatars/')) {
+    const name = decodeURIComponent(url.slice(13));
+    const data = readAvatars();
+    const avatar = data.avatars.find(a => a.name === name);
+    if (!avatar) {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ error: 'Not found' }));
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify(avatar));
+  }
+
+  // API: POST /api/avatars — create/update avatar
+  if (req.method === 'POST' && url === '/api/avatars') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', () => {
+      try {
+        const avatar = JSON.parse(body);
+        const data = readAvatars();
+        const idx = data.avatars.findIndex(a => a.name === avatar.name);
+        if (idx >= 0) {
+          data.avatars[idx] = avatar;
+        } else {
+          data.avatars.push(avatar);
+        }
+        writeAvatars(data);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true }));
+      } catch (err) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message }));
+      }
+    });
+    return;
+  }
+
+  // Serve avatars (GLB files) under /avatars/
+  if (url.startsWith('/avatars/')) {
+    const rel = url.slice(9);
+    const file = path.join(AVATARS_DIR, rel);
+    // Safety: don't escape outside avatars dir
+    if (!file.startsWith(AVATARS_DIR)) { res.writeHead(403); return res.end(); }
+    fs.readFile(file, (err, data) => {
+      if (err) { res.writeHead(404); return res.end('Not found'); }
+      const ext = path.extname(file);
+      res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream' });
+      res.end(data);
+    });
+    return;
   }
 
   // Serve node_modules under /nm/

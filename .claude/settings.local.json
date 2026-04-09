@@ -32,7 +32,15 @@
       "Bash(grep:*)",
       "Bash(python -c \"import sys,json; [print\\(json.loads\\(l\\)[''''id'''']\\) for l in sys.stdin]\")",
       "Bash(npm uninstall:*)",
-      "WebFetch(domain:mcpservers.org)"
+      "WebFetch(domain:mcpservers.org)",
+      "Bash(python F:/workspace/HATS/fix_kanban.py)",
+      "Bash(python3 -c \"print\\('script not found'\\)\")",
+      "Bash(C:/Users/pauln/AppData/Local/Programs/Python/Python310/python.exe:*)",
+      "Bash(python restore_kanban.py)",
+      "Bash(git -C \"F:/workspace/HATS\" show 8ac6c6b -- src/webui/public/app.js)",
+      "Bash(git -C \"F:/workspace/HATS\" diff 8ac6c6b~1 8ac6c6b -- src/webui/public/app.js)",
+      "Bash(npm rebuild:*)",
+      "Bash(xargs ls:*)"
     ]
   }
 }

@@ -1,76 +1,106 @@
 {
-  "avatars": [
-    {
-      "name": "Casey",
-      "sex": "female",
-      "file": "casey.glb",
-      "camera": [0, 1.65, 0.5],
-      "rotate": [0, 0, 0],
-      "fov": 50,
-      "scale": 1
-    },
-    {
-      "name": "Jordan",
-      "sex": "male",
-      "file": "jordan.glb",
-      "camera": [0, 1.7, 0.5],
-      "rotate": [0, 0, 0],
-      "fov": 44,
-      "scale": 1
-    },
-    {
-      "name": "Ella",
-      "sex": "female",
-      "file": "ella.glb",
-      "camera": [0, 1.65, 0.5],
-      "rotate": [0, 0, 0],
-      "fov": 53,
-      "scale": 1
-    },
-    {
-      "name": "Max",
-      "sex": "female",
-      "file": "max.glb",
-      "camera": [0, 1.8, 0.5],
-      "rotate": [0, 0, 0],
-      "fov": 45,
-      "scale": 1
-    },
-    {
-      "name": "Clare",
-      "sex": "male",
-      "file": "clare.glb",
-      "camera": [0, 8.05, 2.85],
-      "rotate": [0, 0, 0],
-      "fov": 40,
-      "scale": 0.05
-    },
-    {
-      "name": "Dave",
-      "sex": "male",
-      "file": "dave.glb",
-      "camera": [0, 8.6, 3.05],
-      "rotate": [0, 0, 0],
-      "fov": 37,
-      "scale": 0.05
-    },
-    {
-      "name": "Will",
-      "sex": "male",
-      "file": "will.glb",
-      "camera": [0, 1.75, 0.5],
-      "rotate": [0, 0, 0],
-      "fov": 50,
-      "scale": 1
-    },
-    {
-      "name": "Harry",
-      "sex": "male",
-      "file": "harry.glb",
-      "camera": [0, 1.81, 0.26],
-      "rotate": [-7, 0, 0],
-      "fov": 49,
-      "scale": 1
-    }
-  ]
+    "avatars": [
+        {
+            "name": "Casey",
+            "sex": "female",
+            "file": "casey.glb",
+            "camera": [
+                0,
+                1.65,
+                0.5
+            ],
+            "rotate": [
+                0,
+                0,
+                0
+            ],
+            "fov": 50,
+            "scale": 1
+        },
+        {
+            "name": "Jordan",
+            "sex": "male",
+            "file": "jordan.glb",
+            "camera": [
+                0,
+                1.7,
+                0.5
+            ],
+            "rotate": [
+                0,
+                0,
+                0
+            ],
+            "fov": 44,
+            "scale": 1
+        },
+        {
+            "name": "Ella",
+            "sex": "female",
+            "file": "ella.glb",
+            "camera": [
+                0,
+                1.65,
+                0.5
+            ],
+            "rotate": [
+                0,
+                0,
+                0
+            ],
+            "fov": 53,
+            "scale": 1
+        },
+        {
+            "name": "Max",
+            "sex": "female",
+            "file": "max.glb",
+            "camera": [
+                0,
+                1.8,
+                0.5
+            ],
+            "rotate": [
+                0,
+                0,
+                0
+            ],
+            "fov": 45,
+            "scale": 1
+        },
+        {
+            "name": "Lyra",
+            "sex": "female",
+            "file": "lyra.glb",
+            "camera": [
+                0,
+                1.65,
+                0.5
+            ],
+            "rotate": [
+                0,
+                0,
+                0
+            ],
+            "fov": 50,
+            "scale": 1
+        },
+        {
+            "name": "Anne",
+            "sex": "female",
+            "file": "anne.glb",
+            "camera": [
+                0,
+                1.65,
+                0.5
+            ],
+            "rotate": [
+                0,
+                0,
+                0
+            ],
+            "fov": 50,
+            "scale": 1
+        }
+    ]
 }

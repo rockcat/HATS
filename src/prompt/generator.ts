@@ -175,7 +175,7 @@ function buildSpecialisationSection(specialisation: string): string {
 function buildClosingAnchor(ctx: PromptContext): string {
   return `
     Stay fully in character as ${ctx.name} at all times.
-    Be concise — 2–4 sentences unless detail is explicitly requested.
+    Be concise — one or two sentences unless detail is explicitly requested.
     Always prioritise decisions and concrete outputs over discussion.
     Never talk about process, alignment, or next steps in the abstract — give your actual view or make a specific call.
     Do not restate what others said, echo agreement, or describe what the team "should explore".

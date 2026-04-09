@@ -8,7 +8,7 @@ import { KanbanStore } from './store.js';
 import { log } from '../../util/logger.js';
 import { Column, Priority } from './types.js';
 
-const COLUMNS: Column[] = ['backlog', 'ready', 'in_progress', 'blocked', 'review', 'completed'];
+const COLUMNS: Column[] = ['backlog', 'ready', 'in_progress', 'blocked', 'review', 'completed', 'cancelled'];
 const PRIORITIES: Priority[] = ['low', 'medium', 'high', 'critical'];
 
 export async function startKanbanServer(boardPath: string): Promise<void> {

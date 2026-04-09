@@ -4,7 +4,8 @@ export type Column =
   | 'in_progress'
   | 'blocked'
   | 'review'      // awaiting review before completion
-  | 'completed';
+  | 'completed'
+  | 'cancelled';
 
 export type Priority = 'low' | 'medium' | 'high' | 'critical';
 

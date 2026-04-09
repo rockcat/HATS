@@ -8,8 +8,8 @@
   <script type="importmap">
   {
     "imports": {
-      "three": "https://unpkg.com/three@0.163.0/build/three.module.js",
-      "three/addons/": "https://unpkg.com/three@0.163.0/examples/jsm/"
+      "three": "/nm/three/build/three.module.js",
+      "three/addons/": "/nm/three/examples/jsm/"
     }
   }
   </script>
@@ -154,6 +154,13 @@
       <div class="kanban-col" id="col-completed">
         <div class="kanban-col-header">
           <span class="kanban-col-label col-completed">Done</span>
+          <span class="kanban-col-count"></span>
+        </div>
+        <div class="task-list"></div>
+      </div>
+      <div class="kanban-col" id="col-cancelled">
+        <div class="kanban-col-header">
+          <span class="kanban-col-label col-cancelled">Cancelled</span>
           <span class="kanban-col-count"></span>
         </div>
         <div class="task-list"></div>
@@ -321,6 +328,7 @@
               <option value="blocked">Blocked</option>
               <option value="review">Review</option>
               <option value="completed">Completed</option>
+              <option value="cancelled">Cancelled</option>
             </select>
           </div>
           <div class="field-group">

@@ -69,7 +69,7 @@ export class MeetingRoom {
           const agent = this.agents.get(participant);
           if (!agent) continue;
           const response = await agent.meetingTurn(
-            `${prompt}\n\nYour turn. State your concrete position, decision, or specific action — not what "we should explore" or how "we should approach" it. No process talk, no agreement echo, no preamble. 1–2 sentences max.`,
+            `${prompt}\n\nYour turn. State your concrete position, decision, or specific action — not what "we should explore" or how "we should approach" it. No process talk, no agreement echo, no preamble. one or two sentences max.`,
           );
           await this.recordTurn(participant, response);
         }
@@ -79,7 +79,7 @@ export class MeetingRoom {
       if (!this.closed) {
         const summary = await facilitator.meetingTurn(
           `${buildTranscriptText(meeting.turns)}\n\n` +
-          `As facilitator: state what has been decided and what is still unresolved. If there is enough to act on, close now with report_task_complete listing concrete action items and owners. If not, name the single specific question still blocking a decision. No summaries of who said what. 1–2 sentences.`,
+          `As facilitator: state what has been decided and what is still unresolved. If there is enough to act on, close now with report_task_complete listing concrete action items and owners. If not, name the single specific question still blocking a decision. No summaries of who said what. one or two sentences.`,
         );
         await this.recordTurn(meeting.facilitator, summary);
       }

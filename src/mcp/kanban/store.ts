@@ -58,7 +58,7 @@ export class KanbanStore {
   }
 
   getBoardSummary(): Record<Column, { count: number; tickets: Array<{ id: string; title: string; priority: Priority; assignee?: string }> }> {
-    const columns: Column[] = ['backlog', 'ready', 'in_progress', 'blocked', 'review', 'completed'];
+    const columns: Column[] = ['backlog', 'ready', 'in_progress', 'blocked', 'review', 'completed', 'cancelled'];
     const result = {} as ReturnType<typeof this.getBoardSummary>;
     for (const col of columns) {
       const tickets = this.listTickets({ column: col });
@@ -105,7 +105,7 @@ export class KanbanStore {
         updatedAt: new Date().toISOString(),
       };
       this.board.tickets[id] = ticket;
-      this.save();
+      await this.save();
       return ticket;
     });
   }
@@ -116,7 +116,7 @@ export class KanbanStore {
       const ticket = this.requireTicket(id);
       ticket.column = column;
       ticket.updatedAt = new Date().toISOString();
-      this.save();
+      await this.save();
       return ticket;
     });
   }
@@ -127,7 +127,7 @@ export class KanbanStore {
       const ticket = this.requireTicket(id);
       ticket.assignee = assignee;
       ticket.updatedAt = new Date().toISOString();
-      this.save();
+      await this.save();
       return ticket;
     });
   }
@@ -138,7 +138,7 @@ export class KanbanStore {
       const ticket = this.requireTicket(id);
       Object.assign(ticket, fields);
       ticket.updatedAt = new Date().toISOString();
-      this.save();
+      await this.save();
       return ticket;
     });
   }
@@ -155,7 +155,7 @@ export class KanbanStore {
       };
       ticket.comments.push(comment);
       ticket.updatedAt = new Date().toISOString();
-      this.save();
+      await this.save();
       return ticket;
     });
   }
@@ -170,7 +170,7 @@ export class KanbanStore {
         ticket.column = 'blocked';
       }
       ticket.updatedAt = new Date().toISOString();
-      this.save();
+      await this.save();
       return ticket;
     });
   }
@@ -203,7 +203,7 @@ export class KanbanStore {
           unblocked.push(ticket);
         }
       }
-      if (unblocked.length > 0) this.save();
+      if (unblocked.length > 0) await this.save();
       return unblocked;
     });
   }
@@ -213,7 +213,7 @@ export class KanbanStore {
       await this.reload();
       this.requireTicket(id);
       delete this.board.tickets[id];
-      this.save();
+      await this.save();
     });
   }
 
@@ -235,10 +235,11 @@ export class KanbanStore {
     return ticket;
   }
 
-  private save(): void {
+  private save(): Promise<void> {
     this.saveQueue = this.saveQueue.then(() =>
       fs.writeFile(this.filePath, JSON.stringify(this.board, null, 2), 'utf-8'),
     );
+    return this.saveQueue;
   }
 
   private async persist(): Promise<void> {

@@ -247,11 +247,18 @@ async function processSentence(
 
     // Write WAV to disk for Rhubarb, then run Rhubarb
     await writeFile(wavFile, wavBytes);
-    await runRhubarb(wavFile, dialogueFile, jsonFile);
 
-    const visemeRaw = await readFile(jsonFile, 'utf-8');
-    const visemes   = parseVisemes(visemeRaw);
-    const duration  = visemes.at(-1)?.end ?? 0;
+    let visemes: VisemeEvent[] = [];
+    try {
+      await runRhubarb(wavFile, dialogueFile, jsonFile);
+      const visemeRaw = await readFile(jsonFile, 'utf-8');
+      visemes = parseVisemes(visemeRaw);
+    } catch {
+      // Rhubarb unavailable — audio still plays; browser uses synthetic oscillation
+      log.warn(`[Speech] Rhubarb skipped for sentence ${id + 1} — no viseme data`);
+    }
+
+    const duration = visemes.length > 0 ? (visemes.at(-1)?.end ?? 0) : wavBytes.length / 2 / 22050;
 
     log.info(`[Speech] Sentence ${id + 1}/${totalChunks} ready — ${visemes.length} visemes, ${duration.toFixed(2)}s`);
 

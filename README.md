@@ -1,23 +1,65 @@
-# HATS
+# HATS — AI agents that disagree to make better decisions
 
-HATS is an AI-powered team collaboration platform that fields a crew of distinct, opinionated agents — each embodying a different thinking style — to
-plan work, debate decisions, run meetings, and execute tasks alongside human team leads.
+Don't ask one AI, start running a team.
 
-Inspired by Edward de Bono's Six Thinking Hats framework, HATS assembles teams of AI agents that genuinely disagree with each other in productive
-ways, surfacing blind spots that a single AI assistant would never find.
+Run meetings, plan work, and stress-test ideas with a team of AI agents that think differently — and challenge each other on purpose.
 
-Every HATS agent wears a hat that defines how it thinks:
+Most AI tools give you one answer.
+HATS gives you a panel of perspectives.
 
-- White Hat — The analyst. Evidence-first, assumption-aware, gap-finding.
-- Red Hat — The empath. Surfaces emotional impact and human consequences before decisions are locked in.
-- Black Hat — The critic. Stress-tests plans, quantifies risk, demands mitigation.
-- Yellow Hat — The optimist. Finds upside, champions promising ideas, maintains momentum.
-- Green Hat — The creative. Generates alternatives, breaks patterns, reframes constraints.
-- Blue Hat — The organiser. Runs the agenda, tracks decisions, synthesises conclusions.
+## What makes HATS different?
 
-Agents are assigned hat types, models, voices, and 3D avatars. Any of the three leading LLM providers — Anthropic Claude, OpenAI GPT, and Google
-Gemini — can power any agent, with real-time token and cost telemetry tracked per agent and per model.
-The system also supports Ollama and LM Studio for local agent provision.
+HATS is inspired by the Six Thinking Hats framework — but implemented as a real multi-agent system with structured disagreement.
+
+Each agent has a role:
+
+⚪ White Hat — facts, gaps, assumptions
+
+🔴 Red Hat — human impact, intuition
+
+⚫ Black Hat — risks, failure modes
+
+🟡 Yellow Hat — upside, opportunity
+
+🟢 Green Hat — creativity, alternatives
+
+🔵 Blue Hat — facilitation, synthesis
+
+
+**They don’t just respond — they debate.**
+
+## Why this matters
+
+LLMs tend to:
+
+- agree with you
+- sound confident even when wrong
+- miss blind spots
+
+HATS fixes that by:
+
+- introducing structured conflict
+- forcing multiple perspectives
+- simulating real team dynamics
+
+### Example use cases
+- Run a product planning meeting
+- Stress-test a startup idea
+- Explore trade-offs in architecture decisions
+-Replace async brainstorming sessions
+
+## Watch 6 AI agents plan a startup and argue about it
+
+(put video here — this is critical)
+
+## Architecture highlights
+
+- Multi-agent orchestration
+- Per-agent model selection:
+- OpenAI / Claude / Gemini
+- Local support via Ollama / LM Studio
+- Token + cost tracking per agent
+- Voice + 3D avatar support
 
 ## Live Meetings with Faces and Voices
 

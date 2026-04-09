@@ -774,6 +774,7 @@ main {
 .col-backlog     { background: rgba(139,148,158,0.15); color: var(--text-muted); }
 .col-review      { background: rgba(210,153,34,0.2);   color: #d4a017; }
 .col-completed   { background: rgba(63,185,80,0.12);   color: #3fb950; opacity: 0.7; }
+.col-cancelled   { background: rgba(139,148,158,0.1);  color: #8b949e; opacity: 0.6; }
 
 .ticket-title {
   font-size: 12px;
@@ -2795,21 +2796,16 @@ body.has-expanded-panel main > section:not(.panel--expanded) {
   min-height: 0;
   background: var(--bg);
   padding: 12px;
-  overflow-y: auto;
+  overflow: hidden;
   display: flex;
-  align-items: flex-start;
-  align-content: flex-start;
+  align-items: stretch;
 }
 
 .meeting-avatars {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
   gap: 12px;
-  justify-content: center;
-  align-items: flex-start;
-  align-content: flex-start;
   width: 100%;
-  box-sizing: border-box;
+  /* columns/rows set dynamically by layoutMeetingAvatars() */
 }
 
 .meeting-avatar-slot {
@@ -2817,9 +2813,8 @@ body.has-expanded-panel main > section:not(.panel--expanded) {
   flex-direction: column;
   align-items: center;
   gap: 6px;
-  flex: 0 1 220px;
-  min-width: 120px;
-  max-width: 220px;
+  min-width: 0;
+  min-height: 0;
 }
 
 /* Wrapper frame — holds background image, clips canvas to rounded corners */
@@ -2860,7 +2855,7 @@ body.has-expanded-panel main > section:not(.panel--expanded) {
 .meeting-avatar-human {
   width: 100%;
   aspect-ratio: 1 / 1;
-  flex: none;
+  flex: 1 1 0;
   border-radius: 12px;
   background: var(--surface-2);
   border: 2px solid var(--border);
