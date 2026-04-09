@@ -23,7 +23,7 @@ async function ensureThree() {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const BLEND = 0.18;
+const BLEND = 0.4;
 const BODY_KEYWORDS = ['torso', 'chest', 'body', 'shoulder', 'arm', 'hand',
                        'leg', 'foot', 'toe', 'hips', 'spine'];
 const CANVAS_SIZE = 512; // draw-buffer size — CSS scales it via aspect-ratio/flex
@@ -70,7 +70,9 @@ function createSlotRenderer(canvas) {
 
   const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 100);
 
-  return { renderer, scene, camera, visemeMeshes: [], morphWeights: {}, targetViseme: 'viseme_sil' };
+  let resolveLoaded;
+  const glbLoaded = new Promise(res => { resolveLoaded = res; });
+  return { renderer, scene, camera, visemeMeshes: [], morphWeights: {}, targetViseme: 'viseme_sil', glbLoaded, _resolveLoaded: resolveLoaded };
 }
 
 function loadSlotGLB(slot, file, camPos, rotate, fov, scale) {
@@ -78,8 +80,16 @@ function loadSlotGLB(slot, file, camPos, rotate, fov, scale) {
   const toRemove = slot.scene.children.filter(c => !c.isLight);
   for (const c of toRemove) slot.scene.remove(c);
   slot.visemeMeshes = [];
+  if (slot.loadGen == null) slot.loadGen = 0;
+  const gen = ++slot.loadGen;
+
+  // Create a new glbLoaded promise for this load
+  let resolveLoaded;
+  slot.glbLoaded = new Promise(res => { resolveLoaded = res; });
+  slot._resolveLoaded = resolveLoaded;
 
   new GLTFLoader().load(`/avatars/${file}`, gltf => {
+    if (gen !== slot.loadGen) { resolveLoaded(); return; } // stale load — discard
     slot.scene.add(gltf.scene);
 
     if (rotate && rotate.length === 3) {
@@ -97,13 +107,16 @@ function loadSlotGLB(slot, file, camPos, rotate, fov, scale) {
     gltf.scene.traverse(obj => {
       if (!obj.isMesh) return;
       if (obj.morphTargetDictionary) {
-        const hasViseme = Object.keys(obj.morphTargetDictionary).some(k => k.startsWith('viseme_'));
+        const keys = Object.keys(obj.morphTargetDictionary);
+        const hasViseme = keys.some(k => k.startsWith('viseme_'));
         if (hasViseme && !slot.visemeMeshes.includes(obj)) slot.visemeMeshes.push(obj);
       }
       const low = obj.name.toLowerCase();
       if (BODY_KEYWORDS.some(kw => low.includes(kw))) obj.visible = false;
     });
-  });
+    console.log(`[Meeting] GLB "${file}" loaded: ${slot.visemeMeshes.length} viseme mesh(es)`);
+    resolveLoaded();
+  }, undefined, () => resolveLoaded()); // error → resolve anyway so speech isn't blocked
 }
 
 function renderAllSlots() {
@@ -187,6 +200,11 @@ function setSpeakingViseme(name, viseme) {
 }
 
 async function playSpeechChunk(chunk, name) {
+  // Wait for the avatar GLB to finish loading (up to 4 s) so lipsync starts in sync
+  if (slots[name]?.glbLoaded) {
+    await Promise.race([slots[name].glbLoaded, new Promise(r => setTimeout(r, 4000))]);
+  }
+
   return new Promise(resolve => {
     try {
       const ctx = getAudioContext();
@@ -218,7 +236,11 @@ async function playSpeechChunk(chunk, name) {
           slots[name].speechDuration   = audioDuration;
         }
 
-        source.onended = () => {
+        let done = false;
+        const finish = () => {
+          if (done) return;
+          done = true;
+          clearTimeout(safetyTimer);
           if (slots[name]) {
             slots[name].speechVisemes  = null;
             slots[name].speechStartAt  = null;
@@ -226,9 +248,11 @@ async function playSpeechChunk(chunk, name) {
             slots[name].speechDuration = null;
           }
           setSpeakingViseme(name, 'viseme_sil');
-          currentSource = null;
+          if (currentSource === source) currentSource = null;
           resolve();
         };
+        source.onended = finish;
+        const safetyTimer = setTimeout(finish, (audioDuration + 1.5) * 1000);
       }, () => resolve()); // decode error — skip
     } catch { resolve(); }
   });
@@ -254,7 +278,11 @@ async function fetchSpeechChunks(participant, content) {
       const { chunks } = await resp.json();
       return chunks ?? [];
     }
-  } catch { /* synthesis failed */ }
+    const body = await resp.text().catch(() => '');
+    console.warn(`[Meeting Fetch] ${participant}: synthesis failed ${resp.status}: ${body.slice(0, 200)}`);
+  } catch (err) {
+    console.error(`[Meeting Fetch] ${participant}: fetch threw`, err);
+  }
   return [];
 }
 
@@ -333,7 +361,7 @@ function appendTranscriptTurn(participant, content) {
 
   const speaker = document.createElement('div');
   speaker.className = 'meeting-turn-speaker' + (participant === 'human' ? ' human' : '');
-  speaker.textContent = participant === 'human' ? 'You' : participant;
+  speaker.textContent = participant === 'human' ? (window._meetingHumanName ?? 'human') : participant;
 
   const text = document.createElement('div');
   text.className = 'meeting-turn-content';
@@ -345,11 +373,49 @@ function appendTranscriptTurn(participant, content) {
   el.scrollTop = el.scrollHeight;
 }
 
+// ── Layout: fill stage with largest possible square slots ─────────────────────
+
+let _layoutResizeObs = null;
+
+function layoutMeetingAvatars() {
+  const container = document.getElementById('meeting-avatars');
+  const stage     = document.getElementById('meeting-stage');
+  if (!container || !stage) return;
+
+  const n = container.children.length;
+  if (n === 0) return;
+
+  const GAP     = 12;
+  const NAME_H  = 22; // approximate height of the name label below each slot
+  const W = stage.clientWidth  - GAP * 2;  // available width (subtract padding)
+  const H = stage.clientHeight - GAP * 2;  // available height
+
+  // Find the number of columns that maximises slot size
+  let bestCols = 1, bestSize = 0;
+  for (let cols = 1; cols <= n; cols++) {
+    const rows    = Math.ceil(n / cols);
+    const slotW   = (W - GAP * (cols - 1)) / cols;
+    const slotH   = (H - GAP * (rows - 1)) / rows - NAME_H;
+    const size    = Math.min(slotW, slotH);
+    if (size > bestSize) { bestSize = size; bestCols = cols; }
+  }
+
+  const bestRows = Math.ceil(n / bestCols);
+  container.style.gridTemplateColumns = `repeat(${bestCols}, 1fr)`;
+  container.style.gridTemplateRows    = `repeat(${bestRows}, 1fr)`;
+  container.style.alignContent        = 'stretch';
+  container.style.justifyContent      = 'stretch';
+  container.style.height              = '100%';
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
 window.meetingUI = {
 
-  async open(meetingId, topic, participants, facilitator, serverAvatars = {}, serverVoices = {}, serverSpeakers = {}, serverBackgrounds = {}) {
+  async open(meetingId, topic, participants, facilitator, serverAvatars = {}, serverVoices = {}, serverSpeakers = {}, serverBackgrounds = {}, humanName = 'human') {
+    console.log(`[Meeting] open() called: id=${meetingId}, topic="${topic}", participants=${JSON.stringify(participants)}, facilitator=${facilitator}`);
+    try {
+    window._meetingHumanName = humanName;
     activeMeetingId = meetingId;
     agentVoiceMap   = serverVoices;
     agentSpeakerMap = serverSpeakers;
@@ -449,14 +515,25 @@ window.meetingUI = {
 
       const label = document.createElement('div');
       label.className = 'meeting-avatar-name';
-      label.textContent = name === 'human' ? 'You' : name;
+      label.textContent = name === 'human' ? (window._meetingHumanName ?? 'human') : name;
       slotEl.appendChild(label);
 
       container.appendChild(slotEl);
     }
 
+    // Layout slots to fill the stage
+    layoutMeetingAvatars();
+
+    // Re-layout on resize
+    if (_layoutResizeObs) _layoutResizeObs.disconnect();
+    _layoutResizeObs = new ResizeObserver(layoutMeetingAvatars);
+    _layoutResizeObs.observe(document.getElementById('meeting-stage'));
+
     // Start render loop (only if Three.js slots were created)
     if (hasThree && !rafId && Object.keys(slots).length > 0) renderAllSlots();
+    } catch (err) {
+      console.error('[Meeting] open() failed:', err);
+    }
   },
 
   addTurn(participant, content) {
@@ -488,6 +565,9 @@ window.meetingUI = {
     speechPlaying = false;
 
     if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+
+    // Stop resize observer
+    if (_layoutResizeObs) { _layoutResizeObs.disconnect(); _layoutResizeObs = null; }
 
     // Dispose Three.js renderers
     for (const slot of Object.values(slots)) {

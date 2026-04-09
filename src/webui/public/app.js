@@ -424,7 +424,7 @@ const PRIORITY_COLOR = {
 };
 
 // Active kanban columns (top-right)
-const ACTIVE_COLUMNS = ['ready', 'in_progress', 'blocked', 'review', 'completed'];
+const ACTIVE_COLUMNS = ['ready', 'in_progress', 'blocked', 'review', 'completed', 'cancelled'];
 
 let kanbanFilterUser = '';
 let kanbanFilterTag  = '';
@@ -1028,6 +1028,11 @@ async function drainSpeechQueue(agentName) {
 }
 
 async function playSpeechChunk(chunk) {
+  // Wait for avatar GLB to finish loading (up to 4 s) so lipsync starts in sync
+  if (window.avatarAPI?.whenLoaded) {
+    await Promise.race([window.avatarAPI.whenLoaded(), new Promise(r => setTimeout(r, 4000))]);
+  }
+
   // Decode base64 → ArrayBuffer
   const binary = atob(chunk.audioBase64);
   const bytes  = new Uint8Array(binary.length);
@@ -1060,8 +1065,10 @@ async function playSpeechChunk(chunk) {
       resolve();
     };
     source.onended = finish;
-    // Safety fallback — resolve after duration + buffer
-    const safetyTimer = setTimeout(finish, (chunk.duration + 1.5) * 1000);
+    // Safety fallback — use actual decoded duration (audioBuffer.duration), not the
+    // server-estimated chunk.duration which may be wrong if the model sample rate
+    // differs from the 22050 Hz assumed in the pipeline duration estimate.
+    const safetyTimer = setTimeout(finish, (audioBuffer.duration + 1.5) * 1000);
   });
 }
 
@@ -1141,7 +1148,7 @@ function connect() {
         if (a.speakerName) speakerMap[a.name]     = a.speakerName;
         if (a.background)  backgroundMap[a.name]  = a.background;
       }
-      window.meetingUI?.open(msg.meetingId, msg.topic, msg.participants ?? [], msg.facilitator ?? '', avatarMap, voiceMap, speakerMap, backgroundMap);
+      window.meetingUI?.open(msg.meetingId, msg.topic, msg.participants ?? [], msg.facilitator ?? '', avatarMap, voiceMap, speakerMap, backgroundMap, state.humanName);
     } else if (msg.type === 'meeting_turn') {
       window.meetingUI?.addTurn(msg.participant, msg.content);
     } else if (msg.type === 'meeting_human_turn') {
@@ -1614,7 +1621,7 @@ function initAgentDetail() {
         source.start();
       }
     } catch { /* ignore preview errors */ }
-    btn.textContent = '▶ Preview'; btn.disabled = false;
+    btn.textContent = '▶'; btn.disabled = false;
   });
 
   // Stop voice button — kills current audio source and clears the queue

@@ -21,8 +21,10 @@ let scene    = null;
 let camera   = null;
 let rafId    = null;
 let visemeMeshes = [];
+let loadGen  = 0; // incremented each loadGLB call; stale async callbacks check this
+let glbLoaded = Promise.resolve(); // resolves when current GLB finishes loading
 
-const BLEND = 0.18; // lerp speed per frame (higher = snappier transitions)
+const BLEND = 0.4; // lerp speed per frame (higher = snappier transitions)
 
 const BODY_KEYWORDS = ['torso', 'chest', 'body', 'shoulder', 'arm', 'hand',
                        'leg', 'foot', 'toe', 'hips', 'spine'];
@@ -57,8 +59,12 @@ function loadGLB(file, camPos, rotate, fov, scale) {
   const toRemove = scene.children.filter(c => !c.isLight);
   for (const c of toRemove) scene.remove(c);
   visemeMeshes = [];
+  const gen = ++loadGen; // this callback is only valid if gen === loadGen when it fires
+  let resolveLoaded;
+  glbLoaded = new Promise(res => { resolveLoaded = res; });
 
   new GLTFLoader().load(`/avatars/${file}`, gltf => {
+    if (gen !== loadGen) { resolveLoaded(); return; } // stale — a newer load started, discard this one
     scene.add(gltf.scene);
 
     if (rotate && rotate.length === 3) {
@@ -76,13 +82,17 @@ function loadGLB(file, camPos, rotate, fov, scale) {
     gltf.scene.traverse(obj => {
       if (!obj.isMesh) return;
       if (obj.morphTargetDictionary) {
-        const hasViseme = Object.keys(obj.morphTargetDictionary).some(k => k.startsWith('viseme_'));
+        const keys = Object.keys(obj.morphTargetDictionary);
+        const hasViseme = keys.some(k => k.startsWith('viseme_'));
+        console.log(`[Avatar] Mesh "${obj.name}": ${keys.length} morph targets, hasViseme=${hasViseme}`, hasViseme ? '' : keys.slice(0, 5));
         if (hasViseme && !visemeMeshes.includes(obj)) visemeMeshes.push(obj);
       }
       const low = obj.name.toLowerCase();
       if (BODY_KEYWORDS.some(kw => low.includes(kw))) obj.visible = false;
     });
-  });
+    console.log(`[Avatar] GLB loaded: ${visemeMeshes.length} viseme mesh(es)`);
+    resolveLoaded();
+  }, undefined, () => resolveLoaded()); // error → resolve anyway
 }
 
 function renderLoop() {
@@ -156,6 +166,9 @@ window.avatarAPI = {
 
     if (!rafId) renderLoop();
   },
+
+  /** Returns a Promise that resolves when the current GLB finishes loading. */
+  whenLoaded() { return glbLoaded; },
 
   /**
    * Begin audio-aligned lipsync.
