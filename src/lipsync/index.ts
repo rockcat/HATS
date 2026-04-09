@@ -6,13 +6,17 @@ import { AvatarAssets } from '../avatar/types.js';
 import { TTSProvider } from '../tts/types.js';
 import { buildVisemeTimeline } from './scheduler.js';
 import { CanvasRenderer } from '../render/canvas-renderer.js';
+import { GlbRenderer, GlbAvatarConfig } from '../render/glb-renderer.js';
 import { FrameClock } from '../render/frame-clock.js';
 import { OBSOutput } from '../webcam/obs-output.js';
 
 export type FrameFormat = 'raw' | 'jpeg';
 
 export interface LipsyncSessionConfig {
-  assets: AvatarAssets;
+  /** Sprite-sheet assets for CanvasRenderer (2D mode). Omit when using glb. */
+  assets?: AvatarAssets;
+  /** GLB avatar config (3D mode). When provided, GlbRenderer is used instead of CanvasRenderer. */
+  glb?: GlbAvatarConfig;
   tts: TTSProvider;
   renderWidth?: number;
   renderHeight?: number;
@@ -26,9 +30,9 @@ export interface LipsyncSessionConfig {
 }
 
 export class LipsyncSession {
-  private renderer: CanvasRenderer;
+  private renderer: CanvasRenderer | GlbRenderer;
   private tts: TTSProvider;
-  private assets: AvatarAssets;
+  private assets?: AvatarAssets;
   private obsOutput?: OBSOutput;
   private onFrame?: (frame: Buffer, index: number) => void;
   private frameFormat: FrameFormat;
@@ -42,16 +46,30 @@ export class LipsyncSession {
     this.onFrame = config.onFrame;
     this.frameFormat = config.frameFormat ?? 'raw';
     this.ffplayPath = config.ffplayPath ?? 'ffplay';
-    this.renderer = new CanvasRenderer({
-      width: config.renderWidth ?? 512,
+
+    const rendererConfig = {
+      width:  config.renderWidth  ?? 512,
       height: config.renderHeight ?? 512,
-      fps: config.fps ?? 25,
-    });
+      fps:    config.fps          ?? 25,
+    };
+
+    if (config.glb) {
+      this.renderer = new GlbRenderer(rendererConfig);
+    } else {
+      this.renderer = new CanvasRenderer(rendererConfig);
+    }
   }
 
   async init(): Promise<void> {
     if (this.assetsLoaded) return;
-    await this.renderer.loadAssets(this.assets);
+
+    if (this.renderer instanceof GlbRenderer) {
+      // GlbRenderer has already been constructed — loadAvatar is called separately
+      // via createGlbRenderer factory or by the caller.
+    } else if (this.assets) {
+      await (this.renderer as CanvasRenderer).loadAssets(this.assets);
+    }
+
     this.assetsLoaded = true;
     this.obsOutput?.start();
   }
@@ -90,10 +108,7 @@ export class LipsyncSession {
       // Drive frame clock
       const clock = new FrameClock(this.renderer, timeline, (frame, index) => {
         if (this.onFrame) {
-          const buf = this.frameFormat === 'jpeg'
-            ? this.renderer.renderJpegFrame()
-            : frame;
-          this.onFrame(buf, index);
+          this.onFrame(frame, index);
         }
         this.obsOutput?.pushFrame(frame);
       });
@@ -110,5 +125,8 @@ export class LipsyncSession {
 
   stop(): void {
     this.obsOutput?.stop();
+    if (this.renderer instanceof GlbRenderer) {
+      this.renderer.dispose();
+    }
   }
 }

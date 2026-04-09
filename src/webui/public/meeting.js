@@ -2,6 +2,8 @@
 // Loaded as <script type="module">; exposes window.meetingUI for app.js.
 // Three.js is loaded lazily so a CDN failure never prevents the overlay from working.
 
+import { collectVisemeMeshes, stepMorphWeights, applyMorphWeights } from './morph-lipsync.js';
+
 // Lazily resolved Three.js handles — null until first meeting opens
 let THREE = null;
 let GLTFLoader = null;
@@ -23,9 +25,6 @@ async function ensureThree() {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const BLEND = 0.4;
-const BODY_KEYWORDS = ['torso', 'chest', 'body', 'shoulder', 'arm', 'hand',
-                       'leg', 'foot', 'toe', 'hips', 'spine'];
 const CANVAS_SIZE = 512; // draw-buffer size — CSS scales it via aspect-ratio/flex
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -107,16 +106,7 @@ function loadSlotGLB(slot, file, camPos, rotate, fov, scale) {
     slot.camera.position.set(camPos[0], camPos[1], camPos[2]);
     slot.camera.lookAt(new THREE.Vector3(camPos[0], camPos[1] - 0.08, 0));
 
-    gltf.scene.traverse(obj => {
-      if (!obj.isMesh) return;
-      if (obj.morphTargetDictionary) {
-        const keys = Object.keys(obj.morphTargetDictionary);
-        const hasViseme = keys.some(k => k.startsWith('viseme_'));
-        if (hasViseme && !slot.visemeMeshes.includes(obj)) slot.visemeMeshes.push(obj);
-      }
-      const low = obj.name.toLowerCase();
-      if (BODY_KEYWORDS.some(kw => low.includes(kw))) obj.visible = false;
-    });
+    slot.visemeMeshes = collectVisemeMeshes(gltf.scene);
     // Start idle animations if the GLB has any
     if (gltf.animations?.length > 0) {
       slot.mixer = new THREE.AnimationMixer(gltf.scene);
@@ -162,25 +152,9 @@ function renderAllSlots() {
       }
     }
 
-    // Lerp morph weights
-    for (const key of Object.keys(slot.morphWeights)) {
-      slot.morphWeights[key] *= (1 - BLEND);
-      if (slot.morphWeights[key] < 0.001) delete slot.morphWeights[key];
-    }
-    if (slot.targetViseme) {
-      const cur = slot.morphWeights[slot.targetViseme] ?? 0;
-      slot.morphWeights[slot.targetViseme] = cur + BLEND * (1 - cur);
-    }
-
-    // Apply to meshes
-    for (const mesh of slot.visemeMeshes) {
-      const dict = mesh.morphTargetDictionary;
-      const infl = mesh.morphTargetInfluences;
-      if (!dict || !infl) continue;
-      for (const key of Object.keys(dict)) {
-        if (key.startsWith('viseme_')) infl[dict[key]] = slot.morphWeights[key] ?? 0;
-      }
-    }
+    // Lerp morph weights toward target, then write to meshes
+    stepMorphWeights(slot.morphWeights, slot.targetViseme);
+    applyMorphWeights(slot.visemeMeshes, slot.morphWeights);
 
     slot.renderer.render(slot.scene, slot.camera);
   }

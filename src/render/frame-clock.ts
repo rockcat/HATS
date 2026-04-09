@@ -1,17 +1,21 @@
 import { VisemeEvent, getVisemeAt } from '../lipsync/scheduler.js';
 import { CanvasRenderer } from './canvas-renderer.js';
+import { GlbRenderer } from './glb-renderer.js';
 
 export type FrameCallback = (frameBuffer: Buffer, frameIndex: number) => void;
 
+/** Any renderer that supports the setViseme / renderFrame interface */
+type AnyRenderer = CanvasRenderer | GlbRenderer;
+
 export class FrameClock {
-  private renderer: CanvasRenderer;
+  private renderer: AnyRenderer;
   private timeline: VisemeEvent[];
   private onFrame: FrameCallback;
   private intervalHandle: ReturnType<typeof setInterval> | null = null;
   private frameIndex = 0;
   private startTime = 0;
 
-  constructor(renderer: CanvasRenderer, timeline: VisemeEvent[], onFrame: FrameCallback) {
+  constructor(renderer: AnyRenderer, timeline: VisemeEvent[], onFrame: FrameCallback) {
     this.renderer = renderer;
     this.timeline = timeline;
     this.onFrame = onFrame;

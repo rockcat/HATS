@@ -3,6 +3,7 @@
 
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { collectVisemeMeshes, stepMorphWeights, applyMorphWeights } from './morph-lipsync.js';
 
 // ── Lipsync state ─────────────────────────────────────────────────────────────
 
@@ -27,11 +28,6 @@ let glbLoaded = Promise.resolve(); // resolves when current GLB finishes loading
 // Idle animation
 let mixer    = null; // THREE.AnimationMixer | null
 let clock    = new THREE.Clock();
-
-const BLEND = 0.4; // lerp speed per frame (higher = snappier transitions)
-
-const BODY_KEYWORDS = ['torso', 'chest', 'body', 'shoulder', 'arm', 'hand',
-                       'leg', 'foot', 'toe', 'hips', 'spine'];
 
 function initRenderer(canvas) {
   renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
@@ -86,16 +82,7 @@ function loadGLB(file, camPos, rotate, fov, scale) {
     camera.position.set(camPos[0], camPos[1], camPos[2]);
     camera.lookAt(new THREE.Vector3(camPos[0], camPos[1] - 0.08, 0));
 
-    gltf.scene.traverse(obj => {
-      if (!obj.isMesh) return;
-      if (obj.morphTargetDictionary) {
-        const keys = Object.keys(obj.morphTargetDictionary);
-        const hasViseme = keys.some(k => k.startsWith('viseme_'));
-        if (hasViseme && !visemeMeshes.includes(obj)) visemeMeshes.push(obj);
-      }
-      const low = obj.name.toLowerCase();
-      if (BODY_KEYWORDS.some(kw => low.includes(kw))) obj.visible = false;
-    });
+    visemeMeshes = collectVisemeMeshes(gltf.scene);
 
     // Start idle animations if the GLB has any
     if (gltf.animations?.length > 0) {
@@ -138,26 +125,10 @@ function renderLoop() {
     }
   }
 
-  // Lerp morph weights toward target
-  for (const key of Object.keys(morphWeights)) {
-    morphWeights[key] *= (1 - BLEND);
-    if (morphWeights[key] < 0.001) delete morphWeights[key];
-  }
-  if (targetViseme) {
-    const cur = morphWeights[targetViseme] ?? 0;
-    morphWeights[targetViseme] = cur + BLEND * (1 - cur);
-  }
-
-  // Write viseme weights — runs after mixer.update() so lipsync overrides any
-  // mouth tracks baked into the idle animation
-  for (const mesh of visemeMeshes) {
-    const dict = mesh.morphTargetDictionary;
-    const infl = mesh.morphTargetInfluences;
-    if (!dict || !infl) continue;
-    for (const key of Object.keys(dict)) {
-      if (key.startsWith('viseme_')) infl[dict[key]] = morphWeights[key] ?? 0;
-    }
-  }
+  // Lerp morph weights toward target, then write to meshes.
+  // Runs after mixer.update() so lipsync overrides mouth tracks from idle animation.
+  stepMorphWeights(morphWeights, targetViseme);
+  applyMorphWeights(visemeMeshes, morphWeights);
 
   renderer.render(scene, camera);
 }
