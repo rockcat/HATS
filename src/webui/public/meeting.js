@@ -69,10 +69,11 @@ function createSlotRenderer(canvas) {
   fill.position.set(-1, 0, 1); scene.add(fill);
 
   const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 100);
+  const clock  = new THREE.Clock();
 
   let resolveLoaded;
   const glbLoaded = new Promise(res => { resolveLoaded = res; });
-  return { renderer, scene, camera, visemeMeshes: [], morphWeights: {}, targetViseme: 'viseme_sil', glbLoaded, _resolveLoaded: resolveLoaded };
+  return { renderer, scene, camera, clock, mixer: null, visemeMeshes: [], morphWeights: {}, targetViseme: 'viseme_sil', glbLoaded, _resolveLoaded: resolveLoaded };
 }
 
 function loadSlotGLB(slot, file, camPos, rotate, fov, scale) {
@@ -80,6 +81,8 @@ function loadSlotGLB(slot, file, camPos, rotate, fov, scale) {
   const toRemove = slot.scene.children.filter(c => !c.isLight);
   for (const c of toRemove) slot.scene.remove(c);
   slot.visemeMeshes = [];
+  if (slot.mixer) { slot.mixer.stopAllAction(); slot.mixer = null; }
+  slot.clock.getDelta(); // reset clock delta
   if (slot.loadGen == null) slot.loadGen = 0;
   const gen = ++slot.loadGen;
 
@@ -114,7 +117,14 @@ function loadSlotGLB(slot, file, camPos, rotate, fov, scale) {
       const low = obj.name.toLowerCase();
       if (BODY_KEYWORDS.some(kw => low.includes(kw))) obj.visible = false;
     });
-    console.log(`[Meeting] GLB "${file}" loaded: ${slot.visemeMeshes.length} viseme mesh(es)`);
+    // Start idle animations if the GLB has any
+    if (gltf.animations?.length > 0) {
+      slot.mixer = new THREE.AnimationMixer(gltf.scene);
+      for (const clip of gltf.animations) {
+        slot.mixer.clipAction(clip).play();
+      }
+    }
+
     resolveLoaded();
   }, undefined, () => resolveLoaded()); // error → resolve anyway so speech isn't blocked
 }
@@ -123,6 +133,11 @@ function renderAllSlots() {
   rafId = requestAnimationFrame(renderAllSlots);
 
   for (const slot of Object.values(slots)) {
+    const delta = slot.clock.getDelta();
+
+    // Advance idle animations (runs before viseme writes so lipsync overrides mouth tracks)
+    if (slot.mixer) slot.mixer.update(delta);
+
     // Resolve target viseme from audio-aligned speech state (same approach as avatar.js)
     if (slot.speechCtx) {
       const t = Math.max(0, slot.speechCtx.currentTime - slot.speechStartAt);
@@ -569,8 +584,9 @@ window.meetingUI = {
     // Stop resize observer
     if (_layoutResizeObs) { _layoutResizeObs.disconnect(); _layoutResizeObs = null; }
 
-    // Dispose Three.js renderers
+    // Dispose Three.js renderers and mixers
     for (const slot of Object.values(slots)) {
+      if (slot.mixer) { slot.mixer.stopAllAction(); slot.mixer = null; }
       slot.renderer.dispose();
     }
     for (const key of Object.keys(slots)) delete slots[key];

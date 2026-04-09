@@ -24,6 +24,10 @@ let visemeMeshes = [];
 let loadGen  = 0; // incremented each loadGLB call; stale async callbacks check this
 let glbLoaded = Promise.resolve(); // resolves when current GLB finishes loading
 
+// Idle animation
+let mixer    = null; // THREE.AnimationMixer | null
+let clock    = new THREE.Clock();
+
 const BLEND = 0.4; // lerp speed per frame (higher = snappier transitions)
 
 const BODY_KEYWORDS = ['torso', 'chest', 'body', 'shoulder', 'arm', 'hand',
@@ -55,10 +59,13 @@ function resizeRenderer(canvas) {
 }
 
 function loadGLB(file, camPos, rotate, fov, scale) {
-  // Remove old avatar nodes (keep lights)
+  // Remove old avatar nodes (keep lights) and dispose old mixer
   const toRemove = scene.children.filter(c => !c.isLight);
   for (const c of toRemove) scene.remove(c);
   visemeMeshes = [];
+  if (mixer) { mixer.stopAllAction(); mixer = null; }
+  clock.getDelta(); // reset clock delta
+
   const gen = ++loadGen; // this callback is only valid if gen === loadGen when it fires
   let resolveLoaded;
   glbLoaded = new Promise(res => { resolveLoaded = res; });
@@ -84,19 +91,32 @@ function loadGLB(file, camPos, rotate, fov, scale) {
       if (obj.morphTargetDictionary) {
         const keys = Object.keys(obj.morphTargetDictionary);
         const hasViseme = keys.some(k => k.startsWith('viseme_'));
-        console.log(`[Avatar] Mesh "${obj.name}": ${keys.length} morph targets, hasViseme=${hasViseme}`, hasViseme ? '' : keys.slice(0, 5));
         if (hasViseme && !visemeMeshes.includes(obj)) visemeMeshes.push(obj);
       }
       const low = obj.name.toLowerCase();
       if (BODY_KEYWORDS.some(kw => low.includes(kw))) obj.visible = false;
     });
-    console.log(`[Avatar] GLB loaded: ${visemeMeshes.length} viseme mesh(es)`);
+
+    // Start idle animations if the GLB has any
+    if (gltf.animations?.length > 0) {
+      mixer = new THREE.AnimationMixer(gltf.scene);
+      for (const clip of gltf.animations) {
+        mixer.clipAction(clip).play();
+      }
+      console.log(`[Avatar] ${gltf.animations.length} idle animation(s) started`);
+    }
+
     resolveLoaded();
   }, undefined, () => resolveLoaded()); // error → resolve anyway
 }
 
 function renderLoop() {
   rafId = requestAnimationFrame(renderLoop);
+
+  const delta = clock.getDelta();
+
+  // Advance idle animations
+  if (mixer) mixer.update(delta);
 
   // Determine target viseme from time-aligned speech data
   if (getAudioTime) {
@@ -128,7 +148,8 @@ function renderLoop() {
     morphWeights[targetViseme] = cur + BLEND * (1 - cur);
   }
 
-  // Write weights into every viseme-capable mesh
+  // Write viseme weights — runs after mixer.update() so lipsync overrides any
+  // mouth tracks baked into the idle animation
   for (const mesh of visemeMeshes) {
     const dict = mesh.morphTargetDictionary;
     const infl = mesh.morphTargetInfluences;
@@ -195,6 +216,7 @@ window.avatarAPI = {
     getAudioTime  = null;
     targetViseme  = 'viseme_sil';
 
+    if (mixer) { mixer.stopAllAction(); mixer = null; }
     if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
     visemeMeshes = [];
 
