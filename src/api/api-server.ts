@@ -40,6 +40,8 @@ const MIME: Record<string, string> = {
 
 const AVATARS_DIR     = path.join(process.cwd(), 'avatars');
 const BACKGROUNDS_DIR = path.join(process.cwd(), 'avatars', 'backgrounds');
+// Serve Three.js (and any other npm packages) from local node_modules to avoid CDN dependency
+const NM_DIR          = path.join(process.cwd(), 'node_modules');
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -561,7 +563,7 @@ export class APIServer {
       return;
     }
 
-    if (req.method !== 'GET' && req.method !== 'POST' && req.method !== 'PATCH' && req.method !== 'DELETE') {
+    if (req.method !== 'GET' && req.method !== 'POST' && req.method !== 'PATCH' && req.method !== 'DELETE' && req.method !== 'PUT') {
       this.json(res, 405, { error: 'Method not allowed' }); return;
     }
 
@@ -1404,6 +1406,21 @@ export class APIServer {
 
     } else if (pathname.startsWith('/api/')) {
       this.json(res, 404, { error: 'Not found' });
+
+    // ── Static: node_modules (Three.js, etc.) ────────────────────────────────
+
+    } else if (pathname.startsWith('/nm/')) {
+      const rel      = pathname.slice('/nm/'.length);
+      const filePath = path.join(NM_DIR, rel);
+      if (!filePath.startsWith(NM_DIR)) {
+        res.writeHead(403); res.end('Forbidden'); return;
+      }
+      fs.readFile(filePath, (err, data) => {
+        if (err) { res.writeHead(404); res.end('Not found'); return; }
+        const ct = MIME[path.extname(filePath)] ?? 'application/javascript';
+        res.writeHead(200, { 'Content-Type': ct, 'Cache-Control': 'public, max-age=86400' });
+        res.end(data);
+      });
 
     // ── Static: avatar GLB files ──────────────────────────────────────────────
 
