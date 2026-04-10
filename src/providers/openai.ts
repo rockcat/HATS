@@ -89,14 +89,14 @@ export class OpenAIProvider implements AIProvider {
 /** Local Ollama via OpenAI-compatible endpoint */
 export class OllamaProvider extends OpenAIProvider {
   constructor(baseURL?: string) {
-    super('ollama', baseURL ?? process.env['OLLAMA_BASE_URL'] ?? 'http://localhost:11434/v1', 'ollama');
+    super('ollama', baseURL || process.env['OLLAMA_BASE_URL'] || 'http://localhost:11434/v1', 'ollama');
   }
 }
 
 /** LM Studio via OpenAI-compatible endpoint */
 export class LMStudioProvider extends OpenAIProvider {
   constructor(baseURL?: string) {
-    super('lm-studio', baseURL ?? process.env['LM_STUDIO_BASE_URL'] ?? 'http://localhost:1234/v1', 'lmstudio');
+    super('lm-studio', baseURL || process.env['LM_STUDIO_BASE_URL'] || 'http://localhost:1234/v1', 'lmstudio');
   }
 }
 
