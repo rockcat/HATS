@@ -21,9 +21,11 @@ export class AnthropicProvider implements AIProvider {
 
   private async doComplete(req: CompletionRequest): Promise<CompletionResponse> {
     if (debugState.logPrompts) {
-      const label = req.agentName ? `[${req.agentName}]` : '[agent]';
-      const bar   = '═'.repeat(60);
+      const label  = req.agentName ? `[${req.agentName}]` : '[agent]';
+      const url    = (this.client as any).baseURL ?? 'https://api.anthropic.com';
+      const bar    = '═'.repeat(60);
       log.info(`\n${bar}`);
+      log.info(`${label} provider=anthropic  url=${url}`);
       log.info(`${label} model=${req.model}  msgs=${req.messages.length}  tools=${req.tools?.length ?? 0}`);
       log.info(`SYSTEM: ${req.systemPrompt.slice(0, 400)}${req.systemPrompt.length > 400 ? '…' : ''}`);
       for (const m of req.messages) {

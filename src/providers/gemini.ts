@@ -1,5 +1,7 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { log } from '../util/logger.js';
 import { AIProvider, CompletionRequest, CompletionResponse, ProviderError } from './types.js';
+import { debugState } from './debug-state.js';
 
 export class GeminiProvider implements AIProvider {
   readonly name = 'gemini';
@@ -10,6 +12,20 @@ export class GeminiProvider implements AIProvider {
   }
 
   async complete(req: CompletionRequest): Promise<CompletionResponse> {
+    if (debugState.logPrompts) {
+      const label = req.agentName ? `[${req.agentName}]` : '[agent]';
+      const bar   = '═'.repeat(60);
+      log.info(`\n${bar}`);
+      log.info(`${label} provider=gemini  url=https://generativelanguage.googleapis.com`);
+      log.info(`${label} model=${req.model}  msgs=${req.messages.length}  tools=${req.tools?.length ?? 0}`);
+      log.info(`SYSTEM: ${req.systemPrompt.slice(0, 400)}${req.systemPrompt.length > 400 ? '…' : ''}`);
+      for (const m of req.messages) {
+        const body = String(m.content ?? '').replace(/\s+/g, ' ').slice(0, 300);
+        log.info(`  ${m.role.padEnd(9)} ${body}`);
+      }
+      log.info(bar);
+    }
+
     try {
       const model = this.client.getGenerativeModel({
         model: req.model,
