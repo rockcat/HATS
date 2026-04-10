@@ -11,7 +11,7 @@ import { Task, Meeting, MeetingType } from '../orchestrator/types.js';
 import { MCP_CATALOGUE, resolveConfig } from '../mcp/mcp-catalogue.js';
 import { debugState } from '../providers/debug-state.js';
 import { AnthropicProvider } from '../providers/anthropic.js';
-import { OpenAIProvider } from '../providers/openai.js';
+import { OpenAIProvider, OllamaProvider, LMStudioProvider } from '../providers/openai.js';
 import { GeminiProvider } from '../providers/gemini.js';
 import { AIProvider } from '../providers/types.js';
 import { HatType } from '../hats/types.js';
@@ -871,16 +871,8 @@ export class APIServer {
       const body = await this.readBody(req);
       const { provider: providerName, model } = JSON.parse(body) as { provider: string; model: string };
       if (!model?.trim()) { this.json(res, 400, { error: 'model is required' }); return; }
-      let provider: AIProvider;
-      if (providerName === 'anthropic') {
-        provider = new AnthropicProvider();
-      } else if (providerName === 'openai') {
-        provider = new OpenAIProvider();
-      } else if (providerName === 'gemini') {
-        provider = new GeminiProvider();
-      } else {
-        this.json(res, 400, { error: `Unknown provider "${providerName}"` }); return;
-      }
+      const provider = makeProvider(providerName);
+      if (!provider) { this.json(res, 400, { error: `Unknown provider "${providerName}"` }); return; }
       try {
         this.orchestrator.updateAgentConfig(this.resolveAgentName(agentName), provider, model.trim());
         this.sseBroadcast({ type: 'agent_update', agents: this.buildAgentStatuses() });
@@ -1040,18 +1032,13 @@ export class APIServer {
       if (!validHats.includes(hatType)) { this.json(res, 400, { error: `Invalid hat type "${hatType}"` }); return; }
       const exists = this.orchestrator.listAgents().some(a => a.name.toLowerCase() === name.trim().toLowerCase());
       if (exists) { this.json(res, 409, { error: `Agent "${name}" already exists` }); return; }
-      let provider: AIProvider;
-      if (providerName === 'openai') {
-        provider = new OpenAIProvider();
-      } else if (providerName === 'gemini') {
-        provider = new GeminiProvider();
-      } else {
-        provider = new AnthropicProvider();
-      }
+      const provider = makeProvider(providerName ?? 'anthropic') ?? new AnthropicProvider();
       const resolvedModel = model?.trim() || (
-        providerName === 'openai'  ? (process.env['OPENAI_MODEL']  ?? 'gpt-4.1-mini') :
-        providerName === 'gemini'  ? (process.env['GEMINI_MODEL']  ?? 'gemini-2.5-flash') :
-                                     (process.env['ANTHROPIC_MODEL'] ?? 'claude-haiku-4-5-20251001')
+        providerName === 'openai'   ? (process.env['OPENAI_MODEL']      ?? 'gpt-4.1-mini') :
+        providerName === 'gemini'   ? (process.env['GEMINI_MODEL']      ?? 'gemini-2.5-flash') :
+        providerName === 'ollama'   ? (process.env['OLLAMA_MODEL']      ?? 'llama3.2') :
+        providerName === 'lmstudio' ? (process.env['LM_STUDIO_MODEL']   ?? '') :
+                                      (process.env['ANTHROPIC_MODEL']   ?? 'claude-haiku-4-5-20251001')
       );
       this.orchestrator.registerAgent({
         identity: {
@@ -2092,6 +2079,18 @@ export class APIServer {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+/** Construct an AIProvider from a provider ID string. Returns null for unknown IDs. */
+function makeProvider(id: string): AIProvider | null {
+  switch (id) {
+    case 'anthropic': return new AnthropicProvider();
+    case 'openai':    return new OpenAIProvider();
+    case 'gemini':    return new GeminiProvider();
+    case 'ollama':    return new OllamaProvider();
+    case 'lmstudio':  return new LMStudioProvider();
+    default:          return null;
+  }
+}
 
 const KNOWN_PROVIDERS = [
   {
