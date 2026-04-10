@@ -1631,15 +1631,21 @@ function initAgentDetail() {
   });
 
   // Re-populate model list when provider changes; show/hide URL field for local providers
-  document.getElementById('agent-config-provider').addEventListener('change', () => {
+  document.getElementById('agent-config-provider').addEventListener('change', async () => {
     const providerId = document.getElementById('agent-config-provider').value;
-    loadProviders().then(providers => {
-      const provider = providers.find(p => p.id === providerId);
-      applyLocalProviderUI(provider);
-      const modelSel = document.getElementById('agent-config-model');
-      populateModelSelect(modelSel, providers, providerId, provider?.defaultModel ?? provider?.models?.[0] ?? '');
-      updatePricingHint(providerId, modelSel.hidden ? document.getElementById('agent-config-model-custom').value : modelSel.value);
-    });
+    let providers = await loadProviders();
+    const isLocal = providers.find(p => p.id === providerId)?.baseUrlEnvKey;
+    if (isLocal) {
+      // For local servers, fetch live models before populating — static list is stale/empty.
+      // refreshProviderModels() merges results into _providersCache in-place.
+      await refreshProviderModels();
+      providers = _providersCache;
+    }
+    const provider = providers.find(p => p.id === providerId);
+    applyLocalProviderUI(provider);
+    const modelSel = document.getElementById('agent-config-model');
+    populateModelSelect(modelSel, providers, providerId, provider?.defaultModel ?? provider?.models?.[0] ?? '');
+    updatePricingHint(providerId, modelSel.hidden ? document.getElementById('agent-config-model-custom').value : modelSel.value);
   });
 
   // Update price hint when model selection changes
@@ -2424,12 +2430,15 @@ function initAddAgent() {
     const p = providers.find(p => p.id === 'anthropic');
     populateModelSelect(document.getElementById('add-agent-model'), providers, 'anthropic', p?.defaultModel ?? '');
   });
-  document.getElementById('add-agent-provider').addEventListener('change', () => {
+  document.getElementById('add-agent-provider').addEventListener('change', async () => {
     const pid = document.getElementById('add-agent-provider').value;
-    loadProviders().then(providers => {
-      const p = providers.find(p => p.id === pid);
-      populateModelSelect(document.getElementById('add-agent-model'), providers, pid, p?.defaultModel ?? '');
-    });
+    let providers = await loadProviders();
+    if (providers.find(p => p.id === pid)?.baseUrlEnvKey) {
+      await refreshProviderModels();
+      providers = _providersCache;
+    }
+    const p = providers.find(p => p.id === pid);
+    populateModelSelect(document.getElementById('add-agent-model'), providers, pid, p?.defaultModel ?? '');
   });
 
   // Show/hide custom spec input when "Custom…" is selected
