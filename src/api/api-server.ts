@@ -1553,6 +1553,9 @@ export class APIServer {
       const name    = this.resolveAgentName(line.slice(1, spaceIdx));
       const message = line.slice(spaceIdx + 1);
       await this.orchestrator.humanMessage(name, message);
+      // Unblock escalation ticket if agent was waiting for human
+      const ticketId = this.agentTicketMap.get(name.toLowerCase());
+      if (ticketId) this.updateKanbanColumn(ticketId, 'in_progress').catch(() => {});
       return `→ Sent to ${name}`;
     }
 

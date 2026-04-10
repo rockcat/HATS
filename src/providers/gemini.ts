@@ -44,9 +44,12 @@ export class GeminiProvider implements AIProvider {
       }));
       const lastMessage = messages[messages.length - 1];
 
+      const label = req.agentName ? `[${req.agentName}]` : '[agent]';
+      log.info(`${label} → gemini (${req.model})`);
       const chat = model.startChat({ history });
       const result = await chat.sendMessage(lastMessage?.content ?? '');
       const response = result.response;
+      log.info(`${label} ← gemini (${response.usageMetadata?.promptTokenCount ?? 0}in/${response.usageMetadata?.candidatesTokenCount ?? 0}out)`);
 
       return {
         content: response.text(),

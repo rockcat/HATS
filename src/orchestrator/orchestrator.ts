@@ -362,6 +362,8 @@ export class TeamOrchestrator {
   async humanMessage(toAgentName: string, content: string): Promise<void> {
     const msg = this.buildMessage('human', toAgentName, 'direct', content);
     await this.store.append('human_message', { to: toAgentName, content });
+    const agent = this.findByName(toAgentName);
+    if (agent) agent.markHelpReceived(); // unblock if agent was waiting for human input
     this.deliverToAgent(toAgentName, msg);
   }
 

@@ -43,6 +43,8 @@ export class AnthropicProvider implements AIProvider {
         input_schema: t.parameters,
       }));
 
+      const label = req.agentName ? `[${req.agentName}]` : '[agent]';
+      log.info(`${label} → anthropic (${req.model})`);
       const response = await this.client.messages.create({
         model: req.model,
         max_tokens: req.maxTokens ?? 8192,
@@ -51,6 +53,7 @@ export class AnthropicProvider implements AIProvider {
         ...(tools && tools.length > 0 ? { tools } : {}),
         ...(req.temperature !== undefined ? { temperature: req.temperature } : {}),
       });
+      log.info(`${label} ← anthropic (${response.usage.input_tokens}in/${response.usage.output_tokens}out)`);
 
       // Extract text content
       const content = response.content

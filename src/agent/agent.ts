@@ -138,6 +138,7 @@ export class Agent {
 
     try {
       while (this.inbox.length > 0) {
+        if (this._state === AgentState.WaitingForHelp) break; // pause until unblocked
         const message = this.inbox.shift()!;
         await this.processMessage(message);
       }
@@ -280,7 +281,13 @@ export class Agent {
 
   markTaskComplete(): void { this.applyEvent('task_complete'); }
   markBlocked(): void { this.applyEvent('blocked'); }
-  markHelpReceived(): void { this.applyEvent('help_received'); }
+  markHelpReceived(): void {
+    this.applyEvent('help_received');
+    // Resume draining any messages that queued while blocked
+    if (this.inbox.length > 0) {
+      this.processInbox().catch((err) => log.error(`[${this.name}] inbox resume error:`, err));
+    }
+  }
   markDiscussionEnded(): void { this.applyEvent('discussion_ended'); }
 
   // ── Internals ───────────────────────────────────────────────────────────────

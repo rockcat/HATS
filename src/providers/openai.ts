@@ -50,6 +50,8 @@ export class OpenAIProvider implements AIProvider {
         },
       }));
 
+      const label = req.agentName ? `[${req.agentName}]` : '[agent]';
+      log.info(`${label} → ${this.name} (${req.model})`);
       const response = await this.client.chat.completions.create({
         model: req.model,
         max_tokens: req.maxTokens ?? 8192,
@@ -60,6 +62,7 @@ export class OpenAIProvider implements AIProvider {
         ...(tools && tools.length > 0 ? { tools } : {}),
         ...(req.temperature !== undefined ? { temperature: req.temperature } : {}),
       });
+      log.info(`${label} ← ${this.name} (${response.usage?.prompt_tokens ?? 0}in/${response.usage?.completion_tokens ?? 0}out)`);
 
       const choice = response.choices[0];
       if (!choice) throw new Error('No choices returned');
