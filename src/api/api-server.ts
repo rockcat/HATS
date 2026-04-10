@@ -813,7 +813,7 @@ export class APIServer {
 
     } else if (pathname === '/api/providers' && req.method === 'GET') {
       const providers = await Promise.all(KNOWN_PROVIDERS.map(async p => {
-        const baseUrl = p.baseUrlEnvKey ? (process.env[p.baseUrlEnvKey] ?? p.defaultBaseUrl ?? '') : undefined;
+        const baseUrl = p.baseUrlEnvKey ? (process.env[p.baseUrlEnvKey] || p.defaultBaseUrl || '') : undefined;
         let available: boolean;
         if (p.envKey) {
           available = !!process.env[p.envKey];
@@ -2255,7 +2255,7 @@ async function fetchLiveModels(p: KnownProvider): Promise<string[]> {
       log.info(`[Models] gemini: ${models.length} model(s)`);
 
     } else if (p.id === 'ollama' || p.id === 'lmstudio') {
-      const baseUrl = (p.baseUrlEnvKey ? process.env[p.baseUrlEnvKey] : undefined) ?? p.defaultBaseUrl ?? '';
+      const baseUrl = (p.baseUrlEnvKey ? process.env[p.baseUrlEnvKey] : undefined) || p.defaultBaseUrl || '';
       if (!baseUrl) { log.warn(`[Models] ${p.id}: no base URL configured`); return []; }
 
       const openAIUrl = baseUrl.replace(/\/+$/, '') + '/models';
