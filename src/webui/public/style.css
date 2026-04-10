@@ -2855,7 +2855,7 @@ body.has-expanded-panel main > section:not(.panel--expanded) {
 .meeting-avatar-human {
   width: 100%;
   aspect-ratio: 1 / 1;
-  flex: 1 1 0;
+  flex: none;
   border-radius: 12px;
   background: var(--surface-2);
   border: 2px solid var(--border);
