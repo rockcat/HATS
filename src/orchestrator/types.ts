@@ -72,4 +72,5 @@ export interface Meeting {
   turns: MeetingTurn[];
   createdAt: string;
   closedAt?: string;
+  minutesPath?: string;  // absolute path to the saved minutes file, if any
 }

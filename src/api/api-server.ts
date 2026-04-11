@@ -1322,6 +1322,26 @@ export class APIServer {
         this.json(res, 500, { error: (err as Error).message });
       }
 
+    } else if (pathname.match(/^\/api\/meetings\/[^/]+\/minutes$/) && req.method === 'GET') {
+      const meetingId = pathname.split('/')[3];
+      const meeting   = this.orchestrator.getMeeting(meetingId);
+      if (!meeting) { this.json(res, 404, { error: 'Meeting not found' }); return; }
+      if (meeting.status !== 'closed') { this.json(res, 409, { error: 'Meeting is still in progress' }); return; }
+      if (meeting.minutesPath) {
+        try {
+          const md = await readFile(meeting.minutesPath, 'utf-8');
+          this.json(res, 200, { markdown: md });
+        } catch {
+          // File missing — regenerate on the fly
+          const { buildMinutesMarkdown } = await import('../orchestrator/meeting-room.js');
+          this.json(res, 200, { markdown: buildMinutesMarkdown(meeting) });
+        }
+      } else {
+        // No project dir was set — build from in-memory turns
+        const { buildMinutesMarkdown } = await import('../orchestrator/meeting-room.js');
+        this.json(res, 200, { markdown: buildMinutesMarkdown(meeting) });
+      }
+
     } else if (pathname.startsWith('/api/meetings/') && pathname.endsWith('/cancel') && req.method === 'POST') {
       const meetingId = pathname.split('/')[3];
       // Unblock any pending human turn so the room can exit

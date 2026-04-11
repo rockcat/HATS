@@ -1,3 +1,5 @@
+import { writeFile, mkdir } from 'fs/promises';
+import * as path from 'path';
 import { Meeting, MeetingTurn } from './types.js';
 import { Agent } from '../agent/agent.js';
 import { EventStore } from '../store/event-store.js';
@@ -24,6 +26,7 @@ export class MeetingRoom {
     private agents: Map<string, Agent>,
     private store: EventStore,
     private humanResponder: HumanResponder,
+    private projectDir?: string | null,
   ) {}
 
   /** Called by orchestrator when human types something mid-meeting. */
@@ -95,12 +98,32 @@ export class MeetingRoom {
       turns: meeting.turns.length,
     });
 
+    // Save minutes to outputs/minutes/
+    if (this.projectDir) {
+      await this.saveMinutes().catch(err =>
+        log.error(`[Meeting] Failed to save minutes: ${(err as Error).message}`),
+      );
+    }
+
     // Return all agents to working state
     for (const participant of [meeting.facilitator, ...meeting.participants]) {
       if (participant !== 'human') {
         this.agents.get(participant)?.markDiscussionEnded();
       }
     }
+  }
+
+  private async saveMinutes(): Promise<void> {
+    const { meeting } = this;
+    const dir = path.join(this.projectDir!, 'outputs', 'minutes');
+    await mkdir(dir, { recursive: true });
+    const slug = meeting.topic.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+/g, '-').slice(0, 50);
+    const date = new Date().toISOString().slice(0, 10);
+    const filename = `${date}-${slug}.md`;
+    const filepath = path.join(dir, filename);
+    await writeFile(filepath, buildMinutesMarkdown(meeting), 'utf-8');
+    meeting.minutesPath = filepath;
+    log.info(`[Meeting] Minutes saved: ${filepath}`);
   }
 
   private async recordTurn(participant: string, content: string): Promise<void> {
@@ -134,4 +157,39 @@ function buildOpeningPrompt(meeting: Meeting): string {
 function buildTranscriptText(turns: MeetingTurn[]): string {
   if (turns.length === 0) return '(No turns yet)';
   return turns.map((t) => `${t.participant}: ${t.content}`).join('\n\n');
+}
+
+export function buildMinutesMarkdown(meeting: Meeting): string {
+  const allParticipants = [meeting.facilitator, ...meeting.participants.filter(p => p !== meeting.facilitator)];
+  const date = meeting.closedAt
+    ? new Date(meeting.closedAt).toLocaleString(undefined, { dateStyle: 'long', timeStyle: 'short' })
+    : new Date().toLocaleString(undefined, { dateStyle: 'long', timeStyle: 'short' });
+
+  const lines: string[] = [
+    `# Meeting Minutes: ${meeting.topic}`,
+    '',
+    `**Date:** ${date}`,
+    `**Facilitator:** ${meeting.facilitator}`,
+    `**Participants:** ${allParticipants.join(', ')}`,
+    ...(meeting.agenda ? [`**Agenda:** ${meeting.agenda}`] : []),
+    '',
+    '---',
+    '',
+    '## Transcript',
+    '',
+  ];
+
+  for (const turn of meeting.turns) {
+    const time = new Date(turn.ts).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+    lines.push(`**${turn.participant}** _(${time})_`);
+    lines.push('');
+    lines.push(turn.content);
+    lines.push('');
+  }
+
+  lines.push('---');
+  lines.push('');
+  lines.push(`_Minutes generated automatically · ${meeting.turns.length} turns_`);
+
+  return lines.join('\n');
 }

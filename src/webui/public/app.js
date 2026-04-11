@@ -2813,6 +2813,7 @@ function showMeetingPopup(id) {
   document.getElementById('meeting-detail-launch-btn').hidden = m.status !== 'scheduled';
   document.getElementById('meeting-detail-cancel-btn').hidden = m.status !== 'scheduled';
   document.getElementById('meeting-detail-delete-btn').hidden = m.status === 'scheduled';
+  document.getElementById('meeting-detail-minutes-btn').hidden = !(m.status === 'launched' && m.meetingId);
 
   document.getElementById('meeting-detail-modal').hidden = false;
 }
@@ -2847,6 +2848,25 @@ async function deleteMeeting(id) {
     if (res.error) alert(res.error);
     else fetchCalendar();
   } catch { alert('Failed to delete meeting.'); }
+}
+
+// ── Minutes modal ─────────────────────────────────────────────────────────────
+
+async function openMinutes(meetingId, topic) {
+  document.getElementById('minutes-modal-title').textContent = `Minutes: ${topic}`;
+  document.getElementById('minutes-modal-content').textContent = 'Loading…';
+  document.getElementById('minutes-modal').hidden = false;
+  try {
+    const res = await fetch(`/api/meetings/${encodeURIComponent(meetingId)}/minutes`);
+    const data = await res.json();
+    document.getElementById('minutes-modal-content').textContent = data.markdown ?? data.error ?? 'No content.';
+  } catch {
+    document.getElementById('minutes-modal-content').textContent = 'Failed to load minutes.';
+  }
+}
+
+function closeMinutes() {
+  document.getElementById('minutes-modal').hidden = true;
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
@@ -2893,6 +2913,16 @@ function initCalendar() {
   document.getElementById('meeting-detail-delete-btn')?.addEventListener('click', async () => {
     const id = _meetingDetailId; closeMeetingDetail();
     await deleteMeeting(id);
+  });
+  document.getElementById('meeting-detail-minutes-btn')?.addEventListener('click', () => {
+    const m = calMeetings.find(x => x.id === _meetingDetailId);
+    if (m?.meetingId) openMinutes(m.meetingId, m.topic);
+  });
+
+  // Minutes modal
+  document.getElementById('minutes-modal-close')?.addEventListener('click', closeMinutes);
+  document.getElementById('minutes-modal')?.addEventListener('click', e => {
+    if (e.target === e.currentTarget) closeMinutes();
   });
 }
 

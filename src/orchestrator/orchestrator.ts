@@ -504,10 +504,11 @@ export class TeamOrchestrator {
     const facilitator = this.findByName(scheduled.facilitator);
     if (!facilitator) throw new Error(`Facilitator "${scheduled.facilitator}" not found`);
 
-    await this.startMeeting(scheduled.facilitator, scheduled.participants, scheduled.topic, scheduled.agenda);
+    const meetingId = await this.startMeeting(scheduled.facilitator, scheduled.participants, scheduled.topic, scheduled.agenda);
 
     scheduled.status = 'launched';
     scheduled.launchedAt = new Date().toISOString();
+    scheduled.meetingId = meetingId;
     await this.scheduledMeetingStore.update(scheduled);
   }
 
@@ -746,7 +747,7 @@ export class TeamOrchestrator {
     participants: string[],
     topic: string,
     agenda?: string,
-  ): Promise<void> {
+  ): Promise<string> {
     return this.startMeeting(facilitatorName, participants, topic, agenda);
   }
 
@@ -755,7 +756,7 @@ export class TeamOrchestrator {
     participants: string[],
     topic: string,
     agenda?: string,
-  ): Promise<void> {
+  ): Promise<string> {
     const meetingId = uuidv4();
     const meeting: Meeting = {
       id: meetingId,
@@ -793,6 +794,7 @@ export class TeamOrchestrator {
       this.store,
       (transcript: MeetingTurn[], meetingTopic: string) =>
         this.getHumanMeetingInput(meetingId, transcript, meetingTopic),
+      this.projectDir,
     );
 
     // Wire up close signal — when facilitator calls report_task_complete inside meeting
@@ -805,6 +807,8 @@ export class TeamOrchestrator {
       log.error(`[Meeting ${meetingId}] error:`, err);
       this.activeMeetingRooms.delete(meetingId);
     });
+
+    return meetingId;
   }
 
   private async getHumanMeetingInput(meetingId: string, turns: MeetingTurn[], topic: string): Promise<string | null> {

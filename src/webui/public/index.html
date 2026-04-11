@@ -592,6 +592,20 @@
         <button class="modal-btn primary" id="meeting-detail-launch-btn">Launch now</button>
         <button class="modal-btn danger" id="meeting-detail-cancel-btn">Cancel meeting</button>
         <button class="modal-btn danger" id="meeting-detail-delete-btn">Delete record</button>
+        <button class="modal-btn" id="meeting-detail-minutes-btn" hidden>View Minutes</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Minutes Modal -->
+  <div id="minutes-modal" class="modal-overlay" hidden>
+    <div class="modal minutes-modal" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <span class="modal-ticket-id" id="minutes-modal-title">Meeting Minutes</span>
+        <button class="modal-close" id="minutes-modal-close" title="Close">✕</button>
+      </div>
+      <div class="modal-body minutes-modal-body">
+        <pre id="minutes-modal-content" class="minutes-modal-content"></pre>
       </div>
     </div>
   </div>
