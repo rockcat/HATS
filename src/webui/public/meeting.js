@@ -400,37 +400,35 @@ function appendTranscriptTurn(participant, content) {
 
 let _layoutResizeObs = null;
 
+function getBestGrid(n, W, H) {
+  const aspect = W / H;
+  const estRows = Math.sqrt(n / aspect);
+  let best = null;
+  for (let rows = Math.floor(estRows) - 2; rows <= Math.ceil(estRows) + 2; rows++) {
+    if (rows < 1) continue;
+    const cols = Math.ceil(n / rows);
+    const size = Math.min(W / cols, H / rows);
+    if (!best || size > best.size) best = { rows, cols, size };
+  }
+  return best;
+}
+
 function layoutMeetingAvatars() {
   const container = document.getElementById('meeting-avatars');
   const stage     = document.getElementById('meeting-stage');
   if (!container || !stage) return;
 
-  const n = container.children.length;
+  const slots = Array.from(container.children);
+  const n = slots.length;
   if (n === 0) return;
 
-  const GAP     = 12;
-  const NAME_H  = 22; // approximate height of the name label below each slot
-  const MAX_SLOT = 180; // px — cap so avatars don't get enormous with few participants
-  const W = stage.clientWidth  - GAP * 2;  // available width (subtract padding)
-  const H = stage.clientHeight - GAP * 2;  // available height
+  const W = stage.clientWidth;
+  const H = stage.clientHeight;
+  const { cols } = getBestGrid(n, W, H);
 
-  // Find the number of columns that maximises slot size
-  let bestCols = 1, bestSize = 0;
-  for (let cols = 1; cols <= n; cols++) {
-    const rows    = Math.ceil(n / cols);
-    const slotW   = (W - GAP * (cols - 1)) / cols;
-    const slotH   = (H - GAP * (rows - 1)) / rows - NAME_H;
-    const size    = Math.min(slotW, slotH);
-    if (size > bestSize) { bestSize = size; bestCols = cols; }
-  }
-  const size = Math.min(bestSize, MAX_SLOT);
-
-  const bestRows = Math.ceil(n / bestCols);
-  container.style.gridTemplateColumns = `repeat(${bestCols}, ${size}px)`;
-  container.style.gridTemplateRows    = `repeat(${bestRows}, ${size + NAME_H}px)`;
-  container.style.alignContent        = 'center';
-  container.style.justifyContent      = 'center';
-  container.style.height              = '100%';
+  slots.forEach(slot => {
+    slot.style.width = `${100 / cols}%`;
+  });
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
