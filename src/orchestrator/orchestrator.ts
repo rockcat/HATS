@@ -391,6 +391,16 @@ export class TeamOrchestrator {
     }
   }
 
+  /** Broadcast a human message to ALL agents, interrupting their current work. */
+  async broadcastHumanMessage(content: string): Promise<void> {
+    await this.store.append('human_broadcast', { content });
+    for (const agent of this.agents.values()) {
+      const msg = this.buildMessage('human', agent.name, 'direct', content);
+      agent.markHelpReceived(); // unblock if waiting for human
+      agent.interrupt(msg);    // preempt current tool loop
+    }
+  }
+
   /** Human injects a message into an active meeting. */
   humanMeetingInterjection(meetingId: string, content: string): void {
     this.activeMeetingRooms.get(meetingId)?.injectHumanMessage(content);

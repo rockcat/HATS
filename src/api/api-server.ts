@@ -1627,6 +1627,7 @@ export class APIServer {
     if (line === 'help') {
       return [
         'Commands:',
+        '  message                        — broadcast to ALL agents (interrupts current work)',
         '  @AgentName message             — DM a specific agent',
         '  task AgentName: text           — assign a task',
         '  task AgentName [name]: text    — assign with project name',
@@ -1636,17 +1637,14 @@ export class APIServer {
         '  meetings                       — list meetings',
         '  resume                         — re-deliver active tasks',
         '  help                           — this help',
-        '',
-        'Default: sends to the blue-hat agent (or first agent)',
       ].join('\n');
     }
 
-    // Default: send to blue hat agent or first agent
+    // Default: broadcast to all agents, interrupting whatever they are doing
     const agents = this.orchestrator.listAgents();
     if (agents.length === 0) return 'No agents available.';
-    const defaultAgent = agents.find(a => String(a.hatType).toLowerCase() === 'blue') ?? agents[0];
-    await this.orchestrator.humanMessage(defaultAgent.name, line);
-    return `→ Sent to ${defaultAgent.name}`;
+    await this.orchestrator.broadcastHumanMessage(line);
+    return `→ Broadcast to all agents (${agents.map(a => a.name).join(', ')})`;
   }
 
   private async createEscalationTicket(from: string, message: string, urgency: string): Promise<void> {

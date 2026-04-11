@@ -26,7 +26,9 @@ export class Agent {
   private systemPrompt: string;
   private conversationHistory: AgentMessage[];
   private inbox: TeamMessage[] = [];
+  private priorityInbox: TeamMessage[] = [];
   private processing = false;
+  private interruptFlag = false;
   private toolExecutor: ToolExecutor | null = null;
   private responseHandler: ResponseHandler | null = null;
   private extraToolsProvider: (() => import('../providers/types.js').ToolDefinition[]) | null = null;
@@ -132,18 +134,46 @@ export class Agent {
     });
   }
 
+  /**
+   * Deliver a high-priority message (e.g. human broadcast) that interrupts
+   * current work. The agent will finish the current LLM call then process
+   * this before resuming any queued regular messages.
+   */
+  interrupt(message: TeamMessage): void {
+    this.priorityInbox.push(message);
+    this.interruptFlag = true;
+    if (!this.processing) {
+      this.processInbox().catch((err) => {
+        log.error(`[${this.name}] inbox processing error:`, err);
+      });
+    }
+    // If already processing, the tool loop checks interruptFlag and yields
+  }
+
   private async processInbox(): Promise<void> {
     if (this.processing) return; // already running
     this.processing = true;
 
     try {
+      // Drain priority messages first (e.g. human broadcasts)
+      while (this.priorityInbox.length > 0) {
+        this.interruptFlag = false;
+        const message = this.priorityInbox.shift()!;
+        await this.processMessage(message);
+      }
+      // Then regular inbox
       while (this.inbox.length > 0) {
         if (this._state === AgentState.WaitingForHelp) break; // pause until unblocked
+        if (this.interruptFlag) break; // new interrupt arrived — re-enter to handle it
         const message = this.inbox.shift()!;
         await this.processMessage(message);
       }
     } finally {
       this.processing = false;
+      // If a new interrupt arrived while we were in the finally, kick off again
+      if (this.priorityInbox.length > 0) {
+        this.processInbox().catch((err) => log.error(`[${this.name}] inbox error:`, err));
+      }
     }
   }
 
@@ -185,6 +215,12 @@ export class Agent {
         ? this.llmSemaphore.run(() => this.config.provider.complete(req))
         : this.config.provider.complete(req));
       this.recordTelemetry(req, response.inputTokens, response.outputTokens);
+
+      // Human interrupted — stop the tool loop and yield to priority inbox
+      if (this.interruptFlag) {
+        log.info(`[${this.name}] interrupted by human — pausing current task`);
+        break;
+      }
 
       if (response.toolCalls && response.toolCalls.length > 0) {
         // Add assistant message with tool calls to working history
