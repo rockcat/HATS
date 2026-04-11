@@ -19,7 +19,8 @@ import { readEnvFile, writeEnvFile } from './env-manager.js';
 import { getPricingTable, FREE_PROVIDERS } from '../providers/pricing.js';
 import { processSpeech, isSpeechAvailable } from '../speech/pipeline.js';
 import { VoiceManager } from '../speech/voice-manager.js';
-import { SPECIALISATION_DIRECTIVES } from '../prompt/generator.js';
+import { SPECIALISATION_DIRECTIVES, generateSystemPrompt } from '../prompt/generator.js';
+import { getHatDefinition } from '../hats/definitions.js';
 import { TelemetryStore } from '../store/telemetry-store.js';
 import { log } from '../util/logger.js';
 
@@ -865,6 +866,36 @@ export class APIServer {
         process.env[key] = value;
       }
       this.json(res, 200, { ok: true });
+
+    } else if (pathname.match(/^\/api\/agents\/[^/]+\/prompt-preview$/) && req.method === 'GET') {
+      const agentName = decodeURIComponent(pathname.slice('/api/agents/'.length, -'/prompt-preview'.length));
+      const hatParam  = url.searchParams.get('hat') as HatType | null;
+      const specParam = url.searchParams.get('specialisation') ?? undefined;
+      try {
+        const resolved = this.resolveAgentName(agentName);
+        const agent    = this.orchestrator.getAgent(resolved);
+        if (!agent) { this.json(res, 404, { error: `Agent "${agentName}" not found` }); return; }
+        const hatType = hatParam ?? agent.hatType;
+        const hat     = getHatDefinition(hatType);
+        const prompt  = generateSystemPrompt({
+          name:               agent.config.identity.name,
+          visualDescription:  agent.config.identity.visualDescription,
+          backstory:          agent.config.identity.backstory,
+          hatLabel:           hat.label,
+          thinkingStyle:      hat.thinkingStyle,
+          communicationTone:  hat.communicationTone,
+          directives:         hat.directives,
+          avoidances:         hat.avoidances,
+          teamRole:           hat.teamRole,
+          teamContext:        agent.config.teamContext,
+          projectDir:         agent.config.projectDir,
+          projectGoal:        agent.config.projectGoal,
+          specialisation:     specParam !== undefined ? specParam : agent.config.identity.specialisation,
+        });
+        this.json(res, 200, { prompt: prompt.text });
+      } catch (err) {
+        this.json(res, 400, { error: (err as Error).message });
+      }
 
     } else if (pathname.match(/^\/api\/agents\/[^/]+\/config$/) && req.method === 'PATCH') {
       const agentName = decodeURIComponent(pathname.slice('/api/agents/'.length, -'/config'.length));

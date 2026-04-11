@@ -1313,6 +1313,54 @@ main {
   opacity: 0.75;
 }
 
+/* ── Agent prompt preview panel ──────────────────────────────────────────── */
+.agent-prompt-preview {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  max-height: 340px;
+  min-height: 120px;
+}
+.agent-prompt-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+}
+.agent-prompt-preview-title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+.agent-prompt-preview-close {
+  background: none;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 14px;
+  opacity: 0.6;
+  padding: 0 2px;
+  line-height: 1;
+}
+.agent-prompt-preview-close:hover { opacity: 1; }
+.agent-prompt-preview-text {
+  flex: 1;
+  overflow-y: auto;
+  margin: 0;
+  padding: 10px 12px;
+  font-size: 11px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text);
+  font-family: inherit;
+}
+
 .agent-detail-feed {
   flex: 1;
   overflow-y: auto;

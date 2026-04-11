@@ -1296,6 +1296,24 @@ async function loadPricing() {
   return _pricingCache;
 }
 
+/** Fetch and display the system prompt for the currently configured hat/specialisation. */
+async function refreshPromptPreview() {
+  if (!activeDetailAgent) return;
+  const textEl = document.getElementById('agent-prompt-preview-text');
+  const hat    = document.getElementById('agent-config-hat').value;
+  const spec   = getSpecValue('agent-config-specialisation', 'agent-config-specialisation-custom');
+  textEl.textContent = 'Loading…';
+  try {
+    const params = new URLSearchParams({ hat });
+    if (spec) params.set('specialisation', spec);
+    const res = await fetch(`/api/agents/${encodeURIComponent(activeDetailAgent)}/prompt-preview?${params}`);
+    const data = await res.json();
+    textEl.textContent = data.prompt ?? data.error ?? 'Error';
+  } catch (e) {
+    textEl.textContent = 'Failed to load prompt.';
+  }
+}
+
 /** Show a price hint or unknown-model warning below the model select. */
 async function updatePricingHint(providerId, modelId) {
   const line = document.getElementById('agent-config-pricing-line');
@@ -1630,6 +1648,18 @@ function initAgentDetail() {
     stopSpeech(activeDetailAgent);
   });
 
+  // Prompt preview button — shows/hides the system prompt panel
+  document.getElementById('agent-config-preview-prompt').addEventListener('click', async () => {
+    const panel = document.getElementById('agent-prompt-preview');
+    if (!panel.hidden) { panel.hidden = true; return; }
+    panel.hidden = false;
+    await refreshPromptPreview();
+  });
+
+  document.getElementById('agent-prompt-preview-close').addEventListener('click', () => {
+    document.getElementById('agent-prompt-preview').hidden = true;
+  });
+
   // Re-populate model list when provider changes; show/hide URL field for local providers
   document.getElementById('agent-config-provider').addEventListener('change', async () => {
     const providerId = document.getElementById('agent-config-provider').value;
@@ -1661,11 +1691,19 @@ function initAgentDetail() {
   });
 
 
+  // Auto-refresh prompt preview when hat changes
+  document.getElementById('agent-config-hat').addEventListener('change', () => {
+    const panel = document.getElementById('agent-prompt-preview');
+    if (!panel.hidden) refreshPromptPreview();
+  });
+
   // Show/hide custom spec input when "Custom…" is selected
   document.getElementById('agent-config-specialisation').addEventListener('change', e => {
     const cust = document.getElementById('agent-config-specialisation-custom');
     cust.hidden = e.target.value !== '__custom__';
     if (!cust.hidden) cust.focus();
+    const panel = document.getElementById('agent-prompt-preview');
+    if (!panel.hidden) refreshPromptPreview();
   });
 
   // Single Apply button — saves hat, voice, avatar, specialisation, provider+model
@@ -1707,6 +1745,8 @@ function initAgentDetail() {
 
 function openAgentDetail(name) {
   activeDetailAgent = name;
+  // Hide prompt preview panel when switching agents
+  document.getElementById('agent-prompt-preview').hidden = true;
   // Kick off a background model refresh (respects server-side TTL)
   refreshProviderModels();
   const agent = state.agents.find(a => a.name === name);
