@@ -122,41 +122,44 @@ export class MeetingRoom {
     }
 
     // ── Phase 4: Closing ──────────────────────────────────────────────────
+    // Facilitator summary (may call report_task_complete here, setting this.closed)
     if (!this.closed) {
-      // Facilitator summary
       const summaryPrompt =
         `${buildTranscriptText(meeting.turns)}\n\n` +
         `Summarise the decisions and action items with owners in two or three sentences. ` +
         `Then offer participants one final chance to comment.`;
       const summaryResponse = await facilitator.meetingTurn(summaryPrompt);
       await this.recordTurn(meeting.facilitator, summaryResponse);
+    }
 
-      // Final comment round
+    // Human always gets a final say — even if facilitator already called report_task_complete
+    if (meeting.participants.includes('human')) {
+      const reply = await this.humanResponder(meeting.turns, meeting.topic);
+      if (reply) await this.recordTurn('human', reply);
+    }
+
+    // Agent final comments (skip if facilitator already closed)
+    if (!this.closed) {
       for (const participant of meeting.participants) {
-        if (this.closed) break;
-        if (participant === 'human') {
-          const reply = await this.humanResponder(meeting.turns, meeting.topic);
-          if (reply) await this.recordTurn('human', reply);
-        } else {
-          const agent = this.agents.get(participant);
-          if (agent) {
-            const prompt =
-              `${buildTranscriptText(meeting.turns)}\n\n` +
-              `Final comment only — one sentence, or respond with "Nothing to add." to pass.`;
-            const response = await agent.meetingTurn(prompt);
-            await this.recordTurn(participant, response);
-          }
+        if (this.closed || participant === 'human') continue;
+        const agent = this.agents.get(participant);
+        if (agent) {
+          const prompt =
+            `${buildTranscriptText(meeting.turns)}\n\n` +
+            `Final comment only — one sentence, or respond with "Nothing to add." to pass.`;
+          const response = await agent.meetingTurn(prompt);
+          await this.recordTurn(participant, response);
         }
       }
+    }
 
-      // Facilitator closes
-      if (!this.closed) {
-        const closePrompt =
-          `${buildTranscriptText(meeting.turns)}\n\n` +
-          `Close this meeting now by calling report_task_complete with a concise summary of all decisions and action items.`;
-        const closeResponse = await facilitator.meetingTurn(closePrompt);
-        await this.recordTurn(meeting.facilitator, closeResponse);
-      }
+    // Facilitator explicit close (only if not already closed by report_task_complete)
+    if (!this.closed) {
+      const closePrompt =
+        `${buildTranscriptText(meeting.turns)}\n\n` +
+        `Close this meeting now by calling report_task_complete with a concise summary of all decisions and action items.`;
+      const closeResponse = await facilitator.meetingTurn(closePrompt);
+      await this.recordTurn(meeting.facilitator, closeResponse);
     }
 
   }
