@@ -1368,6 +1368,7 @@ export class APIServer {
       const body = await this.readBody(req);
       const { participant, raised } = JSON.parse(body) as { participant: string; raised: boolean };
       if (!participant?.trim()) { this.json(res, 400, { error: 'participant is required' }); return; }
+      this.orchestrator.raiseHandInMeeting(meetingId, participant.trim(), !!raised);
       this.sseBroadcast({ type: 'meeting_hand_raised', meetingId, participant: participant.trim(), raised: !!raised });
       this.json(res, 200, { ok: true });
 

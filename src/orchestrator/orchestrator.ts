@@ -576,6 +576,15 @@ export class TeamOrchestrator {
 
         await this.store.append('task_complete', { agent: agentName, summary });
 
+        // If this agent is a meeting facilitator, close their room
+        for (const [meetingId, room] of this.activeMeetingRooms) {
+          const meeting = this.meetings.get(meetingId);
+          if (meeting?.facilitator === agentName) {
+            room.close();
+            break;
+          }
+        }
+
         // Notify Blue Hat that the task is done
         const blueHat = this.findBlueHat();
         if (blueHat && blueHat.name !== agentName) {
@@ -584,6 +593,19 @@ export class TeamOrchestrator {
         }
 
         return `Task marked complete.`;
+      }
+
+      case 'raise_hand': {
+        // Find which active meeting this agent is participating in and raise their hand
+        for (const [meetingId, room] of this.activeMeetingRooms) {
+          const meeting = this.meetings.get(meetingId);
+          if (!meeting) continue;
+          if (meeting.facilitator === agentName || meeting.participants.includes(agentName)) {
+            room.raiseHand(agentName, true);
+            break;
+          }
+        }
+        return `Hand raised. You will be called on when it is your turn.`;
       }
 
       case 'assign_task': {
@@ -739,6 +761,11 @@ export class TeamOrchestrator {
     if (!room) return false;
     room.close();
     return true;
+  }
+
+  /** Raise or lower a participant's hand in an active meeting (used by API for human participants). */
+  raiseHandInMeeting(meetingId: string, participant: string, raised: boolean): void {
+    this.activeMeetingRooms.get(meetingId)?.raiseHand(participant, raised);
   }
 
   /** Launch a meeting immediately (used by the web UI impromptu button). */

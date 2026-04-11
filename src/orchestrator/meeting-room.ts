@@ -5,21 +5,21 @@ import { Agent } from '../agent/agent.js';
 import { EventStore } from '../store/event-store.js';
 import { renderMarkdown } from '../human/markdown.js';
 import { log } from '../util/logger.js';
-
-const MAX_ROUNDS = 6;
+import { RAISE_HAND } from '../tools/definitions.js';
 
 export type HumanResponder = (transcript: MeetingTurn[], topic: string) => Promise<string | null>;
 
 /**
- * Runs a meeting as a round-table.
- *
- * Each participant (agent or human) takes a turn in sequence.
- * The facilitator (Blue Hat) opens and closes.
- * Returns when the facilitator calls report_task_complete or MAX_ROUNDS is reached.
+ * Runs a meeting using a 4-phase structure:
+ *   1. Facilitator opening (problem + position, no pleasantries)
+ *   2. Opening remarks from each participant (can raise hand to re-enter)
+ *   3. Facilitated hand-based discussion (facilitator nominates speakers by name)
+ *   4. Closing (facilitator summarises, final comment round, report_task_complete)
  */
 export class MeetingRoom {
   private closed = false;
   private humanInterjects: string[] = [];
+  private raisedHands: Set<string> = new Set();
 
   constructor(
     private meeting: Meeting,
@@ -39,56 +39,119 @@ export class MeetingRoom {
     this.closed = true;
   }
 
+  /** Raise or lower a participant's hand. Called by orchestrator when agent uses raise_hand tool, or via API for human. */
+  raiseHand(name: string, raised = true): void {
+    if (raised) {
+      this.raisedHands.add(name);
+    } else {
+      this.raisedHands.delete(name);
+    }
+  }
+
   async run(): Promise<void> {
     const { meeting } = this;
-
-    // Facilitator opens with the agenda
     const facilitator = this.agents.get(meeting.facilitator);
     if (!facilitator) return;
 
-    const openingPrompt = buildOpeningPrompt(meeting);
-    const openingResponse = await facilitator.meetingTurn(openingPrompt);
+    // ── Phase 1: Facilitator opens ─────────────────────────────────────────
+    const openingResponse = await facilitator.meetingTurn(buildOpeningPrompt(meeting));
     await this.recordTurn(meeting.facilitator, openingResponse);
 
-    // Round-table loop
-    for (let round = 0; round < MAX_ROUNDS && !this.closed; round++) {
-      const transcript = buildTranscriptText(meeting.turns);
-
-      for (const participant of meeting.participants) {
-        if (this.closed) break;
-
-        // Prepend any human interjects into this turn's prompt
-        let prompt = transcript;
-        if (this.humanInterjects.length > 0) {
-          prompt += '\n\n[Human interjection]: ' + this.humanInterjects.splice(0).join('\n');
-        }
-
-        if (participant === 'human') {
-          const reply = await this.humanResponder(meeting.turns, meeting.topic);
-          if (reply) {
-            await this.recordTurn('human', reply);
-          }
-        } else {
-          const agent = this.agents.get(participant);
-          if (!agent) continue;
-          const response = await agent.meetingTurn(
-            `${prompt}\n\nYour turn. State your concrete position, decision, or specific action — not what "we should explore" or how "we should approach" it. No process talk, no agreement echo, no preamble. one or two sentences max.`,
-          );
-          await this.recordTurn(participant, response);
-        }
-      }
-
-      // Facilitator summarises after each round and decides whether to close
-      if (!this.closed) {
-        const summary = await facilitator.meetingTurn(
+    // ── Phase 2: Opening remarks from each participant ─────────────────────
+    for (const participant of meeting.participants) {
+      if (this.closed) break;
+      if (participant === 'human') {
+        const reply = await this.humanResponder(meeting.turns, meeting.topic);
+        if (reply) await this.recordTurn('human', reply);
+      } else {
+        const agent = this.agents.get(participant);
+        if (!agent) continue;
+        const prompt =
           `${buildTranscriptText(meeting.turns)}\n\n` +
-          `As facilitator: state what has been decided and what is still unresolved. If there is enough to act on, close now with report_task_complete listing concrete action items and owners. If not, name the single specific question still blocking a decision. No summaries of who said what. one or two sentences.`,
-        );
-        await this.recordTurn(meeting.facilitator, summary);
+          `Give your opening remark: your position or the key point you're bringing. ` +
+          `One or two sentences. If you want to speak again later, call raise_hand.`;
+        const response = await agent.meetingTurn(prompt, [RAISE_HAND]);
+        await this.recordTurn(participant, response);
       }
     }
 
-    // Close meeting
+    // ── Phase 3: Hand-based discussion ────────────────────────────────────
+    while (!this.closed) {
+      const raised = [...this.raisedHands];
+      if (raised.length === 0) break;
+
+      // Facilitator nominates the next speaker
+      const facilitatorPrompt =
+        `${buildTranscriptText(meeting.turns)}\n\n` +
+        `Hands raised: ${raised.join(', ')}.\n` +
+        `Call one by saying only their name. Or say DONE to move to closing.`;
+      const nomination = await facilitator.meetingTurn(facilitatorPrompt);
+      await this.recordTurn(meeting.facilitator, nomination);
+
+      if (this.closed) break;
+
+      // Parse who was nominated
+      const nominated = findNominatedSpeaker(nomination, raised);
+      if (!nominated) break;
+
+      this.raisedHands.delete(nominated);
+
+      // Nominated participant speaks
+      if (nominated === 'human') {
+        const reply = await this.humanResponder(meeting.turns, meeting.topic);
+        if (reply) await this.recordTurn('human', reply);
+      } else {
+        const agent = this.agents.get(nominated);
+        if (agent) {
+          const prompt =
+            `${buildTranscriptText(meeting.turns)}\n\n` +
+            `You've been called to speak. State your point clearly in one or two sentences. ` +
+            `Call raise_hand if you want to speak again later.`;
+          const response = await agent.meetingTurn(prompt, [RAISE_HAND]);
+          await this.recordTurn(nominated, response);
+        }
+      }
+    }
+
+    // ── Phase 4: Closing ──────────────────────────────────────────────────
+    if (!this.closed) {
+      // Facilitator summary
+      const summaryPrompt =
+        `${buildTranscriptText(meeting.turns)}\n\n` +
+        `Summarise the decisions and action items with owners in two or three sentences. ` +
+        `Then offer participants one final chance to comment.`;
+      const summaryResponse = await facilitator.meetingTurn(summaryPrompt);
+      await this.recordTurn(meeting.facilitator, summaryResponse);
+
+      // Final comment round
+      for (const participant of meeting.participants) {
+        if (this.closed) break;
+        if (participant === 'human') {
+          const reply = await this.humanResponder(meeting.turns, meeting.topic);
+          if (reply) await this.recordTurn('human', reply);
+        } else {
+          const agent = this.agents.get(participant);
+          if (agent) {
+            const prompt =
+              `${buildTranscriptText(meeting.turns)}\n\n` +
+              `Final comment only — one sentence, or respond with "Nothing to add." to pass.`;
+            const response = await agent.meetingTurn(prompt);
+            await this.recordTurn(participant, response);
+          }
+        }
+      }
+
+      // Facilitator closes
+      if (!this.closed) {
+        const closePrompt =
+          `${buildTranscriptText(meeting.turns)}\n\n` +
+          `Close this meeting now by calling report_task_complete with a concise summary of all decisions and action items.`;
+        const closeResponse = await facilitator.meetingTurn(closePrompt);
+        await this.recordTurn(meeting.facilitator, closeResponse);
+      }
+    }
+
+    // ── Wrap up ───────────────────────────────────────────────────────────
     meeting.status = 'closed';
     meeting.closedAt = new Date().toISOString();
 
@@ -98,7 +161,6 @@ export class MeetingRoom {
       turns: meeting.turns.length,
     });
 
-    // Save minutes to outputs/minutes/
     if (this.projectDir) {
       await this.saveMinutes().catch(err =>
         log.error(`[Meeting] Failed to save minutes: ${(err as Error).message}`),
@@ -157,6 +219,15 @@ function buildOpeningPrompt(meeting: Meeting): string {
 function buildTranscriptText(turns: MeetingTurn[]): string {
   if (turns.length === 0) return '(No turns yet)';
   return turns.map((t) => `${t.participant}: ${t.content}`).join('\n\n');
+}
+
+/** Find the first participant name mentioned in the facilitator's nomination response. Returns null if DONE or no match. */
+function findNominatedSpeaker(response: string, candidates: string[]): string | null {
+  if (/\bdone\b/i.test(response) || /\bclose\b/i.test(response) || /\bno more\b/i.test(response)) return null;
+  for (const name of candidates) {
+    if (new RegExp(`\\b${name}\\b`, 'i').test(response)) return name;
+  }
+  return null;
 }
 
 export function buildMinutesMarkdown(meeting: Meeting): string {
