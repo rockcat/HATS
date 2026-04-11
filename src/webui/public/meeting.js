@@ -190,12 +190,14 @@ function setHandRaised(name, raised) {
   }
   const slotEl = document.querySelector(`.meeting-avatar-slot[data-name="${name}"]`);
   if (!slotEl) return;
+  // Append badge inside the frame/human div so it's clipped correctly and positioned relative to the avatar
+  const frameEl = slotEl.querySelector('.meeting-avatar-frame, .meeting-avatar-human') ?? slotEl;
   let badge = slotEl.querySelector('.meeting-hand-badge');
   if (raised && !badge) {
     badge = document.createElement('span');
     badge.className = 'meeting-hand-badge';
-    badge.innerHTML = '<img src="/assets/raisedhand.svg" class="svg-icon" alt="">';
-    slotEl.appendChild(badge);
+    badge.innerHTML = '<img src="/assets/raisedhand.svg" alt="">';
+    frameEl.appendChild(badge);
   } else if (!raised && badge) {
     badge.remove();
   }
@@ -408,6 +410,7 @@ function layoutMeetingAvatars() {
 
   const GAP     = 12;
   const NAME_H  = 22; // approximate height of the name label below each slot
+  const MAX_SLOT = 180; // px — cap so avatars don't get enormous with few participants
   const W = stage.clientWidth  - GAP * 2;  // available width (subtract padding)
   const H = stage.clientHeight - GAP * 2;  // available height
 
@@ -420,12 +423,13 @@ function layoutMeetingAvatars() {
     const size    = Math.min(slotW, slotH);
     if (size > bestSize) { bestSize = size; bestCols = cols; }
   }
+  const size = Math.min(bestSize, MAX_SLOT);
 
   const bestRows = Math.ceil(n / bestCols);
-  container.style.gridTemplateColumns = `repeat(${bestCols}, 1fr)`;
-  container.style.gridTemplateRows    = `repeat(${bestRows}, 1fr)`;
-  container.style.alignContent        = 'stretch';
-  container.style.justifyContent      = 'stretch';
+  container.style.gridTemplateColumns = `repeat(${bestCols}, ${size}px)`;
+  container.style.gridTemplateRows    = `repeat(${bestRows}, ${size + NAME_H}px)`;
+  container.style.alignContent        = 'center';
+  container.style.justifyContent      = 'center';
   container.style.height              = '100%';
 }
 

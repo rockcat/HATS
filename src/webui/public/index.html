@@ -217,12 +217,16 @@
         </div>
         <div id="meeting-transcript" class="meeting-transcript"></div>
         <div id="meeting-human-input" class="meeting-human-input" hidden>
-          <span class="meeting-turn-label" id="meeting-turn-label" hidden>Your turn</span>
-          <input id="meeting-input" class="meeting-input-field" type="text" placeholder="Say something…" autocomplete="off">
-          <button id="meeting-mic-btn" class="mic-btn" title="Hold to speak (Whisper)"><img src="/assets/mic.svg" class="svg-icon" alt="Mic"></button>
-          <button id="meeting-raise-hand-btn" class="meeting-raise-hand-btn" title="Raise / lower your hand"><img src="/assets/raisedhand.svg" class="svg-icon" alt=""> Raise Hand</button>
-          <button id="meeting-send-btn" class="meeting-send-btn">Send</button>
-          <button id="meeting-pass-btn" class="meeting-pass-btn" hidden>Pass</button>
+          <div class="meeting-input-row">
+            <span class="meeting-turn-label" id="meeting-turn-label" hidden>Your turn</span>
+            <input id="meeting-input" class="meeting-input-field" type="text" placeholder="Say something…" autocomplete="off">
+            <button id="meeting-mic-btn" class="mic-btn" title="Hold to speak (Whisper)"><img src="/assets/mic.svg" class="svg-icon" alt="Mic"></button>
+          </div>
+          <div class="meeting-action-row">
+            <button id="meeting-raise-hand-btn" class="meeting-raise-hand-btn" title="Raise / lower your hand"><img src="/assets/raisedhand.svg" class="svg-icon" alt=""> Raise Hand</button>
+            <button id="meeting-pass-btn" class="meeting-pass-btn" hidden>Pass</button>
+            <button id="meeting-send-btn" class="meeting-send-btn">Send</button>
+          </div>
         </div>
       </div>
     </div>
