@@ -657,9 +657,9 @@ function initTicketEditing() {
 
   document.getElementById('new-ticket-btn').addEventListener('click', openNewTicketModal);
   document.getElementById('board-refresh-btn').addEventListener('click', () => {
-    fetch('/api/kanban')
+    fetch('/api/kanban/tickets')
       .then(r => r.json())
-      .then(data => { state.tickets = data.tickets ?? []; renderKanban(state.tickets); })
+      .then(({ tickets }) => { state.tickets = tickets ?? []; renderKanban(state.tickets); })
       .catch(() => {});
   });
   document.getElementById('modal-close').addEventListener('click', closeTicketModal);

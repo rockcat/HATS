@@ -601,6 +601,11 @@ export class APIServer {
       const board = await this.readKanban();
       this.json(res, 200, buildBoardSummary(board, includeBacklog));
 
+    } else if (pathname === '/api/kanban/tickets' && req.method === 'GET') {
+      if (!this.kanbanPath) { this.json(res, 404, { error: 'Kanban not configured' }); return; }
+      const tickets = await this.readTickets();
+      this.json(res, 200, { tickets });
+
     } else if (pathname === '/api/kanban/tickets' && req.method === 'POST') {
       if (!this.kanbanPath) { this.json(res, 404, { error: 'Kanban not configured' }); return; }
       const body   = await this.readBody(req);
