@@ -1641,7 +1641,7 @@ function initAgentDetail() {
         source.start();
       }
     } catch { /* ignore preview errors */ }
-    btn.textContent = '▶'; btn.disabled = false;
+    btn.innerHTML = '<img src="/assets/play.svg" class="svg-icon" alt="Play">'; btn.disabled = false;
   });
 
   // Stop voice button — kills current audio source and clears the queue
@@ -3353,7 +3353,7 @@ function buildFileActions(f) {
   const viewBtn = canView
     ? `<button class="file-action-btn file-view-btn" title="View" data-name="${esc(f.name)}" data-path="${esc(f.relativePath)}">👁</button>`
     : `<span class="file-action-placeholder"></span>`;
-  const dlBtn = `<a class="file-action-btn" title="Download" href="${esc(url)}" download="${esc(f.name)}">⬇</a>`;
+  const dlBtn = `<a class="file-action-btn" title="Download" href="${esc(url)}" download="${esc(f.name)}"><img src="/assets/download.svg" class="svg-icon" alt="Download"></a>`;
   return `<span class="file-actions">${viewBtn}${dlBtn}</span>`;
 }
 
