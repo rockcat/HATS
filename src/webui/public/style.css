@@ -2900,6 +2900,41 @@ body.has-expanded-panel main > section:not(.panel--expanded) {
 }
 .meeting-avatar-slot.speaking .meeting-avatar-name { color: var(--text); }
 
+/* Hand raised badge */
+.meeting-hand-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  font-size: 22px;
+  line-height: 1;
+  pointer-events: none;
+  filter: drop-shadow(0 1px 3px rgba(0,0,0,0.6));
+  animation: hand-bob 1s ease-in-out infinite;
+  z-index: 5;
+}
+@keyframes hand-bob {
+  0%, 100% { transform: translateY(0);   }
+  50%       { transform: translateY(-4px); }
+}
+
+/* Raise hand button (human meeting controls) */
+.meeting-raise-hand-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  border-radius: 6px;
+  padding: 7px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.meeting-raise-hand-btn:hover { color: var(--text); border-color: var(--border-hover); }
+.meeting-raise-hand-btn.raised {
+  background: #b7791f22;
+  border-color: #d69e2e;
+  color: #d69e2e;
+}
+
 /* Human avatar placeholder */
 .meeting-avatar-human {
   width: 100%;

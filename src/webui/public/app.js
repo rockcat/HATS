@@ -1153,6 +1153,8 @@ function connect() {
       window.meetingUI?.addTurn(msg.participant, msg.content);
     } else if (msg.type === 'meeting_human_turn') {
       window.meetingUI?.requestHumanTurn(msg.meetingId);
+    } else if (msg.type === 'meeting_hand_raised') {
+      window.meetingUI?.setHandRaised(msg.participant, msg.raised);
     } else if (msg.type === 'meeting_closed') {
       window.meetingUI?.close(msg.meetingId);
     }

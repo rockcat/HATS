@@ -1343,6 +1343,14 @@ export class APIServer {
         this.json(res, 404, { error: 'No pending human turn' });
       }
 
+    } else if (pathname.startsWith('/api/meetings/') && pathname.endsWith('/raise-hand') && req.method === 'POST') {
+      const meetingId = pathname.split('/')[3];
+      const body = await this.readBody(req);
+      const { participant, raised } = JSON.parse(body) as { participant: string; raised: boolean };
+      if (!participant?.trim()) { this.json(res, 400, { error: 'participant is required' }); return; }
+      this.sseBroadcast({ type: 'meeting_hand_raised', meetingId, participant: participant.trim(), raised: !!raised });
+      this.json(res, 200, { ok: true });
+
     } else if (pathname.startsWith('/api/meetings/') && pathname.endsWith('/human-interject') && req.method === 'POST') {
       const meetingId = pathname.split('/')[3];
       const body = await this.readBody(req);

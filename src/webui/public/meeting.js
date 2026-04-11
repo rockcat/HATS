@@ -39,6 +39,9 @@ let agentSpeakerMap = {};
 // Per-participant Three.js slot: name → { renderer, scene, camera, visemeMeshes, morphWeights, targetViseme }
 const slots = {};
 
+// Raised hands
+const raisedHands = new Set();
+
 // Shared render loop
 let rafId = null;
 
@@ -179,9 +182,38 @@ function stopCurrentAudio() {
   }
 }
 
+function setHandRaised(name, raised) {
+  if (raised) {
+    raisedHands.add(name);
+  } else {
+    raisedHands.delete(name);
+  }
+  const slotEl = document.querySelector(`.meeting-avatar-slot[data-name="${name}"]`);
+  if (!slotEl) return;
+  let badge = slotEl.querySelector('.meeting-hand-badge');
+  if (raised && !badge) {
+    badge = document.createElement('span');
+    badge.className = 'meeting-hand-badge';
+    badge.textContent = '✋';
+    slotEl.appendChild(badge);
+  } else if (!raised && badge) {
+    badge.remove();
+  }
+  // Sync raise-hand button state if this is the human
+  if (name === 'human') {
+    const btn = document.getElementById('meeting-raise-hand-btn');
+    if (btn) {
+      btn.classList.toggle('raised', raised);
+      btn.textContent = raised ? '✋ Lower Hand' : '✋ Raise Hand';
+    }
+  }
+}
+
 function setSlotSpeaking(name, speaking) {
   const el = document.querySelector(`.meeting-avatar-slot[data-name="${name}"]`);
   if (el) el.classList.toggle('speaking', speaking);
+  // Lower hand when a participant starts speaking
+  if (speaking && raisedHands.has(name)) setHandRaised(name, false);
 }
 
 function setSpeakingViseme(name, viseme) {
@@ -507,8 +539,25 @@ window.meetingUI = {
       label.textContent = name === 'human' ? (window._meetingHumanName ?? 'human') : name;
       slotEl.appendChild(label);
 
+      // Click slot to toggle hand raised
+      slotEl.addEventListener('click', () => {
+        const participant = slotEl.dataset.name;
+        const nowRaised = !raisedHands.has(participant);
+        setHandRaised(participant, nowRaised);
+        // Broadcast to server so other clients see it
+        if (activeMeetingId) {
+          fetch(`/api/meetings/${encodeURIComponent(activeMeetingId)}/raise-hand`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ participant, raised: nowRaised }),
+          }).catch(() => {});
+        }
+      });
+
       container.appendChild(slotEl);
     }
+
+    raisedHands.clear();
 
     // Layout slots to fill the stage
     layoutMeetingAvatars();
@@ -539,6 +588,8 @@ window.meetingUI = {
 
   requestHumanTurn(meetingId) {
     if (meetingId !== activeMeetingId) return;
+    // Lower hand — the human has been given the floor
+    if (raisedHands.has('human')) setHandRaised('human', false);
     document.getElementById('meeting-turn-label').hidden = false;
     document.getElementById('meeting-pass-btn').hidden = false;
     document.getElementById('meeting-input')?.focus();
@@ -565,17 +616,24 @@ window.meetingUI = {
     }
     for (const key of Object.keys(slots)) delete slots[key];
 
+    raisedHands.clear();
     document.getElementById('meeting-overlay').hidden = true;
     document.getElementById('meeting-transcript').innerHTML = '';
     document.getElementById('meeting-human-input').hidden = true;
     document.getElementById('meeting-turn-label').hidden = true;
     document.getElementById('meeting-pass-btn').hidden = true;
+    const rhBtn = document.getElementById('meeting-raise-hand-btn');
+    if (rhBtn) { rhBtn.classList.remove('raised'); rhBtn.textContent = '✋ Raise Hand'; }
   },
 
   setSpeechEnabled(enabled) {
     speechEnabled = enabled;
     const btn = document.getElementById('meeting-speech-toggle');
     if (btn) btn.classList.toggle('active', enabled);
+  },
+
+  setHandRaised(participant, raised) {
+    setHandRaised(participant, raised);
   },
 };
 
@@ -628,6 +686,8 @@ document.addEventListener('DOMContentLoaded', () => {
     inputEl && (inputEl.value = '');
     document.getElementById('meeting-turn-label').hidden = true;
     document.getElementById('meeting-pass-btn').hidden = true;
+    // Lower hand when speaking
+    if (raisedHands.has('human')) setHandRaised('human', false);
 
     const id = activeMeetingId;
 
@@ -652,6 +712,17 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     } catch { /* ignore network errors */ }
   }
+
+  document.getElementById('meeting-raise-hand-btn')?.addEventListener('click', () => {
+    if (!activeMeetingId) return;
+    const nowRaised = !raisedHands.has('human');
+    setHandRaised('human', nowRaised);
+    fetch(`/api/meetings/${encodeURIComponent(activeMeetingId)}/raise-hand`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ participant: 'human', raised: nowRaised }),
+    }).catch(() => {});
+  });
 
   document.getElementById('meeting-send-btn')?.addEventListener('click', () => submitHumanTurn(false));
   document.getElementById('meeting-pass-btn')?.addEventListener('click', () => submitHumanTurn(true));
