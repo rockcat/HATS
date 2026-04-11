@@ -3366,6 +3366,19 @@ function initFileViewer() {
     openFileViewer(btn.dataset.name, btn.dataset.path);
   });
 
+  // Double-click a file row: view if available, otherwise trigger download
+  document.addEventListener('dblclick', e => {
+    const row = e.target.closest('.file-row:not(.file-row--dir)');
+    if (!row) return;
+    const viewBtn = row.querySelector('.file-view-btn');
+    if (viewBtn) {
+      openFileViewer(viewBtn.dataset.name, viewBtn.dataset.path);
+    } else {
+      const dlLink = row.querySelector('a.file-action-btn[download]');
+      if (dlLink) dlLink.click();
+    }
+  });
+
   document.getElementById('file-viewer-close').addEventListener('click', () => {
     document.getElementById('file-viewer-modal').hidden = true;
   });
