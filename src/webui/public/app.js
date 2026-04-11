@@ -656,6 +656,12 @@ function initTicketEditing() {
   });
 
   document.getElementById('new-ticket-btn').addEventListener('click', openNewTicketModal);
+  document.getElementById('board-refresh-btn').addEventListener('click', () => {
+    fetch('/api/kanban')
+      .then(r => r.json())
+      .then(data => { state.tickets = data.tickets ?? []; renderKanban(state.tickets); })
+      .catch(() => {});
+  });
   document.getElementById('modal-close').addEventListener('click', closeTicketModal);
   document.getElementById('modal-cancel').addEventListener('click', closeTicketModal);
   document.getElementById('modal-save').addEventListener('click', saveTicket);
