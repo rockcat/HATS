@@ -1322,6 +1322,7 @@ main {
   max-height: 340px;
   min-height: 120px;
 }
+.agent-prompt-preview[hidden] { display: none; }
 .agent-prompt-preview-header {
   display: flex;
   align-items: center;
