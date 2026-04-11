@@ -1932,7 +1932,7 @@ function buildFeedItem(ev, selfName) {
 const FEED_META = {
   task_assigned:  { icon: '📋', cls: 'task',     label: 'Task assigned'   },
   task_complete:  { icon: '✓',  cls: 'complete',  label: 'Task complete'   },
-  tool_call:      { icon: '⚙',  cls: 'tool',      label: 'Tool call'       },
+  tool_call:      { icon: '<img src="/assets/settings.svg" class="svg-icon svg-icon--feed" alt="">',  cls: 'tool',      label: 'Tool call'       },
   tool_result:    { icon: '↩',  cls: 'result',    label: 'Tool result'     },
   tool_error:     { icon: '✗',  cls: 'error',     label: 'Tool error'      },
   agent_response: { icon: '💬', cls: 'response',  label: 'Response'        },
@@ -2005,7 +2005,7 @@ function initCLI() {
   const input = document.getElementById('cli-input');
   if (!input) return;
 
-  appendCLILine('Team CLI — type "help" for commands', 'cli-system');
+  appendCLILine('Team Chat — type "help" for commands', 'cli-system');
 
   input.addEventListener('keydown', e => {
     if (e.key !== 'Enter') return;
@@ -3180,7 +3180,7 @@ function collapseExpandedPanel() {
   document.querySelectorAll('section.panel--expanded').forEach(p => {
     p.classList.remove('panel--expanded');
     const b = p.querySelector('.panel-expand-btn');
-    if (b) b.innerHTML = '&#x26F6;';
+    if (b) b.innerHTML = '<img src="/assets/expand.svg" class="svg-icon" alt="Expand">';
   });
   document.body.classList.remove('has-expanded-panel');
 }
@@ -3195,7 +3195,7 @@ function initPanelExpand() {
       collapseExpandedPanel();
       if (!isExpanded) {
         panel.classList.add('panel--expanded');
-        btn.innerHTML = '&#x229F;'; // ⊟ squared minus — restore to normal
+        btn.innerHTML = '<img src="/assets/reduce.svg" class="svg-icon" alt="Collapse">'; // reduce — restore to normal
         document.body.classList.add('has-expanded-panel');
       }
     });

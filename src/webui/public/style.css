@@ -22,6 +22,18 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+.svg-icon {
+  width: 18px;
+  height: 18px;
+  vertical-align: middle;
+  display: inline-block;
+  pointer-events: none;
+}
+.svg-icon--feed {
+  width: 14px;
+  height: 14px;
+}
+
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   background: var(--bg);
@@ -2710,11 +2722,12 @@ main {
   border: none;
   color: var(--text-muted);
   cursor: pointer;
-  font-size: 13px;
   padding: 2px 4px;
   margin-left: auto;
   opacity: 0.5;
   line-height: 1;
+  display: flex;
+  align-items: center;
 }
 .panel-expand-btn:hover { opacity: 1; color: var(--text); }
 

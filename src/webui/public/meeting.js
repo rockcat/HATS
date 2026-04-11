@@ -194,7 +194,7 @@ function setHandRaised(name, raised) {
   if (raised && !badge) {
     badge = document.createElement('span');
     badge.className = 'meeting-hand-badge';
-    badge.textContent = '✋';
+    badge.innerHTML = '<img src="/assets/raisedhand.svg" class="svg-icon" alt="">';
     slotEl.appendChild(badge);
   } else if (!raised && badge) {
     badge.remove();
@@ -204,7 +204,7 @@ function setHandRaised(name, raised) {
     const btn = document.getElementById('meeting-raise-hand-btn');
     if (btn) {
       btn.classList.toggle('raised', raised);
-      btn.textContent = raised ? '✋ Lower Hand' : '✋ Raise Hand';
+      btn.innerHTML = raised ? '<img src="/assets/raisedhand.svg" class="svg-icon" alt=""> Lower Hand' : '<img src="/assets/raisedhand.svg" class="svg-icon" alt=""> Raise Hand';
     }
   }
 }
@@ -623,7 +623,7 @@ window.meetingUI = {
     document.getElementById('meeting-turn-label').hidden = true;
     document.getElementById('meeting-pass-btn').hidden = true;
     const rhBtn = document.getElementById('meeting-raise-hand-btn');
-    if (rhBtn) { rhBtn.classList.remove('raised'); rhBtn.textContent = '✋ Raise Hand'; }
+    if (rhBtn) { rhBtn.classList.remove('raised'); rhBtn.innerHTML = '<img src="/assets/raisedhand.svg" class="svg-icon" alt=""> Raise Hand'; }
   },
 
   setSpeechEnabled(enabled) {

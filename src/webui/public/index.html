@@ -33,14 +33,15 @@
       </span>
     </div>
     <div class="telemetry-bar" id="telemetry-bar" title="LLM usage totals">
+      Usage
       <span class="telemetry-stat"><span class="telemetry-label">In</span> <span id="tel-in">0</span></span>
       <span class="telemetry-sep">|</span>
       <span class="telemetry-stat"><span class="telemetry-label">Out</span> <span id="tel-out">0</span></span>
       <span class="telemetry-sep">|</span>
       <span class="telemetry-stat"><span class="telemetry-label">Cost</span> <span id="tel-cost">$0.0000</span></span>
-      <button id="telemetry-btn" class="telemetry-detail-btn" title="View LLM usage details">&#9432;</button>
+      <button id="telemetry-btn" class="telemetry-detail-btn" title="View LLM usage details"><img src="/assets/info.svg" class="svg-icon" alt="Info"></button>
     </div>
-    <button id="settings-btn" class="header-btn header-btn--icon" title="Settings">⚙</button>
+    <button id="settings-btn" class="header-btn header-btn--icon" title="Settings"><img src="/assets/settings.svg" class="svg-icon" alt="Settings"></button>
     <div id="connection-status" class="status-dot" title="Connecting…"></div>
   </header>
 
@@ -48,7 +49,7 @@
   <div id="goal-bar">
     <div id="goal-text-wrap">
       <span id="goal-text" class="goal-text" title="Click to set project goal"></span>
-      <button id="goal-edit-btn" class="goal-edit-btn" title="Edit goal">&#9998;</button>
+      <button id="goal-edit-btn" class="goal-edit-btn" title="Edit goal"><img src="/assets/edit.svg" class="svg-icon" alt="Edit"></button>
       <input id="goal-input" class="goal-input" type="text" placeholder="Enter project goal…" hidden>
       <button id="goal-save-btn" class="goal-save-btn" hidden>Save</button>
     </div>
@@ -66,8 +67,8 @@
       <div class="panel-header panel-header--agents">
         Agents
         <button id="add-agent-btn" class="panel-add-btn" title="Add new agent">+ Agent</button>
-        <button id="impromptu-meeting-btn" class="panel-add-btn" title="Start an impromptu meeting now">⚡ Meet</button>
-        <button class="panel-expand-btn" data-panel="agents-panel" title="Expand">&#x26F6;</button>
+        <button id="impromptu-meeting-btn" class="panel-add-btn" title="Start an impromptu meeting now"><img src="/assets/meeting.svg" class="svg-icon" alt=""> Meet</button>
+        <button class="panel-expand-btn" data-panel="agents-panel" title="Expand"><img src="/assets/expand.svg" class="svg-icon" alt="Expand"></button>
       </div>
       <div id="agents-container">
         <svg id="comms-overlay" aria-hidden="true"></svg>
@@ -79,9 +80,9 @@
       <div class="panel-header panel-header--tabs">
         <button class="panel-tab" data-tab="tools">Tools</button>
         <button class="panel-tab" data-tab="mcp">MCP Servers</button>
-        <button class="panel-tab active" data-tab="cli">CLI</button>
-        <button class="panel-tab" data-tab="files">Files</button>
-        <button class="panel-expand-btn" data-panel="tools-panel" title="Expand">&#x26F6;</button>
+        <button class="panel-tab active" data-tab="cli">Chat</button>
+        <button class="panel-tab" data-tab="files">Project Files</button>
+        <button class="panel-expand-btn" data-panel="tools-panel" title="Expand"><img src="/assets/expand.svg" class="svg-icon" alt="Expand"></button>
       </div>
       <div id="tools-content" class="tab-pane"></div>
       <div id="mcp-content" class="tab-pane"></div>
@@ -90,7 +91,7 @@
         <div id="cli-input-row">
           <span class="cli-prompt">&gt;</span>
           <input type="text" id="cli-input" placeholder="Type a command or message…" autocomplete="off" spellcheck="false">
-          <button id="cli-mic-btn" class="mic-btn" title="Hold to speak (Whisper)">🎙</button>
+          <button id="cli-mic-btn" class="mic-btn" title="Hold to speak (Whisper)"><img src="/assets/mic.svg" class="svg-icon" alt="Mic"></button>
         </div>
       </div>
       <div id="files-content" class="tab-pane files-pane">
@@ -120,7 +121,7 @@
           <option value="">All tags</option>
         </select>
         <button id="new-ticket-btn" class="panel-add-btn" title="Create a new ticket">+ New Ticket</button>
-        <button class="panel-expand-btn" data-panel="kanban-active" title="Expand">&#x26F6;</button>
+        <button class="panel-expand-btn" data-panel="kanban-active" title="Expand"><img src="/assets/expand.svg" class="svg-icon" alt="Expand"></button>
       </div>
       <div class="kanban-active-cols">
       <div class="kanban-col" id="col-ready">
@@ -184,7 +185,7 @@
           <button class="cal-view-btn" data-view="agenda">Agenda</button>
         </div>
         <button id="new-meeting-btn" class="panel-add-btn" hidden>+ Meeting</button>
-        <button class="panel-expand-btn" data-panel="backlog-panel" title="Expand">&#x26F6;</button>
+        <button class="panel-expand-btn" data-panel="backlog-panel" title="Expand"><img src="/assets/expand.svg" class="svg-icon" alt="Expand"></button>
       </div>
       <div id="backlog-list" class="btab-pane active"></div>
       <div id="calendar-pane" class="btab-pane" hidden></div>
@@ -218,8 +219,8 @@
         <div id="meeting-human-input" class="meeting-human-input" hidden>
           <span class="meeting-turn-label" id="meeting-turn-label" hidden>Your turn</span>
           <input id="meeting-input" class="meeting-input-field" type="text" placeholder="Say something…" autocomplete="off">
-          <button id="meeting-mic-btn" class="mic-btn" title="Hold to speak (Whisper)">🎙</button>
-          <button id="meeting-raise-hand-btn" class="meeting-raise-hand-btn" title="Raise / lower your hand">✋ Raise Hand</button>
+          <button id="meeting-mic-btn" class="mic-btn" title="Hold to speak (Whisper)"><img src="/assets/mic.svg" class="svg-icon" alt="Mic"></button>
+          <button id="meeting-raise-hand-btn" class="meeting-raise-hand-btn" title="Raise / lower your hand"><img src="/assets/raisedhand.svg" class="svg-icon" alt=""> Raise Hand</button>
           <button id="meeting-send-btn" class="meeting-send-btn">Send</button>
           <button id="meeting-pass-btn" class="meeting-pass-btn" hidden>Pass</button>
         </div>
