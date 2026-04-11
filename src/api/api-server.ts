@@ -2028,6 +2028,7 @@ export class APIServer {
   private async ensureProjectFolders(dir: string): Promise<void> {
     await mkdir(path.join(dir, 'sources'), { recursive: true });
     await mkdir(path.join(dir, 'outputs'), { recursive: true });
+    await mkdir(path.join(dir, 'outputs', 'minutes'), { recursive: true });
   }
 
   private async initTelemetryStore(filePath: string): Promise<void> {

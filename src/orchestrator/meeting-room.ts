@@ -49,6 +49,14 @@ export class MeetingRoom {
   }
 
   async run(): Promise<void> {
+    try {
+      await this.runPhases();
+    } finally {
+      await this.wrapUp();
+    }
+  }
+
+  private async runPhases(): Promise<void> {
     const { meeting } = this;
     const facilitator = this.agents.get(meeting.facilitator);
     if (!facilitator) return;
@@ -151,7 +159,12 @@ export class MeetingRoom {
       }
     }
 
-    // ── Wrap up ───────────────────────────────────────────────────────────
+  }
+
+  private async wrapUp(): Promise<void> {
+    const { meeting } = this;
+    if (meeting.status === 'closed') return; // guard against double-call
+
     meeting.status = 'closed';
     meeting.closedAt = new Date().toISOString();
 
@@ -159,7 +172,7 @@ export class MeetingRoom {
       meetingId: meeting.id,
       topic: meeting.topic,
       turns: meeting.turns.length,
-    });
+    }).catch(() => {});
 
     if (this.projectDir) {
       await this.saveMinutes().catch(err =>

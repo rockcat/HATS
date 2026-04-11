@@ -2372,9 +2372,16 @@ main {
 .file-row:hover { background: var(--surface-2); }
 
 .file-row--dir {
-  color: var(--hat-yellow);
+  color: var(--text-muted);
   font-weight: 600;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: 4px;
+  padding-top: 5px;
+  border-top: 1px solid var(--border);
 }
+.file-row--dir:first-child { margin-top: 0; border-top: none; }
 
 .file-icon {
   flex-shrink: 0;
@@ -2398,9 +2405,9 @@ main {
   flex-shrink: 0;
 }
 
-.file-row--indent-1 { padding-left: 24px; }
-.file-row--indent-2 { padding-left: 36px; }
-.file-row--indent-3 { padding-left: 48px; }
+.file-row--indent-1 { padding-left: 28px; border-left: 2px solid var(--border); margin-left: 14px; padding-right: 6px; }
+.file-row--indent-2 { padding-left: 28px; border-left: 2px solid var(--border); margin-left: 28px; padding-right: 6px; }
+.file-row--indent-3 { padding-left: 28px; border-left: 2px solid var(--border); margin-left: 42px; padding-right: 6px; }
 
 .file-actions {
   display: flex;
