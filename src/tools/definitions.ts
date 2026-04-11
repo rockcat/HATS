@@ -165,6 +165,12 @@ const REQUEST_MEETING: ToolDefinition = {
   },
 };
 
+export const RAISE_HAND: ToolDefinition = {
+  name: 'raise_hand',
+  description: 'Signal that you want to speak again in the meeting discussion. Call this if you have more to contribute after your current turn. The facilitator will call on you when it is your turn.',
+  parameters: { type: 'object', properties: {}, required: [] },
+};
+
 // ── Registry ──────────────────────────────────────────────────────────────────
 
 const BASE_TOOLS = [SEND_MESSAGE, ESCALATE_TO_HUMAN, REPORT_TASK_COMPLETE, READ_FILE, WRITE_FILE, LIST_FILES, WEB_SEARCH, GET_CURRENT_DATETIME];

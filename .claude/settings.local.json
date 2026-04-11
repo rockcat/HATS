@@ -40,7 +40,8 @@
       "Bash(git -C \"F:/workspace/HATS\" show 8ac6c6b -- src/webui/public/app.js)",
       "Bash(git -C \"F:/workspace/HATS\" diff 8ac6c6b~1 8ac6c6b -- src/webui/public/app.js)",
       "Bash(npm rebuild:*)",
-      "Bash(xargs ls:*)"
+      "Bash(xargs ls:*)",
+      "Bash(sed:*)"
     ]
   }
 }

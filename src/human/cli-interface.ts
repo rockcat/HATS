@@ -81,7 +81,7 @@ export class CLIInterface {
     if (this.running) return;
     this.running = true;
 
-    log.info('\n━━━ Team CLI ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    log.info('\n━━━ Team Chat ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     log.info('Type "help" for commands. Default target: ' + this.defaultAgent);
     log.info('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 

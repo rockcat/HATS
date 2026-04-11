@@ -264,12 +264,13 @@ export class Agent {
    * Produce one meeting turn given the transcript so far.
    * Unlike processMessage, this doesn't route a reply — it just returns the text.
    */
-  async meetingTurn(transcript: string): Promise<string> {
+  async meetingTurn(transcript: string, extraMeetingTools: import('../providers/types.js').ToolDefinition[] = []): Promise<string> {
     // Strip meeting-management tools — calling them inside a meeting creates duplicate meetings
     const MEETING_TOOLS = new Set(['request_meeting', 'schedule_meeting']);
     const tools = [
       ...getToolsForHat(this.config.hatType).filter(t => !MEETING_TOOLS.has(t.name)),
       ...(this.extraToolsProvider?.() ?? []).filter(t => !MEETING_TOOLS.has(t.name)),
+      ...extraMeetingTools,
     ];
     const working: Message[] = [
       ...this.conversationHistory.map(toProviderMessage),
