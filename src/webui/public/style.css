@@ -522,6 +522,7 @@ main {
 
 .state-dot.idle         { background: var(--state-idle); }
 .state-dot.working      { background: var(--state-working);    animation: blink 1.5s infinite; }
+.state-dot.waiting      { background: var(--state-idle); opacity: 0.4; }
 .state-dot.waiting_for_help { background: var(--state-waiting); animation: blink 1s infinite; }
 .state-dot.in_discussion { background: var(--state-discussing); animation: blink 0.8s infinite; }
 

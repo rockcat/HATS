@@ -9,8 +9,12 @@ const transitions: Transition = {
     task_assigned: AgentState.Working,
   },
   [AgentState.Working]: {
-    task_complete: AgentState.Idle,
+    task_complete: AgentState.Waiting,  // done with work → go quiet until woken
     blocked: AgentState.WaitingForHelp,
+    discussion_invited: AgentState.InDiscussion,
+  },
+  [AgentState.Waiting]: {
+    task_assigned: AgentState.Working,
     discussion_invited: AgentState.InDiscussion,
   },
   [AgentState.WaitingForHelp]: {
@@ -19,7 +23,7 @@ const transitions: Transition = {
   },
   [AgentState.InDiscussion]: {
     discussion_ended: AgentState.Working,
-    task_complete: AgentState.Idle,
+    task_complete: AgentState.Waiting,  // meeting ended with no new task → wait
   },
 };
 

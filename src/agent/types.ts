@@ -3,8 +3,9 @@ import { AIProvider, ToolCall } from '../providers/types.js';
 import { TeamMessage } from '../orchestrator/types.js';
 
 export enum AgentState {
-  Idle = 'idle',
+  Idle = 'idle',           // initial state — no work yet, receptive to everything
   Working = 'working',
+  Waiting = 'waiting',     // finished work, nothing to do — ignores agent chatter
   WaitingForHelp = 'waiting_for_help',
   InDiscussion = 'in_discussion',
 }

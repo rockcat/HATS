@@ -165,7 +165,13 @@ export class Agent {
       while (this.inbox.length > 0) {
         if (this._state === AgentState.WaitingForHelp) break; // pause until unblocked
         if (this.interruptFlag) break; // new interrupt arrived — re-enter to handle it
-        const message = this.inbox.shift()!;
+        const message = this.inbox[0];
+        // When waiting for new work, silently drop agent-to-agent chatter
+        if (this._state === AgentState.Waiting && message.from !== 'human' && message.type !== 'task') {
+          this.inbox.shift();
+          continue;
+        }
+        this.inbox.shift();
         await this.processMessage(message);
       }
     } finally {
