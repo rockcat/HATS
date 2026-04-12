@@ -51,6 +51,10 @@ let   speechPlaying  = false;
 let   audioCtx       = null;
 let   currentSource  = null; // AudioBufferSourceNode
 
+// Deferred callbacks that run once the speech queue fully drains
+let   onQueueDrained  = null; // single pending callback
+let   meetingClosing  = false; // true after meeting_closed — blocks new turns, lets queue drain
+
 // Avatar catalogue (from /api/avatars)
 let avatarCatalogue = [];
 
@@ -371,6 +375,13 @@ async function drainSpeechQueue() {
   }
 
   speechPlaying = false;
+
+  // Fire any deferred action (human turn prompt or meeting close) now that the queue is empty
+  if (onQueueDrained) {
+    const cb = onQueueDrained;
+    onQueueDrained = null;
+    cb();
+  }
 }
 
 // ── DOM helpers ───────────────────────────────────────────────────────────────
@@ -577,7 +588,7 @@ window.meetingUI = {
   },
 
   addTurn(participant, content) {
-    if (!activeMeetingId) return;
+    if (!activeMeetingId || meetingClosing) return;
     if (participant === 'human') {
       // Human turns are shown immediately by submitHumanTurn; server echo is ignored
       // to avoid double display.
@@ -590,42 +601,65 @@ window.meetingUI = {
 
   requestHumanTurn(meetingId) {
     if (meetingId !== activeMeetingId) return;
-    // Lower hand — the human has been given the floor
-    if (raisedHands.has('human')) setHandRaised('human', false);
-    document.getElementById('meeting-turn-label').hidden = false;
-    document.getElementById('meeting-pass-btn').hidden = false;
-    document.getElementById('meeting-input')?.focus();
+    const show = () => {
+      if (activeMeetingId !== meetingId) return; // meeting closed while waiting
+      if (raisedHands.has('human')) setHandRaised('human', false);
+      document.getElementById('meeting-turn-label').hidden = false;
+      document.getElementById('meeting-pass-btn').hidden = false;
+      document.getElementById('meeting-input')?.focus();
+    };
+    // Wait for all queued turns to be displayed/played before prompting the human
+    if (speechPlaying || speechQueue.length > 0) {
+      onQueueDrained = show;
+    } else {
+      show();
+    }
   },
 
   close(meetingId) {
     if (meetingId && meetingId !== activeMeetingId) return;
-    activeMeetingId = null;
-    agentVoiceMap   = {};
-    agentSpeakerMap = {};
-    stopCurrentAudio();
-    speechQueue.length = 0;
-    speechPlaying = false;
+    const idToClose = activeMeetingId;
 
-    if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+    const doClose = () => {
+      if (activeMeetingId !== idToClose) return; // guard against double-close
+      activeMeetingId = null;
+      meetingClosing  = false;
+      onQueueDrained  = null;
+      agentVoiceMap   = {};
+      agentSpeakerMap = {};
+      stopCurrentAudio();
+      speechQueue.length = 0;
+      speechPlaying = false;
 
-    // Stop resize observer
-    if (_layoutResizeObs) { _layoutResizeObs.disconnect(); _layoutResizeObs = null; }
+      if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
 
-    // Dispose Three.js renderers and mixers
-    for (const slot of Object.values(slots)) {
-      if (slot.mixer) { slot.mixer.stopAllAction(); slot.mixer = null; }
-      slot.renderer.dispose();
+      // Stop resize observer
+      if (_layoutResizeObs) { _layoutResizeObs.disconnect(); _layoutResizeObs = null; }
+
+      // Dispose Three.js renderers and mixers
+      for (const slot of Object.values(slots)) {
+        if (slot.mixer) { slot.mixer.stopAllAction(); slot.mixer = null; }
+        slot.renderer.dispose();
+      }
+      for (const key of Object.keys(slots)) delete slots[key];
+
+      raisedHands.clear();
+      document.getElementById('meeting-overlay').hidden = true;
+      document.getElementById('meeting-transcript').innerHTML = '';
+      document.getElementById('meeting-human-input').hidden = true;
+      document.getElementById('meeting-turn-label').hidden = true;
+      document.getElementById('meeting-pass-btn').hidden = true;
+      const rhBtn = document.getElementById('meeting-raise-hand-btn');
+      if (rhBtn) { rhBtn.classList.remove('raised'); rhBtn.innerHTML = '<img src="/assets/raisedhand.svg" class="svg-icon" alt=""> Raise Hand'; }
+    };
+
+    if (speechPlaying || speechQueue.length > 0) {
+      // Let the queue finish playing so the human sees/hears all turns before it closes
+      meetingClosing = true;   // block new turns from being queued
+      onQueueDrained = doClose;
+    } else {
+      doClose();
     }
-    for (const key of Object.keys(slots)) delete slots[key];
-
-    raisedHands.clear();
-    document.getElementById('meeting-overlay').hidden = true;
-    document.getElementById('meeting-transcript').innerHTML = '';
-    document.getElementById('meeting-human-input').hidden = true;
-    document.getElementById('meeting-turn-label').hidden = true;
-    document.getElementById('meeting-pass-btn').hidden = true;
-    const rhBtn = document.getElementById('meeting-raise-hand-btn');
-    if (rhBtn) { rhBtn.classList.remove('raised'); rhBtn.innerHTML = '<img src="/assets/raisedhand.svg" class="svg-icon" alt=""> Raise Hand'; }
   },
 
   setSpeechEnabled(enabled) {
