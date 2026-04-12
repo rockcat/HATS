@@ -51,6 +51,9 @@ let   speechPlaying  = false;
 let   audioCtx       = null;
 let   currentSource  = null; // AudioBufferSourceNode
 
+// Module-level prefetch so addTurn can start synthesis while audio is still playing
+let   prefetch        = null; // { participant, content, promise } | null
+
 // Deferred callbacks that run once the speech queue fully drains
 let   onQueueDrained  = null; // single pending callback
 let   meetingClosing  = false; // true after meeting_closed — blocks new turns, lets queue drain
@@ -317,10 +320,6 @@ async function drainSpeechQueue() {
   if (speechPlaying) return;
   speechPlaying = true;
 
-  // Pre-fetch state: tracks a synthesis request started for the next queue entry
-  // so it runs in parallel with the current speaker's playback.
-  let prefetch = null; // { participant, content, promise }
-
   while (speechQueue.length > 0) {
     const entry = speechQueue.shift();
     if (!activeMeetingId) break;
@@ -354,13 +353,13 @@ async function drainSpeechQueue() {
         chunksPromise = fetchSpeechChunks(participant, content);
       }
 
-      // Immediately kick off synthesis for the next entry in parallel —
-      // it runs while we await + play the current chunks, eliminating the gap.
+      // Kick off synthesis for the next queue entry in parallel while this one plays.
+      // If the queue is currently empty, addTurn will start it when the next SSE arrives.
       if (speechQueue.length > 0 && speechQueue[0].participant !== 'human') {
         const next = speechQueue[0];
-        prefetch = { participant: next.participant, content: next.content, promise: fetchSpeechChunks(next.participant, next.content) };
-      } else {
-        prefetch = null;
+        if (!prefetch || prefetch.participant !== next.participant || prefetch.content !== next.content) {
+          prefetch = { participant: next.participant, content: next.content, promise: fetchSpeechChunks(next.participant, next.content) };
+        }
       }
 
       const chunks = await chunksPromise;
@@ -594,6 +593,11 @@ window.meetingUI = {
       // to avoid double display.
       return;
     }
+    // Start synthesis immediately if audio is already playing and no prefetch is running,
+    // so the gap between speakers is eliminated even when turns arrive one at a time.
+    if (speechEnabled && speechPlaying && (!prefetch || prefetch.participant !== participant || prefetch.content !== content)) {
+      prefetch = { participant, content, promise: fetchSpeechChunks(participant, content) };
+    }
     // Queue the turn — transcript entry is added just before audio plays
     speechQueue.push({ participant, content });
     drainSpeechQueue();
@@ -625,6 +629,7 @@ window.meetingUI = {
       activeMeetingId = null;
       meetingClosing  = false;
       onQueueDrained  = null;
+      prefetch        = null;
       agentVoiceMap   = {};
       agentSpeakerMap = {};
       stopCurrentAudio();
