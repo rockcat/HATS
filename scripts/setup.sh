@@ -66,10 +66,6 @@ PIPER_BIN_PATH="${PIPER_BIN:-piper/piper}"
 if [[ -f "$ROOT/$PIPER_BIN_PATH" ]] || [[ -f "$ROOT/${PIPER_BIN_PATH}.exe" ]]; then
   ok "piper binary found at $PIPER_BIN_PATH"
 else
-  warn "piper binary not found at $ROOT/$PIPER_BIN_PATH"
-  warn "  Download from https://github.com/rhasspy/piper/releases"
-  warn "  and extract to $ROOT/piper/"
-
   # Also check for Python server mode as an alternative
   PYTHON_BIN="${PYTHON_BIN:-python}"
   if command -v "$PYTHON_BIN" &>/dev/null; then
@@ -77,7 +73,8 @@ else
       ok "piper-tts Python package found (server mode available)"
     else
       warn "piper-tts Python package not installed either"
-      warn "  For server mode run: pip install piper-tts"
+      warn "Attempting to install: pip install piper-tts flask"
+      "$PYTHON_BIN" -m pip install piper-tts flask
     fi
   else
     warn "  (Python not found — server mode also unavailable)"
