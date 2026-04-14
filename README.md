@@ -118,6 +118,9 @@ HTML/CSS/JS frontend requiring no build step.
 
 # Installation
 
+## Setup scripts
+The scripts folder contains two scripts: `setup.bat` for Windows and `setup.sh` fro linux/MacOs. These perform some of the tasks below. 
+
 ## Prerequisites
 
 ### Node.js
@@ -243,6 +246,8 @@ avatars/          GLB avatar models and avatars.json catalogue
 projects/         Per-project runtime data (kanban, meetings, agent state)
 scripts/          Setup scripts (setup.sh, setup.bat)
 tools/            Developer utilities (glb-viewer.mjs)
+rhubarb/          Install rhubarb in here
+piper_voices/     Install voices for piper tts in here
 ```
 
 ## Development

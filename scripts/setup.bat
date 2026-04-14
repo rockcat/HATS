@@ -60,9 +60,8 @@ echo -- Piper TTS (optional — required for avatar speech)
 if exist "%ROOT%\piper\piper.exe" (
     echo   [OK]   piper\piper.exe found
 ) else (
-    echo   [WARN] piper\piper.exe not found — avatar speech will be disabled
-    echo   [WARN]   Download from https://github.com/rhasspy/piper/releases
-    echo   [WARN]   and extract to %ROOT%\piper\
+    echo   [WARN] piper not found — installing piper-tts Python package
+    pip install piper-tts flask
 )
 
 :: ── Piper voices ──────────────────────────────────────────────────────────────

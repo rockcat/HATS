@@ -12,8 +12,9 @@ piper/espeak-ng-data
 
 piper_voices/
 
-rhubarb/*.exe
-rhubarb/res
+rhubarb/*
+!rhubarb/install_rhubard_in_here
+
 
 avatars_no_visemes/
 gltf/
