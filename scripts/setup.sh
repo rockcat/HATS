@@ -81,20 +81,10 @@ else
   fi
 fi
 
-# ── Piper voices ──────────────────────────────────────────────────────────────
-VOICES_DIR="${PIPER_VOICES_DIR:-$ROOT/piper_voices}"
-if [[ -d "$VOICES_DIR" ]]; then
-  VOICE_COUNT=$(find "$VOICES_DIR" -name "*.onnx" | wc -l)
-  if (( VOICE_COUNT > 0 )); then
-    ok "$VOICE_COUNT voice model(s) found in $VOICES_DIR"
-  else
-    warn "No .onnx voice models found in $VOICES_DIR"
-    warn "  Download voices from https://rhasspy.github.io/piper-samples/"
-  fi
-else
-  warn "Piper voices directory not found: $VOICES_DIR"
-  warn "  Create it and download .onnx voices from https://rhasspy.github.io/piper-samples/"
-fi
+# ── Piper voices — en_GB medium (download from HuggingFace) ──────────────────
+echo ""
+echo "── Piper voices — en_GB medium"
+node "$SCRIPT_DIR/download-voices.mjs"
 
 # ── Rhubarb ───────────────────────────────────────────────────────────────────
 echo ""
