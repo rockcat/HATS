@@ -64,22 +64,12 @@ if exist "%ROOT%\piper\piper.exe" (
     pip install piper-tts flask
 )
 
-:: ── Piper voices ──────────────────────────────────────────────────────────────
-set "VOICES_DIR=%ROOT%\piper_voices"
-if defined PIPER_VOICES_DIR set "VOICES_DIR=%PIPER_VOICES_DIR%"
-
-if exist "%VOICES_DIR%\" (
-    set VOICE_COUNT=0
-    for %%f in ("%VOICES_DIR%\*.onnx") do set /a VOICE_COUNT+=1
-    if !VOICE_COUNT! GTR 0 (
-        echo   [OK]   !VOICE_COUNT! voice model(s) found in %VOICES_DIR%
-    ) else (
-        echo   [WARN] No .onnx voice models in %VOICES_DIR%
-        echo   [WARN]   Download from https://rhasspy.github.io/piper-samples/
-    )
-) else (
-    echo   [WARN] Piper voices directory not found: %VOICES_DIR%
-    echo   [WARN]   Create it and download .onnx voices from https://rhasspy.github.io/piper-samples/
+:: ── Piper voices — en_GB medium (download from HuggingFace) ──────────────────
+echo.
+echo -- Piper voices -- en_GB medium
+node "%ROOT%\scripts\download-voices.mjs"
+if errorlevel 1 (
+    echo   [WARN] Voice download encountered errors — check output above
 )
 
 :: ── Rhubarb ───────────────────────────────────────────────────────────────────
