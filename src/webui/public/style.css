@@ -2944,6 +2944,33 @@ body.has-expanded-panel main > section:not(.panel--expanded) {
 }
 .meeting-avatar-slot.speaking .meeting-avatar-name { color: var(--text); }
 
+/* Hat icon — background-color shaped by the hat.svg mask */
+.agent-hat-icon,
+.meeting-hat-icon {
+  -webkit-mask: url(/assets/hat.svg) center/contain no-repeat;
+  mask: url(/assets/hat.svg) center/contain no-repeat;
+  pointer-events: none;
+}
+
+.agent-hat-icon {
+  position: absolute;
+  top: 7px;
+  right: 8px;
+  width: 18px;
+  height: 17px;
+  opacity: 0.85;
+}
+
+.meeting-hat-icon {
+  position: absolute;
+  bottom: 6px;
+  right: 6px;
+  width: 20px;
+  height: 18px;
+  filter: drop-shadow(0 1px 3px rgba(0,0,0,0.8));
+  z-index: 3;
+}
+
 /* Hand raised badge — circular chip positioned over the avatar frame corner */
 .meeting-hand-badge {
   position: absolute;

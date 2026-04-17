@@ -250,6 +250,7 @@ function createCard(agent) {
     <div class="agent-activity">
       <div class="agent-activity-text"></div>
     </div>
+    <div class="agent-hat-icon"></div>
   `;
   applyCardData(el, agent);
   return el;
@@ -265,6 +266,7 @@ function applyCardData(el, agent) {
 
   el.querySelector('.agent-hat-bar').style.background = c.bar;
   el.querySelector('.agent-name').textContent = agent.name;
+  el.querySelector('.agent-hat-icon').style.backgroundColor = c.bar;
 
   const badge = el.querySelector('.agent-hat-badge');
   badge.textContent = hatLabel(agent.hatType);
@@ -1147,14 +1149,15 @@ function connect() {
     } else if (msg.type === 'files_update') {
       renderFilesList(msg.sources, msg.outputs);
     } else if (msg.type === 'meeting_started') {
-      const avatarMap = {}, voiceMap = {}, speakerMap = {}, backgroundMap = {};
+      const avatarMap = {}, voiceMap = {}, speakerMap = {}, backgroundMap = {}, hatMap = {};
       for (const a of state.agents) {
         if (a.avatar)      avatarMap[a.name]      = a.avatar;
         if (a.voice)       voiceMap[a.name]       = a.voice;
         if (a.speakerName) speakerMap[a.name]     = a.speakerName;
         if (a.background)  backgroundMap[a.name]  = a.background;
+        if (a.hatType)     hatMap[a.name]         = a.hatType;
       }
-      window.meetingUI?.open(msg.meetingId, msg.topic, msg.participants ?? [], msg.facilitator ?? '', avatarMap, voiceMap, speakerMap, backgroundMap, state.humanName);
+      window.meetingUI?.open(msg.meetingId, msg.topic, msg.participants ?? [], msg.facilitator ?? '', avatarMap, voiceMap, speakerMap, backgroundMap, state.humanName, hatMap);
     } else if (msg.type === 'meeting_turn') {
       window.meetingUI?.addTurn(msg.participant, msg.content);
     } else if (msg.type === 'meeting_human_turn') {

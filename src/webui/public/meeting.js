@@ -54,6 +54,16 @@ let   currentSource  = null; // AudioBufferSourceNode
 // Module-level prefetch so addTurn can start synthesis while audio is still playing
 let   prefetch        = null; // { participant, content, promise } | null
 
+// Hat colours (mirrors HAT in app.js)
+const HAT_COLORS = {
+  white:  '#e6edf3',
+  red:    '#f85149',
+  black:  '#8b949e',
+  yellow: '#e3b341',
+  green:  '#3fb950',
+  blue:   '#58a6ff',
+};
+
 // Deferred callbacks that run once the speech queue fully drains
 let   onQueueDrained  = null; // single pending callback
 let   meetingClosing  = false; // true after meeting_closed — blocks new turns, lets queue drain
@@ -445,7 +455,7 @@ function layoutMeetingAvatars() {
 
 window.meetingUI = {
 
-  async open(meetingId, topic, participants, facilitator, serverAvatars = {}, serverVoices = {}, serverSpeakers = {}, serverBackgrounds = {}, humanName = 'human') {
+  async open(meetingId, topic, participants, facilitator, serverAvatars = {}, serverVoices = {}, serverSpeakers = {}, serverBackgrounds = {}, humanName = 'human', hatMap = {}) {
     console.log(`[Meeting] open() called: id=${meetingId}, topic="${topic}", participants=${JSON.stringify(participants)}, facilitator=${facilitator}`);
     try {
     window._meetingHumanName = humanName;
@@ -493,6 +503,8 @@ window.meetingUI = {
       slotEl.className = 'meeting-avatar-slot';
       slotEl.dataset.name = name;
 
+      const hatColor = name !== 'human' ? (HAT_COLORS[hatMap[name]] ?? HAT_COLORS.white) : null;
+
       if (name === 'human') {
         const icon = document.createElement('div');
         icon.className = 'meeting-avatar-human';
@@ -516,6 +528,12 @@ window.meetingUI = {
         canvas.width  = CANVAS_SIZE;
         canvas.height = CANVAS_SIZE;
         frameEl.appendChild(canvas);
+
+        // Hat icon badge
+        const hatEl = document.createElement('div');
+        hatEl.className = 'meeting-hat-icon';
+        hatEl.style.backgroundColor = hatColor;
+        frameEl.appendChild(hatEl);
 
         // Init Three.js slot
         const slot = createSlotRenderer(canvas);
@@ -543,6 +561,13 @@ window.meetingUI = {
         const icon = document.createElement('div');
         icon.className = 'meeting-avatar-human';
         icon.textContent = name.slice(0, 2).toUpperCase();
+
+        // Hat icon badge
+        const hatEl = document.createElement('div');
+        hatEl.className = 'meeting-hat-icon';
+        hatEl.style.backgroundColor = hatColor;
+        icon.appendChild(hatEl);
+
         slotEl.appendChild(icon);
       }
 
