@@ -326,6 +326,12 @@ async function fetchSpeechChunks(participant, content) {
   return [];
 }
 
+/** Notify the server that this turn's speech has finished — it can now generate the next turn. */
+function ackTurn(participant) {
+  if (!activeMeetingId || participant === 'human') return;
+  fetch(`/api/meetings/${encodeURIComponent(activeMeetingId)}/turn-ack`, { method: 'POST' }).catch(() => {});
+}
+
 async function drainSpeechQueue() {
   if (speechPlaying) return;
   speechPlaying = true;
@@ -349,7 +355,10 @@ async function drainSpeechQueue() {
 
     appendTranscriptTurn(participant, content);
 
-    if (!speechEnabled) continue;
+    if (!speechEnabled) {
+      ackTurn(participant); // no audio — ACK immediately so server can proceed
+      continue;
+    }
 
     setSlotSpeaking(participant, true);
 
@@ -381,6 +390,7 @@ async function drainSpeechQueue() {
 
     setSlotSpeaking(participant, false);
     setSpeakingViseme(participant, 'viseme_sil');
+    ackTurn(participant); // speech finished — server can generate the next turn
   }
 
   speechPlaying = false;

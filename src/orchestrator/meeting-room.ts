@@ -10,6 +10,13 @@ import { RAISE_HAND } from '../tools/definitions.js';
 export type HumanResponder = (transcript: MeetingTurn[], topic: string) => Promise<string | null>;
 
 /**
+ * Called after each non-human agent turn is broadcast. The meeting room awaits
+ * this before making the next LLM call, so the server paces itself to the
+ * client's speech playback — ensuring the human can participate in real time.
+ */
+export type TurnPacer = (meetingId: string, participant: string) => Promise<void>;
+
+/**
  * Runs a meeting using a 4-phase structure:
  *   1. Facilitator opening (problem + position, no pleasantries)
  *   2. Opening remarks from each participant (can raise hand to re-enter)
@@ -27,6 +34,7 @@ export class MeetingRoom {
     private store: EventStore,
     private humanResponder: HumanResponder,
     private projectDir?: string | null,
+    private turnPacer?: TurnPacer,
   ) {}
 
   /** Called by orchestrator when human types something mid-meeting. */
@@ -219,6 +227,12 @@ export class MeetingRoom {
     });
 
     log.info(`\n\x1b[1m[${this.meeting.topic}] ${participant}\x1b[0m\n${renderMarkdown(content)}`);
+
+    // Pace the meeting to speech playback: wait for the client to ACK this turn
+    // before making the next LLM call, so the human can participate in real time.
+    if (participant !== 'human' && this.turnPacer) {
+      await this.turnPacer(this.meeting.id, participant);
+    }
   }
 }
 

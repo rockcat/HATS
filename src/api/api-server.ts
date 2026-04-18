@@ -133,6 +133,9 @@ export class APIServer {
   // Pending human turns in active meetings: meetingId → resolve fn
   private pendingHumanTurns = new Map<string, (input: string | null) => void>();
 
+  // Pending turn ACKs: meetingId → resolve fn (one at a time per meeting)
+  private pendingTurnAcks = new Map<string, () => void>();
+
   constructor(orchestrator: TeamOrchestrator, config: APIServerConfig = {}) {
     this.orchestrator = orchestrator;
     this.kanbanPath   = config.kanbanPath ?? null;
@@ -196,10 +199,25 @@ export class APIServer {
       this.sseBroadcast({ type: 'meeting_human_turn', meetingId, topic });
       return new Promise<string | null>((resolve) => {
         this.pendingHumanTurns.set(meetingId, resolve);
-        // Auto-pass after 5 minutes
+        // Auto-pass after 30 minutes — with turn-by-turn pacing the queue is
+        // already empty when the human prompt appears, so the 5-min limit was
+        // too tight; users can always click Pass explicitly.
         setTimeout(() => {
           if (this.pendingHumanTurns.delete(meetingId)) resolve(null);
-        }, 5 * 60 * 1000);
+        }, 30 * 60 * 1000);
+      });
+    });
+
+    // Pace meetings to speech playback — server awaits client ACK after each
+    // agent turn before making the next LLM call.
+    this.orchestrator.setMeetingTurnPacer(async (meetingId: string, _participant: string) => {
+      return new Promise<void>((resolve) => {
+        this.pendingTurnAcks.set(meetingId, resolve);
+        // Auto-proceed after 3 minutes in case the client disconnects or
+        // speech fails — prevents the meeting from hanging forever.
+        setTimeout(() => {
+          if (this.pendingTurnAcks.delete(meetingId)) resolve();
+        }, 3 * 60 * 1000);
       });
     });
 
@@ -427,6 +445,9 @@ export class APIServer {
         // Resolve any pending human turn (so the waiting promise unblocks)
         const resolver = this.pendingHumanTurns.get(meetingId ?? '');
         if (resolver) { this.pendingHumanTurns.delete(meetingId!); resolver(null); }
+        // Resolve any pending turn ACK (shouldn't normally be outstanding at close)
+        const ackResolver = this.pendingTurnAcks.get(meetingId ?? '');
+        if (ackResolver) { this.pendingTurnAcks.delete(meetingId!); ackResolver(); }
         break;
       }
       case 'escalation': {
@@ -1352,6 +1373,9 @@ export class APIServer {
       // Unblock any pending human turn so the room can exit
       const resolver = this.pendingHumanTurns.get(meetingId);
       if (resolver) { this.pendingHumanTurns.delete(meetingId); resolver(null); }
+      // Unblock any pending turn ACK
+      const ackResolver = this.pendingTurnAcks.get(meetingId);
+      if (ackResolver) { this.pendingTurnAcks.delete(meetingId); ackResolver(); }
       const cancelled = this.orchestrator.cancelActiveMeeting(meetingId);
       this.json(res, cancelled ? 200 : 404, { ok: cancelled });
 
@@ -1367,6 +1391,14 @@ export class APIServer {
       } else {
         this.json(res, 404, { error: 'No pending human turn' });
       }
+
+    } else if (pathname.startsWith('/api/meetings/') && pathname.endsWith('/turn-ack') && req.method === 'POST') {
+      // Client confirms that the previous agent turn's speech has finished playing.
+      // Resolves the turn pacer so the meeting room proceeds to the next LLM call.
+      const meetingId = pathname.split('/')[3];
+      const ackResolver = this.pendingTurnAcks.get(meetingId);
+      if (ackResolver) { this.pendingTurnAcks.delete(meetingId); ackResolver(); }
+      this.json(res, 200, { ok: true });
 
     } else if (pathname.startsWith('/api/meetings/') && pathname.endsWith('/raise-hand') && req.method === 'POST') {
       const meetingId = pathname.split('/')[3];

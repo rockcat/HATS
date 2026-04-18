@@ -42,6 +42,7 @@ export class TeamOrchestrator {
   private projectGoal: string | null = null;
   private onHumanEscalation: ((from: string, message: string, urgency: string) => void) | null = null;
   private onHumanMeetingTurn: ((meetingId: string, turns: MeetingTurn[], topic: string) => Promise<string | null>) | null = null;
+  private onMeetingTurnPaced: ((meetingId: string, participant: string) => Promise<void>) | null = null;
   private rebuildTimer: ReturnType<typeof setTimeout> | null = null;
   private mcp = new MCPRegistry();
   private llmSemaphore: Semaphore;
@@ -203,6 +204,10 @@ export class TeamOrchestrator {
 
   setHumanMeetingTurnHandler(fn: NonNullable<typeof this.onHumanMeetingTurn>): void {
     this.onHumanMeetingTurn = fn;
+  }
+
+  setMeetingTurnPacer(fn: NonNullable<typeof this.onMeetingTurnPaced>): void {
+    this.onMeetingTurnPaced = fn;
   }
 
   setProjectDir(dir: string | null): void {
@@ -822,6 +827,9 @@ export class TeamOrchestrator {
       (transcript: MeetingTurn[], meetingTopic: string) =>
         this.getHumanMeetingInput(meetingId, transcript, meetingTopic),
       this.projectDir,
+      this.onMeetingTurnPaced
+        ? (id, participant) => this.onMeetingTurnPaced!(id, participant)
+        : undefined,
     );
 
     // Wire up close signal — when facilitator calls report_task_complete inside meeting
