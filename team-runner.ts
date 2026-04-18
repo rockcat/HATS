@@ -96,60 +96,75 @@ function makeProjectLoader(): ProjectLoader {
     } else {
       console.log(`[Team] New project at ${projectDir} — assembling fresh team.`);
 
+      // Blue Hat leader is always present
       orchestrator.registerAgent({
         identity: {
           name: 'Amara',
           visualDescription: 'poised, organised, warm presence in a tailored blazer',
-          specialisation: 'project coordination and facilitation',
+          specialisation: 'Leadership',
           backstory: 'Grew up between Lagos and London; spent a decade running cross-functional teams at a global consultancy.',
         },
         hatType: HatType.Blue, provider: claude, model,
       });
-      orchestrator.registerAgent({
-        identity: {
-          name: 'Kenji',
-          visualDescription: 'precise, methodical, calm energy with a researcher\'s focus',
-          specialisation: 'data gathering and research',
-          backstory: 'Former data scientist at a Tokyo think-tank, obsessed with source quality and evidence.',
+
+      // Pool of non-blue agents — one per hat type. Three are chosen at random.
+      const agentPool = [
+        {
+          identity: {
+            name: 'Kenji',
+            visualDescription: "precise, methodical, calm energy with a researcher's focus",
+            specialisation: 'data gathering and research',
+            backstory: 'Former data scientist at a Tokyo think-tank, obsessed with source quality and evidence.',
+          },
+          hatType: HatType.White,
         },
-        hatType: HatType.White, provider: claude, model,
-      });
-      orchestrator.registerAgent({
-        identity: {
-          name: 'Nadia',
-          visualDescription: 'sharp, direct, nothing escapes her notice',
-          specialisation: 'risk assessment and critical analysis',
-          backstory: 'Ex-auditor from Prague who spent years finding what could go wrong before it did.',
+        {
+          identity: {
+            name: 'Nadia',
+            visualDescription: 'sharp, direct, nothing escapes her notice',
+            specialisation: 'risk assessment and critical analysis',
+            backstory: 'Ex-auditor from Prague who spent years finding what could go wrong before it did.',
+          },
+          hatType: HatType.Black,
         },
-        hatType: HatType.Black, provider: claude, model,
-      });
-      orchestrator.registerAgent({
-        identity: {
-          name: 'Rafael',
-          visualDescription: 'warm, animated, always leaning forward with ideas',
-          specialisation: 'opportunity identification and positive outcomes',
-          backstory: 'Serial entrepreneur from São Paulo who has founded three ventures and genuinely believes things work out.',
+        {
+          identity: {
+            name: 'Rafael',
+            visualDescription: 'warm, animated, always leaning forward with ideas',
+            specialisation: 'opportunity identification and positive outcomes',
+            backstory: 'Serial entrepreneur from São Paulo who has founded three ventures and genuinely believes things work out.',
+          },
+          hatType: HatType.Yellow,
         },
-        hatType: HatType.Yellow, provider: claude, model,
-      });
-      orchestrator.registerAgent({
-        identity: {
-          name: 'Priya',
-          visualDescription: 'creative, lateral-thinking, expressive and a little unpredictable',
-          specialisation: 'creative solutions and idea generation',
-          backstory: "Trained as a UX designer in Bangalore, thinks in systems and metaphors, never accepts 'that's just how it's done'.",
+        {
+          identity: {
+            name: 'Priya',
+            visualDescription: 'creative, lateral-thinking, expressive and a little unpredictable',
+            specialisation: 'creative solutions and idea generation',
+            backstory: "Trained as a UX designer in Bangalore, thinks in systems and metaphors, never accepts 'that's just how it's done'.",
+          },
+          hatType: HatType.Green,
         },
-        hatType: HatType.Green, provider: claude, model,
-      });
-      orchestrator.registerAgent({
-        identity: {
-          name: 'Tariq',
-          visualDescription: 'empathetic, intuitive, quietly observant with a measured tone',
-          specialisation: 'team dynamics, sentiment, and stakeholder perspective',
-          backstory: 'Spent years in organisational psychology in Amman before joining international business teams.',
+        {
+          identity: {
+            name: 'Tariq',
+            visualDescription: 'empathetic, intuitive, quietly observant with a measured tone',
+            specialisation: 'team dynamics, sentiment, and stakeholder perspective',
+            backstory: 'Spent years in organisational psychology in Amman before joining international business teams.',
+          },
+          hatType: HatType.Red,
         },
-        hatType: HatType.Red, provider: claude, model,
-      });
+      ];
+
+      // Shuffle and pick 3 — each has a distinct hat type so the team stays diverse
+      for (let i = agentPool.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [agentPool[i], agentPool[j]] = [agentPool[j], agentPool[i]];
+      }
+      const selected = agentPool.slice(0, 3);
+      for (const agent of selected) {
+        orchestrator.registerAgent({ ...agent, provider: claude, model });
+      }
 
       await orchestrator.addMCPServer({
         name: 'kanban',
@@ -160,7 +175,8 @@ function makeProjectLoader(): ProjectLoader {
         },
       });
 
-      console.log('[Team] Team assembled: Amara · Kenji · Nadia · Rafael · Priya · Tariq');
+      const names = ['Amara', ...selected.map(a => a.identity.name)].join(' · ');
+      console.log(`[Team] Team assembled: ${names}`);
     }
 
     return orchestrator;
