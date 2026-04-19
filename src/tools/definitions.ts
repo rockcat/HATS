@@ -171,9 +171,15 @@ export const RAISE_HAND: ToolDefinition = {
   parameters: { type: 'object', properties: {}, required: [] },
 };
 
+const DISENGAGE_CONVERSATION: ToolDefinition = {
+  name: 'disengage_conversation',
+  description: 'Signal that you have nothing more to contribute to this conversation thread and are stepping back. Use this when you have finished your part in the discussion and do not need to continue the back-and-forth. Your conversation partner will be notified so they can also wrap up if they wish.',
+  parameters: { type: 'object', properties: {}, required: [] },
+};
+
 // ── Registry ──────────────────────────────────────────────────────────────────
 
-const BASE_TOOLS = [SEND_MESSAGE, ESCALATE_TO_HUMAN, REPORT_TASK_COMPLETE, READ_FILE, WRITE_FILE, LIST_FILES, WEB_SEARCH, GET_CURRENT_DATETIME];
+const BASE_TOOLS = [SEND_MESSAGE, ESCALATE_TO_HUMAN, REPORT_TASK_COMPLETE, DISENGAGE_CONVERSATION, READ_FILE, WRITE_FILE, LIST_FILES, WEB_SEARCH, GET_CURRENT_DATETIME];
 const BLUE_HAT_TOOLS = [...BASE_TOOLS, ASSIGN_TASK, REQUEST_MEETING, SCHEDULE_MEETING];
 
 export function getToolsForHat(hatType: HatType): ToolDefinition[] {

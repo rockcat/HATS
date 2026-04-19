@@ -613,6 +613,29 @@ export class TeamOrchestrator {
         return `Hand raised. You will be called on when it is your turn.`;
       }
 
+      case 'disengage_conversation': {
+        const agent = this.findByName(agentName);
+        agent?.markTaskComplete();
+        await this.store.append('agent_disengaged', { agent: agentName });
+
+        // Notify the last person who messaged this agent so they can wrap up too
+        const partner = this.lastSenderByAgent.get(agentName);
+        if (partner && partner !== 'human') {
+          const partnerAgent = this.findByName(partner);
+          if (partnerAgent) {
+            const note = this.buildMessage(
+              agentName,
+              partner,
+              'direct',
+              `I've wrapped up my side of our conversation and stepped back. Feel free to disengage too if you have nothing more to add.`,
+            );
+            this.deliverToAgent(partner, note);
+          }
+        }
+
+        return `You have disengaged from the conversation. You are now in a resting state and will not be drawn into further back-and-forth unless assigned a new task or contacted by the human.`;
+      }
+
       case 'assign_task': {
         const { agent, task, context, projectName } = call.arguments as { agent: string; task: string; context?: string; projectName?: string };
         const target = this.findByName(agent);
@@ -873,9 +896,14 @@ export class TeamOrchestrator {
     };
   }
 
+  private lastSenderByAgent = new Map<string, string>();
+
   private deliverToAgent(name: string, message: TeamMessage): void {
     const agent = this.findByName(name);
     if (agent) {
+      if (message.from !== 'system') {
+        this.lastSenderByAgent.set(name, message.from);
+      }
       agent.receive(message);
     } else {
       log.warn(`[Orchestrator] No agent "${name}" to deliver message to`);
