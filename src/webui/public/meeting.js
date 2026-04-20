@@ -498,8 +498,8 @@ window.meetingUI = {
       } catch { /* no avatars */ }
     }
 
-    // Build participant list (facilitator first, then others)
-    const all = [facilitator, ...participants.filter(p => p !== facilitator)];
+    // Build participant list (facilitator first, then others, deduped)
+    const all = [...new Set([facilitator, ...participants.filter(p => p !== facilitator)])];
 
     // Build avatar slots
     const avatarOverrides = (() => {
@@ -655,7 +655,7 @@ window.meetingUI = {
     }
   },
 
-  close(meetingId) {
+  close(meetingId, { force = false } = {}) {
     if (meetingId && meetingId !== activeMeetingId) return;
     const idToClose = activeMeetingId;
 
@@ -693,7 +693,7 @@ window.meetingUI = {
       if (rhBtn) { rhBtn.classList.remove('raised'); rhBtn.innerHTML = '<img src="/assets/raisedhand.svg" class="svg-icon" alt=""> Raise Hand'; }
     };
 
-    if (speechPlaying || speechQueue.length > 0) {
+    if (!force && (speechPlaying || speechQueue.length > 0)) {
       // Let the queue finish playing so the human sees/hears all turns before it closes
       meetingClosing = true;   // block new turns from being queued
       onQueueDrained = doClose;
@@ -724,11 +724,11 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('meeting-end-btn')?.addEventListener('click', async () => {
     if (!activeMeetingId) return;
     const id = activeMeetingId;
+    // Close immediately — don't wait for the speech queue to drain
+    window.meetingUI.close(id, { force: true });
     try {
       await fetch(`/api/meetings/${encodeURIComponent(id)}/cancel`, { method: 'POST' });
-    } catch { /* ignore — overlay will close when meeting_closed SSE arrives */ }
-    // Close the overlay immediately from the user's side
-    window.meetingUI.close(id);
+    } catch { /* ignore */ }
   });
 
   document.getElementById('meeting-minimize-btn')?.addEventListener('click', () => {
