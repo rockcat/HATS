@@ -954,7 +954,7 @@ export class TeamOrchestrator {
     const activeTask = Array.from(this.tasks.values()).find(
       t => t.status === 'active' && t.assignedTo.toLowerCase() === agentName.toLowerCase(),
     );
-    const base = activeTask?.projectFolder ?? process.cwd();
+    const base = activeTask?.projectFolder ?? this.projectDir ?? process.cwd();
     return path.resolve(base, filePath);
   }
 
