@@ -1,7 +1,7 @@
 // ── Constants ────────────────────────────────────────────────────────────────
 
 const HAT = {
-  white:  { bar: '#e6edf3', label: '#0d1117', bg: 'rgba(230,237,243,0.12)' },
+  white:  { bar: '#e6edf3', label: '#0d1117', bg: 'rgba(230,237,243,0.40)' },
   red:    { bar: '#f85149', label: '#f85149', bg: 'rgba(248,81,73,0.12)'   },
   black:  { bar: '#8b949e', label: '#8b949e', bg: 'rgba(139,148,158,0.12)' },
   yellow: { bar: '#e3b341', label: '#e3b341', bg: 'rgba(227,179,65,0.12)'  },

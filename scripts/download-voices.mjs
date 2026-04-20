@@ -40,8 +40,10 @@ let downloaded = 0, skipped = 0, failed = 0;
 const voices = (await hfList('en/en_GB')).filter(e => e.type === 'directory');
 
 for (const voice of voices) {
+  process.stdout.write(`Processing voice: ${voice.path.split('/').pop()}...\n`);
+  
   const files  = await hfList(`${voice.path}/medium`);
-  const onnx   = files.filter(f => f.type === 'file' && f.path.endsWith('.onnx'));
+  const onnx   = files.filter(f => f.type === 'file' && (f.path.endsWith('.onnx') || f.path.endsWith('.json')));
 
   for (const file of onnx) {
     const filename = file.path.split('/').pop();
@@ -49,6 +51,7 @@ for (const voice of voices) {
 
     if (await fileExists(dest)) {
       skipped++;
+      process.stdout.write(`    Skipping ${filename} (already exists)\n`);
       continue;
     }
 

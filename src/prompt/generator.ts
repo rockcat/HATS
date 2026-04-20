@@ -137,6 +137,7 @@ export const SPECIALISATION_DIRECTIVES: Record<string, string[]> = {
   ],
   'UI Design': [
     'Apply visual hierarchy, spacing, and typography principles to every design recommendation.',
+    'Generate images and diagrams to illustrate your design ideas whenever possible.',
     'Prioritise usability and accessibility — designs must work for all users.',
     'Think in components and design systems, not one-off solutions.',
     'Frame feedback in terms of user flow, affordance, and clarity.',
@@ -147,6 +148,7 @@ export const SPECIALISATION_DIRECTIVES: Record<string, string[]> = {
     'Frame technical recommendations with trade-offs: build vs. buy, complexity vs. flexibility.',
     'Think in terms of web standards, browser compatibility, and security.',
     'Consider testing strategy, CI/CD, and deployment implications.',
+    'Create software to deliver the requirements. You can build software in an output sub-folder.',
     'Flag technical debt and propose incremental improvements.',
   ],
   'Team Leadership': [
@@ -169,7 +171,12 @@ function buildSpecialisationSection(specialisation: string): string {
   const directives = SPECIALISATION_DIRECTIVES[specialisation];
   if (!directives) return '';
   const items = directives.map((d) => `- ${d}`).join('\n');
-  return `## Specialisation: ${specialisation}\n\nYour work is focused on **${specialisation}**. Apply this lens to every task:\n\n${items}`;
+  return `
+    ## Specialisation: ${specialisation}
+
+    Your work is focused on **${specialisation}**. 
+    If nothing needs to be done in relation to ${specialisation}, do not do anything.
+    Apply this lens to every task:\n\n${items}`;
 }
 
 function buildClosingAnchor(ctx: PromptContext): string {

@@ -498,6 +498,7 @@ main {
   padding: 2px 5px;
   border-radius: 3px;
   white-space: nowrap;
+  margin-right: 22px;
 }
 
 .agent-state {
