@@ -43,7 +43,14 @@
       "Bash(xargs ls:*)",
       "Bash(sed:*)",
       "Bash(git add:*)",
-      "Bash(git commit -m ':*)"
+      "Bash(git commit -m ':*)",
+      "WebFetch(domain:www.dreamteamfc.com)",
+      "WebFetch(domain:web.archive.org)",
+      "WebFetch(domain:www.thesun.co.uk)",
+      "Bash(npx puppeteer:*)",
+      "Bash(npx playwright:*)",
+      "Bash(where puppeteer:*)",
+      "Bash(npx --yes puppeteer browsers install chrome)"
     ]
   }
 }
