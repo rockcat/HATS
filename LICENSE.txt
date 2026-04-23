@@ -1,0 +1,45 @@
+HATS Non-Commercial License
+Copyright (c) 2025 Ely House 25 Ltd. All rights reserved.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to use,
+copy, modify, and distribute the Software, or any derivative works based upon
+it, solely for non-commercial purposes, subject to the following conditions:
+
+1. NON-COMMERCIAL USE ONLY
+   The rights granted above apply exclusively to non-commercial use.
+   "Non-commercial" means not primarily intended for, or directed towards,
+   commercial advantage or monetary compensation. Personal projects, academic
+   research, education, and open-source community contributions are considered
+   non-commercial provided no revenue is derived from the Software or any
+   derivative work.
+
+2. COMMERCIAL USE RESTRICTED
+   Any use of the Software, or any derivative work based upon it, for
+   commercial purposes — including but not limited to: incorporating it into a
+   product or service offered for sale, using it to generate revenue, deploying
+   it within a for-profit organisation's operations, or licensing it to third
+   parties — requires prior written permission from Ely House 25 Ltd and may
+   be subject to a separate commercial licence agreement.
+   To enquire about commercial licensing, contact: licensing@elyhouse25.com
+
+3. DERIVATIVE WORKS
+   You may create and distribute derivative works for non-commercial purposes
+   under the same terms as this licence. Any derivative work intended for
+   commercial use is subject to clause 2 above and requires explicit written
+   authorisation from Ely House 25 Ltd. Ely House 25 Ltd retains all rights
+   over derivative works used for commercial purposes.
+
+4. ATTRIBUTION
+   All copies or substantial portions of the Software, and any derivative
+   works, must include this licence notice and the following attribution:
+   "Based on HATS by Ely House 25 Ltd — https://github.com/rockcat/HATS"
+
+5. NO WARRANTY
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT. IN NO EVENT SHALL
+   ELY HOUSE 25 LTD BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+   WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF
+   OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+   SOFTWARE.
