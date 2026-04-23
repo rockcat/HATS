@@ -40,6 +40,14 @@ export class CLIInterface {
   private running = false;
   private meetingInputResolvers: Map<string, (input: string | null) => void> = new Map();
 
+  // @ mention menu state
+  private menuActive     = false;
+  private menuAgents:    string[] = [];
+  private menuIdx        = 0;
+  private menuFilter     = '';
+  private menuLineCount  = 0;
+  private lineBeforeAt   = '';
+
   constructor(
     orchestrator: TeamOrchestrator,
     defaultAgent = 'Blue',
@@ -59,6 +67,7 @@ export class CLIInterface {
     });
 
     this.wireEscalation(orchestrator);
+    this.setupAtMenu();
   }
 
   /** Update the orchestrator reference (e.g. after a project switch). */
@@ -176,6 +185,133 @@ export class CLIInterface {
 
     // Default: send to default agent
     await this.orchestrator.humanMessage(this.defaultAgent, line);
+  }
+
+  // ── @ mention popup menu ─────────────────────────────────────────────────
+
+  private setupAtMenu(): void {
+    if (!process.stdin.isTTY) return;
+
+    // Intercept readline's key handler so we can fully own keys while the menu
+    // is open without readline also acting on them.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rl = this.rl as any;
+    const orig: (s: string, key: unknown) => void = rl._ttyWrite.bind(rl);
+
+    rl._ttyWrite = (s: string, key: unknown) => {
+      if (this.menuActive) {
+        this.menuHandleKey(s, key as Record<string, unknown>);
+        return;
+      }
+      orig(s, key);
+      // After readline has processed the char and updated its line buffer,
+      // check if '@' was just typed and open the menu.
+      if (s === '@') setImmediate(() => this.menuOpen());
+    };
+  }
+
+  private menuOpen(): void {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rl = this.rl as any;
+    const line: string = rl.line ?? '';
+
+    // Strip the '@' readline already added to its buffer
+    const atIdx = line.lastIndexOf('@');
+    this.lineBeforeAt = atIdx >= 0 ? line.slice(0, atIdx) : line;
+    rl.line   = this.lineBeforeAt;
+    rl.cursor = this.lineBeforeAt.length;
+    rl._refreshLine();
+
+    this.menuAgents    = this.orchestrator.listAgents().map(a => a.name);
+    this.menuFilter    = '';
+    this.menuIdx       = 0;
+    this.menuActive    = true;
+    this.menuLineCount = 0;
+    this.menuRender();
+  }
+
+  private menuFiltered(): string[] {
+    const f = this.menuFilter.toLowerCase();
+    return this.menuAgents.filter(n => n.toLowerCase().startsWith(f));
+  }
+
+  private menuHandleKey(s: string, key: Record<string, unknown>): void {
+    const filtered = this.menuFiltered();
+
+    if (key?.name === 'return' || key?.name === 'enter' || s === '\t') {
+      const selected = filtered[this.menuIdx];
+      this.menuClose(selected ? `${this.lineBeforeAt}@${selected} ` : null);
+
+    } else if (key?.name === 'escape' || (key?.ctrl && key?.name === 'c')) {
+      this.menuClose(null);
+
+    } else if (key?.name === 'up') {
+      this.menuIdx = Math.max(0, this.menuIdx - 1);
+      this.menuRender();
+
+    } else if (key?.name === 'down') {
+      this.menuIdx = Math.min(Math.max(0, filtered.length - 1), this.menuIdx + 1);
+      this.menuRender();
+
+    } else if (key?.name === 'backspace') {
+      if (this.menuFilter.length > 0) {
+        this.menuFilter = this.menuFilter.slice(0, -1);
+        this.menuIdx    = 0;
+        this.menuRender();
+      } else {
+        this.menuClose(null);
+      }
+
+    } else if (s && s >= ' ' && s < '\x7f') {
+      this.menuFilter += s;
+      this.menuIdx    = 0;
+      this.menuRender();
+    }
+  }
+
+  private menuRender(): void {
+    const filtered = this.menuFiltered();
+
+    // Erase previously drawn menu lines
+    for (let i = 0; i < this.menuLineCount; i++) {
+      process.stdout.write('\x1b[1A\x1b[2K');
+    }
+
+    const atLabel = this.menuFilter ? `@${this.menuFilter}` : '@';
+    const hint    = `\x1b[2m  ${atLabel}  ↑↓ navigate · Enter select · Esc cancel\x1b[0m`;
+    const lines   = [hint];
+
+    if (filtered.length === 0) {
+      lines.push('  \x1b[2m(no match)\x1b[0m');
+    } else {
+      for (let i = 0; i < filtered.length; i++) {
+        const active = i === this.menuIdx;
+        const arrow  = active ? '\x1b[32m▶\x1b[0m' : ' ';
+        const name   = active
+          ? `\x1b[1m${filtered[i]}\x1b[0m`
+          : `\x1b[2m${filtered[i]}\x1b[0m`;
+        lines.push(`  ${arrow} ${name}`);
+      }
+    }
+
+    process.stdout.write('\n' + lines.join('\n') + '\n');
+    this.menuLineCount = lines.length + 1; // +1 for the leading newline
+  }
+
+  private menuClose(result: string | null): void {
+    // Clear the menu lines
+    for (let i = 0; i < this.menuLineCount; i++) {
+      process.stdout.write('\x1b[1A\x1b[2K');
+    }
+    this.menuLineCount = 0;
+    this.menuActive    = false;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rl = this.rl as any;
+    const line = result ?? this.lineBeforeAt;
+    rl.line   = line;
+    rl.cursor = line.length;
+    rl._refreshLine();
   }
 
   // ── tab completer ─────────────────────────────────────────────────────────
