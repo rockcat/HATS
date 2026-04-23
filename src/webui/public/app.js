@@ -2017,21 +2017,122 @@ function initCLI() {
 
   appendCLILine('Team Chat — type "help" for commands', 'cli-system');
 
-  input.addEventListener('keydown', e => {
-    if (e.key !== 'Enter') return;
-    const line = input.value.trim();
-    if (!line) return;
-    input.value = '';
-    appendCLILine('> ' + line, 'cli-input-echo');
+  // ── @ mention menu ──────────────────────────────────────────────────
+  let menuEl    = null;
+  let menuIdx   = 0;
+  let atStart   = -1; // index of '@' in input.value when menu opened
 
-    fetch('/api/cli', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ line }),
-    })
-      .then(r => r.json())
-      .then(data => { if (data.output) appendCLILine(data.output, 'cli-response'); })
-      .catch(err => appendCLILine('Error: ' + err, 'cli-error'));
+  function agentNames() {
+    return (state.agents ?? []).map(a => a.name);
+  }
+
+  function filtered() {
+    if (atStart < 0) return [];
+    const fragment = input.value.slice(atStart + 1).toLowerCase();
+    return agentNames().filter(n => n.toLowerCase().startsWith(fragment));
+  }
+
+  function closeMenu() {
+    menuEl?.remove();
+    menuEl  = null;
+    atStart = -1;
+    menuIdx = 0;
+  }
+
+  function renderMenu() {
+    const items = filtered();
+    if (!items.length) { closeMenu(); return; }
+
+    if (!menuEl) {
+      menuEl = document.createElement('div');
+      menuEl.className = 'at-mention-menu';
+      document.getElementById('cli-input-row').appendChild(menuEl);
+    }
+
+    const fragment = atStart >= 0 ? input.value.slice(atStart) : '@';
+    menuEl.innerHTML = `<div class="at-mention-hint">@${fragment.slice(1) || '…'}  ↑↓ navigate · Enter select · Esc cancel</div>`;
+
+    items.forEach((name, i) => {
+      const el = document.createElement('div');
+      el.className = 'at-mention-item' + (i === menuIdx ? ' selected' : '');
+      el.innerHTML = `<span class="at-mention-arrow">▶</span><span>${name}</span>`;
+      el.addEventListener('mousedown', e => {
+        e.preventDefault(); // don't blur the input
+        selectItem(name);
+      });
+      menuEl.appendChild(el);
+    });
+  }
+
+  function selectItem(name) {
+    if (atStart < 0) return;
+    const before = input.value.slice(0, atStart);
+    input.value  = before + '@' + name + ' ';
+    closeMenu();
+    input.focus();
+  }
+
+  // Open or update the menu whenever the value changes
+  input.addEventListener('input', () => {
+    const val    = input.value;
+    const cursor = input.selectionStart ?? val.length;
+
+    // Find the last '@' before the cursor with no space after it
+    const segment = val.slice(0, cursor);
+    const idx     = segment.lastIndexOf('@');
+
+    if (idx >= 0 && !segment.slice(idx + 1).includes(' ')) {
+      atStart = idx;
+      menuIdx = 0;
+      renderMenu();
+    } else {
+      closeMenu();
+    }
+  });
+
+  input.addEventListener('keydown', e => {
+    // Menu navigation
+    if (menuEl) {
+      const items = filtered();
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        menuIdx = Math.min(menuIdx + 1, items.length - 1);
+        renderMenu();
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        menuIdx = Math.max(menuIdx - 1, 0);
+        renderMenu();
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        if (items[menuIdx]) { e.preventDefault(); selectItem(items[menuIdx]); return; }
+      }
+      if (e.key === 'Escape') { e.preventDefault(); closeMenu(); return; }
+    }
+
+    // Normal send on Enter
+    if (e.key === 'Enter' && !menuEl) {
+      const line = input.value.trim();
+      if (!line) return;
+      input.value = '';
+      appendCLILine('> ' + line, 'cli-input-echo');
+
+      fetch('/api/cli', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ line }),
+      })
+        .then(r => r.json())
+        .then(data => { if (data.output) appendCLILine(data.output, 'cli-response'); })
+        .catch(err => appendCLILine('Error: ' + err, 'cli-error'));
+    }
+  });
+
+  // Close menu if user clicks outside
+  document.addEventListener('click', e => {
+    if (menuEl && !menuEl.contains(e.target) && e.target !== input) closeMenu();
   });
 }
 

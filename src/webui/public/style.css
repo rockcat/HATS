@@ -1610,6 +1610,7 @@ main {
   padding: 6px 10px;
   border-top: 1px solid var(--border);
   flex-shrink: 0;
+  position: relative;
 }
 
 .cli-prompt {
@@ -1630,6 +1631,60 @@ main {
   font-size: 11px;
   outline: none;
   caret-color: var(--hat-green);
+}
+
+/* @ mention dropdown */
+.at-mention-menu {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  overflow: hidden;
+  z-index: 200;
+}
+
+.at-mention-hint {
+  padding: 5px 10px;
+  font-size: 10px;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+  font-family: ui-monospace, monospace;
+  letter-spacing: 0.02em;
+}
+
+.at-mention-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-family: ui-monospace, monospace;
+  transition: background 0.1s, color 0.1s;
+}
+
+.at-mention-item:hover,
+.at-mention-item.selected {
+  background: var(--border);
+  color: var(--text);
+}
+
+.at-mention-item.selected {
+  color: var(--hat-green);
+}
+
+.at-mention-arrow {
+  font-size: 9px;
+  opacity: 0;
+}
+
+.at-mention-item.selected .at-mention-arrow {
+  opacity: 1;
 }
 
 .mic-btn {
