@@ -36,7 +36,7 @@ export class MCPClient {
 
   constructor(serverName: string) {
     this.serverName = serverName;
-    this.client = new Client({ name: 'personality-agent', version: '1.0.0' });
+    this.client = new Client({ name: 'hat-agent', version: '1.0.0' });
   }
 
   getDef(): MCPServerDef | null { return this._def; }
