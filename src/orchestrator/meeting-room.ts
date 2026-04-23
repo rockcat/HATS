@@ -42,6 +42,14 @@ export class MeetingRoom {
     this.humanInterjects.push(text);
   }
 
+  /** Flush any pending human interjects into the transcript so agents can see them. */
+  private async flushInterjects(): Promise<void> {
+    while (this.humanInterjects.length > 0) {
+      const text = this.humanInterjects.shift()!;
+      await this.recordTurn('human', text);
+    }
+  }
+
   /** Signal from facilitator's tool call that the meeting should close. */
   close(): void {
     this.closed = true;
@@ -80,6 +88,7 @@ export class MeetingRoom {
         const reply = await this.humanResponder(meeting.turns, meeting.topic);
         if (reply) await this.recordTurn('human', reply);
       } else {
+        await this.flushInterjects();
         const agent = this.agents.get(participant);
         if (!agent) continue;
         const prompt =
@@ -93,6 +102,7 @@ export class MeetingRoom {
 
     // ── Phase 3: Hand-based discussion ────────────────────────────────────
     while (!this.closed) {
+      await this.flushInterjects();
       const raised = [...this.raisedHands];
       if (raised.length === 0) break;
 
@@ -117,6 +127,7 @@ export class MeetingRoom {
         const reply = await this.humanResponder(meeting.turns, meeting.topic);
         if (reply) await this.recordTurn('human', reply);
       } else {
+        await this.flushInterjects();
         const agent = this.agents.get(nominated);
         if (agent) {
           const prompt =
@@ -130,6 +141,7 @@ export class MeetingRoom {
     }
 
     // ── Phase 4: Closing ──────────────────────────────────────────────────
+    await this.flushInterjects();
     // Facilitator summary (may call report_task_complete here, setting this.closed)
     if (!this.closed) {
       const summaryPrompt =
@@ -150,6 +162,7 @@ export class MeetingRoom {
     if (!this.closed) {
       for (const participant of meeting.participants) {
         if (this.closed || participant === 'human') continue;
+        await this.flushInterjects();
         const agent = this.agents.get(participant);
         if (agent) {
           const prompt =
