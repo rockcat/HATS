@@ -306,24 +306,71 @@ function getVoiceParams(participant) {
   return { voiceId, speakerName };
 }
 
-async function fetchSpeechChunks(participant, content) {
-  const { voiceId, speakerName } = getVoiceParams(participant);
-  try {
-    const resp = await fetch('/api/speech/synthesise', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: content, voice: voiceId, speakerName }),
-    });
-    if (resp.ok) {
-      const { chunks } = await resp.json();
-      return chunks ?? [];
-    }
-    const body = await resp.text().catch(() => '');
-    console.warn(`[Meeting Fetch] ${participant}: synthesis failed ${resp.status}: ${body.slice(0, 200)}`);
-  } catch (err) {
-    console.error(`[Meeting Fetch] ${participant}: fetch threw`, err);
+/**
+ * Starts a streaming TTS request and buffers chunks as they arrive.
+ * Implements async iteration so the consumer plays each sentence as soon
+ * as it is synthesised rather than waiting for the full turn.
+ */
+class SpeechStream {
+  constructor(participant, content) {
+    this.participant = participant;
+    this.content     = content;
+    this._buffer     = [];
+    this._done       = false;
+    this._waiters    = [];
+    this._start();
   }
-  return [];
+
+  _notify() {
+    const ws = this._waiters; this._waiters = [];
+    ws.forEach(r => r());
+  }
+
+  async _start() {
+    const { voiceId, speakerName } = getVoiceParams(this.participant);
+    try {
+      const resp = await fetch('/api/speech/synthesise', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: this.content, voice: voiceId, speakerName }),
+      });
+      if (!resp.ok || !resp.body) {
+        console.warn(`[SpeechStream] ${this.participant}: HTTP ${resp.status}`);
+        return;
+      }
+      const reader  = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split('\n');
+        buf = lines.pop(); // keep incomplete trailing line
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try { this._buffer.push(JSON.parse(line)); this._notify(); } catch { /* skip bad line */ }
+        }
+      }
+      if (buf.trim()) {
+        try { this._buffer.push(JSON.parse(buf)); this._notify(); } catch {}
+      }
+    } catch (err) {
+      console.error(`[SpeechStream] ${this.participant}: fetch threw`, err);
+    } finally {
+      this._done = true;
+      this._notify();
+    }
+  }
+
+  async *[Symbol.asyncIterator]() {
+    let idx = 0;
+    while (true) {
+      if (idx < this._buffer.length) { yield this._buffer[idx++]; }
+      else if (this._done)           { return; }
+      else                           { await new Promise(r => this._waiters.push(r)); }
+    }
+  }
 }
 
 /** Notify the server that this turn's speech has finished — it can now generate the next turn. */
@@ -347,7 +394,7 @@ async function drainSpeechQueue() {
       if (speechEnabled && speechQueue.length > 0 && speechQueue[0].participant !== 'human') {
         const next = speechQueue[0];
         if (!prefetch || prefetch.participant !== next.participant || prefetch.content !== next.content) {
-          prefetch = { participant: next.participant, content: next.content, promise: fetchSpeechChunks(next.participant, next.content) };
+          prefetch = { participant: next.participant, content: next.content, stream: new SpeechStream(next.participant, next.content) };
         }
       }
       continue;
@@ -363,13 +410,13 @@ async function drainSpeechQueue() {
     setSlotSpeaking(participant, true);
 
     try {
-      // Resolve chunks: use pre-fetched promise if it matches, else fetch now
-      let chunksPromise;
+      // Use pre-fetched stream if it matches, otherwise start a new one
+      let stream;
       if (prefetch && prefetch.participant === participant && prefetch.content === content) {
-        chunksPromise = prefetch.promise;
+        stream  = prefetch.stream;
         prefetch = null;
       } else {
-        chunksPromise = fetchSpeechChunks(participant, content);
+        stream = new SpeechStream(participant, content);
       }
 
       // Kick off synthesis for the next queue entry in parallel while this one plays.
@@ -377,12 +424,12 @@ async function drainSpeechQueue() {
       if (speechQueue.length > 0 && speechQueue[0].participant !== 'human') {
         const next = speechQueue[0];
         if (!prefetch || prefetch.participant !== next.participant || prefetch.content !== next.content) {
-          prefetch = { participant: next.participant, content: next.content, promise: fetchSpeechChunks(next.participant, next.content) };
+          prefetch = { participant: next.participant, content: next.content, stream: new SpeechStream(next.participant, next.content) };
         }
       }
 
-      const chunks = await chunksPromise;
-      for (const chunk of (chunks ?? [])) {
+      // Play each sentence as soon as it streams in — no waiting for the full turn
+      for await (const chunk of stream) {
         if (!activeMeetingId) break;
         await playSpeechChunk(chunk, participant);
       }
@@ -631,7 +678,7 @@ window.meetingUI = {
     // Start synthesis immediately if audio is already playing and no prefetch is running,
     // so the gap between speakers is eliminated even when turns arrive one at a time.
     if (speechEnabled && speechPlaying && (!prefetch || prefetch.participant !== participant || prefetch.content !== content)) {
-      prefetch = { participant, content, promise: fetchSpeechChunks(participant, content) };
+      prefetch = { participant, content, stream: new SpeechStream(participant, content) };
     }
     // Queue the turn — transcript entry is added just before audio plays
     speechQueue.push({ participant, content });

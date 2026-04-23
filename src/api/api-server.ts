@@ -1341,11 +1341,20 @@ export class APIServer {
           const found = voice.speakers.find(s => s.name === speakerName);
           if (found) speakerId = found.id;
         }
-        const chunks: unknown[] = [];
-        await processSpeech(text, '__meeting__', voice.url, speakerId, (chunk) => { chunks.push(chunk); });
-        this.json(res, 200, { chunks });
+        // Stream NDJSON — send each sentence chunk as soon as it is synthesised
+        // so the client can begin playback before the full turn is ready.
+        res.writeHead(200, {
+          'Content-Type': 'application/x-ndjson',
+          'Transfer-Encoding': 'chunked',
+          'Cache-Control': 'no-cache',
+        });
+        await processSpeech(text, '__meeting__', voice.url, speakerId, (chunk) => {
+          res.write(JSON.stringify(chunk) + '\n');
+        });
+        res.end();
       } catch (err) {
-        this.json(res, 500, { error: (err as Error).message });
+        if (!res.headersSent) this.json(res, 500, { error: (err as Error).message });
+        else res.end();
       }
 
     } else if (pathname.match(/^\/api\/meetings\/[^/]+\/minutes$/) && req.method === 'GET') {
