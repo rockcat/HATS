@@ -465,7 +465,11 @@ function appendTranscriptTurn(participant, content) {
 
   const text = document.createElement('div');
   text.className = 'meeting-turn-content';
-  text.textContent = content;
+  if (window.marked) {
+    text.innerHTML = window.marked.parse(content);
+  } else {
+    text.textContent = content;
+  }
 
   turn.appendChild(speaker);
   turn.appendChild(text);
