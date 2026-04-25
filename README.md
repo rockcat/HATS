@@ -50,7 +50,9 @@ HATS fixes that by:
 
 ## Watch 6 AI agents plan a startup and argue about it
 
-[![Demo Video]](docs/video/HATS_Meeting_720p_short.mp4)
+[![Demo video](https://raw.githubusercontent.com/rockcat/HATS/main/docs/video/HATS_Meeting_720p_short.mp4)](https://raw.githubusercontent.com/rockcat/HATS/main/docs/video/HATS_Meeting_720p_short.mp4)
+
+
 
 ## Architecture highlights
 
