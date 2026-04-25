@@ -50,6 +50,20 @@ export class MeetingRoom {
     }
   }
 
+  /**
+   * Facilitator explicitly acknowledges and responds to the human's most recent contribution.
+   * This makes it clear the human's input was heard and incorporated.
+   */
+  private async acknowledgeHuman(facilitator: Agent): Promise<void> {
+    if (this.closed) return;
+    const ackPrompt =
+      `${buildTranscriptText(this.meeting.turns)}\n\n` +
+      `The human just spoke. Directly address their specific point in one or two sentences — ` +
+      `agree, push back, or build on it. Reference what they actually said.`;
+    const ack = await facilitator.meetingTurn(ackPrompt);
+    await this.recordTurn(this.meeting.facilitator, ack);
+  }
+
   /** Signal from facilitator's tool call that the meeting should close. */
   close(): void {
     this.closed = true;
@@ -86,7 +100,10 @@ export class MeetingRoom {
       if (this.closed) break;
       if (participant === 'human') {
         const reply = await this.humanResponder(meeting.turns, meeting.topic);
-        if (reply) await this.recordTurn('human', reply);
+        if (reply) {
+          await this.recordTurn('human', reply);
+          await this.acknowledgeHuman(facilitator);
+        }
       } else {
         await this.flushInterjects();
         const agent = this.agents.get(participant);
@@ -125,7 +142,10 @@ export class MeetingRoom {
       // Nominated participant speaks
       if (nominated === 'human') {
         const reply = await this.humanResponder(meeting.turns, meeting.topic);
-        if (reply) await this.recordTurn('human', reply);
+        if (reply) {
+          await this.recordTurn('human', reply);
+          await this.acknowledgeHuman(facilitator);
+        }
       } else {
         await this.flushInterjects();
         const agent = this.agents.get(nominated);
@@ -155,7 +175,10 @@ export class MeetingRoom {
     // Human always gets a final say — even if facilitator already called report_task_complete
     if (meeting.participants.includes('human')) {
       const reply = await this.humanResponder(meeting.turns, meeting.topic);
-      if (reply) await this.recordTurn('human', reply);
+      if (reply) {
+        await this.recordTurn('human', reply);
+        await this.acknowledgeHuman(facilitator);
+      }
     }
 
     // Agent final comments (skip if facilitator already closed)
@@ -251,11 +274,13 @@ export class MeetingRoom {
 
 function buildOpeningPrompt(meeting: Meeting): string {
   const participants = meeting.participants.join(', ');
+  const hasHuman = meeting.participants.includes('human');
   return (
     `Facilitate this meeting. Topic: "${meeting.topic}". ` +
     (meeting.agenda ? `Agenda: ${meeting.agenda}. ` : '') +
     `Participants: ${participants}. ` +
-    `State the problem in one sentence and your opening position or recommendation. No pleasantries, no agenda recap. Drive toward a decision immediately.`
+    `State the problem in one sentence and your opening position or recommendation. No pleasantries, no agenda recap. Drive toward a decision immediately.` +
+    (hasHuman ? ` When the human speaks, you will respond directly to their specific point before moving on.` : '')
   );
 }
 

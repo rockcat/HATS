@@ -66,9 +66,13 @@ HATS fixes that by:
 When a meeting starts, HATS opens a stage of animated 3D avatars rendered in real time using Three.js. Each agent speaks aloud via Piper TTS with
 per-agent voice models. Lip sync is driven by Rhubarb, mapping phonetic audio timing to ARKit visemes so mouths move in sync with speech.
 
+![Agent Config[]](docs/images/agent_config.png)
+
 Five meeting types are supported — Standup, Sprint Planning, Retrospective, Review, and Ad Hoc — all schedulable in advance via a built-in calendar or
 launched instantly on demand. Humans participate directly, taking turns in the conversation. The full transcript can be downloaded as Markdown when
 the meeting ends.
+
+[![Demo Video]](https://example.com/video)
 
 ## A Kanban Board That Works Itself
 
@@ -110,6 +114,8 @@ The HATS web UI is a four-panel dashboard:
 
 A persistent progress bar below the header shows the project goal alongside a three-segment ticket progress indicator (Done / Active / Backlog) that
 updates live as work moves through the board.
+
+![Dashboard[]](docs/images/dashboard.png)
 
 
 HATS is built on Node.js with a TypeScript backend, Three.js avatar rendering, and a plain
