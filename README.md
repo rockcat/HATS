@@ -25,7 +25,6 @@ Each agent has a role:
 
 🔵 Blue Hat — facilitation, synthesis
 
-
 **They don’t just respond — they debate.**
 
 ## Why this matters
@@ -43,6 +42,7 @@ HATS fixes that by:
 - simulating real team dynamics
 
 ### Example use cases
+
 - Run a product planning meeting
 - Stress-test a startup idea
 - Explore trade-offs in architecture decisions
@@ -50,9 +50,8 @@ HATS fixes that by:
 
 ## Watch 6 AI agents plan a startup and argue about it
 
-[![Demo video](https://raw.githubusercontent.com/rockcat/HATS/main/docs/video/HATS_Meeting_720p_short.mp4)](https://raw.githubusercontent.com/rockcat/HATS/main/docs/video/HATS_Meeting_720p_short.mp4)
-
-
+Click for a demo video:
+[![Demo video](docs/images/meeting_snapshot.png)](https://youtu.be/-oQs3qht9CU)
 
 ## Architecture highlights
 
@@ -86,7 +85,6 @@ Agents interact with the board through the Kanban MCP server, creating, moving, 
 
 Through the Model Context Protocol \(MCP), HATS ships integrations across five categories:
 
-
 |Category|Tools|
 |-|-|
 |Productivity|Kanban, Memory (knowledge graph), Slack|
@@ -117,14 +115,13 @@ updates live as work moves through the board.
 
 ![Dashboard[]](docs/images/dashboard.png)
 
-
 HATS is built on Node.js with a TypeScript backend, Three.js avatar rendering, and a plain
 HTML/CSS/JS frontend requiring no build step.
 
+## Installation
 
-# Installation
+### Setup scripts
 
-## Setup scripts
 The scripts folder contains two scripts: `setup.bat` for Windows and `setup.sh` fro linux/MacOs. These perform some of the tasks below. 
 
 ## Prerequisites
@@ -146,7 +143,7 @@ cp .env.example .env
 ```
 
 | Variable | Description |
-|---|---|
+| --- | --- |
 | `ANTHROPIC_API_KEY` | Anthropic Claude (default provider) |
 | `OPENAI_API_KEY` | OpenAI GPT models |
 | `GEMINI_API_KEY` | Google Gemini models |
@@ -233,7 +230,7 @@ scripts\setup.bat
 
 ## Project structure
 
-```
+```sh
 src/
   agent/          Agent execution loop and state machine
   api/            HTTP + SSE + WebSocket server (port 3001)
