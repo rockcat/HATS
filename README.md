@@ -50,7 +50,7 @@ HATS fixes that by:
 
 ## Watch 6 AI agents plan a startup and argue about it
 
-(put video here — this is critical)
+[![Demo Video]](docs/video/HATS_Meeting_720p_short.mp4)
 
 ## Architecture highlights
 
@@ -71,8 +71,6 @@ per-agent voice models. Lip sync is driven by Rhubarb, mapping phonetic audio ti
 Five meeting types are supported — Standup, Sprint Planning, Retrospective, Review, and Ad Hoc — all schedulable in advance via a built-in calendar or
 launched instantly on demand. Humans participate directly, taking turns in the conversation. The full transcript can be downloaded as Markdown when
 the meeting ends.
-
-![Demo Video](docs/video/HATS_Meeting_720p_short.mp4)
 
 ## A Kanban Board That Works Itself
 
