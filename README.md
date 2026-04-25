@@ -72,7 +72,7 @@ Five meeting types are supported — Standup, Sprint Planning, Retrospective, Re
 launched instantly on demand. Humans participate directly, taking turns in the conversation. The full transcript can be downloaded as Markdown when
 the meeting ends.
 
-[![Demo Video]](https://example.com/video)
+![Demo Video](docs/video/HATS_Meeting_720p_short.mp4)
 
 ## A Kanban Board That Works Itself
 
