@@ -1489,6 +1489,10 @@ function initAgentDetail() {
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape' && activeDetailAgent) closeAgentDetail();
   });
+  // Click on backdrop (overlay itself, not the modal box) closes the modal
+  document.getElementById('agent-detail-modal').addEventListener('click', e => {
+    if (e.target === document.getElementById('agent-detail-modal')) closeAgentDetail();
+  });
 
   // Name rename — commit on Enter or blur
   const nameInput = document.getElementById('agent-detail-name');
@@ -1839,7 +1843,7 @@ function openAgentDetail(name) {
 
   const feed = document.getElementById('agent-detail-feed');
   feed.innerHTML = '<p class="feed-empty">Loading…</p>';
-  document.getElementById('agent-detail').hidden = false;
+  document.getElementById('agent-detail-modal').hidden = false;
 
   // Unlock AudioContext inside the user gesture (click) so it can play later
   if (!audioCtx) audioCtx = new AudioContext();
@@ -1943,7 +1947,7 @@ function closeAgentDetail() {
   clearSpeechQueue(activeDetailAgent);
   setSpeechAgent(null);
   activeDetailAgent = null;
-  document.getElementById('agent-detail').hidden = true;
+  document.getElementById('agent-detail-modal').hidden = true;
   applyAvatarBackground(null);
   if (window.avatarAPI) window.avatarAPI.hide();
 }

@@ -1286,19 +1286,16 @@ main {
 
 /* ── Agent detail drawer ─────────────────────────────── */
 .agent-detail {
-  position: fixed;
-  top: 44px; /* below header */
-  right: 0;
-  bottom: 0;
-  width: 560px;
   background: var(--surface);
-  border-left: 1px solid var(--border);
+  border: 1px solid var(--border-hover);
+  border-radius: 10px;
+  width: 100%;
+  max-width: 720px;
+  max-height: 90vh;
   display: flex;
   flex-direction: column;
-  z-index: 50;
-  box-shadow: -8px 0 32px rgba(0,0,0,0.4);
+  box-shadow: 0 24px 64px rgba(0,0,0,0.6);
 }
-.agent-detail[hidden] { display: none; }
 
 .agent-detail-header {
   display: flex;

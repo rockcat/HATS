@@ -233,8 +233,9 @@
     </div>
   </div>
 
-  <!-- Agent detail drawer -->
-  <div id="agent-detail" class="agent-detail" hidden>
+  <!-- Agent detail modal -->
+  <div id="agent-detail-modal" class="modal-overlay" hidden>
+  <div id="agent-detail" class="agent-detail" role="dialog" aria-modal="true">
     <div class="agent-detail-header">
       <div class="agent-detail-identity">
         <input id="agent-detail-name" class="agent-detail-name-input" type="text" spellcheck="false" autocomplete="off" title="Click to rename">
@@ -310,6 +311,7 @@
         <button id="agent-detail-send" class="agent-detail-send-btn">Send</button>
       </div>
     </div>
+  </div>
   </div>
 
   <!-- Edit Ticket Modal -->
