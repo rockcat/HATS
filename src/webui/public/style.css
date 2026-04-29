@@ -1886,6 +1886,23 @@ main {
 }
 .agent-config-line--btns .agent-config-label { flex: 0 0 44px; }
 
+.agent-config-mcp-line { align-items: flex-start; }
+.agent-config-mcp-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  flex: 1;
+}
+.agent-config-mcp-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
 .agent-config-input {
   flex: 1;
   min-width: 0;

@@ -35,6 +35,11 @@ export class MCPRegistry {
     return Array.from(this.clients.values()).flatMap((c) => c.getToolDefinitions());
   }
 
+  /** Tool definitions for a specific subset of servers (by server name/ID). */
+  getToolsForServers(serverIds: string[]): ToolDefinition[] {
+    return serverIds.flatMap((id) => this.clients.get(id)?.getToolDefinitions() ?? []);
+  }
+
   /** Returns true if the tool name belongs to any registered MCP server. */
   isMCPTool(toolName: string): boolean {
     return Array.from(this.clients.values()).some((c) => c.isMCPTool(toolName));

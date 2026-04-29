@@ -1746,6 +1746,18 @@ function initAgentDetail() {
         method: 'PATCH', headers: {'Content-Type':'application/json'},
         body: JSON.stringify({ specialisation }),
       }));
+      // MCP servers — only send if the section is visible
+      const mcpLine = document.getElementById('agent-config-mcp-line');
+      if (mcpLine && !mcpLine.hidden) {
+        const checks = Array.from(document.querySelectorAll('#agent-config-mcp-list input[type="checkbox"]'));
+        const allChecked = checks.every(c => c.checked);
+        // null = "all servers" (default); array = specific selection (including empty = none)
+        const servers = allChecked ? null : checks.filter(c => c.checked).map(c => c.value);
+        tasks.push(fetch(`/api/agents/${encodeURIComponent(activeDetailAgent)}/mcp-servers`, {
+          method: 'PATCH', headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ servers }),
+        }));
+      }
       await Promise.all(tasks);
       btn.textContent = '✓';
     } catch {
@@ -1886,6 +1898,32 @@ function openAgentDetail(name) {
   populateBackgroundSelect(currentBg).then(() => {
     applyAvatarBackground(currentBg);
   });
+
+  // Populate per-agent MCP server checkboxes
+  fetch('/api/mcp/catalogue')
+    .then(r => r.json())
+    .then(catalogue => {
+      const enabledServers = catalogue.filter(e => e.enabled);
+      const mcpLine = document.getElementById('agent-config-mcp-line');
+      const mcpList = document.getElementById('agent-config-mcp-list');
+      if (enabledServers.length === 0) { mcpLine.hidden = true; return; }
+      mcpLine.hidden = false;
+      const agentServers = agent?.enabledMcpServers; // undefined = all
+      mcpList.innerHTML = '';
+      for (const entry of enabledServers) {
+        const checked = !agentServers || agentServers.includes(entry.id);
+        const lbl = document.createElement('label');
+        lbl.className = 'agent-config-mcp-item';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.value = entry.id;
+        cb.checked = checked;
+        lbl.appendChild(cb);
+        lbl.append(' ' + entry.name);
+        mcpList.appendChild(lbl);
+      }
+    })
+    .catch(() => { document.getElementById('agent-config-mcp-line').hidden = true; });
 
   fetch(`/api/agents/${encodeURIComponent(name)}/feed`)
     .then(r => r.json())

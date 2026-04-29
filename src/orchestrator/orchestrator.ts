@@ -113,6 +113,7 @@ export class TeamOrchestrator {
       model: agent.config.model,
       providerName: agent.config.provider.name,
       teamContext: agent.config.teamContext,
+      enabledMcpServers: agent.config.enabledMcpServers,
       history: agent.getHistory().map((m) => ({
         role: m.role,
         content: m.content,
@@ -172,6 +173,7 @@ export class TeamOrchestrator {
         provider,
         model: snap.model,
         teamContext: snap.teamContext,
+        enabledMcpServers: snap.enabledMcpServers,
       };
       const agent = this.registerAgent(config);
       agent.setHistory(snap.history);
@@ -232,7 +234,10 @@ export class TeamOrchestrator {
     const agent = new Agent(config);
     agent.setToolExecutor(this.makeToolExecutor());
     agent.setResponseHandler(this.makeResponseHandler());
-    agent.setExtraToolsProvider(() => this.mcp.getAllTools());
+    agent.setExtraToolsProvider(() => {
+      const ids = agent.config.enabledMcpServers;
+      return ids === undefined ? this.mcp.getAllTools() : this.mcp.getToolsForServers(ids);
+    });
     agent.setLLMSemaphore(this.llmSemaphore);
     if (this.telemetryRecorder) agent.setTelemetryRecorder(this.telemetryRecorder);
     this.agents.set(agent.id, agent);
@@ -299,6 +304,13 @@ export class TeamOrchestrator {
     const agent = this.findByName(name);
     if (!agent) throw new Error(`Agent "${name}" not found`);
     agent.setVoice(voice, speakerName);
+  }
+
+  /** Set which MCP servers an agent can use. Pass undefined to restore "all enabled servers". */
+  updateAgentMcpServers(name: string, serverIds: string[] | undefined): void {
+    const agent = this.findByName(name);
+    if (!agent) throw new Error(`Agent "${name}" not found`);
+    agent.config.enabledMcpServers = serverIds;
   }
 
   /** Remove an agent from the team. */

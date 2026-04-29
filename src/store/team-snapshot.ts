@@ -12,6 +12,7 @@ export interface AgentSnapshot {
   model: string;
   providerName: string;   // used by ProviderFactory to reconstruct the right provider
   teamContext?: string;
+  enabledMcpServers?: string[]; // per-agent MCP server IDs; absent = all project servers
   history: Array<{
     role: 'user' | 'assistant' | 'tool';
     content: string;

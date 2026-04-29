@@ -38,6 +38,7 @@ export interface AgentConfig {
   teamContext?: string;    // injected by orchestrator after team is assembled
   projectDir?: string;     // absolute path to current project folder
   projectGoal?: string;    // optional goal statement injected into every prompt
+  enabledMcpServers?: string[]; // MCP server IDs this agent can use; undefined = all enabled servers
 }
 
 export interface AgentMessage {

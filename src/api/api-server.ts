@@ -60,6 +60,7 @@ interface AgentStatus {
   avatar?:          string;
   voice?:           string;
   speakerName?:     string;
+  enabledMcpServers?: string[];
 }
 
 // ── Config ────────────────────────────────────────────────────────────────────
@@ -535,6 +536,7 @@ export class APIServer {
         background:       a.config.identity.background,
         voice:            a.config.identity.voice,
         speakerName:      a.config.identity.speakerName,
+        enabledMcpServers: a.config.enabledMcpServers,
       };
     });
   }
@@ -986,6 +988,21 @@ export class APIServer {
       try {
         const resolved = this.resolveAgentName(agentName);
         this.orchestrator.updateAgentVoice(resolved, voice?.trim() || undefined, speakerName?.trim() || undefined);
+        this.sseBroadcast({ type: 'agent_update', agents: this.buildAgentStatuses() });
+        this.saveCurrentState().catch(() => {});
+        this.json(res, 200, { ok: true });
+      } catch (err) {
+        this.json(res, 400, { error: (err as Error).message });
+      }
+
+    } else if (pathname.match(/^\/api\/agents\/[^/]+\/mcp-servers$/) && req.method === 'PATCH') {
+      const agentName = decodeURIComponent(pathname.slice('/api/agents/'.length, -'/mcp-servers'.length));
+      const body = await this.readBody(req);
+      // servers: string[] → specific list; null → all enabled servers (default)
+      const { servers } = JSON.parse(body) as { servers: string[] | null };
+      try {
+        const resolved = this.resolveAgentName(agentName);
+        this.orchestrator.updateAgentMcpServers(resolved, servers ?? undefined);
         this.sseBroadcast({ type: 'agent_update', agents: this.buildAgentStatuses() });
         this.saveCurrentState().catch(() => {});
         this.json(res, 200, { ok: true });
