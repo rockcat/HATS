@@ -161,6 +161,23 @@ export const MCP_CATALOGUE: MCPCatalogueEntry[] = [
     notes: 'Requires Python 3.12+ and uv (install uv with: pip install uv). No npm package exists for POP3 — this runs a Python-based server via uvx. For Gmail set POP3_SERVER=pop.gmail.com and use an App Password.',
   },
   {
+    id: 'google-calendar',
+    name: 'Google Calendar',
+    description: 'List, create, update, delete and respond to Google Calendar events across all your calendars',
+    category: 'productivity',
+    config: { transport: 'stdio', command: 'npx', args: ['-y', '@cocal/google-calendar-mcp'], env: { GOOGLE_OAUTH_CREDENTIALS: '' } },
+    envVars: ['GOOGLE_OAUTH_CREDENTIALS'],
+    notes: 'GOOGLE_OAUTH_CREDENTIALS should be the file path to your OAuth 2.0 JSON key (e.g. /path/to/gcp-oauth.keys.json). To obtain it: create a project in Google Cloud Console, enable the Calendar API, create an OAuth 2.0 "Desktop app" credential, and download the JSON file. A browser OAuth consent flow runs on first use; tokens are cached locally.',
+  },
+  {
+    id: 'microsoft-365',
+    name: 'Microsoft 365',
+    description: 'Access Outlook calendar, email, OneDrive, Teams, Contacts, and more via the Microsoft Graph API — works with personal, work, and school Microsoft accounts',
+    category: 'productivity',
+    config: { transport: 'stdio', command: 'npx', args: ['-y', '@softeria/ms-365-mcp-server'] },
+    notes: 'No credentials needed to get started — the server has a built-in Azure app registration. On first use call the "login" tool and follow the device-code flow printed to the terminal. For org/work accounts add --org-mode to the args. Optionally supply MS365_MCP_CLIENT_ID and MS365_MCP_TENANT_ID env vars to use your own Azure app registration.',
+  },
+  {
     id: 'whatsapp-periskope',
     name: 'WhatsApp (Periskope)',
     description: 'Send and receive WhatsApp messages, manage chats and contacts — uses the Periskope managed API (requires a Periskope account)',
