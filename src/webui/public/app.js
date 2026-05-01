@@ -1205,6 +1205,9 @@ function renderMCPCatalogue(catalogue) {
       ).join('');
       const catBadge = `<span class="mcp-cat-badge" style="background:${cc.bg};color:${cc.text}">${esc(cat)}</span>`;
 
+      const linkHtml = entry.url
+        ? `<a class="mcp-entry-link" href="${esc(entry.url)}" target="_blank" rel="noopener noreferrer" title="Setup docs ↗">docs ↗</a>`
+        : '';
       html += `
         <div class="mcp-entry ${entry.enabled ? 'enabled' : ''}" data-id="${esc(entry.id)}">
           <div class="mcp-entry-main">
@@ -1212,6 +1215,7 @@ function renderMCPCatalogue(catalogue) {
               <span class="mcp-entry-name">${esc(entry.name)}</span>
               ${catBadge}
               ${envHtml}
+              ${linkHtml}
             </div>
             <div class="mcp-entry-desc">${esc(entry.description)}</div>
           </div>

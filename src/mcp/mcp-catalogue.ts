@@ -10,6 +10,7 @@ export interface MCPCatalogueEntry {
   config: MCPServerConfig;
   envVars?: string[];   // env var names required by this server
   notes?: string;
+  url?: string;         // link to docs / source for the setup page
 }
 
 /** Resolves env var placeholders in a config using process.env at connect time.
@@ -51,6 +52,7 @@ export const MCP_CATALOGUE: MCPCatalogueEntry[] = [
     category: 'files',
     config: { transport: 'stdio', command: 'npx', args: ['-y', '@modelcontextprotocol/server-filesystem'] },
     // project dir is appended at runtime by resolveMCPConfig
+    url: 'https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem',
   },
   {
     id: 'excel',
@@ -58,6 +60,7 @@ export const MCP_CATALOGUE: MCPCatalogueEntry[] = [
     description: 'Read and write Microsoft Excel (.xlsx) files — create sheets, edit cells, formulas, and charts',
     category: 'files',
     config: { transport: 'stdio', command: 'npx', args: ['-y', '@negokaz/excel-mcp-server'] },
+    url: 'https://github.com/negokaz/excel-mcp-server',
   },
   {
     id: 'docx',
@@ -65,6 +68,7 @@ export const MCP_CATALOGUE: MCPCatalogueEntry[] = [
     description: 'Create and edit Microsoft Word (.docx) documents using structured JSON',
     category: 'files',
     config: { transport: 'stdio', command: 'npx', args: ['-y', '@docx-mcp/docx-mcp'] },
+    url: 'https://www.npmjs.com/package/@docx-mcp/docx-mcp',
   },
   {
     id: 'pdf',
@@ -72,6 +76,7 @@ export const MCP_CATALOGUE: MCPCatalogueEntry[] = [
     description: 'Generate PDF files from content — supports text, layout, tables, and Unicode. Save to outputs/ for deliverables',
     category: 'files',
     config: { transport: 'stdio', command: 'npx', args: ['-y', '@mcp-z/mcp-pdf'] },
+    url: 'https://www.npmjs.com/package/@mcp-z/mcp-pdf',
   },
   {
     id: 'powerpoint',
@@ -79,6 +84,7 @@ export const MCP_CATALOGUE: MCPCatalogueEntry[] = [
     description: 'Create PowerPoint presentations — add slides, text, tables, shapes, and charts. Save .pptx to outputs/',
     category: 'files',
     config: { transport: 'stdio', command: 'npx', args: ['-y', '@pylogmonmcp/powerpoint-generator'] },
+    url: 'https://www.npmjs.com/package/@pylogmonmcp/powerpoint-generator',
   },
   {
     id: 'brave-search',
@@ -87,6 +93,7 @@ export const MCP_CATALOGUE: MCPCatalogueEntry[] = [
     category: 'web',
     config: { transport: 'stdio', command: 'npx', args: ['-y', '@modelcontextprotocol/server-brave-search'], env: { BRAVE_API_KEY: '' } },
     envVars: ['BRAVE_API_KEY'],
+    url: 'https://brave.com/search/api/',
   },
   {
     id: 'memory',
@@ -94,6 +101,7 @@ export const MCP_CATALOGUE: MCPCatalogueEntry[] = [
     description: 'Persistent knowledge graph — agents can store and retrieve facts across sessions',
     category: 'productivity',
     config: { transport: 'stdio', command: 'npx', args: ['-y', '@modelcontextprotocol/server-memory'] },
+    url: 'https://github.com/modelcontextprotocol/servers/tree/main/src/memory',
   },
   {
     id: 'github',
@@ -102,6 +110,7 @@ export const MCP_CATALOGUE: MCPCatalogueEntry[] = [
     category: 'dev',
     config: { transport: 'stdio', command: 'npx', args: ['-y', '@modelcontextprotocol/server-github'], env: { GITHUB_PERSONAL_ACCESS_TOKEN: '' } },
     envVars: ['GITHUB_PERSONAL_ACCESS_TOKEN'],
+    url: 'https://github.com/modelcontextprotocol/servers/tree/main/src/github',
   },
   {
     id: 'sqlite',
@@ -109,6 +118,7 @@ export const MCP_CATALOGUE: MCPCatalogueEntry[] = [
     description: 'Run queries against a local SQLite database file',
     category: 'data',
     config: { transport: 'stdio', command: 'npx', args: ['-y', 'mcp-sqlite', '--db-path', './data.db'] },
+    url: 'https://www.npmjs.com/package/mcp-sqlite',
   },
   {
     id: 'postgres',
@@ -117,6 +127,7 @@ export const MCP_CATALOGUE: MCPCatalogueEntry[] = [
     category: 'data',
     config: { transport: 'stdio', command: 'npx', args: ['-y', '@modelcontextprotocol/server-postgres'], env: { POSTGRES_CONNECTION_STRING: '' } },
     envVars: ['POSTGRES_CONNECTION_STRING'],
+    url: 'https://github.com/modelcontextprotocol/servers/tree/main/src/postgres',
   },
   {
     id: 'puppeteer',
@@ -124,6 +135,7 @@ export const MCP_CATALOGUE: MCPCatalogueEntry[] = [
     description: 'Control a headless Chrome browser — navigate pages, take screenshots, fill forms',
     category: 'web',
     config: { transport: 'stdio', command: 'npx', args: ['-y', '@modelcontextprotocol/server-puppeteer'] },
+    url: 'https://github.com/modelcontextprotocol/servers/tree/main/src/puppeteer',
   },
   {
     id: 'slack',
@@ -132,6 +144,7 @@ export const MCP_CATALOGUE: MCPCatalogueEntry[] = [
     category: 'productivity',
     config: { transport: 'stdio', command: 'npx', args: ['-y', '@modelcontextprotocol/server-slack'], env: { SLACK_BOT_TOKEN: '', SLACK_TEAM_ID: '' } },
     envVars: ['SLACK_BOT_TOKEN', 'SLACK_TEAM_ID'],
+    url: 'https://github.com/modelcontextprotocol/servers/tree/main/src/slack',
   },
   {
     id: 'linkedin',
@@ -141,6 +154,7 @@ export const MCP_CATALOGUE: MCPCatalogueEntry[] = [
     config: { transport: 'stdio', command: 'node', args: ['linkedin-mcpserver/build/index.js'], env: { LINKEDIN_CLIENT_ID: '', LINKEDIN_CLIENT_SECRET: '' } },
     envVars: ['LINKEDIN_CLIENT_ID', 'LINKEDIN_CLIENT_SECRET'],
     notes: 'Requires manual setup: git clone https://github.com/felipfr/linkedin-mcpserver, then npm install && npm run build inside the cloned folder. Place the folder alongside this project. Create a LinkedIn app at https://www.linkedin.com/developers/apps to obtain credentials.',
+    url: 'https://github.com/felipfr/linkedin-mcpserver',
   },
   {
     id: 'email-imap',
@@ -150,6 +164,7 @@ export const MCP_CATALOGUE: MCPCatalogueEntry[] = [
     config: { transport: 'stdio', command: 'npx', args: ['-y', '@codefuturist/email-mcp'], env: { MCP_EMAIL_ADDRESS: '', MCP_EMAIL_PASSWORD: '', MCP_EMAIL_IMAP_HOST: '', MCP_EMAIL_SMTP_HOST: '' } },
     envVars: ['MCP_EMAIL_ADDRESS', 'MCP_EMAIL_PASSWORD', 'MCP_EMAIL_IMAP_HOST', 'MCP_EMAIL_SMTP_HOST'],
     notes: 'Run "npx @codefuturist/email-mcp setup" for a guided wizard that auto-detects server settings. For Gmail use an App Password (not your main password) and set IMAP host to imap.gmail.com, SMTP host to smtp.gmail.com.',
+    url: 'https://www.npmjs.com/package/@codefuturist/email-mcp',
   },
   {
     id: 'email-pop3',
@@ -159,6 +174,7 @@ export const MCP_CATALOGUE: MCPCatalogueEntry[] = [
     config: { transport: 'stdio', command: 'uvx', args: ['--from', 'git+https://github.com/ptbsare/email-mcp-server.git', 'email-mcp-server'], env: { EMAIL_USER: '', EMAIL_PASS: '', POP3_SERVER: '', POP3_PORT: '995' } },
     envVars: ['EMAIL_USER', 'EMAIL_PASS', 'POP3_SERVER'],
     notes: 'Requires Python 3.12+ and uv (install uv with: pip install uv). No npm package exists for POP3 — this runs a Python-based server via uvx. For Gmail set POP3_SERVER=pop.gmail.com and use an App Password.',
+    url: 'https://github.com/ptbsare/email-mcp-server',
   },
   {
     id: 'google-calendar',
@@ -168,6 +184,7 @@ export const MCP_CATALOGUE: MCPCatalogueEntry[] = [
     config: { transport: 'stdio', command: 'npx', args: ['-y', '@cocal/google-calendar-mcp'], env: { GOOGLE_OAUTH_CREDENTIALS: '' } },
     envVars: ['GOOGLE_OAUTH_CREDENTIALS'],
     notes: 'GOOGLE_OAUTH_CREDENTIALS should be the file path to your OAuth 2.0 JSON key (e.g. /path/to/gcp-oauth.keys.json). To obtain it: create a project in Google Cloud Console, enable the Calendar API, create an OAuth 2.0 "Desktop app" credential, and download the JSON file. A browser OAuth consent flow runs on first use; tokens are cached locally.',
+    url: 'https://github.com/cocal/google-calendar-mcp',
   },
   {
     id: 'microsoft-365',
@@ -176,6 +193,7 @@ export const MCP_CATALOGUE: MCPCatalogueEntry[] = [
     category: 'productivity',
     config: { transport: 'stdio', command: 'npx', args: ['-y', '@softeria/ms-365-mcp-server'] },
     notes: 'No credentials needed to get started — the server has a built-in Azure app registration. On first use call the "login" tool and follow the device-code flow printed to the terminal. For org/work accounts add --org-mode to the args. Optionally supply MS365_MCP_CLIENT_ID and MS365_MCP_TENANT_ID env vars to use your own Azure app registration.',
+    url: 'https://github.com/softeria/ms-365-mcp-server',
   },
   {
     id: 'whatsapp-periskope',
@@ -185,6 +203,7 @@ export const MCP_CATALOGUE: MCPCatalogueEntry[] = [
     config: { transport: 'stdio', command: 'npx', args: ['-y', '@periskope/whatsapp-mcp'], env: { PERISKOPE_API_KEY: '', PERISKOPE_PHONE_ID: '' } },
     envVars: ['PERISKOPE_API_KEY', 'PERISKOPE_PHONE_ID'],
     notes: 'Sign up at console.periskope.app, connect your WhatsApp number, then find your API key and Phone ID under Settings → API settings.',
+    url: 'https://www.npmjs.com/package/@periskope/whatsapp-mcp',
   },
   {
     id: 'whatsapp-web',
@@ -193,6 +212,7 @@ export const MCP_CATALOGUE: MCPCatalogueEntry[] = [
     category: 'productivity',
     config: { transport: 'stdio', command: 'npx', args: ['-y', 'wweb-mcp', '--mode', 'mcp', '--transport', 'command'] },
     notes: 'Uses WhatsApp Web browser automation (unofficial). On first run, scan the QR code printed to the terminal. Session is persisted locally. Note: WhatsApp does not officially support automation on personal accounts.',
+    url: 'https://www.npmjs.com/package/wweb-mcp',
   },
   {
     id: 'twitter',
@@ -202,6 +222,7 @@ export const MCP_CATALOGUE: MCPCatalogueEntry[] = [
     config: { transport: 'stdio', command: 'npx', args: ['-y', '@enescinar/twitter-mcp'], env: { API_KEY: '', API_SECRET_KEY: '', ACCESS_TOKEN: '', ACCESS_TOKEN_SECRET: '' } },
     envVars: ['API_KEY', 'API_SECRET_KEY', 'ACCESS_TOKEN', 'ACCESS_TOKEN_SECRET'],
     notes: 'Create a developer app at developer.twitter.com and generate OAuth 1.0a keys under "Keys and Tokens". Posting requires at least the Basic tier ($100/month). Search is available on the Free tier.',
+    url: 'https://developer.twitter.com/en/portal/dashboard',
   },
   {
     id: 'threads',
@@ -211,5 +232,6 @@ export const MCP_CATALOGUE: MCPCatalogueEntry[] = [
     config: { transport: 'stdio', command: 'npx', args: ['-y', '@mikusnuz/meta-mcp'], env: { THREADS_ACCESS_TOKEN: '', THREADS_USER_ID: '' } },
     envVars: ['THREADS_ACCESS_TOKEN', 'THREADS_USER_ID'],
     notes: 'Create an app at developers.facebook.com, add the Threads API product, and generate an OAuth access token. Your user ID can be found via the Threads API /me endpoint.',
+    url: 'https://developers.facebook.com/docs/threads',
   },
 ];

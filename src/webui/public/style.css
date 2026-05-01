@@ -1207,6 +1207,15 @@ main {
   color: var(--text);
 }
 
+.mcp-entry-link {
+  font-size: 8px;
+  color: var(--text-muted);
+  text-decoration: none;
+  margin-left: 2px;
+  opacity: 0.7;
+}
+.mcp-entry-link:hover { color: var(--accent); opacity: 1; text-decoration: underline; }
+
 .mcp-cat-badge {
   font-size: 8px;
   font-weight: 700;
