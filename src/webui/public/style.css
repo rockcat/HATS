@@ -7,6 +7,8 @@
   --text:         #e6edf3;
   --text-muted:   #8b949e;
 
+  --green-text:   #3fb950;
+
   --hat-white:  #e6edf3;
   --hat-red:    #f85149;
   --hat-black:  #8b949e;
@@ -1360,7 +1362,7 @@ main {
   border-left: 1px solid var(--border);
   border-radius: 0 10px 10px 0;
   background: var(--surface-2);
-  width: 300px;
+  width: 400px;
   flex-shrink: 0;
   overflow: hidden;
 }
@@ -1396,12 +1398,19 @@ main {
   overflow-y: auto;
   margin: 0;
   padding: 10px 12px;
-  font-size: 11px;
+  font-size: 9px;
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
-  color: var(--text);
-  font-family: inherit;
+  color: var(--green-text);
+  font-family: "Courier New", Courier, monospace;
+}
+
+.agent-prompt-preview-length {
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 4px 12px;
+  border-top: 1px solid var(--border);
 }
 
 .agent-detail-feed {

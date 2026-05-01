@@ -32,7 +32,12 @@
       "Bash(npx puppeteer:*)",
       "Bash(npx playwright:*)",
       "Bash(where puppeteer:*)",
-      "Bash(npx --yes puppeteer browsers install chrome)"
+      "Bash(npx --yes puppeteer browsers install chrome)",
+      "WebFetch(domain:www.npmjs.com)",
+      "WebFetch(domain:registry.npmjs.org)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:api.npmjs.org)",
+      "WebFetch(domain:docs.periskope.app)"
     ]
   }
 }

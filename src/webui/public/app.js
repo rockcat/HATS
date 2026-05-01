@@ -1321,6 +1321,10 @@ async function refreshPromptPreview() {
     const res = await fetch(`/api/agents/${encodeURIComponent(activeDetailAgent)}/prompt-preview?${params}`);
     const data = await res.json();
     textEl.textContent = data.prompt ?? data.error ?? 'Error';
+    // assume a token is about 4 characters
+    const promptLength = data.prompt ? data.prompt.length : 0;
+    const numTokens = promptLength / 4
+    document.getElementById('agent-prompt-preview-length').textContent = `Length: ${promptLength} chars  ~${numTokens} tokens`; 
   } catch (e) {
     textEl.textContent = 'Failed to load prompt.';
   }
