@@ -236,80 +236,84 @@
   <!-- Agent detail modal -->
   <div id="agent-detail-modal" class="modal-overlay" hidden>
   <div id="agent-detail" class="agent-detail" role="dialog" aria-modal="true">
-    <div class="agent-detail-header">
-      <div class="agent-detail-identity">
-        <input id="agent-detail-name" class="agent-detail-name-input" type="text" spellcheck="false" autocomplete="off" title="Click to rename">
-        <span id="agent-detail-hat"></span>
+    <!-- Left: main panel -->
+    <div class="agent-detail-main">
+      <div class="agent-detail-header">
+        <div class="agent-detail-identity">
+          <input id="agent-detail-name" class="agent-detail-name-input" type="text" spellcheck="false" autocomplete="off" title="Click to rename">
+          <span id="agent-detail-hat"></span>
+        </div>
+        <button id="agent-remove-btn" class="agent-remove-btn" title="Remove agent">Remove</button>
+        <button id="agent-detail-close" class="modal-close" title="Close"><img src="/assets/close.svg" class="svg-icon" alt="Close"></button>
       </div>
-      <button id="agent-remove-btn" class="agent-remove-btn" title="Remove agent">Remove</button>
-      <button id="agent-detail-close" class="modal-close" title="Close"><img src="/assets/close.svg" class="svg-icon" alt="Close"></button>
+      <div class="agent-config-row">
+        <div class="agent-config-line">
+          <label class="agent-config-label">Hat</label>
+          <select id="agent-config-hat" class="agent-config-select agent-config-hat-select" title="Hat type"></select>
+        </div>
+        <div class="agent-config-line">
+          <label class="agent-config-label">Avatar</label>
+          <select id="agent-config-avatar" class="agent-config-select agent-config-avatar-select" title="Avatar"></select>
+        </div>
+        <div class="agent-config-line">
+          <label class="agent-config-label">Background</label>
+          <select id="agent-config-background" class="agent-config-select agent-config-background-select" title="Background"></select>
+          <button id="agent-config-gen-bg" class="agent-config-btn" title="Generate a new background with DALL-E 3">Generate…</button>
+        </div>
+        <div class="agent-config-line">
+          <label class="agent-config-label">Voice</label>
+          <select id="agent-config-voice"  class="agent-config-select agent-config-voice-select"  title="Voice"></select>
+          <select id="agent-config-speaker" class="agent-config-select agent-config-speaker-select" title="Speaker" hidden></select>
+          <button id="agent-config-preview-voice" class="agent-config-btn agent-config-preview-btn" title="Play a short voice sample"><img src="/assets/play.svg" class="svg-icon" alt="Play"></button>
+        </div>
+        <div class="agent-config-line">
+          <label class="agent-config-label">Spec.</label>
+          <select id="agent-config-specialisation" class="agent-config-select">
+            <option value="">— none —</option>
+            <option value="__custom__">Custom…</option>
+          </select>
+          <input type="text" id="agent-config-specialisation-custom" class="agent-config-input" placeholder="Type your specialisation…" autocomplete="off" hidden>
+        </div>
+        <div class="agent-config-line">
+          <label class="agent-config-label">Model</label>
+          <select id="agent-config-provider" class="agent-config-select agent-config-provider-select"></select>
+          <select id="agent-config-model"    class="agent-config-select agent-config-model-select"></select>
+          <input  id="agent-config-model-custom" type="text" class="agent-config-input agent-config-model-input" placeholder="e.g. llama3.2" autocomplete="off" hidden>
+        </div>
+        <div class="agent-config-line agent-config-pricing-line" id="agent-config-pricing-line" hidden>
+          <label class="agent-config-label"></label>
+          <span id="agent-config-pricing-hint" class="agent-config-pricing-hint"></span>
+        </div>
+        <div class="agent-config-line agent-config-mcp-line" id="agent-config-mcp-line" hidden>
+          <label class="agent-config-label">MCP Tools</label>
+          <div id="agent-config-mcp-list" class="agent-config-mcp-list"></div>
+        </div>
+        <div class="agent-config-line agent-config-line--btns">
+          <label class="agent-config-label"></label>
+          <button id="agent-config-stop-voice" class="agent-config-btn agent-config-stop-btn" title="Stop voice playback">Stop talking</button>
+          <button id="agent-config-preview-prompt" class="agent-config-btn" title="Preview the system prompt this agent will use">Prompt…</button>
+          <button id="agent-config-apply" class="agent-config-btn">Apply</button>
+        </div>
+      </div>
+      <div id="avatar-panel" class="avatar-panel" hidden>
+        <canvas id="avatar-canvas" class="avatar-canvas"></canvas>
+      </div>
+      <div id="agent-detail-feed" class="agent-detail-feed"></div>
+      <div class="agent-detail-compose">
+        <div class="agent-detail-tickets" id="agent-detail-tickets"></div>
+        <div class="agent-detail-compose-row">
+          <textarea id="agent-detail-message" class="agent-detail-textarea" placeholder="Message this agent…" rows="3"></textarea>
+          <button id="agent-detail-send" class="agent-detail-send-btn">Send</button>
+        </div>
+      </div>
     </div>
-    <div class="agent-config-row">
-      <div class="agent-config-line">
-        <label class="agent-config-label">Hat</label>
-        <select id="agent-config-hat" class="agent-config-select agent-config-hat-select" title="Hat type"></select>
-      </div>
-      <div class="agent-config-line">
-        <label class="agent-config-label">Avatar</label>
-        <select id="agent-config-avatar" class="agent-config-select agent-config-avatar-select" title="Avatar"></select>
-      </div>
-      <div class="agent-config-line">
-        <label class="agent-config-label">Background</label>
-        <select id="agent-config-background" class="agent-config-select agent-config-background-select" title="Background"></select>
-        <button id="agent-config-gen-bg" class="agent-config-btn" title="Generate a new background with DALL-E 3">Generate…</button>
-      </div>
-      <div class="agent-config-line">
-        <label class="agent-config-label">Voice</label>
-        <select id="agent-config-voice"  class="agent-config-select agent-config-voice-select"  title="Voice"></select>
-        <select id="agent-config-speaker" class="agent-config-select agent-config-speaker-select" title="Speaker" hidden></select>
-        <button id="agent-config-preview-voice" class="agent-config-btn agent-config-preview-btn" title="Play a short voice sample"><img src="/assets/play.svg" class="svg-icon" alt="Play"></button>
-      </div>
-      <div class="agent-config-line">
-        <label class="agent-config-label">Spec.</label>
-        <select id="agent-config-specialisation" class="agent-config-select">
-          <option value="">— none —</option>
-          <option value="__custom__">Custom…</option>
-        </select>
-        <input type="text" id="agent-config-specialisation-custom" class="agent-config-input" placeholder="Type your specialisation…" autocomplete="off" hidden>
-      </div>
-      <div class="agent-config-line">
-        <label class="agent-config-label">Model</label>
-        <select id="agent-config-provider" class="agent-config-select agent-config-provider-select"></select>
-        <select id="agent-config-model"    class="agent-config-select agent-config-model-select"></select>
-        <input  id="agent-config-model-custom" type="text" class="agent-config-input agent-config-model-input" placeholder="e.g. llama3.2" autocomplete="off" hidden>
-      </div>
-      <div class="agent-config-line agent-config-pricing-line" id="agent-config-pricing-line" hidden>
-        <label class="agent-config-label"></label>
-        <span id="agent-config-pricing-hint" class="agent-config-pricing-hint"></span>
-      </div>
-      <div class="agent-config-line agent-config-mcp-line" id="agent-config-mcp-line" hidden>
-        <label class="agent-config-label">MCP Tools</label>
-        <div id="agent-config-mcp-list" class="agent-config-mcp-list"></div>
-      </div>
-      <div class="agent-config-line agent-config-line--btns">
-        <label class="agent-config-label"></label>
-        <button id="agent-config-stop-voice" class="agent-config-btn agent-config-stop-btn" title="Stop voice playback">Stop talking</button>
-        <button id="agent-config-preview-prompt" class="agent-config-btn" title="Preview the system prompt this agent will use">Prompt…</button>
-        <button id="agent-config-apply" class="agent-config-btn">Apply</button>
-      </div>
-    </div>
+    <!-- Right: system prompt panel (shown alongside when Prompt… is clicked) -->
     <div id="agent-prompt-preview" class="agent-prompt-preview" hidden>
       <div class="agent-prompt-preview-header">
         <span class="agent-prompt-preview-title">System Prompt</span>
         <button id="agent-prompt-preview-close" class="agent-prompt-preview-close" title="Close"><img src="/assets/close.svg" class="svg-icon" alt="Close"></button>
       </div>
       <pre id="agent-prompt-preview-text" class="agent-prompt-preview-text"></pre>
-    </div>
-    <div id="avatar-panel" class="avatar-panel" hidden>
-      <canvas id="avatar-canvas" class="avatar-canvas"></canvas>
-    </div>
-    <div id="agent-detail-feed" class="agent-detail-feed"></div>
-    <div class="agent-detail-compose">
-      <div class="agent-detail-tickets" id="agent-detail-tickets"></div>
-      <div class="agent-detail-compose-row">
-        <textarea id="agent-detail-message" class="agent-detail-textarea" placeholder="Message this agent…" rows="3"></textarea>
-        <button id="agent-detail-send" class="agent-detail-send-btn">Send</button>
-      </div>
     </div>
   </div>
   </div>

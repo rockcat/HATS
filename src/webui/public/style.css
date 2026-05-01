@@ -1293,8 +1293,19 @@ main {
   max-width: 720px;
   max-height: 90vh;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   box-shadow: 0 24px 64px rgba(0,0,0,0.6);
+  transition: max-width 0.22s ease;
+}
+.agent-detail.prompt-open {
+  max-width: 960px;
+}
+.agent-detail-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .agent-detail-header {
@@ -1346,10 +1357,12 @@ main {
 .agent-prompt-preview {
   display: flex;
   flex-direction: column;
-  border-top: 1px solid var(--border);
-  background: var(--surface);
-  max-height: 340px;
-  min-height: 120px;
+  border-left: 1px solid var(--border);
+  border-radius: 0 10px 10px 0;
+  background: var(--surface-2);
+  width: 300px;
+  flex-shrink: 0;
+  overflow: hidden;
 }
 .agent-prompt-preview[hidden] { display: none; }
 .agent-prompt-preview-header {

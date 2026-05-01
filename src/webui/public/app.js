@@ -1665,16 +1665,17 @@ function initAgentDetail() {
   });
 
   // Prompt preview button — shows/hides the system prompt panel
-  document.getElementById('agent-config-preview-prompt').addEventListener('click', async () => {
-    const panel = document.getElementById('agent-prompt-preview');
-    if (!panel.hidden) { panel.hidden = true; return; }
-    panel.hidden = false;
-    await refreshPromptPreview();
-  });
+  const togglePromptPreview = async (show) => {
+    const panel  = document.getElementById('agent-prompt-preview');
+    const dialog = document.getElementById('agent-detail');
+    const open   = show !== undefined ? show : panel.hidden;
+    panel.hidden = !open;
+    dialog.classList.toggle('prompt-open', open);
+    if (open) await refreshPromptPreview();
+  };
 
-  document.getElementById('agent-prompt-preview-close').addEventListener('click', () => {
-    document.getElementById('agent-prompt-preview').hidden = true;
-  });
+  document.getElementById('agent-config-preview-prompt').addEventListener('click', () => togglePromptPreview());
+  document.getElementById('agent-prompt-preview-close').addEventListener('click', () => togglePromptPreview(false));
 
   // Re-populate model list when provider changes; show/hide URL field for local providers
   document.getElementById('agent-config-provider').addEventListener('change', async () => {
@@ -1775,6 +1776,7 @@ function openAgentDetail(name) {
   activeDetailAgent = name;
   // Hide prompt preview panel when switching agents
   document.getElementById('agent-prompt-preview').hidden = true;
+  document.getElementById('agent-detail').classList.remove('prompt-open');
   // Kick off a background model refresh (respects server-side TTL)
   refreshProviderModels();
   const agent = state.agents.find(a => a.name === name);
