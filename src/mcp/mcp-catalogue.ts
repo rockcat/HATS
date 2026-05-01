@@ -143,13 +143,22 @@ export const MCP_CATALOGUE: MCPCatalogueEntry[] = [
     notes: 'Requires manual setup: git clone https://github.com/felipfr/linkedin-mcpserver, then npm install && npm run build inside the cloned folder. Place the folder alongside this project. Create a LinkedIn app at https://www.linkedin.com/developers/apps to obtain credentials.',
   },
   {
-    id: 'email',
+    id: 'email-imap',
     name: 'Email (IMAP / SMTP)',
     description: 'Read, search, compose, send, and manage email via IMAP and SMTP — works with Gmail, Outlook, and any standard mail server',
     category: 'productivity',
     config: { transport: 'stdio', command: 'npx', args: ['-y', '@codefuturist/email-mcp'], env: { MCP_EMAIL_ADDRESS: '', MCP_EMAIL_PASSWORD: '', MCP_EMAIL_IMAP_HOST: '', MCP_EMAIL_SMTP_HOST: '' } },
     envVars: ['MCP_EMAIL_ADDRESS', 'MCP_EMAIL_PASSWORD', 'MCP_EMAIL_IMAP_HOST', 'MCP_EMAIL_SMTP_HOST'],
     notes: 'Run "npx @codefuturist/email-mcp setup" for a guided wizard that auto-detects server settings. For Gmail use an App Password (not your main password) and set IMAP host to imap.gmail.com, SMTP host to smtp.gmail.com.',
+  },
+  {
+    id: 'email-pop3',
+    name: 'Email (POP3 / SMTP)',
+    description: 'Read and delete email via POP3, send via SMTP — use this when your mail provider supports POP3 but not IMAP',
+    category: 'productivity',
+    config: { transport: 'stdio', command: 'uvx', args: ['--from', 'git+https://github.com/ptbsare/email-mcp-server.git', 'email-mcp-server'], env: { EMAIL_USER: '', EMAIL_PASS: '', POP3_SERVER: '', POP3_PORT: '995' } },
+    envVars: ['EMAIL_USER', 'EMAIL_PASS', 'POP3_SERVER'],
+    notes: 'Requires Python 3.12+ and uv (install uv with: pip install uv). No npm package exists for POP3 — this runs a Python-based server via uvx. For Gmail set POP3_SERVER=pop.gmail.com and use an App Password.',
   },
   {
     id: 'whatsapp-periskope',
