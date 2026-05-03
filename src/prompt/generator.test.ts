@@ -57,6 +57,19 @@ describe('generateSystemPrompt', () => {
     expect(result.sections.teamRole).toContain('Team Alpha');
   });
 
+  it('includes specialisation in team role when set', () => {
+    const ctx: PromptContext = { ...baseContext, teamContext: 'Team Alpha.', specialisation: 'Finance' };
+    const result = generateSystemPrompt(ctx);
+    expect(result.sections.teamRole).toContain('Finance');
+    expect(result.text).toContain('Your current specialisation is **Finance**');
+  });
+
+  it('does not mention specialisation in team role when not set', () => {
+    const ctx: PromptContext = { ...baseContext, teamContext: 'Team Alpha.' };
+    const result = generateSystemPrompt(ctx);
+    expect(result.sections.teamRole).not.toContain('specialisation');
+  });
+
   it('all directives appear in text', () => {
     const result = generateSystemPrompt(baseContext);
     for (const directive of baseContext.directives) {

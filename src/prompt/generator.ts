@@ -73,7 +73,10 @@ function buildAvoidances(ctx: PromptContext): string {
 }
 
 function buildTeamRole(ctx: PromptContext): string {
-  return `## Your team context\n\n${ctx.teamContext}\n\n**Your role in this team**: ${ctx.teamRole}`;
+  const role = ctx.specialisation
+    ? `${ctx.teamRole} Your current specialisation is **${ctx.specialisation}**.`
+    : ctx.teamRole;
+  return `## Your team context\n\n${ctx.teamContext}\n\n**Your role in this team**: ${role}`;
 }
 
 function buildProjectGoalSection(goal: string): string {
