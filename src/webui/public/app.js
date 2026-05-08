@@ -3792,6 +3792,10 @@ function fetchFiles() {
 }
 
 function initFileUpload() {
+  document.getElementById('files-open-folder-btn')?.addEventListener('click', () => {
+    fetch('/api/project/open-folder', { method: 'POST' }).catch(() => {});
+  });
+
   const input = document.getElementById('files-upload-input');
   if (!input) return;
   input.addEventListener('change', async () => {

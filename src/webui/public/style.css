@@ -2543,6 +2543,23 @@ main {
   border-top: 1px solid var(--border);
 }
 
+.files-toolbar--top {
+  justify-content: flex-end;
+}
+
+.files-open-folder-btn {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 3px 9px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+.files-open-folder-btn:hover { color: var(--text); border-color: var(--border-hover); }
+
 .files-section-label {
   font-size: 10px;
   font-weight: 700;

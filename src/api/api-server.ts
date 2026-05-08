@@ -1,4 +1,5 @@
 import { createServer, IncomingMessage, ServerResponse } from 'http';
+import { spawn } from 'child_process';
 import { readFile, writeFile, rename, mkdir, readdir, stat } from 'fs/promises';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -797,6 +798,17 @@ export class APIServer {
       } catch (err) {
         this.json(res, 500, { error: (err as Error).message });
       }
+
+    } else if (pathname === '/api/project/open-folder' && req.method === 'POST') {
+      const dir = this.projectDir;
+      if (!dir) { this.json(res, 400, { error: 'No project folder is set' }); return; }
+      const { platform } = process;
+      const [cmd, args] =
+        platform === 'win32'  ? ['explorer.exe', [dir]] :
+        platform === 'darwin' ? ['open',          [dir]] :
+                                ['xdg-open',      [dir]];
+      spawn(cmd, args, { detached: true, stdio: 'ignore' }).unref();
+      this.json(res, 200, { ok: true });
 
     } else if (pathname === '/api/project' && req.method === 'GET') {
       this.json(res, 200, {
