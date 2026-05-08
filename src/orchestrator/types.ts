@@ -19,6 +19,18 @@ export interface TeamMessage {
   urgency?: 'low' | 'high';
 }
 
+export interface HumanRequest {
+  id: string;
+  agentName: string;
+  message: string;
+  urgency: 'low' | 'high';
+  relatedTicketId?: string;
+  status: 'pending' | 'answered';
+  response?: string;
+  createdAt: string;
+  answeredAt?: string;
+}
+
 export type TaskStatus = 'pending' | 'active' | 'complete' | 'blocked';
 
 export interface Task {

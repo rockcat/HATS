@@ -1855,7 +1855,7 @@ main {
 }
 
 .agent-config-label {
-  flex: 0 0 44px;
+  flex: 0 0 80px;
   font-size: 10px;
   color: var(--text-muted);
   text-transform: uppercase;
@@ -2400,6 +2400,123 @@ main {
 }
 
 .meeting-participant-label input { accent-color: var(--hat-blue); }
+
+/* ── Human Requests panel ────────────────────────────────── */
+
+.tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--hat-red);
+  color: #fff;
+  font-size: 8px;
+  font-weight: 700;
+  vertical-align: middle;
+  margin-left: 3px;
+}
+
+.requests-pane {
+  flex-direction: column;
+  padding: 8px;
+  overflow-y: auto;
+}
+
+.requests-empty {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 24px 16px;
+}
+
+.request-item {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border);
+  border-radius: 6px;
+  padding: 9px 12px;
+  margin-bottom: 7px;
+  background: var(--bg-card);
+  transition: border-color 0.15s;
+}
+.request-item--pending { border-left-color: var(--state-waiting); cursor: pointer; }
+.request-item--pending:hover { border-color: var(--border-hover); border-left-color: var(--state-waiting); }
+.request-item--high.request-item--pending { border-left-color: var(--hat-red); }
+.request-item--high.request-item--pending:hover { border-left-color: var(--hat-red); }
+.request-item--answered { opacity: 0.6; }
+
+.request-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  user-select: none;
+}
+
+.request-agent { font-size: 11px; font-weight: 700; color: var(--text); }
+
+.request-urgency-badge {
+  font-size: 8px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.05em; padding: 1px 5px; border-radius: 3px;
+}
+.request-urgency--high { background: rgba(248,81,73,0.15); color: var(--hat-red); }
+.request-urgency--low  { background: rgba(210,153,34,0.15); color: var(--state-waiting); }
+
+.request-done-badge {
+  font-size: 8px; font-weight: 700; padding: 1px 5px; border-radius: 3px;
+  background: rgba(63,185,80,0.12); color: var(--hat-green);
+}
+
+.request-ticket-ref {
+  font-size: 8px; font-family: ui-monospace, monospace;
+  color: var(--text-muted); background: var(--bg-2);
+  padding: 1px 5px; border-radius: 3px;
+}
+
+.request-time { font-size: 9px; color: var(--text-muted); margin-left: auto; }
+
+.request-message { font-size: 11px; color: var(--text); line-height: 1.5; }
+.request-message p { margin: 0 0 4px; }
+.request-message p:last-child { margin-bottom: 0; }
+.request-message ul, .request-message ol { margin: 4px 0; padding-left: 16px; }
+.request-message code { font-family: ui-monospace, monospace; font-size: 10px; background: var(--bg-2); padding: 1px 4px; border-radius: 3px; }
+
+.request-reply-area {
+  margin-top: 8px; border-top: 1px solid var(--border); padding-top: 8px;
+}
+
+.request-reply-input {
+  width: 100%; min-height: 70px; padding: 6px 8px;
+  border: 1px solid var(--border); border-radius: 5px;
+  background: var(--bg-input); color: var(--text);
+  font-size: 11px; resize: vertical; box-sizing: border-box; font-family: inherit;
+}
+.request-reply-input:focus { outline: none; border-color: var(--accent); }
+
+.request-reply-footer {
+  display: flex; align-items: center; justify-content: space-between; margin-top: 6px;
+}
+
+.request-reply-error { font-size: 10px; color: var(--hat-red); }
+
+.request-reply-submit {
+  font-size: 10px; font-weight: 600; padding: 4px 12px;
+  border-radius: 5px; border: none; background: var(--accent);
+  color: #fff; cursor: pointer;
+}
+.request-reply-submit:hover { filter: brightness(1.1); }
+.request-reply-submit:disabled { opacity: 0.5; cursor: wait; }
+
+.request-response-display {
+  margin-top: 8px; padding: 6px 10px; background: var(--bg-2); border-radius: 5px;
+}
+.request-response-label {
+  font-size: 8px; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--text-muted); display: block; margin-bottom: 3px;
+}
+.request-response-text { font-size: 11px; color: var(--text); white-space: pre-wrap; line-height: 1.4; }
 
 /* ── Files panel ────────────────────────────────────── */
 

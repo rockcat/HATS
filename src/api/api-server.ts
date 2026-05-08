@@ -7,7 +7,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { TeamOrchestrator } from '../orchestrator/orchestrator.js';
 import { StoredEvent } from '../store/event-store.js';
 import { Board } from '../mcp/kanban/types.js';
-import { Task, Meeting, MeetingType } from '../orchestrator/types.js';
+import { Task, Meeting, MeetingType, HumanRequest } from '../orchestrator/types.js';
 import { MCP_CATALOGUE, resolveConfig } from '../mcp/mcp-catalogue.js';
 import { debugState } from '../providers/debug-state.js';
 import { AnthropicProvider } from '../providers/anthropic.js';
@@ -111,6 +111,9 @@ export class APIServer {
 
   // Maps agent name (lowercase) → kanban ticket id they're working on
   private agentTicketMap = new Map<string, string>();
+
+  // Human requests raised by agents (escalations)
+  private humanRequests = new Map<string, HumanRequest>();
 
   // Per-agent event feed (last 200 events per agent)
   private agentFeeds = new Map<string, StoredEvent[]>();
@@ -325,7 +328,8 @@ export class APIServer {
     const tickets    = this.kanbanPath ? await this.readTickets() : [];
     const meta       = await this.readProjectMeta();
     const project    = { id: this.projectId, dir: this.projectDir, goal: meta['goal'] ?? '', humanName: meta['humanName'] ?? 'Human' };
-    res.write(`data: ${JSON.stringify({ type: 'init', agents, tickets, project })}\n\n`);
+    const requests   = this.buildRequestsList();
+    res.write(`data: ${JSON.stringify({ type: 'init', agents, tickets, project, requests })}\n\n`);
     this.sseClients.push(res);
   }
 
@@ -464,8 +468,21 @@ export class APIServer {
             this.updateKanbanColumn(ticketId, 'blocked').catch(() => {});
             if (message) this.addTicketComment(ticketId, from, `Blocked: ${message}`).catch(() => {});
           }
-          // Create a human-assigned ticket for the escalation
+          // Create a human-assigned kanban ticket for tracking
           this.createEscalationTicket(from, message ?? '', urgency ?? 'medium').catch(() => {});
+          // Create a HumanRequest entry for the Requests panel
+          const reqId = `req-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+          const request: HumanRequest = {
+            id: reqId,
+            agentName: from,
+            message: message ?? '',
+            urgency: urgency === 'high' ? 'high' : 'low',
+            relatedTicketId: ticketId,
+            status: 'pending',
+            createdAt: new Date().toISOString(),
+          };
+          this.humanRequests.set(reqId, request);
+          this.sseBroadcast({ type: 'requests_update', requests: this.buildRequestsList() });
         }
         break;
       }
@@ -516,6 +533,15 @@ export class APIServer {
 
   private setActivity(name: string, activity: string, talkingTo?: string): void {
     this.agentActivity.set(name, { activity, talkingTo });
+  }
+
+  private buildRequestsList(): HumanRequest[] {
+    const all = Array.from(this.humanRequests.values());
+    const pending  = all.filter(r => r.status === 'pending')
+      .sort((a, b) => (b.urgency === 'high' ? 1 : 0) - (a.urgency === 'high' ? 1 : 0) || a.createdAt.localeCompare(b.createdAt));
+    const answered = all.filter(r => r.status === 'answered')
+      .sort((a, b) => (b.answeredAt ?? '').localeCompare(a.answeredAt ?? ''));
+    return [...pending, ...answered];
   }
 
   private buildAgentStatuses(): AgentStatus[] {
@@ -1038,6 +1064,28 @@ export class APIServer {
       } catch (err) {
         this.json(res, 400, { error: (err as Error).message });
       }
+
+    } else if (pathname === '/api/human-requests' && req.method === 'GET') {
+      this.json(res, 200, { requests: this.buildRequestsList() });
+
+    } else if (pathname.match(/^\/api\/human-requests\/[^/]+\/respond$/) && req.method === 'POST') {
+      const reqId   = decodeURIComponent(pathname.slice('/api/human-requests/'.length, -'/respond'.length));
+      const request = this.humanRequests.get(reqId);
+      if (!request) { this.json(res, 404, { error: 'Request not found' }); return; }
+      if (request.status === 'answered') { this.json(res, 409, { error: 'Already answered' }); return; }
+      const body = await this.readBody(req);
+      const { response } = JSON.parse(body) as { response?: string };
+      if (!response?.trim()) { this.json(res, 400, { error: 'Response is required' }); return; }
+      request.status    = 'answered';
+      request.response  = response.trim();
+      request.answeredAt = new Date().toISOString();
+      await this.orchestrator.humanReply(request.agentName, response.trim());
+      // Move blocked kanban ticket back to in_progress
+      const ticketId = request.relatedTicketId ?? this.agentTicketMap.get(request.agentName.toLowerCase());
+      if (ticketId) this.updateKanbanColumn(ticketId, 'in_progress').catch(() => {});
+      this.sseBroadcast({ type: 'requests_update', requests: this.buildRequestsList() });
+      this.sseBroadcast({ type: 'agent_update',   agents:   this.buildAgentStatuses() });
+      this.json(res, 200, { ok: true });
 
     } else if (pathname === '/api/images/backgrounds' && req.method === 'GET') {
       try {
