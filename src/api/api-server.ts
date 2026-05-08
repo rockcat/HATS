@@ -1052,8 +1052,17 @@ export class APIServer {
       const apiKey = process.env['OPENAI_API_KEY'];
       if (!apiKey) { this.json(res, 400, { error: 'OPENAI_API_KEY not configured' }); return; }
       const body = await this.readBody(req);
-      const { prompt } = JSON.parse(body) as { prompt?: string };
+      const { prompt, name } = JSON.parse(body) as { prompt?: string; name?: string };
       if (!prompt?.trim()) { this.json(res, 400, { error: 'prompt is required' }); return; }
+      const slug = (name ?? '').trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9_-]/g, '');
+      if (!slug) { this.json(res, 400, { error: 'name is required' }); return; }
+      await mkdir(BACKGROUNDS_DIR, { recursive: true });
+      const filename = `${slug}.png`;
+      const destPath = path.join(BACKGROUNDS_DIR, filename);
+      const existing = await readdir(BACKGROUNDS_DIR).catch(() => [] as string[]);
+      if (existing.includes(filename)) {
+        this.json(res, 409, { error: `A background named "${slug}" already exists` }); return;
+      }
       try {
         // Call DALL-E 3 via the OpenAI REST API using built-in fetch
         const response = await fetch('https://api.openai.com/v1/images/generations', {
@@ -1074,9 +1083,7 @@ export class APIServer {
         const data = await response.json() as { data: Array<{ b64_json: string }> };
         const b64 = data.data[0]?.b64_json;
         if (!b64) { this.json(res, 502, { error: 'No image data returned' }); return; }
-        await mkdir(BACKGROUNDS_DIR, { recursive: true });
-        const filename = `bg-${Date.now()}.png`;
-        await writeFile(path.join(BACKGROUNDS_DIR, filename), Buffer.from(b64, 'base64'));
+        await writeFile(destPath, Buffer.from(b64, 'base64'));
         this.json(res, 200, { filename });
       } catch (err) {
         this.json(res, 500, { error: (err as Error).message });

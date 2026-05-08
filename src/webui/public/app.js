@@ -3550,25 +3550,35 @@ function initFileViewer() {
 }
 
 function initGenBgModal() {
-  const modal     = document.getElementById('gen-bg-modal');
-  const closeBtn  = document.getElementById('gen-bg-close');
-  const cancelBtn = document.getElementById('gen-bg-cancel');
-  const submitBtn = document.getElementById('gen-bg-submit');
-  const spinner   = document.getElementById('gen-bg-spinner');
-  const preview   = document.getElementById('gen-bg-preview');
-  const errorEl   = document.getElementById('gen-bg-error');
+  const modal       = document.getElementById('gen-bg-modal');
+  const closeBtn    = document.getElementById('gen-bg-close');
+  const cancelBtn   = document.getElementById('gen-bg-cancel');
+  const submitBtn   = document.getElementById('gen-bg-submit');
+  const spinner     = document.getElementById('gen-bg-spinner');
+  const preview     = document.getElementById('gen-bg-preview');
+  const errorEl     = document.getElementById('gen-bg-error');
+  const nameInput   = document.getElementById('gen-bg-name');
+  const promptInput = document.getElementById('gen-bg-prompt');
 
-  const close = () => { modal.hidden = true; };
+  const close = () => {
+    modal.hidden = true;
+    nameInput.value = '';
+    promptInput.value = '';
+    preview.hidden = true;
+    errorEl.textContent = '';
+  };
   closeBtn.addEventListener('click', close);
   cancelBtn.addEventListener('click', close);
   modal.addEventListener('click', e => { if (e.target === modal) close(); });
 
-  document.getElementById('gen-bg-prompt').addEventListener('keydown', e => {
-    if (e.key === 'Enter') submitBtn.click();
-  });
+  for (const el of [nameInput, promptInput]) {
+    el.addEventListener('keydown', e => { if (e.key === 'Enter') submitBtn.click(); });
+  }
 
   submitBtn.addEventListener('click', async () => {
-    const prompt = document.getElementById('gen-bg-prompt').value.trim();
+    const name   = nameInput.value.trim();
+    const prompt = promptInput.value.trim();
+    if (!name)   { errorEl.textContent = 'Please enter a name for the background.'; return; }
     if (!prompt) { errorEl.textContent = 'Please enter a scene description.'; return; }
     errorEl.textContent = '';
     submitBtn.disabled = true;
@@ -3578,7 +3588,7 @@ function initGenBgModal() {
     try {
       const res  = await fetch('/api/images/generate', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt }),
+        body: JSON.stringify({ name, prompt }),
       });
       const data = await res.json();
       if (!res.ok || data.error) { errorEl.textContent = data.error ?? 'Generation failed'; return; }
@@ -3618,7 +3628,7 @@ async function populateBackgroundSelect(selectedFile) {
   for (const f of backgrounds) {
     const opt = document.createElement('option');
     opt.value = f;
-    opt.textContent = f.replace(/^bg-\d+\./, 'bg.').replace(/\.\w+$/, '');  // tidy display name
+    opt.textContent = f.replace(/\.[^.]+$/, '');
     sel.appendChild(opt);
   }
   if (selectedFile) sel.value = selectedFile;

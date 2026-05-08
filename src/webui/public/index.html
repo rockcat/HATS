@@ -267,7 +267,7 @@
           <button id="agent-config-preview-voice" class="agent-config-btn agent-config-preview-btn" title="Play a short voice sample"><img src="/assets/play.svg" class="svg-icon" alt="Play"></button>
         </div>
         <div class="agent-config-line">
-          <label class="agent-config-label">Spec.</label>
+          <label class="agent-config-label">Specialisation</label>
           <select id="agent-config-specialisation" class="agent-config-select">
             <option value="">— none —</option>
             <option value="__custom__">Custom…</option>
@@ -525,6 +525,11 @@
         <button class="modal-close" id="gen-bg-close" title="Close"><img src="/assets/close.svg" class="svg-icon" alt="Close"></button>
       </div>
       <div class="modal-body">
+        <div class="field-group">
+          <label class="field-label">Name</label>
+          <input type="text" id="gen-bg-name" class="modal-input"
+                 placeholder="e.g. modern-office" maxlength="60">
+        </div>
         <div class="field-group">
           <label class="field-label">Scene description</label>
           <input type="text" id="gen-bg-prompt" class="modal-input"
