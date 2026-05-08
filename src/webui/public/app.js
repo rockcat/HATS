@@ -1312,15 +1312,16 @@ async function loadPricing() {
   return _pricingCache;
 }
 
-/** Fetch and display the system prompt for the currently configured hat/specialisation. */
+/** Fetch and display the system prompt for the currently configured hat/name/specialisation. */
 async function refreshPromptPreview() {
   if (!activeDetailAgent) return;
   const textEl = document.getElementById('agent-prompt-preview-text');
   const hat    = document.getElementById('agent-config-hat').value;
+  const name   = (document.getElementById('agent-detail-name').value.trim()) || activeDetailAgent;
   const spec   = getSpecValue('agent-config-specialisation', 'agent-config-specialisation-custom');
   textEl.textContent = 'Loading…';
   try {
-    const params = new URLSearchParams({ hat });
+    const params = new URLSearchParams({ hat, name });
     if (spec) params.set('specialisation', spec);
     const res = await fetch(`/api/agents/${encodeURIComponent(activeDetailAgent)}/prompt-preview?${params}`);
     const data = await res.json();
@@ -1730,6 +1731,16 @@ function initAgentDetail() {
     const panel = document.getElementById('agent-prompt-preview');
     if (!panel.hidden) refreshPromptPreview();
   });
+
+  // Auto-refresh prompt preview when name or custom spec is typed (debounced)
+  let _promptRefreshTimer = null;
+  const schedulePromptRefresh = () => {
+    if (document.getElementById('agent-prompt-preview').hidden) return;
+    clearTimeout(_promptRefreshTimer);
+    _promptRefreshTimer = setTimeout(refreshPromptPreview, 350);
+  };
+  document.getElementById('agent-detail-name').addEventListener('input', schedulePromptRefresh);
+  document.getElementById('agent-config-specialisation-custom').addEventListener('input', schedulePromptRefresh);
 
   // Single Apply button — saves hat, voice, avatar, specialisation, provider+model
   document.getElementById('agent-config-apply').addEventListener('click', async () => {

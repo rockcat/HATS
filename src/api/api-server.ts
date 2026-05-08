@@ -899,6 +899,7 @@ export class APIServer {
       const agentName = decodeURIComponent(pathname.slice('/api/agents/'.length, -'/prompt-preview'.length));
       const hatParam  = url.searchParams.get('hat') as HatType | null;
       const specParam = url.searchParams.get('specialisation') ?? undefined;
+      const nameParam = url.searchParams.get('name') ?? undefined;
       try {
         const resolved = this.resolveAgentName(agentName);
         const agent    = this.orchestrator.getAgent(resolved);
@@ -906,7 +907,7 @@ export class APIServer {
         const hatType = hatParam ?? agent.hatType;
         const hat     = getHatDefinition(hatType);
         const prompt  = generateSystemPrompt({
-          name:               agent.config.identity.name,
+          name:               nameParam ?? agent.config.identity.name,
           visualDescription:  agent.config.identity.visualDescription,
           backstory:          agent.config.identity.backstory,
           hatLabel:           hat.label,

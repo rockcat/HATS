@@ -20,10 +20,10 @@ export function generateSystemPrompt(context: PromptContext): SystemPrompt {
     communicationTone,
     directives,
     avoidances,
-    ...(teamRole ? [teamRole] : []),
     ...(projectGoal ? [projectGoal] : []),
     ...(workspace ? [workspace] : []),
     ...(specialisation ? [specialisation] : []),
+    ...(teamRole ? [teamRole] : []),
     closingAnchor,
   ];
 
