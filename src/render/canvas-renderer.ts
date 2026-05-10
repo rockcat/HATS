@@ -59,7 +59,7 @@ export class CanvasRenderer {
   renderJpegFrame(quality = 85): Buffer {
     const idle = this.idleAnimator.tick();
     this.drawWithIdle(idle);
-    return this.canvas.toBuffer('image/jpeg', { quality: quality / 100 });
+    return this.canvas.toBuffer('image/jpeg', quality / 100);
   }
 
   private drawWithIdle(idle: IdleState): void {

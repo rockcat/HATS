@@ -30,7 +30,7 @@ export async function generateHeadTexture(config: TextureGeneratorConfig): Promi
     quality: 'hd',
   });
 
-  const url = response.data[0]?.url;
+  const url = response.data?.[0]?.url;
   if (!url) throw new Error('No URL returned from DALL-E');
 
   const res = await fetch(url);

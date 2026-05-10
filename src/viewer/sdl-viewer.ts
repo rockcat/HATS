@@ -36,7 +36,7 @@ export class SDLViewer implements MediaOutput {
 
     this.window.on('close', () => this.handleClose());
 
-    this.window.on('keyDown', ({ scancode }: { scancode: string }) => {
+    (this.window as any).on('keyDown', ({ scancode }: { scancode: string }) => {
       if (scancode === 'escape') this.handleClose();
     });
 
@@ -48,7 +48,7 @@ export class SDLViewer implements MediaOutput {
       if (button === 1) this.mouseDown = false;
     });
 
-    this.window.on('mouseMove', ({ dx, dy }: { dx: number; dy: number }) => {
+    (this.window as any).on('mouseMove', ({ dx, dy }: { dx: number; dy: number }) => {
       if (this.mouseDown && this.config.onMouseDrag) {
         this.config.onMouseDrag(dx, dy);
       }
@@ -67,7 +67,7 @@ export class SDLViewer implements MediaOutput {
     this.renderPending = true;
     const pitch = width * 4; // bytes per row
 
-    const result = this.window.render(width, height, pitch, 'rgba32', rgbaBuffer);
+    const result = this.window.render(width, height, pitch, 'rgba32', rgbaBuffer) as unknown;
     if (result && typeof (result as any).then === 'function') {
       (result as Promise<void>)
         .then(() => { this.renderPending = false; })

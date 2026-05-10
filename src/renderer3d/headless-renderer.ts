@@ -94,7 +94,7 @@ export class HeadlessRenderer {
     const flipped = flipRGBA(new Uint8Array(imageData.data.buffer), img.width, img.height);
 
     const texture = new THREE.DataTexture(
-      flipped,
+      new Uint8Array(flipped),
       img.width,
       img.height,
       THREE.RGBAFormat,

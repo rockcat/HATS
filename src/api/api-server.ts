@@ -1391,7 +1391,7 @@ export class APIServer {
                   : contentType.includes('ogg')  ? 'ogg'
                   : contentType.includes('wav')  ? 'wav'
                   : 'webm';
-        const blob = new Blob([audioBuffer], { type: contentType });
+        const blob = new Blob([new Uint8Array(audioBuffer)], { type: contentType });
         const form = new FormData();
         form.append('file', blob, `recording.${ext}`);
         form.append('model', 'whisper-1');
