@@ -117,8 +117,8 @@ export const MCP_CATALOGUE: MCPCatalogueEntry[] = [
     name: 'SQLite',
     description: 'Run queries against a local SQLite database file',
     category: 'data',
-    config: { transport: 'stdio', command: 'npx', args: ['-y', 'mcp-sqlite', '--db-path', './data.db'] },
-    url: 'https://www.npmjs.com/package/mcp-sqlite',
+    config: { transport: 'stdio', command: 'npx', args: ['-y', '@modelcontextprotocol/server-sqlite', './data.db'] },
+    url: 'https://github.com/modelcontextprotocol/servers/tree/main/src/sqlite',
   },
   {
     id: 'postgres',
