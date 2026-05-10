@@ -22,7 +22,6 @@ export { AgentRegistry } from './registry/agent-registry.js';
 // Avatar
 export type { AvatarConfig, VisemeFrame, AvatarAssets, VisemeId } from './avatar/types.js';
 export { VISEME_IDS, PHONEME_TO_VISEME, VISEME_DESCRIPTIONS } from './avatar/visemes.js';
-export { AvatarGenerator } from './avatar/generator.js';
 
 // TTS
 export type { TTSRequest, TTSResult, TTSProvider } from './tts/types.js';

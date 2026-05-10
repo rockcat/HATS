@@ -14,7 +14,7 @@ export interface VisemeFrame {
   imagePath: string;
 }
 
-/** AvatarConfig identifies an avatar archetype (used by AvatarGenerator) */
+/** AvatarConfig identifies an avatar archetype */
 export interface AvatarConfig {
   name: string;
   baseImagePath: string;

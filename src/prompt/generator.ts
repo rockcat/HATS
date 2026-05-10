@@ -179,7 +179,7 @@ function buildSpecialisationSection(specialisation: string): string {
 
     Your work is focused on **${specialisation}**. 
     If nothing needs to be done in relation to ${specialisation}, do not do anything.
-    Apply this lens to every task:\n\n${items}`;
+    Apply this lens to every task:\n\n${items}`.replace(/^ +/gm, '');
 }
 
 function buildClosingAnchor(ctx: PromptContext): string {
@@ -191,5 +191,5 @@ function buildClosingAnchor(ctx: PromptContext): string {
     Do not restate what others said, echo agreement, or describe what the team "should explore".
     If you have nothing new to add, say so in one sentence and yield.
     Reach a decision within 4 exchanges. Avoid preamble and padding.
-  `;
+  `.replace(/^ +/gm, '');
 }
