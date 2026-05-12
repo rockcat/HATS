@@ -42,7 +42,8 @@
       "Bash(Select-Object Name)",
       "Bash(npm test *)",
       "Bash(git commit *)",
-      "Bash(git stash *)"
+      "Bash(git stash *)",
+      "Bash(xargs wc -l)"
     ]
   }
 }

@@ -10,6 +10,7 @@ import { AgentConfig, AgentMessage, AgentState, AgentEvent, ToolExecutor, Respon
 import { transition } from './state-machine.js';
 import { Semaphore } from '../providers/semaphore.js';
 import { calcCost } from '../providers/pricing.js';
+import { sanitizeHistory, toProviderMessage, formatIncomingMessage } from './agent-utils.js';
 
 type TelemetryRecorder = (entry: {
   agent: string; provider: string; model: string;
@@ -420,93 +421,3 @@ export class Agent {
   }
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-/**
- * Remove any messages that would cause an Anthropic API error:
- *
- * 1. Leading non-user messages (first message must be a plain user message)
- * 2. Assistant tool-call groups where not ALL tool_use IDs have a matching
- *    tool_result in the immediately following tool messages — the entire group
- *    (assistant + partial results) is dropped
- * 3. Orphaned tool-result messages that appear outside of a valid group
- *
- * Processes messages as groups so partial sequences are always removed together.
- */
-function sanitizeHistory<T extends { role: string; toolCalls?: ToolCall[]; toolCallId?: string }>(
-  messages: T[],
-): T[] {
-  if (messages.length === 0) return messages;
-
-  // 1. Drop everything before the first plain user message
-  const firstUser = messages.findIndex((m) => m.role === 'user' && !m.toolCallId);
-  const msgs = firstUser > 0 ? messages.slice(firstUser) : [...messages];
-
-  const out: T[] = [];
-  let i = 0;
-
-  while (i < msgs.length) {
-    const m = msgs[i]!;
-
-    if (m.role === 'assistant' && m.toolCalls && m.toolCalls.length > 0) {
-      // Collect ALL immediately following tool-result messages
-      const results: T[] = [];
-      let j = i + 1;
-      while (j < msgs.length && msgs[j]!.role === 'tool') {
-        results.push(msgs[j]!);
-        j++;
-      }
-
-      // Valid only if every tool_call ID has a matching tool_result
-      const expectedIds = new Set(m.toolCalls.map((tc) => tc.id));
-      const coveredIds  = new Set(results.map((r) => r.toolCallId));
-      const complete    = expectedIds.size > 0 &&
-        [...expectedIds].every((id) => coveredIds.has(id));
-
-      if (complete) {
-        out.push(m);
-        for (const r of results) out.push(r);
-      }
-      // else: drop the whole group (assistant + partial results)
-      i = j; // advance past results regardless
-
-    } else if (m.role === 'tool') {
-      // Orphaned tool result outside a valid group — drop it
-      i++;
-    } else {
-      out.push(m);
-      i++;
-    }
-  }
-
-  return out;
-}
-
-function toProviderMessage(m: AgentMessage): Message {
-  return {
-    role: m.role,
-    content: m.content,
-    toolCalls: m.toolCalls,
-    toolCallId: m.toolCallId,
-    toolName: m.toolName,
-  };
-}
-
-function formatIncomingMessage(msg: TeamMessage): string {
-  switch (msg.type) {
-    case 'task':
-      return `[TASK from ${msg.from}] ${msg.content}`;
-    case 'direct':
-      return `[MESSAGE from ${msg.from}] ${msg.content}`;
-    case 'meeting_invite':
-      return `[MEETING INVITE from ${msg.from}] ${msg.content}`;
-    case 'escalation':
-      return `[ESCALATION from ${msg.from}] ${msg.content}`;
-    case 'human_reply':
-      return `[HUMAN REPLY] ${msg.content}`;
-    case 'task_complete':
-      return `[TASK COMPLETE from ${msg.from}] ${msg.content}`;
-    default:
-      return msg.content;
-  }
-}
