@@ -1,13 +1,16 @@
 import { IncomingMessage, ServerResponse } from 'http';
 import { TeamOrchestrator } from '../orchestrator/orchestrator.js';
 import { HumanRequest } from '../orchestrator/types.js';
+import { HumanRequestStore } from './human-request-store.js';
 import { StoredEvent } from '../store/event-store.js';
 import { Board } from '../mcp/kanban/types.js';
-import { MCP_CATALOGUE } from '../mcp/mcp-catalogue.js';
+import { MCPCatalogueEntry } from '../mcp/mcp-catalogue.js';
+import { getCatalogue } from '../mcp/catalogue-store.js';
 import { debugState } from '../providers/debug-state.js';
 import { HatType } from '../hats/types.js';
 import { SPECIALISATION_DIRECTIVES, generateSystemPrompt } from '../prompt/generator.js';
 import { getHatDefinition } from '../hats/definitions.js';
+import { personasByHat } from '../hats/personas.js';
 import { getPricingTable, FREE_PROVIDERS } from '../providers/pricing.js';
 import { AnthropicProvider } from '../providers/anthropic.js';
 import { makeProvider, KNOWN_PROVIDERS, probeLocalLLM, getCachedModels, getModelCacheEntry, clearModelCache } from './providers.js';
@@ -16,7 +19,7 @@ import { AgentStatus } from './project-manager.js';
 export interface AgentRouterDeps {
   getOrchestrator(): TeamOrchestrator;
   agentFeeds: Map<string, StoredEvent[]>;
-  humanRequests: Map<string, HumanRequest>;
+  humanRequestStore: HumanRequestStore;
   agentTicketMap: Map<string, string>;
   agentActivity: Map<string, { activity: string; talkingTo?: string }>;
   talkingTimers: Map<string, ReturnType<typeof setTimeout>>;
@@ -45,7 +48,7 @@ export class AgentRouter {
   }
 
   async handleRoutes(pathname: string, method: string, url: URL, req: IncomingMessage, res: ServerResponse): Promise<boolean> {
-    const { json, readBody, resolveAgentName, sseBroadcast, saveCurrentState, agentFeeds, humanRequests, agentTicketMap, agentActivity, talkingTimers, enabledMCPIds } = this.deps;
+    const { json, readBody, resolveAgentName, sseBroadcast, saveCurrentState, agentFeeds, humanRequestStore, agentTicketMap, agentActivity, talkingTimers, enabledMCPIds } = this.deps;
     const orch = this.deps.getOrchestrator();
 
     if (pathname.startsWith('/api/agents/') && pathname.endsWith('/feed')) {
@@ -89,6 +92,7 @@ export class AgentRouter {
           teamContext: agent.config.teamContext, projectDir: agent.config.projectDir,
           projectGoal: agent.config.projectGoal,
           specialisation: specParam !== undefined ? specParam : agent.config.identity.specialisation,
+          email: agent.config.identity.email,
         });
         json(res, 200, { prompt: prompt.text });
       } catch (err) { json(res, 400, { error: (err as Error).message }); }
@@ -149,6 +153,17 @@ export class AgentRouter {
       const { voice, speakerName } = JSON.parse(body) as { voice?: string; speakerName?: string };
       try {
         orch.updateAgentVoice(resolveAgentName(agentName), voice?.trim() || undefined, speakerName?.trim() || undefined);
+        sseBroadcast({ type: 'agent_update', agents: this.deps.buildAgentStatuses() }); saveCurrentState().catch(() => {}); json(res, 200, { ok: true });
+      } catch (err) { json(res, 400, { error: (err as Error).message }); }
+      return true;
+    }
+
+    if (pathname.match(/^\/api\/agents\/[^/]+\/email$/) && method === 'PATCH') {
+      const agentName = decodeURIComponent(pathname.slice('/api/agents/'.length, -'/email'.length));
+      const body = await readBody(req);
+      const { email } = JSON.parse(body) as { email?: string };
+      try {
+        orch.updateAgentEmail(resolveAgentName(agentName), email?.trim() || undefined);
         sseBroadcast({ type: 'agent_update', agents: this.deps.buildAgentStatuses() }); saveCurrentState().catch(() => {}); json(res, 200, { ok: true });
       } catch (err) { json(res, 400, { error: (err as Error).message }); }
       return true;
@@ -254,7 +269,7 @@ export class AgentRouter {
     }
 
     if (pathname === '/api/mcp/catalogue' && method === 'GET') {
-      const catalogue = MCP_CATALOGUE.map(entry => ({
+      const catalogue = getCatalogue().map(entry => ({
         ...entry,
         enabled: orch.hasMCPServer(entry.id),
         envStatus: (entry.envVars ?? []).map(v => ({ name: v, present: !!process.env[v] })),
@@ -266,7 +281,7 @@ export class AgentRouter {
     if (pathname === '/api/mcp/enable' && method === 'POST') {
       const body = await readBody(req);
       const { id } = JSON.parse(body) as { id: string };
-      const entry = MCP_CATALOGUE.find(e => e.id === id);
+      const entry = getCatalogue().find(e => e.id === id);
       if (!entry) { json(res, 404, { error: `Unknown MCP server "${id}"` }); return true; }
       if (orch.hasMCPServer(id)) { enabledMCPIds.add(id); json(res, 200, { ok: true }); return true; }
       try {
@@ -309,13 +324,13 @@ export class AgentRouter {
 
     if (pathname.match(/^\/api\/human-requests\/[^/]+\/respond$/) && method === 'POST') {
       const reqId   = decodeURIComponent(pathname.slice('/api/human-requests/'.length, -'/respond'.length));
-      const request = humanRequests.get(reqId);
+      const request = humanRequestStore.get(reqId);
       if (!request) { json(res, 404, { error: 'Request not found' }); return true; }
       if (request.status === 'answered') { json(res, 409, { error: 'Already answered' }); return true; }
       const body = await readBody(req);
       const { response } = JSON.parse(body) as { response?: string };
       if (!response?.trim()) { json(res, 400, { error: 'Response is required' }); return true; }
-      request.status = 'answered'; request.response = response.trim(); request.answeredAt = new Date().toISOString();
+      await humanRequestStore.respond(reqId, response.trim());
       await orch.humanReply(request.agentName, response.trim());
       const ticketId = request.relatedTicketId ?? agentTicketMap.get(request.agentName.toLowerCase());
       if (ticketId) this.deps.updateKanbanColumn(ticketId, 'in_progress').catch(() => {});
@@ -345,6 +360,79 @@ export class AgentRouter {
       if (url.searchParams.get('refresh') === 'true') { for (const p of KNOWN_PROVIDERS) clearModelCache(p.id); }
       const results = await Promise.all(KNOWN_PROVIDERS.map(async p => ({ id: p.id, models: await getCachedModels(p) })));
       json(res, 200, results);
+      return true;
+    }
+
+    // ── Personal MCP endpoints ─────────────────────────────────────────────
+
+    if (pathname.match(/^\/api\/agents\/[^/]+\/personal-mcp$/) && method === 'GET') {
+      const agentName = decodeURIComponent(pathname.slice('/api/agents/'.length, -'/personal-mcp'.length));
+      const resolved  = resolveAgentName(agentName);
+      const agent     = orch.getAgent(resolved);
+      if (!agent) { json(res, 404, { error: `Agent "${agentName}" not found` }); return true; }
+      const savedCreds   = orch.getPersonalMcpCredentials(resolved);
+      const personalEntries: MCPCatalogueEntry[] = getCatalogue().filter(e => e.personal);
+      const result = personalEntries.map(e => ({
+        id:          e.id,
+        name:        e.name,
+        description: e.description,
+        envVars:     e.envVars ?? [],
+        notes:       e.notes,
+        configured:  !!savedCreds[e.id],
+        credentials: savedCreds[e.id] ?? {},
+      }));
+      json(res, 200, result);
+      return true;
+    }
+
+    if (pathname.match(/^\/api\/agents\/[^/]+\/personal-mcp\/[^/]+$/) && method === 'PUT') {
+      const parts     = pathname.split('/');
+      const serverId  = decodeURIComponent(parts[parts.length - 1]);
+      const agentName = decodeURIComponent(parts.slice(3, -2).join('/'));
+      const body      = await readBody(req);
+      const { credentials } = JSON.parse(body) as { credentials: Record<string, string> };
+      if (!credentials || typeof credentials !== 'object') { json(res, 400, { error: 'credentials object required' }); return true; }
+      try {
+        await orch.enablePersonalMcp(resolveAgentName(agentName), serverId, credentials);
+        await saveCurrentState();
+        sseBroadcast({ type: 'agent_update', agents: this.deps.buildAgentStatuses() });
+        json(res, 200, { ok: true });
+      } catch (err) { json(res, 400, { error: (err as Error).message }); }
+      return true;
+    }
+
+    if (pathname.match(/^\/api\/agents\/[^/]+\/personal-mcp\/[^/]+$/) && method === 'DELETE') {
+      const parts    = pathname.split('/');
+      const serverId = decodeURIComponent(parts[parts.length - 1]);
+      const agentName = decodeURIComponent(parts.slice(3, -2).join('/'));
+      try {
+        await orch.disablePersonalMcp(resolveAgentName(agentName), serverId);
+        await saveCurrentState();
+        sseBroadcast({ type: 'agent_update', agents: this.deps.buildAgentStatuses() });
+        json(res, 200, { ok: true });
+      } catch (err) { json(res, 400, { error: (err as Error).message }); }
+      return true;
+    }
+
+    if (pathname === '/api/personas' && method === 'GET') {
+      json(res, 200, personasByHat);
+      return true;
+    }
+
+    if (pathname.match(/^\/api\/agents\/[^/]+\/identity$/) && method === 'PATCH') {
+      const agentName = decodeURIComponent(pathname.slice('/api/agents/'.length, -'/identity'.length));
+      const body = await readBody(req);
+      const { visualDescription, backstory } = JSON.parse(body) as { visualDescription?: string; backstory?: string };
+      try {
+        orch.updateAgentIdentity(
+          resolveAgentName(agentName),
+          visualDescription !== undefined ? (visualDescription.trim() || undefined) : undefined,
+          backstory !== undefined ? (backstory.trim() || undefined) : undefined,
+        );
+        sseBroadcast({ type: 'agent_update', agents: this.deps.buildAgentStatuses() });
+        saveCurrentState().catch(() => {});
+        json(res, 200, { ok: true });
+      } catch (err) { json(res, 404, { error: (err as Error).message }); }
       return true;
     }
 

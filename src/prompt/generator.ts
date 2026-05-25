@@ -44,9 +44,8 @@ export function generateSystemPrompt(context: PromptContext): SystemPrompt {
 
 function buildIdentityAnchor(ctx: PromptContext): string {
   const lines = [`You are ${ctx.name}. ${ctx.visualDescription}`];
-  if (ctx.backstory) {
-    lines.push(ctx.backstory);
-  }
+  if (ctx.backstory) lines.push(ctx.backstory);
+  if (ctx.email)     lines.push(`Your email address is ${ctx.email}.`);
   return lines.join(' ');
 }
 
@@ -63,8 +62,17 @@ function buildCommunicationTone(ctx: PromptContext): string {
 }
 
 function buildDirectives(ctx: PromptContext): string {
-  const items = ctx.directives.map((d) => `- ${d}`).join('\n');
-  return `## Your directives\n\n${items}`;
+  const items = [...ctx.directives];
+  if (ctx.email) {
+    items.push(
+      `Your email address is ${ctx.email}. 
+      When sending a new email, always use tools that send from this address.
+      You should check for and read emails from your personal email and the human's email. 
+      When replying, use the email at which the message was received.
+      Only use the human's email when replying to messages where it is appropriate.`,
+    );
+  }
+  return `## Your directives\n\n${items.map((d) => `- ${d}`).join('\n')}`;
 }
 
 function buildAvoidances(ctx: PromptContext): string {
@@ -103,6 +111,14 @@ Always check \`sources/\` for relevant materials before starting work.`;
 }
 
 export const SPECIALISATION_DIRECTIVES: Record<string, string[]> = {
+  'Personal Assistant': [
+    'Prioritise tasks that unblock the team and keep things moving',
+    'Regularly check for new emails for you and the human',
+    'Manage your calendar and schedule meetings as needed',
+    'Handle routine communications and follow-ups',
+    'Do not ask permissions questions to the human more than once every few hours',
+    'Assume you can download files, send emails, generate replies etc',
+  ],
   'Marketing': [
     'Apply brand thinking: every output should reinforce a clear, consistent identity.',
     'Frame ideas in terms of audience segments, messaging, and channels.',

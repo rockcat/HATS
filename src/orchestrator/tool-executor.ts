@@ -3,11 +3,13 @@ import { readFile, writeFile, mkdir, readdir } from 'fs/promises';
 import { MCPRegistry } from '../mcp/mcp-registry.js';
 import { EventStore } from '../store/event-store.js';
 import { ToolCall } from '../providers/types.js';
+import { AgendaStore } from '../api/agenda-store.js';
 import { Agent } from '../agent/agent.js';
 import { Task, Meeting, TeamMessage, ScheduledMeeting, MeetingType } from './types.js';
 import { MeetingRoom } from './meeting-room.js';
 import { MeetingStore } from './meeting-store.js';
 import { buildMessage } from './orchestrator-utils.js';
+import { EmailAllowlistStore } from '../api/email-allowlist-store.js';
 
 export interface ToolCallContext {
   store: EventStore;
@@ -19,6 +21,12 @@ export interface ToolCallContext {
   lastSenderByAgent: Map<string, string>;
   scheduledMeetingStore: MeetingStore | null;
   onHumanEscalation: ((from: string, message: string, urgency: string) => void) | null;
+  /** Mutable wrapper so the store reference stays live after context creation. */
+  emailAllowlistRef: { store: EmailAllowlistStore | null };
+  /** Returns the personal MCPRegistry for the given agent, or null if they have none. */
+  getPersonalMcp(agentName: string): MCPRegistry | null;
+  /** Mutable ref so the store stays live after context creation. */
+  agendaStore: { store: AgendaStore | null };
   findByName(name: string): Agent | undefined;
   findBlueHat(): Agent | undefined;
   hasAgentWithName(name: string): boolean;
@@ -33,13 +41,57 @@ export interface ToolCallContext {
   resolveAgentPath(agentName: string, filePath: string): string;
 }
 
+const EMAIL_STANDALONE_RE = /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/;
+
+function extractEmailsFromArgs(args: Record<string, unknown>): string[] {
+  const emails = new Set<string>();
+  const scan = (v: unknown): void => {
+    if (typeof v === 'string') {
+      const trimmed = v.trim();
+      if (EMAIL_STANDALONE_RE.test(trimmed)) {
+        emails.add(trimmed.toLowerCase());
+      } else if (trimmed.includes(',') || trimmed.includes(';')) {
+        for (const part of trimmed.split(/[,;]/).map(s => s.trim())) {
+          if (EMAIL_STANDALONE_RE.test(part)) emails.add(part.toLowerCase());
+        }
+      }
+    } else if (Array.isArray(v)) {
+      v.forEach(scan);
+    } else if (v && typeof v === 'object') {
+      Object.values(v as Record<string, unknown>).forEach(scan);
+    }
+  };
+  scan(args);
+  return [...emails];
+}
+
 export function buildToolExecutor(ctx: ToolCallContext, mcp: MCPRegistry) {
   return async (agentName: string, call: ToolCall): Promise<string> => {
     await ctx.store.append('tool_call', { agent: agentName, tool: call.name, args: call.arguments });
     try {
-      const result = mcp.isMCPTool(call.name)
-        ? await mcp.callTool(call.name, call.arguments)
-        : await executeToolCall(ctx, agentName, call);
+      let result: string;
+      const personalMcp = ctx.getPersonalMcp(agentName);
+      const isMcpTool   = (personalMcp && personalMcp.isMCPTool(call.name)) || mcp.isMCPTool(call.name);
+      if (isMcpTool) {
+        const allowlist = ctx.emailAllowlistRef.store;
+        if (allowlist) {
+          const emails  = extractEmailsFromArgs(call.arguments ?? {});
+          const blocked = emails.filter(e => !allowlist.isApproved(e));
+          if (blocked.length > 0) {
+            result = `Blocked: email address(es) not in the approved allowlist: ${blocked.join(', ')}. Use the request_email_approval tool to request approval, then retry once the human has approved it.`;
+            await ctx.store.append('tool_result', { agent: agentName, tool: call.name, result });
+            return result;
+          }
+        }
+        // Personal MCP takes precedence over shared for the same tool name
+        if (personalMcp && personalMcp.isMCPTool(call.name)) {
+          result = await personalMcp.callTool(call.name, call.arguments);
+        } else {
+          result = await mcp.callTool(call.name, call.arguments);
+        }
+      } else {
+        result = await executeToolCall(ctx, agentName, call);
+      }
       await ctx.store.append('tool_result', { agent: agentName, tool: call.name, result });
       return result;
     } catch (err) {
@@ -225,6 +277,124 @@ export async function executeToolCall(ctx: ToolCallContext, agentName: string, c
     case 'get_current_datetime': {
       const now = new Date();
       return `Current date and time: ${now.toISOString()} (local: ${now.toLocaleString()})`;
+    }
+
+    case 'fetch_url': {
+      const { url, filePath: rawPath } = call.arguments as { url: string; filePath?: string };
+      if (!url?.trim()) return 'url argument is required.';
+      const projectDir = ctx.projectDir ?? '.';
+      const outputsDir = path.join(projectDir, 'outputs');
+
+      // Derive filename from URL if not provided
+      const derivedName = rawPath?.trim() || (() => {
+        try {
+          const u = new URL(url);
+          const base = path.basename(u.pathname) || u.hostname;
+          return base.includes('.') ? base : `${base}.html`;
+        } catch { return 'fetched-content.html'; }
+      })();
+      const dest = path.isAbsolute(derivedName)
+        ? derivedName
+        : path.join(outputsDir, derivedName);
+
+      try {
+        const resp = await fetch(url);
+        if (!resp.ok) return `Fetch failed: ${resp.status} ${resp.statusText}`;
+        const body = await resp.text();
+        await mkdir(path.dirname(dest), { recursive: true });
+        await writeFile(dest, body, 'utf-8');
+        return `Saved ${body.length} characters to ${dest}`;
+      } catch (err) {
+        return `Fetch error: ${(err as Error).message}`;
+      }
+    }
+
+    case 'request_email_approval': {
+      const { email, reason } = call.arguments as { email: string; reason?: string };
+      if (!email?.trim()) return 'email argument is required.';
+      const store = ctx.emailAllowlistRef.store;
+      if (!store) return 'Email allowlist is not configured in this project.';
+      const existing = store.get(email.trim());
+      if (existing?.status === 'approved') return `${email} is already approved — you can proceed.`;
+      if (existing?.status === 'pending')  return `Approval for ${email} is already pending. Please wait for the human to review it in the Allowlist panel.`;
+      await store.add({
+        email:       email.trim().toLowerCase(),
+        status:      'pending',
+        requestedBy: agentName,
+        reason,
+        requestedAt: new Date().toISOString(),
+      });
+      await ctx.store.append('email_approval_requested', { from: agentName, email: email.trim().toLowerCase(), reason });
+      return `Approval request submitted for ${email}. Please wait — the human will review it in the Allowlist panel before you can use it.`;
+    }
+
+    case 'check_email_permissions': {
+      const store = ctx.emailAllowlistRef.store;
+      if (!store) return 'Email allowlist is not configured in this project.';
+      const mine = store.list().filter(e => e.requestedBy === agentName);
+      if (mine.length === 0) return 'You have no email permission requests on record.';
+
+      // Only surface entries the agent hasn't been told about yet: pending ones,
+      // and approved/rejected ones with no notifiedAt stamp.
+      const pending   = mine.filter(e => e.status === 'pending');
+      const newlyDone = mine.filter(e => e.status !== 'pending' && !e.notifiedAt);
+
+      if (pending.length === 0 && newlyDone.length === 0) {
+        return 'No new updates to your email permission requests since your last check.';
+      }
+
+      const lines: string[] = [];
+      for (const e of newlyDone) {
+        if (e.status === 'approved') lines.push(`APPROVED: ${e.email} — you may now send emails to this address`);
+        if (e.status === 'rejected') lines.push(`REJECTED: ${e.email} — do not contact this address`);
+      }
+      for (const e of pending) {
+        lines.push(`PENDING: ${e.email} — still awaiting human review`);
+      }
+
+      // Mark newly resolved entries so they won't be reported again
+      if (newlyDone.length > 0) {
+        await store.markNotified(newlyDone.map(e => e.email));
+      }
+
+      return `Email permission updates:\n${lines.join('\n')}`;
+    }
+
+    case 'schedule_action': {
+      const { label, description, intervalMinutes, delayMinutes } = call.arguments as {
+        label: string; description: string; intervalMinutes?: number; delayMinutes?: number;
+      };
+      const agenda = ctx.agendaStore.store;
+      if (!agenda) return 'Agenda scheduling is not available in this project.';
+      const intervalSeconds = (intervalMinutes && intervalMinutes > 0) ? Math.round(intervalMinutes * 60) : null;
+      const delaySeconds    = delayMinutes != null ? Math.round(delayMinutes * 60) : undefined;
+      const entry = await agenda.add({ agentName, label, description, intervalSeconds, delaySeconds });
+      const nextStr   = new Date(entry.nextRunAt).toLocaleString();
+      const repeatStr = intervalSeconds ? ` Repeats every ${intervalMinutes} minute(s).` : ' One-off.';
+      return `Action "${label}" scheduled (id: ${entry.id}). First run: ${nextStr}.${repeatStr}`;
+    }
+
+    case 'list_my_actions': {
+      const agenda = ctx.agendaStore.store;
+      if (!agenda) return 'Agenda scheduling is not available in this project.';
+      const actions = agenda.list(agentName).filter(e => e.enabled);
+      if (actions.length === 0) return 'You have no scheduled actions.';
+      return actions.map(e => {
+        const next   = new Date(e.nextRunAt).toLocaleString();
+        const repeat = e.intervalSeconds ? `every ${Math.round(e.intervalSeconds / 60)} min` : 'once';
+        return `- [${e.id}] "${e.label}" (${repeat}) — next: ${next}`;
+      }).join('\n');
+    }
+
+    case 'cancel_action': {
+      const { id } = call.arguments as { id: string };
+      const agenda = ctx.agendaStore.store;
+      if (!agenda) return 'Agenda scheduling is not available in this project.';
+      const entry = agenda.get(id);
+      if (!entry) return `No action found with id "${id}".`;
+      if (entry.agentName !== agentName) return `Action "${id}" does not belong to you.`;
+      await agenda.remove(id);
+      return `Action "${entry.label}" cancelled.`;
     }
 
     default:

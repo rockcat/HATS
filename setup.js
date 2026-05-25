@@ -152,7 +152,42 @@ You can run this script again at any time to change settings.`);
   }
   ok('Build complete');
 
-  // ── 4. AI provider keys ─────────────────────────────────────────────────────
+  // ── 4. Gemini CLI & Google Workspace extension ──────────────────────────────
+  head('Gemini CLI & Google Workspace extension');
+  const geminiVer = probeVersion('gemini');
+  if (!geminiVer) {
+    warn('Gemini CLI is not installed.');
+    info('Install it with:');
+    link('npm install -g @google/gemini-cli');
+    if (await confirm('Install Gemini CLI now?', true)) {
+      run('npm', ['install', '-g', '@google/gemini-cli']);
+      if (probe('gemini')) ok('Gemini CLI installed');
+      else warn('Install may need a terminal restart to take effect in PATH.');
+    }
+  } else {
+    ok(`Gemini CLI ${geminiVer}`);
+  }
+
+  if (probe('gemini')) {
+    const { homedir } = await import('os');
+    const { join }    = await import('path');
+    const extPath     = join(homedir(), '.gemini', 'extensions', 'google-workspace');
+    if (!existsSync(extPath)) {
+      if (await confirm('Install Google Workspace extension for Gemini CLI?', true)) {
+        if (!run('gemini', ['extensions', 'install', 'https://github.com/gemini-cli-extensions/workspace'])) {
+          warn('Extension install failed — try manually:');
+          info('gemini extensions install https://github.com/gemini-cli-extensions/workspace');
+        } else {
+          ok('Google Workspace extension installed');
+          info('Run "gemini" and sign in with your Google account on first use.');
+        }
+      }
+    } else {
+      ok('Google Workspace extension already installed');
+    }
+  }
+
+  // ── 5. AI provider keys ────────────────────────────────────────────────────
   head('AI Provider Keys');
   console.log('\n  HATS needs at least one AI provider key to work.\n');
 
@@ -181,7 +216,7 @@ You can run this script again at any time to change settings.`);
     warn('No AI provider key entered — the app will not work without at least one.');
   }
 
-  // ── 5. Optional MCP services ────────────────────────────────────────────────
+  // ── 6. Optional MCP services ────────────────────────────────────────────────
   head('Optional Services (MCP)');
   console.log('\n  Connect HATS to external tools and services.');
   console.log('  Say "n" to skip any service — you can enable them later in the app.\n');
@@ -221,15 +256,6 @@ You can run this script again at any time to change settings.`);
     set('MCP_EMAIL_SMTP_HOST', await ask('SMTP host', map.MCP_EMAIL_SMTP_HOST || 'smtp.gmail.com'));
   }
 
-  // Google Calendar
-  if (await confirm('Set up Google Calendar?')) {
-    info('Requires a Google Cloud project with the Calendar API enabled.');
-    info('Download the OAuth 2.0 "Desktop app" JSON key file, then enter its path.');
-    link('https://developers.google.com/calendar/api/quickstart/nodejs');
-    set('GOOGLE_OAUTH_CREDENTIALS',
-      await ask('Full path to gcp-oauth.keys.json', map.GOOGLE_OAUTH_CREDENTIALS));
-  }
-
   // WhatsApp via Periskope
   if (await confirm('Set up WhatsApp via Periskope (managed API)?')) {
     info('Sign up at Periskope, connect your number, then find your API key and Phone ID.');
@@ -263,7 +289,7 @@ You can run this script again at any time to change settings.`);
       await ask('Connection string', map.POSTGRES_CONNECTION_STRING));
   }
 
-  // ── 6. Python & uv (POP3 email) ─────────────────────────────────────────────
+  // ── 7. Python & uv (POP3 email) ─────────────────────────────────────────────
   head('Python & uv (optional — needed for POP3 email only)');
   const hasPython = probe('python3') || probe('python');
   let   hasUv     = probe('uvx');
@@ -299,12 +325,12 @@ You can run this script again at any time to change settings.`);
     }
   }
 
-  // ── 7. Write .env ───────────────────────────────────────────────────────────
+  // ── 8. Write .env ───────────────────────────────────────────────────────────
   head('Saving configuration');
   saveEnvFile(lines, updates);
   ok(`.env saved`);
 
-  // ── 8. Done ─────────────────────────────────────────────────────────────────
+  // ── 9. Done ─────────────────────────────────────────────────────────────────
   console.log(`
 ${c.bold}╔══════════════════════════════════════════╗
 ║             Setup complete!              ║

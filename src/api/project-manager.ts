@@ -12,7 +12,7 @@ export interface AgentStatus {
   name: string; hatType: string; state: string; activity: string;
   talkingTo?: string; model?: string; provider?: string;
   specialisation?: string; visualDescription?: string; backstory?: string;
-  avatar?: string; voice?: string; speakerName?: string; enabledMcpServers?: string[];
+  email?: string; avatar?: string; voice?: string; speakerName?: string; enabledMcpServers?: string[];
 }
 
 export interface ProjectManagerDeps {

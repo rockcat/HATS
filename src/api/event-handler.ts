@@ -5,25 +5,26 @@ import { HumanRequest } from '../orchestrator/types.js';
 import { VoiceManager } from '../speech/voice-manager.js';
 import { processSpeech, isSpeechAvailable } from '../speech/pipeline.js';
 import { AgentStatus } from './project-manager.js';
+import { HumanRequestStore } from './human-request-store.js';
+import { EmailAllowlistStore } from './email-allowlist-store.js';
 
 export interface OrchestratorEventContext {
   agentActivity: Map<string, { activity: string; talkingTo?: string }>;
   talkingTimers: Map<string, ReturnType<typeof setTimeout>>;
   pendingHumanTurns: Map<string, (input: string | null) => void>;
   pendingTurnAcks: Map<string, () => void>;
-  humanRequests: Map<string, HumanRequest>;
+  humanRequestStore: HumanRequestStore;
+  emailAllowlistStore: EmailAllowlistStore | null;
   agentTicketMap: Map<string, string>;
   kanban: {
     updateKanbanColumn(id: string, col: string): Promise<void>;
     addTicketComment(id: string, author: string, text: string): Promise<void>;
-    createEscalationTicket(from: string, msg: string, urgency: string): Promise<void>;
   };
   getOrchestrator(): TeamOrchestrator;
   speechInterest: Map<WebSocket, { agentName: string; voiceUrl: string | null; speakerId: number | null }>;
   voiceManager: VoiceManager;
   sseBroadcast(data: object): void;
   buildAgentStatuses(): AgentStatus[];
-  buildRequestsList(): HumanRequest[];
 }
 
 export function handleOrchestratorEvent(ev: StoredEvent, ctx: OrchestratorEventContext): void {
@@ -142,7 +143,6 @@ export function handleOrchestratorEvent(ev: StoredEvent, ctx: OrchestratorEventC
           ctx.kanban.updateKanbanColumn(ticketId, 'blocked').catch(() => {});
           if (message) ctx.kanban.addTicketComment(ticketId, from, `Blocked: ${message}`).catch(() => {});
         }
-        ctx.kanban.createEscalationTicket(from, message ?? '', urgency ?? 'medium').catch(() => {});
         const reqId   = `req-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
         const request: HumanRequest = {
           id: reqId, agentName: from, message: message ?? '',
@@ -150,8 +150,17 @@ export function handleOrchestratorEvent(ev: StoredEvent, ctx: OrchestratorEventC
           relatedTicketId: ticketId,
           status: 'pending', createdAt: new Date().toISOString(),
         };
-        ctx.humanRequests.set(reqId, request);
-        ctx.sseBroadcast({ type: 'requests_update', requests: ctx.buildRequestsList() });
+        ctx.humanRequestStore.add(request).catch(() => {});
+        ctx.sseBroadcast({ type: 'requests_update', requests: ctx.humanRequestStore.list() });
+      }
+      break;
+    }
+    case 'email_approval_requested': {
+      const from  = ev['from']  as string | undefined;
+      const email = ev['email'] as string | undefined;
+      if (from && email) {
+        ctx.sseBroadcast({ type: 'cli_output', kind: 'system', from, content: `${from} is requesting approval to use email address: ${email}` });
+        ctx.sseBroadcast({ type: 'email_allowlist_update', allowlist: ctx.emailAllowlistStore?.list() ?? [] });
       }
       break;
     }

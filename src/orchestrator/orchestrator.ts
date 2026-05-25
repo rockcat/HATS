@@ -22,6 +22,11 @@ import {
   resolveAgentPath as resolveAgentPathFn,
 } from './orchestrator-helpers.js';
 import { buildToolExecutor, ToolCallContext } from './tool-executor.js';
+import { EmailAllowlistStore } from '../api/email-allowlist-store.js';
+import { AgendaStore } from '../api/agenda-store.js';
+import { AgendaRunner } from './agenda-runner.js';
+import { resolvePersonalConfig } from '../mcp/mcp-catalogue.js';
+import { getCatalogue } from '../mcp/catalogue-store.js';
 import {
   startMeeting as startMeetingFn,
   makeResponseHandler as makeResponseHandlerFn,
@@ -53,6 +58,13 @@ export class TeamOrchestrator {
   private onHumanEscalation: ((from: string, message: string, urgency: string) => void) | null = null;
   private onHumanMeetingTurn: ((meetingId: string, turns: MeetingTurn[], topic: string) => Promise<string | null>) | null = null;
   private onMeetingTurnPaced: ((meetingId: string, participant: string) => Promise<void>) | null = null;
+  /** Mutable ref so the store can be set/replaced after agents are registered. */
+  private emailAllowlistRef: { store: EmailAllowlistStore | null } = { store: null };
+  /** Per-agent personal MCP registries, keyed by lowercase agent name. */
+  private personalMcpByAgent = new Map<string, MCPRegistry>();
+  private agendaStoreRef: { store: AgendaStore | null } = { store: null };
+  private agendaRunner: AgendaRunner | null = null;
+  private agendaDefaultsSeeded = new Set<string>();
   private rebuildTimer: ReturnType<typeof setTimeout> | null = null;
   private mcp = new MCPRegistry();
   private llmSemaphore: Semaphore;
@@ -80,6 +92,19 @@ export class TeamOrchestrator {
     await this.scheduledMeetingStore.load();
   }
 
+  async initAgendaStore(filePath: string): Promise<void> {
+    const store = new AgendaStore(filePath);
+    await store.load();
+    this.agendaStoreRef.store = store;
+    this.agendaRunner?.stop();
+    this.agendaRunner = new AgendaRunner(store, (name, content) => this.humanMessage(name, content));
+    this.agendaRunner.start();
+  }
+
+  getAgendaStore(): AgendaStore | null { return this.agendaStoreRef.store; }
+
+  stopAgendaRunner(): void { this.agendaRunner?.stop(); }
+
   async addMCPServer(def: MCPServerDef): Promise<void> {
     await this.mcp.add(def);
     await this.store.append('mcp_server_added', { name: def.name });
@@ -103,7 +128,11 @@ export class TeamOrchestrator {
 
   async shutdown(snapshotPath?: string): Promise<void> {
     if (snapshotPath) await this.saveState(snapshotPath);
+    for (const agent of this.agents.values()) agent.stop();
+    this.agendaRunner?.stop();
     await this.mcp.disconnectAll();
+    await Promise.all(Array.from(this.personalMcpByAgent.values()).map(r => r.disconnectAll()));
+    this.personalMcpByAgent.clear();
     await this.store.append('session_end', {});
   }
 
@@ -118,6 +147,7 @@ export class TeamOrchestrator {
       providerName: agent.config.provider.name,
       teamContext: agent.config.teamContext,
       enabledMcpServers: agent.config.enabledMcpServers,
+      personalMcpCredentials: agent.config.personalMcpCredentials,
       history: agent.getHistory().map((m) => ({
         role: m.role,
         content: m.content,
@@ -168,6 +198,7 @@ export class TeamOrchestrator {
         model: snap.model,
         teamContext: snap.teamContext,
         enabledMcpServers: snap.enabledMcpServers,
+        personalMcpCredentials: snap.personalMcpCredentials,
       };
       const agent = this.registerAgent(config);
       agent.setHistory(snap.history);
@@ -197,6 +228,47 @@ export class TeamOrchestrator {
     this.onMeetingTurnPaced = fn;
   }
 
+  setEmailAllowlistStore(store: EmailAllowlistStore | null): void {
+    this.emailAllowlistRef.store = store;
+  }
+
+  async enablePersonalMcp(agentName: string, serverId: string, credentials: Record<string, string>): Promise<void> {
+    const agent = this.requireAgent(agentName);
+    const entry = getCatalogue().find(e => e.id === serverId && e.personal);
+    if (!entry) throw new Error(`"${serverId}" is not a personal MCP catalogue entry.`);
+    if (!agent.config.personalMcpCredentials) agent.config.personalMcpCredentials = {};
+    agent.config.personalMcpCredentials[serverId] = credentials;
+    await this.startPersonalMcp(agentName, serverId, credentials);
+  }
+
+  async disablePersonalMcp(agentName: string, serverId: string): Promise<void> {
+    const agent = this.requireAgent(agentName);
+    if (agent.config.personalMcpCredentials) {
+      delete agent.config.personalMcpCredentials[serverId];
+      if (Object.keys(agent.config.personalMcpCredentials).length === 0) {
+        delete agent.config.personalMcpCredentials;
+      }
+    }
+    const personalMcp = this.personalMcpByAgent.get(agentName.toLowerCase());
+    if (personalMcp?.has(serverId)) await personalMcp.disconnect(serverId);
+  }
+
+  getPersonalMcpCredentials(agentName: string): Record<string, Record<string, string>> {
+    return this.findByName(agentName)?.config.personalMcpCredentials ?? {};
+  }
+
+  private async startPersonalMcp(agentName: string, serverId: string, credentials: Record<string, string>): Promise<void> {
+    const entry = getCatalogue().find(e => e.id === serverId);
+    if (!entry) return;
+    const key = agentName.toLowerCase();
+    if (!this.personalMcpByAgent.has(key)) this.personalMcpByAgent.set(key, new MCPRegistry());
+    const personalMcp = this.personalMcpByAgent.get(key)!;
+    if (personalMcp.has(serverId)) await personalMcp.disconnect(serverId);
+    const config = resolvePersonalConfig(entry, credentials);
+    await personalMcp.add({ name: serverId, config });
+    log.info(`[Team] Personal MCP "${serverId}" started for ${agentName}`);
+  }
+
   setProjectDir(dir: string | null): void {
     this.projectDir = dir;
     for (const agent of this.agents.values()) agent.updateProjectDir(dir);
@@ -223,14 +295,48 @@ export class TeamOrchestrator {
       buildMessage,
     }));
     agent.setExtraToolsProvider(() => {
-      const ids = agent.config.enabledMcpServers;
-      return ids === undefined ? this.mcp.getAllTools() : this.mcp.getToolsForServers(ids);
+      const ids         = agent.config.enabledMcpServers;
+      const sharedTools = ids === undefined ? this.mcp.getAllTools() : this.mcp.getToolsForServers(ids);
+      const personalMcp = this.personalMcpByAgent.get(agent.name.toLowerCase());
+      if (!personalMcp) return sharedTools;
+      const personalTools   = personalMcp.getAllTools();
+      const personalToolNames = new Set(personalTools.map(t => t.name));
+      // Only deduplicate exact name matches — shared email tools remain available for reading.
+      // The system prompt directive governs which account to use when sending.
+      return [...sharedTools.filter(t => !personalToolNames.has(t.name)), ...personalTools];
     });
     agent.setLLMSemaphore(this.llmSemaphore);
     if (this.telemetryRecorder) agent.setTelemetryRecorder(this.telemetryRecorder);
     this.agents.set(agent.id, agent);
     this.rebuildTeamContext();
+    // Start personal MCPs from config (fire-and-forget; they connect async)
+    if (config.personalMcpCredentials) {
+      for (const [serverId, creds] of Object.entries(config.personalMcpCredentials)) {
+        this.startPersonalMcp(agent.name, serverId, creds).catch((err: Error) => {
+          log.warn(`[Team] Personal MCP "${serverId}" for ${agent.name} failed to start:`, err.message);
+        });
+      }
+    }
+    this.ensureDefaultAgenda(agent.name).catch(() => {});
     return agent;
+  }
+
+  private async ensureDefaultAgenda(agentName: string): Promise<void> {
+    if (this.agendaDefaultsSeeded.has(agentName)) return;
+    const store = this.agendaStoreRef.store;
+    if (!store) return;
+    this.agendaDefaultsSeeded.add(agentName);
+    const existing = store.list(agentName);
+    const hasPermissionCheck = existing.some(e =>
+      e.label.toLowerCase().includes('permission') || e.label.toLowerCase().includes('approval'),
+    );
+    if (hasPermissionCheck) return;
+    await store.add({
+      agentName,
+      label: 'Check email permissions',
+      description: 'Call check_email_permissions to see if the human has approved any new email addresses since your last check. For each newly approved address, proceed with any email you were waiting to send to that address.',
+      intervalSeconds: 600,
+    });
   }
 
   getAgent(name: string): Agent | undefined { return this.findByName(name); }
@@ -259,9 +365,14 @@ export class TeamOrchestrator {
     this.rebuildTeamContext();
   }
 
+  updateAgentIdentity(name: string, visualDescription: string | undefined, backstory: string | undefined): void {
+    this.requireAgent(name).setIdentity(visualDescription, backstory);
+  }
+
   updateAgentAvatar(name: string, avatar: string | undefined): void { this.requireAgent(name).setAvatar(avatar); }
   updateAgentBackground(name: string, background: string | undefined): void { this.requireAgent(name).setBackground(background); }
   updateAgentVoice(name: string, voice: string | undefined, speakerName: string | undefined): void { this.requireAgent(name).setVoice(voice, speakerName); }
+  updateAgentEmail(name: string, email: string | undefined): void { this.requireAgent(name).config.identity.email = email || undefined; }
 
   updateAgentMcpServers(name: string, serverIds: string[] | undefined): void {
     this.requireAgent(name).config.enabledMcpServers = serverIds;
@@ -270,6 +381,11 @@ export class TeamOrchestrator {
   removeAgent(name: string): void {
     const agent = this.requireAgent(name);
     this.agents.delete(agent.id);
+    const personalMcp = this.personalMcpByAgent.get(name.toLowerCase());
+    if (personalMcp) {
+      personalMcp.disconnectAll().catch(() => {});
+      this.personalMcpByAgent.delete(name.toLowerCase());
+    }
     this.rebuildTeamContext();
   }
 
@@ -462,6 +578,9 @@ export class TeamOrchestrator {
       lastSenderByAgent: this.lastSenderByAgent,
       scheduledMeetingStore: this.scheduledMeetingStore,
       onHumanEscalation: this.onHumanEscalation,
+      emailAllowlistRef: this.emailAllowlistRef,
+      getPersonalMcp: (agentName) => this.personalMcpByAgent.get(agentName.toLowerCase()) ?? null,
+      agendaStore: this.agendaStoreRef,
       findByName: (name) => this.findByName(name),
       findBlueHat: () => this.findBlueHat(),
       hasAgentWithName: (name) => this.hasAgentWithName(name),
@@ -497,3 +616,4 @@ export class TeamOrchestrator {
     }
   }
 }
+

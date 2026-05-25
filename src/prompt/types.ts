@@ -12,6 +12,7 @@ export interface PromptContext {
   projectDir?: string;     // absolute path to current project folder
   projectGoal?: string;    // optional goal statement — injected into every prompt
   specialisation?: string; // optional focus area (e.g. 'Marketing', 'Finance')
+  email?: string;          // agent's own email address
 }
 
 export interface SystemPrompt {

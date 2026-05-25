@@ -27,18 +27,24 @@ import { AnthropicProvider } from './src/providers/anthropic.js';
 import { OpenAIProvider, OllamaProvider, LMStudioProvider } from './src/providers/openai.js';
 import { GeminiProvider } from './src/providers/gemini.js';
 import { HatType } from './src/hats/types.js';
+import { getRandomPersona } from './src/hats/personas.js';
+import { initCatalogue } from './src/mcp/catalogue-store.js';
 
 // ── Project layout ────────────────────────────────────────────────────────────
 
+const CATALOGUE_FILE = path.join(process.cwd(), 'config', 'mcp-catalogue.json');
 const PROJECTS_ROOT = path.resolve(process.env['PROJECTS_ROOT'] ?? './projects');
 const PROJECT_ID    = process.argv[2] ?? process.env['TEAM_PROJECT'] ?? 'default';
 const PROJECT_DIR   = path.join(PROJECTS_ROOT, PROJECT_ID);
 
-const STATE_FILE    = path.join(PROJECT_DIR, 'team-state.json');
-const EVENTS_FILE   = path.join(PROJECT_DIR, 'team-events.jsonl');
-const KANBAN_FILE   = path.join(PROJECT_DIR, 'kanban-board.json');
-const MCP_FILE      = path.join(PROJECT_DIR, 'mcp-enabled.json');
-const MEETINGS_FILE = path.join(PROJECT_DIR, 'meetings.json');
+const STATE_FILE     = path.join(PROJECT_DIR, 'team-state.json');
+const EVENTS_FILE    = path.join(PROJECT_DIR, 'team-events.jsonl');
+const KANBAN_FILE    = path.join(PROJECT_DIR, 'kanban-board.json');
+const REQUESTS_FILE  = path.join(PROJECT_DIR, 'human-requests.json');
+const ALLOWLIST_FILE = path.join(PROJECT_DIR, 'email-allowlist.json');
+const MCP_FILE       = path.join(PROJECT_DIR, 'mcp-enabled.json');
+const MEETINGS_FILE  = path.join(PROJECT_DIR, 'meetings.json');
+const AGENDA_FILE    = path.join(PROJECT_DIR, 'agent-agenda.json');
 
 // ── Provider factory ──────────────────────────────────────────────────────────
 
@@ -67,8 +73,10 @@ function makeProjectLoader(): ProjectLoader {
       projectsRoot: projectDir,
       humanName:    'Boss',
     });
+    const agendaFile = path.join(projectDir, 'agent-agenda.json');
     await orchestrator.init();
     await orchestrator.initMeetingStore(meetingsFile);
+    await orchestrator.initAgendaStore(agendaFile);
 
     if (existsSync(stateFile)) {
       console.log(`[Team] Restoring state from ${stateFile}`);
@@ -96,64 +104,20 @@ function makeProjectLoader(): ProjectLoader {
     } else {
       console.log(`[Team] New project at ${projectDir} — assembling fresh team.`);
 
-      // Blue Hat leader is always present
+      // ── Blue Hat leaders — one chosen at random ───────────────────────────
+      const blueIdentity = getRandomPersona(HatType.Blue);
       orchestrator.registerAgent({
-        identity: {
-          name: 'Amara',
-          visualDescription: 'poised, organised, warm presence in a tailored blazer',
-          specialisation: 'Leadership',
-          backstory: 'Grew up between Lagos and London; spent a decade running cross-functional teams at a global consultancy.',
-        },
+        identity: blueIdentity,
         hatType: HatType.Blue, provider: claude, model,
       });
 
-      // Pool of non-blue agents — one per hat type. Three are chosen at random.
+      // ── Non-blue agent pool — one per hat, three chosen at random ─────────
       const agentPool = [
-        {
-          identity: {
-            name: 'Kenji',
-            visualDescription: "precise, methodical, calm energy with a researcher's focus",
-            specialisation: 'data gathering and research',
-            backstory: 'Former data scientist at a Tokyo think-tank, obsessed with source quality and evidence.',
-          },
-          hatType: HatType.White,
-        },
-        {
-          identity: {
-            name: 'Nadia',
-            visualDescription: 'sharp, direct, nothing escapes her notice',
-            specialisation: 'risk assessment and critical analysis',
-            backstory: 'Ex-auditor from Prague who spent years finding what could go wrong before it did.',
-          },
-          hatType: HatType.Black,
-        },
-        {
-          identity: {
-            name: 'Rafael',
-            visualDescription: 'warm, animated, always leaning forward with ideas',
-            specialisation: 'opportunity identification and positive outcomes',
-            backstory: 'Serial entrepreneur from São Paulo who has founded three ventures and genuinely believes things work out.',
-          },
-          hatType: HatType.Yellow,
-        },
-        {
-          identity: {
-            name: 'Priya',
-            visualDescription: 'creative, lateral-thinking, expressive and a little unpredictable',
-            specialisation: 'creative solutions and idea generation',
-            backstory: "Trained as a UX designer in Bangalore, thinks in systems and metaphors, never accepts 'that's just how it's done'.",
-          },
-          hatType: HatType.Green,
-        },
-        {
-          identity: {
-            name: 'Tariq',
-            visualDescription: 'empathetic, intuitive, quietly observant with a measured tone',
-            specialisation: 'team dynamics, sentiment, and stakeholder perspective',
-            backstory: 'Spent years in organisational psychology in Amman before joining international business teams.',
-          },
-          hatType: HatType.Red,
-        },
+        { identity: getRandomPersona(HatType.White),  hatType: HatType.White  },
+        { identity: getRandomPersona(HatType.Black),  hatType: HatType.Black  },
+        { identity: getRandomPersona(HatType.Yellow), hatType: HatType.Yellow },
+        { identity: getRandomPersona(HatType.Green),  hatType: HatType.Green  },
+        { identity: getRandomPersona(HatType.Red),    hatType: HatType.Red    },
       ];
 
       // Shuffle and pick 3 — each has a distinct hat type so the team stays diverse
@@ -175,7 +139,7 @@ function makeProjectLoader(): ProjectLoader {
         },
       });
 
-      const names = ['Amara', ...selected.map(a => a.identity.name)].join(' · ');
+      const names = [blueIdentity.name, ...selected.map(a => a.identity.name)].join(' · ');
       console.log(`[Team] Team assembled: ${names}`);
     }
 
@@ -187,6 +151,7 @@ function makeProjectLoader(): ProjectLoader {
 
 async function main() {
   await mkdir(PROJECT_DIR, { recursive: true });
+  await initCatalogue(CATALOGUE_FILE);
 
   console.log(`[Team] Project : ${PROJECT_ID}`);
   console.log(`[Team] Folder  : ${PROJECT_DIR}`);
@@ -200,6 +165,8 @@ async function main() {
   const api = new APIServer(orchestrator, {
     port:           3001,
     kanbanPath:     KANBAN_FILE,
+    requestsPath:   REQUESTS_FILE,
+    allowlistPath:  ALLOWLIST_FILE,
     mcpEnabledPath: MCP_FILE,
     meetingsPath:   MEETINGS_FILE,
     envPath:        './.env',
@@ -215,7 +182,8 @@ async function main() {
     process.exit(0);
   });
 
-  const cli = new CLIInterface(orchestrator, 'Amara', STATE_FILE, providerFactory);
+  const blueHat = orchestrator.listAgents().find(a => a.hatType === HatType.Blue);
+  const cli = new CLIInterface(orchestrator, blueHat?.name ?? 'Amara', STATE_FILE, providerFactory);
 
   // Keep the CLI in sync when the API server switches projects
   api.onProjectSwitch((newOrchestrator) => {

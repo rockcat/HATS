@@ -24,12 +24,15 @@ export async function startMeeting(
   agenda?: string,
 ): Promise<string> {
   const meetingId = uuidv4();
+  // Remove the facilitator from participants and deduplicate — the facilitator
+  // already speaks in every phase so including them again doubles their turns.
+  const uniqueParticipants = [...new Set(participants.filter(p => p !== facilitatorName))];
   const meeting: Meeting = {
     id: meetingId,
     topic,
     agenda,
     facilitator: facilitatorName,
-    participants,
+    participants: uniqueParticipants,
     status: 'open',
     turns: [],
     createdAt: new Date().toISOString(),

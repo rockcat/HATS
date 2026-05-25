@@ -2,7 +2,6 @@ import * as path from 'path';
 import { IncomingMessage } from 'http';
 import { readdir, stat } from 'fs/promises';
 import { Board } from '../mcp/kanban/types.js';
-import { HumanRequest } from '../orchestrator/types.js';
 import { TeamOrchestrator } from '../orchestrator/orchestrator.js';
 import { AgentStatus } from './project-manager.js';
 
@@ -82,6 +81,7 @@ export function buildAgentStatuses(
       specialisation: a.config.identity.specialisation,
       visualDescription: a.config.identity.visualDescription,
       backstory: a.config.identity.backstory,
+      email: a.config.identity.email,
       avatar: a.config.identity.avatar,
       background: (a.config.identity as { background?: string }).background,
       voice: a.config.identity.voice,
@@ -89,15 +89,6 @@ export function buildAgentStatuses(
       enabledMcpServers: a.config.enabledMcpServers,
     };
   });
-}
-
-export function buildRequestsList(humanRequests: Map<string, HumanRequest>): HumanRequest[] {
-  const all      = Array.from(humanRequests.values());
-  const pending  = all.filter(r => r.status === 'pending')
-    .sort((a, b) => (b.urgency === 'high' ? 1 : 0) - (a.urgency === 'high' ? 1 : 0) || a.createdAt.localeCompare(b.createdAt));
-  const answered = all.filter(r => r.status === 'answered')
-    .sort((a, b) => (b.answeredAt ?? '').localeCompare(a.answeredAt ?? ''));
-  return [...pending, ...answered];
 }
 
 export function readBody(req: IncomingMessage): Promise<string> {

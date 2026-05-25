@@ -57,6 +57,11 @@ export class MCPRegistry {
     }));
   }
 
+  /** Returns the names of all connected servers. */
+  serverNames(): string[] {
+    return Array.from(this.clients.keys());
+  }
+
   /** Returns the server definitions for all connected servers (for snapshots). */
   getServerDefs(): MCPServerDef[] {
     return Array.from(this.clients.values())

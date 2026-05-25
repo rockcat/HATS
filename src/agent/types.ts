@@ -23,6 +23,7 @@ export interface AgentIdentity {
   visualDescription: string;
   specialisation?: string;  // shown in team roster, e.g. "financial analysis"
   backstory?: string;
+  email?: string;           // agent's own email address, used as the "from" address for email MCPs
   avatar?: string;          // avatar file name, e.g. "morgan.glb"
   background?: string;      // background image filename, e.g. "bg-office.png"
   voice?: string;           // TTS voice name
@@ -39,6 +40,8 @@ export interface AgentConfig {
   projectDir?: string;     // absolute path to current project folder
   projectGoal?: string;    // optional goal statement injected into every prompt
   enabledMcpServers?: string[]; // MCP server IDs this agent can use; undefined = all enabled servers
+  /** Per-agent credentials for personal MCP servers. Maps catalogueId → envVar → value. */
+  personalMcpCredentials?: Record<string, Record<string, string>>;
 }
 
 export interface AgentMessage {

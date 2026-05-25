@@ -17,7 +17,8 @@ let speechDuration = 0;     // seconds — decoded audio duration of current chu
 
 // ── Three.js ─────────────────────────────────────────────────────────────────
 
-let renderer = null;
+let renderer      = null;
+let currentCanvas = null;
 let scene    = null;
 let camera   = null;
 let rafId    = null;
@@ -31,6 +32,7 @@ let clock    = new THREE.Clock();
 
 function initRenderer(canvas) {
   renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+  currentCanvas = canvas;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
 
   scene = new THREE.Scene();
@@ -182,7 +184,7 @@ window.avatarAPI = {
   },
 
   /** Hide the avatar panel and stop rendering. */
-  hide() {
+  hide(panelId = 'avatar-panel') {
     speechVisemes = null;
     getAudioTime  = null;
     targetViseme  = 'viseme_sil';
@@ -191,7 +193,7 @@ window.avatarAPI = {
     if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
     visemeMeshes = [];
 
-    const panel = document.getElementById('avatar-panel');
+    const panel = document.getElementById(panelId);
     if (panel) panel.hidden = true;
   },
 };

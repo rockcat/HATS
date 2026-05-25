@@ -87,6 +87,30 @@ function setSpecValue(selectId, customId, value) {
   }
 }
 
+// ── Personas ──────────────────────────────────────────────────────────────────
+
+let personasByHat = {};
+
+async function loadPersonas() {
+  try {
+    const res = await fetch('/api/personas');
+    personasByHat = await res.json();
+  } catch { personasByHat = {}; }
+}
+
+function populatePersonaSelect(selectId, hatType, currentName) {
+  const sel = document.getElementById(selectId);
+  if (!sel) return;
+  sel.innerHTML = '<option value="">— custom —</option>';
+  const pool = personasByHat[hatType] ?? [];
+  for (const p of pool) {
+    const opt = document.createElement('option');
+    opt.value = p.name; opt.textContent = p.name;
+    sel.appendChild(opt);
+  }
+  sel.value = (currentName && pool.some(p => p.name === currentName)) ? currentName : '';
+}
+
 // ── State ─────────────────────────────────────────────────────────────────────
 
 let state = { agents: [], tickets: [], humanName: 'human' };
@@ -241,6 +265,8 @@ function createCard(agent) {
     <div class="agent-header">
       <span class="agent-name"></span>
       <span class="agent-hat-badge"></span>
+      <button class="agent-card-chat-btn" title="Chat with this agent">💬</button>
+      <div class="agent-hat-icon"></div>
     </div>
     <div class="agent-state">
       <div class="state-dot"></div>
@@ -250,7 +276,6 @@ function createCard(agent) {
     <div class="agent-activity">
       <div class="agent-activity-text"></div>
     </div>
-    <div class="agent-hat-icon"></div>
   `;
   applyCardData(el, agent);
   return el;
@@ -1120,11 +1145,13 @@ function connect() {
       fetchCalendar();
       fetch('/api/telemetry').then(r => r.json()).then(d => applyTelemetrySummary(d.summary)).catch(() => {});
       renderRequests(msg.requests ?? []);
+      renderAllowlist(msg.allowlist ?? []);
       initTabs();
       initKanbanDrag();
       initTicketEditing();
       initCLI();
       initAgentDetail();
+      initAllowlist();
     } else if (msg.type === 'agent_update') {
       state.agents = msg.agents;
       syncAgentConfigs();
@@ -1149,6 +1176,8 @@ function connect() {
       applyTelemetrySummary(msg.summary);
     } else if (msg.type === 'requests_update') {
       renderRequests(msg.requests ?? []);
+    } else if (msg.type === 'email_allowlist_update') {
+      renderAllowlist(msg.allowlist ?? []);
     } else if (msg.type === 'files_update') {
       renderFilesList(msg.sources, msg.outputs);
     } else if (msg.type === 'meeting_started') {
@@ -1241,8 +1270,9 @@ function renderRequests(requests) {
       ${bodyPart}`;
 
     if (req.status === 'pending') {
-      item.querySelector('.request-header').addEventListener('click', () => {
+      item.addEventListener('click', (e) => {
         const area = item.querySelector('.request-reply-area');
+        if (area.contains(e.target)) return;
         const open = area.hidden;
         area.hidden = !open;
         if (open) area.querySelector('textarea').focus();
@@ -1275,6 +1305,104 @@ function renderRequests(requests) {
   }
 }
 
+// ── Email Allowlist ───────────────────────────────────────────────────────────
+
+function renderAllowlist(entries) {
+  const el = document.getElementById('allowlist-list');
+  if (!el) return;
+
+  const pending = entries.filter(e => e.status === 'pending');
+  const badge   = document.getElementById('allowlist-badge');
+  if (badge) {
+    badge.textContent = String(pending.length);
+    badge.hidden = pending.length === 0;
+  }
+
+  if (entries.length === 0) {
+    el.innerHTML = '<p class="allowlist-empty">No email addresses in the allowlist yet.</p>';
+    return;
+  }
+
+  el.innerHTML = '';
+  for (const entry of entries) {
+    const item = document.createElement('div');
+    item.className = `allowlist-item allowlist-item--${entry.status}`;
+
+    const timeStr  = new Date(entry.requestedAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' });
+    const reasonHtml = entry.reason ? `<span class="allowlist-reason">${esc(entry.reason)}</span>` : '';
+    const byHtml   = `<span class="allowlist-by">by ${esc(entry.requestedBy)}</span>`;
+
+    let actionHtml = '';
+    if (entry.status === 'pending') {
+      actionHtml = `
+        <button class="allowlist-approve-btn" data-email="${esc(entry.email)}">Approve</button>
+        <button class="allowlist-reject-btn"  data-email="${esc(entry.email)}">Reject</button>`;
+    }
+
+    item.innerHTML = `
+      <div class="allowlist-row">
+        <span class="allowlist-email">${esc(entry.email)}</span>
+        <span class="allowlist-status allowlist-status--${entry.status}">${entry.status}</span>
+        ${byHtml}
+        <span class="allowlist-time">${timeStr}</span>
+        ${actionHtml}
+        <button class="allowlist-delete-btn" data-email="${esc(entry.email)}" title="Remove">✕</button>
+      </div>
+      ${reasonHtml}`;
+
+    item.querySelector('.allowlist-delete-btn')?.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const email = item.querySelector('.allowlist-delete-btn').dataset.email;
+      await fetch(`/api/email-allowlist/${encodeURIComponent(email)}`, { method: 'DELETE' });
+    });
+    item.querySelector('.allowlist-approve-btn')?.addEventListener('click', async () => {
+      const email = item.querySelector('.allowlist-approve-btn').dataset.email;
+      await fetch(`/api/email-allowlist/${encodeURIComponent(email)}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'approve' }),
+      });
+    });
+    item.querySelector('.allowlist-reject-btn')?.addEventListener('click', async () => {
+      const email = item.querySelector('.allowlist-reject-btn').dataset.email;
+      await fetch(`/api/email-allowlist/${encodeURIComponent(email)}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'reject' }),
+      });
+    });
+
+    el.appendChild(item);
+  }
+}
+
+function initAllowlist() {
+  const addBtn    = document.getElementById('allowlist-add-btn');
+  const emailInp  = document.getElementById('allowlist-add-input');
+  const reasonInp = document.getElementById('allowlist-add-reason');
+  if (!addBtn || !emailInp) return;
+
+  const doAdd = async () => {
+    const email  = emailInp.value.trim();
+    const reason = reasonInp?.value.trim() || undefined;
+    if (!email) return;
+    addBtn.disabled = true;
+    try {
+      await fetch('/api/email-allowlist', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, reason }),
+      });
+      emailInp.value  = '';
+      if (reasonInp) reasonInp.value = '';
+    } finally {
+      addBtn.disabled = false;
+    }
+  };
+
+  addBtn.addEventListener('click', doAdd);
+  emailInp.addEventListener('keydown', (e) => { if (e.key === 'Enter') doAdd(); });
+
+  fetch('/api/email-allowlist').then(r => r.json()).then(renderAllowlist).catch(() => {});
+}
+
 // ── MCP Catalogue ─────────────────────────────────────────────────────────────
 
 const CATEGORY_COLOR = {
@@ -1289,11 +1417,14 @@ function renderMCPCatalogue(catalogue) {
   const el = document.getElementById('mcp-content');
   if (!el) return;
 
-  const categories = [...new Set(catalogue.map(e => e.category))];
+  const sharedCatalogue  = catalogue.filter(e => !e.personal);
+  const personalCatalogue = catalogue.filter(e => e.personal);
+
+  const categories = [...new Set(sharedCatalogue.map(e => e.category))];
   let html = '';
 
   for (const cat of categories) {
-    const entries = catalogue.filter(e => e.category === cat);
+    const entries = sharedCatalogue.filter(e => e.category === cat);
     const cc = CATEGORY_COLOR[cat] || CATEGORY_COLOR.dev;
     html += `<div class="mcp-cat-label" style="color:${cc.text}">${esc(cat)}</div>`;
     for (const entry of entries) {
@@ -1321,6 +1452,13 @@ function renderMCPCatalogue(catalogue) {
           </button>
         </div>`;
     }
+  }
+
+  if (personalCatalogue.length > 0) {
+    html += `<div class="mcp-personal-note">
+      <span class="mcp-personal-note-icon">👤</span>
+      <span><strong>Personal MCPs</strong> (${personalCatalogue.map(e => e.name).join(', ')}) are configured per-agent with individual credentials — open an agent's detail panel to set them up.</span>
+    </div>`;
   }
 
   el.innerHTML = html || '<p class="tools-empty">No servers in catalogue</p>';
@@ -1393,9 +1531,205 @@ function fetchMCPCatalogue() {
     .catch(() => {});
 }
 
+// ── MCP Catalogue Editor ──────────────────────────────────────────────────────
+
+let _mcpEditorSelected = null; // id of selected entry, or null for new
+
+function openMCPEditor() {
+  _mcpEditorSelected = null;
+  fetchAndRenderEditorList();
+  clearEditorForm();
+  document.getElementById('mcp-editor-modal').hidden = false;
+}
+
+function closeMCPEditor() {
+  document.getElementById('mcp-editor-modal').hidden = true;
+}
+
+async function fetchAndRenderEditorList() {
+  const listEl = document.getElementById('mcp-editor-list');
+  listEl.innerHTML = '<p class="mcp-editor-loading">Loading…</p>';
+  try {
+    const raw = await fetch('/api/mcp/catalogue').then(r => r.json());
+    renderEditorList(raw);
+  } catch {
+    listEl.innerHTML = '<p class="mcp-editor-loading">Failed to load.</p>';
+  }
+}
+
+function renderEditorList(entries) {
+  const listEl = document.getElementById('mcp-editor-list');
+  const grouped = {};
+  for (const e of entries) {
+    if (!grouped[e.category]) grouped[e.category] = [];
+    grouped[e.category].push(e);
+  }
+  let html = '';
+  for (const [cat, items] of Object.entries(grouped)) {
+    const cc = CATEGORY_COLOR[cat] || CATEGORY_COLOR.dev;
+    html += `<div class="mcp-editor-cat-label" style="color:${cc.text}">${esc(cat)}</div>`;
+    for (const item of items) {
+      html += `<button class="mcp-editor-item${_mcpEditorSelected === item.id ? ' selected' : ''}" data-id="${esc(item.id)}">${esc(item.name)}</button>`;
+    }
+  }
+  listEl.innerHTML = html || '<p class="mcp-editor-loading">No entries</p>';
+  listEl.querySelectorAll('.mcp-editor-item').forEach(btn => {
+    btn.addEventListener('click', () => selectEditorEntry(btn.dataset.id, entries));
+  });
+}
+
+function clearEditorForm() {
+  document.getElementById('mcp-editor-placeholder').hidden = false;
+  document.getElementById('mcp-editor-fields').hidden = true;
+  document.getElementById('mcp-ef-error').textContent = '';
+  _mcpEditorSelected = null;
+}
+
+function selectEditorEntry(id, entries) {
+  _mcpEditorSelected = id;
+  const entry = entries.find(e => e.id === id);
+  if (!entry) return;
+
+  document.getElementById('mcp-editor-placeholder').hidden = true;
+  document.getElementById('mcp-editor-fields').hidden = false;
+  document.getElementById('mcp-ef-error').textContent = '';
+
+  document.getElementById('mcp-ef-id').value          = entry.id;
+  document.getElementById('mcp-ef-id').readOnly       = true;
+  document.getElementById('mcp-ef-name').value        = entry.name || '';
+  document.getElementById('mcp-ef-description').value = entry.description || '';
+  document.getElementById('mcp-ef-category').value    = entry.category || 'productivity';
+  document.getElementById('mcp-ef-notes').value       = entry.notes || '';
+  document.getElementById('mcp-ef-docs-url').value    = entry.url || '';
+  document.getElementById('mcp-ef-personal').checked  = !!entry.personal;
+
+  const transport = entry.config?.transport || 'stdio';
+  document.getElementById('mcp-ef-transport').value = transport;
+  toggleTransportFields(transport);
+
+  if (transport === 'stdio') {
+    document.getElementById('mcp-ef-command').value = entry.config.command || '';
+    document.getElementById('mcp-ef-args').value    = (entry.config.args || []).join('\n');
+    document.getElementById('mcp-ef-envvars').value = (entry.envVars || []).join('\n');
+  } else {
+    document.getElementById('mcp-ef-url-endpoint').value = entry.config.url || '';
+  }
+
+  // Highlight selected in list
+  document.querySelectorAll('.mcp-editor-item').forEach(b =>
+    b.classList.toggle('selected', b.dataset.id === id));
+}
+
+function toggleTransportFields(transport) {
+  document.getElementById('mcp-ef-stdio-fields').hidden = transport !== 'stdio';
+  document.getElementById('mcp-ef-url-fields').hidden   = transport === 'stdio';
+}
+
+function buildEntryFromForm() {
+  const transport = document.getElementById('mcp-ef-transport').value;
+  const envVarNames = document.getElementById('mcp-ef-envvars').value
+    .split('\n').map(s => s.trim()).filter(Boolean);
+
+  const config = transport === 'stdio'
+    ? {
+        transport: 'stdio',
+        command: document.getElementById('mcp-ef-command').value.trim(),
+        args: document.getElementById('mcp-ef-args').value
+          .split('\n').map(s => s.trim()).filter(Boolean),
+        ...(envVarNames.length > 0
+          ? { env: Object.fromEntries(envVarNames.map(k => [k, ''])) }
+          : {}),
+      }
+    : {
+        transport,
+        url: document.getElementById('mcp-ef-url-endpoint').value.trim(),
+      };
+
+  return {
+    id:          document.getElementById('mcp-ef-id').value.trim(),
+    name:        document.getElementById('mcp-ef-name').value.trim(),
+    description: document.getElementById('mcp-ef-description').value.trim(),
+    category:    document.getElementById('mcp-ef-category').value,
+    config,
+    ...(envVarNames.length > 0 ? { envVars: envVarNames } : {}),
+    ...(document.getElementById('mcp-ef-personal').checked ? { personal: true } : {}),
+    notes:   document.getElementById('mcp-ef-notes').value.trim() || undefined,
+    url:     document.getElementById('mcp-ef-docs-url').value.trim() || undefined,
+  };
+}
+
+function initMCPEditor() {
+  document.getElementById('mcp-catalogue-edit-btn').addEventListener('click', openMCPEditor);
+  document.getElementById('mcp-editor-close').addEventListener('click', closeMCPEditor);
+  document.getElementById('mcp-editor-modal').addEventListener('click', e => {
+    if (e.target === document.getElementById('mcp-editor-modal')) closeMCPEditor();
+  });
+
+  document.getElementById('mcp-editor-add-btn').addEventListener('click', () => {
+    _mcpEditorSelected = null;
+    document.getElementById('mcp-editor-placeholder').hidden = true;
+    document.getElementById('mcp-editor-fields').hidden = false;
+    document.getElementById('mcp-ef-error').textContent = '';
+    // Clear all fields for a new entry
+    ['mcp-ef-id','mcp-ef-name','mcp-ef-description','mcp-ef-notes','mcp-ef-docs-url',
+     'mcp-ef-command','mcp-ef-args','mcp-ef-envvars','mcp-ef-url-endpoint'].forEach(id => {
+      document.getElementById(id).value = '';
+    });
+    document.getElementById('mcp-ef-id').readOnly = false;
+    document.getElementById('mcp-ef-personal').checked = false;
+    document.getElementById('mcp-ef-transport').value = 'stdio';
+    document.getElementById('mcp-ef-category').value = 'productivity';
+    toggleTransportFields('stdio');
+    document.querySelectorAll('.mcp-editor-item').forEach(b => b.classList.remove('selected'));
+  });
+
+  document.getElementById('mcp-ef-transport').addEventListener('change', e => {
+    toggleTransportFields(e.target.value);
+  });
+
+  document.getElementById('mcp-ef-save-btn').addEventListener('click', async () => {
+    const errEl = document.getElementById('mcp-ef-error');
+    errEl.textContent = '';
+    const entry = buildEntryFromForm();
+    if (!entry.id) { errEl.textContent = 'ID is required.'; return; }
+    if (!entry.name) { errEl.textContent = 'Name is required.'; return; }
+
+    const isNew = !_mcpEditorSelected;
+    const url    = isNew ? '/api/mcp/catalogue' : `/api/mcp/catalogue/${encodeURIComponent(_mcpEditorSelected)}`;
+    const method = isNew ? 'POST' : 'PATCH';
+
+    try {
+      const res = await fetch(url, {
+        method, headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(entry),
+      }).then(r => r.json());
+      if (res.error) { errEl.textContent = res.error; return; }
+      _mcpEditorSelected = entry.id;
+      await fetchAndRenderEditorList();
+      fetchMCPCatalogue(); // refresh the main MCP panel
+    } catch { errEl.textContent = 'Save failed.'; }
+  });
+
+  document.getElementById('mcp-ef-remove-btn').addEventListener('click', async () => {
+    if (!_mcpEditorSelected) return;
+    const errEl = document.getElementById('mcp-ef-error');
+    errEl.textContent = '';
+    try {
+      const res = await fetch(`/api/mcp/catalogue/${encodeURIComponent(_mcpEditorSelected)}`, {
+        method: 'DELETE',
+      }).then(r => r.json());
+      if (res.error) { errEl.textContent = res.error; return; }
+      clearEditorForm();
+      await fetchAndRenderEditorList();
+      fetchMCPCatalogue();
+    } catch { errEl.textContent = 'Remove failed.'; }
+  });
+}
+
 // ── Agent detail drawer ───────────────────────────────────────────────────────
 
 let activeDetailAgent = null;
+let activeChatAgent   = null;
 
 // ── Pricing ───────────────────────────────────────────────────────────────────
 
@@ -1581,6 +1915,209 @@ function populateModelSelect(sel, providers, providerId, selectedModel) {
   }
 }
 
+// ── Agent agenda ──────────────────────────────────────────────────────────────
+
+function formatAgendaMeta(entry) {
+  const next   = new Date(entry.nextRunAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const repeat = entry.intervalSeconds ? `every ${Math.round(entry.intervalSeconds / 60)}m` : 'once';
+  return `${repeat} · next ${next}`;
+}
+
+async function loadAgentAgenda(agentName) {
+  const listEl   = document.getElementById('agent-agenda-list');
+  const countEl  = document.getElementById('agent-agenda-count');
+  const detailEl = document.getElementById('agent-detail-agenda');
+  if (!listEl) return;
+  const wasOpen = detailEl?.open ?? false;
+  try {
+    const entries = await fetch(`/api/agenda?agent=${encodeURIComponent(agentName)}`).then(r => r.json());
+    const active  = entries.filter(e => e.enabled);
+    if (countEl) countEl.textContent = active.length > 0 ? String(active.length) : '';
+    listEl.innerHTML = '';
+    if (active.length === 0) {
+      listEl.innerHTML = '<span style="color:var(--text-muted);font-size:11px">No scheduled actions.</span>';
+      return;
+    }
+    for (const entry of active) {
+      listEl.appendChild(buildAgendaRow(entry, agentName));
+    }
+  } catch { if (listEl) listEl.innerHTML = '<span style="color:var(--text-muted)">Failed to load.</span>'; }
+  if (detailEl && wasOpen) detailEl.open = true;
+}
+
+function buildAgendaRow(entry, agentName) {
+  const wrap = document.createElement('div');
+  wrap.className = 'agenda-entry';
+  wrap.dataset.id = entry.id;
+
+  // ── summary row ──────────────────────────────────────────────────────────
+  const summary = document.createElement('div');
+  summary.className = 'agenda-entry-summary';
+
+  const label = document.createElement('span');
+  label.className = 'agenda-entry-label';
+  label.title = entry.description;
+  label.textContent = entry.label;
+
+  const meta = document.createElement('span');
+  meta.className = 'agenda-entry-meta';
+  meta.textContent = formatAgendaMeta(entry);
+
+  const editBtn = document.createElement('button');
+  editBtn.className = 'agenda-entry-edit';
+  editBtn.title = 'Edit this action';
+  editBtn.textContent = '✎';
+
+  const del = document.createElement('button');
+  del.className = 'agenda-entry-delete';
+  del.title = 'Cancel this action';
+  del.textContent = '✕';
+  del.addEventListener('click', async () => {
+    await fetch(`/api/agenda/${encodeURIComponent(entry.id)}`, { method: 'DELETE' });
+    await loadAgentAgenda(agentName);
+  });
+
+  summary.appendChild(label);
+  summary.appendChild(meta);
+  summary.appendChild(editBtn);
+  summary.appendChild(del);
+  wrap.appendChild(summary);
+
+  // ── edit form (hidden by default) ────────────────────────────────────────
+  const form = document.createElement('div');
+  form.className = 'agenda-entry-form';
+  form.hidden = true;
+
+  const labelInput = document.createElement('input');
+  labelInput.type = 'text';
+  labelInput.className = 'agent-agenda-input';
+  labelInput.value = entry.label;
+
+  const descInput = document.createElement('textarea');
+  descInput.className = 'agent-agenda-desc-input';
+  descInput.rows = 3;
+  descInput.value = entry.description;
+
+  const footer = document.createElement('div');
+  footer.className = 'agent-agenda-add-footer';
+
+  const intervalInput = document.createElement('input');
+  intervalInput.type = 'number';
+  intervalInput.className = 'agent-agenda-input agent-agenda-interval';
+  intervalInput.placeholder = 'Mins (blank=once)';
+  intervalInput.min = '1';
+  intervalInput.value = entry.intervalSeconds ? String(Math.round(entry.intervalSeconds / 60)) : '';
+
+  const saveBtn = document.createElement('button');
+  saveBtn.type = 'button';
+  saveBtn.className = 'agent-agenda-add-btn';
+  saveBtn.textContent = 'Save';
+
+  const cancelBtn = document.createElement('button');
+  cancelBtn.type = 'button';
+  cancelBtn.className = 'agenda-entry-delete';
+  cancelBtn.textContent = 'Cancel';
+
+  footer.appendChild(intervalInput);
+  footer.appendChild(saveBtn);
+  footer.appendChild(cancelBtn);
+  form.appendChild(labelInput);
+  form.appendChild(descInput);
+  form.appendChild(footer);
+  wrap.appendChild(form);
+
+  // ── toggle logic ─────────────────────────────────────────────────────────
+  editBtn.addEventListener('click', () => {
+    form.hidden = !form.hidden;
+    wrap.classList.toggle('agenda-entry-editing', !form.hidden);
+    if (!form.hidden) labelInput.focus();
+  });
+
+  cancelBtn.addEventListener('click', () => {
+    form.hidden = true;
+    wrap.classList.remove('agenda-entry-editing');
+  });
+
+  saveBtn.addEventListener('click', async () => {
+    const newLabel = labelInput.value.trim();
+    const newDesc  = descInput.value.trim();
+    if (!newLabel || !newDesc) return;
+    const intervalMins = intervalInput.value ? Number(intervalInput.value) : null;
+    const intervalSeconds = intervalMins ? Math.round(intervalMins * 60) : null;
+    saveBtn.disabled = true; saveBtn.textContent = '…';
+    const res = await fetch(`/api/agenda/${encodeURIComponent(entry.id)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ label: newLabel, description: newDesc, intervalSeconds }),
+    });
+    if (res.ok) {
+      await loadAgentAgenda(agentName);
+    } else {
+      saveBtn.disabled = false; saveBtn.textContent = 'Save';
+    }
+  });
+
+  return wrap;
+}
+
+function initAgendaAdd() {
+  const addBtn = document.getElementById('agenda-add-btn');
+  if (!addBtn) return;
+  addBtn.addEventListener('click', async () => {
+    if (!activeDetailAgent) return;
+    const label       = document.getElementById('agenda-add-label').value.trim();
+    const description = document.getElementById('agenda-add-description').value.trim();
+    const intervalVal = document.getElementById('agenda-add-interval').value;
+    if (!label || !description) return;
+    const intervalMinutes = intervalVal ? Number(intervalVal) : undefined;
+    addBtn.disabled = true; addBtn.textContent = '…';
+    try {
+      const res = await fetch('/api/agenda', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agentName: activeDetailAgent, label, description, intervalMinutes }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: res.statusText }));
+        console.error('[Agenda] POST failed:', err);
+        addBtn.disabled = false; addBtn.textContent = '+ Add';
+        return;
+      }
+      document.getElementById('agenda-add-label').value       = '';
+      document.getElementById('agenda-add-description').value = '';
+      document.getElementById('agenda-add-interval').value    = '';
+      await loadAgentAgenda(activeDetailAgent);
+    } catch (e) { console.error('[Agenda] add error:', e); }
+    addBtn.disabled = false; addBtn.textContent = '+ Add';
+  });
+}
+
+// ── Shared agent feed helper ──────────────────────────────────────────────────
+
+function loadAgentFeedInto(name, feedEl) {
+  feedEl.innerHTML = '<p class="feed-empty">Loading…</p>';
+  fetch(`/api/agents/${encodeURIComponent(name)}/feed`)
+    .then(r => r.json())
+    .then(events => {
+      feedEl.innerHTML = '';
+      if (!events.length) { feedEl.innerHTML = '<p class="feed-empty">No activity yet.</p>'; return; }
+      for (const ev of events) feedEl.appendChild(buildFeedItem(ev, name));
+      feedEl.scrollTop = feedEl.scrollHeight;
+    })
+    .catch(() => { feedEl.innerHTML = '<p class="feed-empty">Failed to load.</p>'; });
+}
+
+// ── Agent chat: delegate to the shared agent-detail modal in chat-only mode ───
+
+function initAgentChat() { /* wired via initAgentDetail's card click handler */ }
+
+function openAgentChat(name) {
+  openAgentDetail(name, true);   // true = chat-only mode
+}
+
+function closeAgentChat() {
+  closeAgentDetail();
+}
+
 let agentDetailInited = false;
 
 function initAgentDetail() {
@@ -1588,6 +2125,11 @@ function initAgentDetail() {
   agentDetailInited = true;
 
   document.getElementById('agents-container').addEventListener('click', e => {
+    if (e.target.closest('.agent-card-chat-btn')) {
+      const card = e.target.closest('.agent-card');
+      if (card) openAgentChat(card.dataset.name);
+      return;
+    }
     const card = e.target.closest('.agent-card');
     if (card) openAgentDetail(card.dataset.name);
   });
@@ -1646,6 +2188,12 @@ function initAgentDetail() {
   sendBtn.addEventListener('click', doSend);
   messageArea.addEventListener('keydown', e => {
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); doSend(); }
+  });
+
+  // Configure button: switch from chat-only to full config mode
+  document.getElementById('agent-detail-configure-btn').addEventListener('click', () => {
+    document.getElementById('agent-detail').classList.remove('chat-mode');
+    activeChatAgent = null;
   });
 
   document.getElementById('agent-remove-btn').addEventListener('click', () => {
@@ -1814,10 +2362,24 @@ function initAgentDetail() {
   });
 
 
-  // Auto-refresh prompt preview when hat changes
+  // Auto-refresh prompt preview when hat changes; repopulate persona select
   document.getElementById('agent-config-hat').addEventListener('change', () => {
+    const hatType = document.getElementById('agent-config-hat').value;
+    populatePersonaSelect('agent-config-persona', hatType, '');
     const panel = document.getElementById('agent-prompt-preview');
     if (!panel.hidden) refreshPromptPreview();
+  });
+
+  // Persona select — auto-fill name, visual description and backstory
+  document.getElementById('agent-config-persona').addEventListener('change', () => {
+    const hatType = document.getElementById('agent-config-hat').value;
+    const personaName = document.getElementById('agent-config-persona').value;
+    const persona = (personasByHat[hatType] ?? []).find(p => p.name === personaName);
+    if (!persona) return;
+    document.getElementById('agent-detail-name').value = persona.name;
+    document.getElementById('agent-config-visual-desc').value = persona.visualDescription;
+    document.getElementById('agent-config-backstory').value = persona.backstory;
+    setSpecValue('agent-config-specialisation', 'agent-config-specialisation-custom', persona.specialisation);
   });
 
   // Show/hide custom spec input when "Custom…" is selected
@@ -1867,6 +2429,17 @@ function initAgentDetail() {
         method: 'PATCH', headers: {'Content-Type':'application/json'},
         body: JSON.stringify({ specialisation }),
       }));
+      const email = document.getElementById('agent-config-email').value.trim() || undefined;
+      tasks.push(fetch(`/api/agents/${encodeURIComponent(activeDetailAgent)}/email`, {
+        method: 'PATCH', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ email }),
+      }));
+      const visualDescription = document.getElementById('agent-config-visual-desc').value.trim() || undefined;
+      const backstory         = document.getElementById('agent-config-backstory').value.trim() || undefined;
+      tasks.push(fetch(`/api/agents/${encodeURIComponent(activeDetailAgent)}/identity`, {
+        method: 'PATCH', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ visualDescription, backstory }),
+      }));
       // MCP servers — only send if the section is visible
       const mcpLine = document.getElementById('agent-config-mcp-line');
       if (mcpLine && !mcpLine.hidden) {
@@ -1888,8 +2461,11 @@ function initAgentDetail() {
   });
 }
 
-function openAgentDetail(name) {
+function openAgentDetail(name, chatOnly = false) {
   activeDetailAgent = name;
+  activeChatAgent   = chatOnly ? name : null;
+  // Toggle chat-only mode (hides config rows via CSS)
+  document.getElementById('agent-detail').classList.toggle('chat-mode', chatOnly);
   // Hide prompt preview panel when switching agents
   document.getElementById('agent-prompt-preview').hidden = true;
   document.getElementById('agent-detail').classList.remove('prompt-open');
@@ -1927,6 +2503,14 @@ function openAgentDetail(name) {
   // Set specialisation select value
   setSpecValue('agent-config-specialisation', 'agent-config-specialisation-custom', agent?.specialisation || '');
 
+  // Set email address
+  document.getElementById('agent-config-email').value = agent?.email || '';
+
+  // Populate persona select and identity fields
+  populatePersonaSelect('agent-config-persona', agent?.hatType || 'white', agent?.name);
+  document.getElementById('agent-config-visual-desc').value = agent?.visualDescription || '';
+  document.getElementById('agent-config-backstory').value   = agent?.backstory || '';
+
   // Populate provider + model selects from the catalogue
   loadProviders().then(providers => {
     const providerId = (agent?.provider) || 'anthropic';
@@ -1960,12 +2544,14 @@ function openAgentDetail(name) {
   document.getElementById('agent-detail-message').value = '';
 
   const feed = document.getElementById('agent-detail-feed');
-  feed.innerHTML = '<p class="feed-empty">Loading…</p>';
   document.getElementById('agent-detail-modal').hidden = false;
 
   // Unlock AudioContext inside the user gesture (click) so it can play later
   if (!audioCtx) audioCtx = new AudioContext();
   if (audioCtx.state === 'suspended') audioCtx.resume();
+
+  loadAgentFeedInto(name, feed);
+  loadAgentAgenda(name);
 
   // Populate voice select; then register speech interest with the resolved voice
   getVoices().then(voices => {
@@ -2047,24 +2633,131 @@ function openAgentDetail(name) {
     })
     .catch(() => { document.getElementById('agent-config-mcp-line').hidden = true; });
 
-  fetch(`/api/agents/${encodeURIComponent(name)}/feed`)
+  // Populate personal MCP configuration
+  fetch(`/api/agents/${encodeURIComponent(name)}/personal-mcp`)
     .then(r => r.json())
-    .then(events => {
-      feed.innerHTML = '';
-      if (!events.length) {
-        feed.innerHTML = '<p class="feed-empty">No activity yet.</p>';
-        return;
+    .then(entries => {
+      const line = document.getElementById('agent-config-personal-mcp-line');
+      const list = document.getElementById('agent-config-personal-mcp-list');
+      if (!entries.length) { line.hidden = true; return; }
+      line.hidden = false;
+      list.innerHTML = '';
+      for (const entry of entries) {
+        list.appendChild(buildPersonalMcpEntry(name, entry));
       }
-      for (const ev of events) feed.appendChild(buildFeedItem(ev, name));
-      feed.scrollTop = feed.scrollHeight;
     })
-    .catch(() => { feed.innerHTML = '<p class="feed-empty">Failed to load.</p>'; });
+    .catch(() => { document.getElementById('agent-config-personal-mcp-line').hidden = true; });
+
+}
+
+function buildPersonalMcpEntry(agentName, entry) {
+  const wrap = document.createElement('div');
+  wrap.className = 'personal-mcp-entry';
+  wrap.dataset.serverId = entry.id;
+
+  const header = document.createElement('div');
+  header.className = 'personal-mcp-header';
+
+  const title = document.createElement('span');
+  title.className = 'personal-mcp-title';
+  title.textContent = entry.name;
+  header.appendChild(title);
+
+  if (entry.description) {
+    const desc = document.createElement('span');
+    desc.className = 'personal-mcp-desc';
+    desc.textContent = entry.description;
+    header.appendChild(desc);
+  }
+  wrap.appendChild(header);
+
+  const fields = document.createElement('div');
+  fields.className = 'personal-mcp-fields';
+  const inputs = {};
+  for (const varName of (entry.envVars ?? [])) {
+    const row = document.createElement('div');
+    row.className = 'personal-mcp-field-row';
+    const lbl = document.createElement('label');
+    lbl.className = 'personal-mcp-field-label';
+    lbl.textContent = varName;
+    const inp = document.createElement('input');
+    inp.type = varName.toLowerCase().includes('password') || varName.toLowerCase().includes('secret') ? 'password' : 'text';
+    inp.className = 'personal-mcp-field-input';
+    inp.value = entry.credentials?.[varName] ?? '';
+    inp.placeholder = varName;
+    inp.autocomplete = 'off';
+    inputs[varName] = inp;
+    row.appendChild(lbl);
+    row.appendChild(inp);
+    fields.appendChild(row);
+  }
+  wrap.appendChild(fields);
+
+  const actions = document.createElement('div');
+  actions.className = 'personal-mcp-actions';
+
+  const saveBtn = document.createElement('button');
+  saveBtn.className = 'personal-mcp-save-btn';
+  saveBtn.textContent = entry.configured ? 'Update' : 'Enable';
+  saveBtn.onclick = async () => {
+    const credentials = {};
+    for (const [k, inp] of Object.entries(inputs)) credentials[k] = inp.value.trim();
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving…';
+    try {
+      const res = await fetch(`/api/agents/${encodeURIComponent(agentName)}/personal-mcp/${encodeURIComponent(entry.id)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ credentials }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      saveBtn.textContent = 'Saved!';
+      entry.configured = true;
+      disableBtn.hidden = false;
+      setTimeout(() => { saveBtn.textContent = 'Update'; saveBtn.disabled = false; }, 1500);
+    } catch (err) {
+      saveBtn.textContent = 'Error';
+      saveBtn.title = err.message;
+      setTimeout(() => { saveBtn.textContent = entry.configured ? 'Update' : 'Enable'; saveBtn.disabled = false; }, 2000);
+    }
+  };
+  actions.appendChild(saveBtn);
+
+  const disableBtn = document.createElement('button');
+  disableBtn.className = 'personal-mcp-disable-btn';
+  disableBtn.textContent = 'Disable';
+  disableBtn.hidden = !entry.configured;
+  disableBtn.onclick = async () => {
+    disableBtn.disabled = true;
+    disableBtn.textContent = 'Removing…';
+    try {
+      const res = await fetch(`/api/agents/${encodeURIComponent(agentName)}/personal-mcp/${encodeURIComponent(entry.id)}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) throw new Error(await res.text());
+      entry.configured = false;
+      for (const inp of Object.values(inputs)) inp.value = '';
+      disableBtn.hidden = true;
+      saveBtn.textContent = 'Enable';
+      disableBtn.disabled = false;
+    } catch (err) {
+      disableBtn.textContent = 'Error';
+      disableBtn.title = err.message;
+      setTimeout(() => { disableBtn.textContent = 'Disable'; disableBtn.disabled = false; }, 2000);
+    }
+  };
+  actions.appendChild(disableBtn);
+
+  wrap.appendChild(actions);
+  return wrap;
 }
 
 function closeAgentDetail() {
   clearSpeechQueue(activeDetailAgent);
   setSpeechAgent(null);
   activeDetailAgent = null;
+  activeChatAgent   = null;
+  document.getElementById('agent-detail').classList.remove('chat-mode');
   document.getElementById('agent-detail-modal').hidden = true;
   applyAvatarBackground(null);
   if (window.avatarAPI) window.avatarAPI.hide();
@@ -2073,6 +2766,7 @@ function closeAgentDetail() {
 function appendAgentFeedEvent(agentName, ev) {
   if (activeDetailAgent !== agentName) return;
   const feed = document.getElementById('agent-detail-feed');
+  if (!feed) return;
   const empty = feed.querySelector('.feed-empty');
   if (empty) empty.remove();
   feed.appendChild(buildFeedItem(ev, agentName));
@@ -2341,6 +3035,8 @@ function initTabs() {
       document.querySelectorAll('.tab-pane').forEach(p => p.classList.toggle('active', p.id === tab + '-content'));
       if (tab === 'mcp') fetchMCPCatalogue();
       if (tab === 'cli') document.getElementById('cli-input')?.focus();
+      const mcpEditBtn = document.getElementById('mcp-catalogue-edit-btn');
+      if (mcpEditBtn) mcpEditBtn.hidden = (tab !== 'mcp');
     });
   });
 }
@@ -2674,6 +3370,10 @@ function loadProjectList() {
         list.innerHTML = '<div class="project-switcher-loading">No projects found.</div>';
         return;
       }
+
+      // sort projects 
+      projects = projects.sort((a, b) => a.id.localeCompare(b.id));
+
       for (const p of projects) {
         const row = document.createElement('div');
         row.className = 'project-switcher-row' + (p.active ? ' active' : '');
@@ -2754,6 +3454,23 @@ function initAddAgent() {
     populateModelSelect(document.getElementById('add-agent-model'), providers, pid, p?.defaultModel ?? '');
   });
 
+  // Repopulate persona select when hat changes
+  document.getElementById('add-agent-hat').addEventListener('change', () => {
+    const hatType = document.getElementById('add-agent-hat').value;
+    populatePersonaSelect('add-agent-persona', hatType, '');
+  });
+
+  // Auto-fill name when a persona is selected
+  document.getElementById('add-agent-persona').addEventListener('change', () => {
+    const hatType = document.getElementById('add-agent-hat').value;
+    const personaName = document.getElementById('add-agent-persona').value;
+    const persona = (personasByHat[hatType] ?? []).find(p => p.name === personaName);
+    if (persona) {
+      document.getElementById('add-agent-name').value = persona.name;
+      setSpecValue('add-agent-specialisation', 'add-agent-specialisation-custom', persona.specialisation);
+    }
+  });
+
   // Show/hide custom spec input when "Custom…" is selected
   document.getElementById('add-agent-specialisation').addEventListener('change', e => {
     const cust = document.getElementById('add-agent-specialisation-custom');
@@ -2771,6 +3488,8 @@ function openAddAgent() {
   document.getElementById('add-agent-name').value = '';
   setSpecValue('add-agent-specialisation', 'add-agent-specialisation-custom', '');
   document.getElementById('add-agent-error').textContent = '';
+  const hatType = document.getElementById('add-agent-hat').value;
+  populatePersonaSelect('add-agent-persona', hatType, '');
   document.getElementById('add-agent-modal').hidden = false;
   document.getElementById('add-agent-name').focus();
 }
@@ -2785,6 +3504,8 @@ async function saveAddAgent() {
   const specialisation = getSpecValue('add-agent-specialisation', 'add-agent-specialisation-custom');
   const provider = document.getElementById('add-agent-provider').value;
   const model = document.getElementById('add-agent-model').value;
+  const personaName = document.getElementById('add-agent-persona').value;
+  const persona = (personasByHat[hatType] ?? []).find(p => p.name === personaName);
   const errEl = document.getElementById('add-agent-error');
   errEl.textContent = '';
   if (!name) { errEl.textContent = 'Name is required.'; return; }
@@ -2793,7 +3514,13 @@ async function saveAddAgent() {
   try {
     const res = await fetch('/api/agents', {
       method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ name, hatType, specialisation: specialisation || undefined, provider, model }),
+      body: JSON.stringify({
+        name, hatType,
+        visualDescription: persona?.visualDescription || undefined,
+        backstory: persona?.backstory || undefined,
+        specialisation: specialisation || persona?.specialisation || undefined,
+        provider, model,
+      }),
     }).then(r => r.json());
     if (res.error) { errEl.textContent = res.error; }
     else { closeAddAgent(); }
@@ -3433,7 +4160,11 @@ initProjectBadge();
 initGoalBar();
 initSettings();
 initAddAgent();
+initAgentChat();
+initAgendaAdd();
 loadSpecialisations();
+loadPersonas();
+initMCPEditor();
 initImpromptuMeeting();
 initCalendar();
 initMicButtons();
@@ -3450,6 +4181,7 @@ connect();
 function collapseExpandedPanel() {
   document.querySelectorAll('section.panel--expanded').forEach(p => {
     p.classList.remove('panel--expanded');
+    p.style.top = '';
     const b = p.querySelector('.panel-expand-btn');
     if (b) b.innerHTML = '<img src="/assets/expand.svg" class="svg-icon" alt="Expand">';
   });
@@ -3466,6 +4198,10 @@ function initPanelExpand() {
       collapseExpandedPanel();
       if (!isExpanded) {
         panel.classList.add('panel--expanded');
+        // Pin the top to the actual bottom of the chrome above main so the
+        // panel never overlaps the header or goal bar regardless of their heights.
+        const mainEl = document.querySelector('main');
+        if (mainEl) panel.style.top = mainEl.getBoundingClientRect().top + 'px';
         btn.innerHTML = '<img src="/assets/reduce.svg" class="svg-icon" alt="Collapse">'; // reduce — restore to normal
         document.body.classList.add('has-expanded-panel');
       }

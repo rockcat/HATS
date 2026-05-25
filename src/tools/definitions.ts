@@ -103,6 +103,19 @@ const GET_CURRENT_DATETIME: ToolDefinition = {
   parameters: { type: 'object', properties: {}, required: [] },
 };
 
+const FETCH_URL: ToolDefinition = {
+  name: 'fetch_url',
+  description: 'Fetch the content of a URL and save it to a file in the project workspace. Returns the path of the saved file. Useful for downloading web pages, JSON feeds, documents, or any publicly accessible resource.',
+  parameters: {
+    type: 'object',
+    properties: {
+      url:      { type: 'string', description: 'The URL to fetch.' },
+      filePath: { type: 'string', description: 'Where to save the content, relative to the project outputs/ folder. If omitted a filename is derived from the URL.' },
+    },
+    required: ['url'],
+  },
+};
+
 // ── Tools available to Blue Hat (PM) only ────────────────────────────────────
 
 const ASSIGN_TASK: ToolDefinition = {
@@ -177,9 +190,63 @@ const DISENGAGE_CONVERSATION: ToolDefinition = {
   parameters: { type: 'object', properties: {}, required: [] },
 };
 
+const REQUEST_EMAIL_APPROVAL: ToolDefinition = {
+  name: 'request_email_approval',
+  description: 'Request human approval to use an email address with email-sending MCP tools. You MUST call this and wait for approval before passing any email address to an MCP tool. Once approved, the address is stored and you can proceed.',
+  parameters: {
+    type: 'object',
+    properties: {
+      email:  { type: 'string', description: 'The email address you need to use.' },
+      reason: { type: 'string', description: 'Why you need to contact this email address.' },
+    },
+    required: ['email'],
+  },
+};
+
+const CHECK_EMAIL_PERMISSIONS: ToolDefinition = {
+  name: 'check_email_permissions',
+  description: 'Check the approval status of email addresses you have previously requested permission to contact. Returns each address with its current status (pending / approved / rejected). Use this after a scheduled check to see if the human has granted any new approvals, then act on them.',
+  parameters: { type: 'object', properties: {}, required: [] },
+};
+
+// ── Agent self-scheduling tools (all agents) ──────────────────────────────────
+
+const SCHEDULE_ACTION: ToolDefinition = {
+  name: 'schedule_action',
+  description: 'Schedule a future or recurring action for yourself. The system will send you the description text at the specified time. Use this to remind yourself to check email, follow up on a task, or perform any periodic check.',
+  parameters: {
+    type: 'object',
+    properties: {
+      label:           { type: 'string', description: 'Short name shown in the UI (e.g. "Check inbox").' },
+      description:     { type: 'string', description: 'Instructions sent to you when this action fires — describe exactly what you should do.' },
+      intervalMinutes: { type: 'number', description: 'Repeat every N minutes. Omit or set to 0 for a one-off action.' },
+      delayMinutes:    { type: 'number', description: 'Minutes from now before the first run. Defaults to the interval (or 1 minute for one-off).' },
+    },
+    required: ['label', 'description'],
+  },
+};
+
+const LIST_MY_ACTIONS: ToolDefinition = {
+  name: 'list_my_actions',
+  description: 'List your current scheduled actions, including their IDs, labels, intervals, and next run times.',
+  parameters: { type: 'object', properties: {}, required: [] },
+};
+
+const CANCEL_ACTION: ToolDefinition = {
+  name: 'cancel_action',
+  description: 'Cancel a scheduled action by its ID. Use list_my_actions first to find the ID.',
+  parameters: {
+    type: 'object',
+    properties: {
+      id: { type: 'string', description: 'The action ID to cancel.' },
+    },
+    required: ['id'],
+  },
+};
+
 // ── Registry ──────────────────────────────────────────────────────────────────
 
-const BASE_TOOLS = [SEND_MESSAGE, ESCALATE_TO_HUMAN, REPORT_TASK_COMPLETE, DISENGAGE_CONVERSATION, READ_FILE, WRITE_FILE, LIST_FILES, WEB_SEARCH, GET_CURRENT_DATETIME];
+const BASE_TOOLS = [SEND_MESSAGE, ESCALATE_TO_HUMAN, REPORT_TASK_COMPLETE, DISENGAGE_CONVERSATION, READ_FILE, WRITE_FILE, LIST_FILES, WEB_SEARCH, FETCH_URL, GET_CURRENT_DATETIME, REQUEST_EMAIL_APPROVAL, CHECK_EMAIL_PERMISSIONS, SCHEDULE_ACTION, LIST_MY_ACTIONS, CANCEL_ACTION];
 const BLUE_HAT_TOOLS = [...BASE_TOOLS, ASSIGN_TASK, REQUEST_MEETING, SCHEDULE_MEETING];
 
 export function getToolsForHat(hatType: HatType): ToolDefinition[] {

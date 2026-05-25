@@ -30,6 +30,7 @@ export class Agent {
   private priorityInbox: TeamMessage[] = [];
   private processing = false;
   private interruptFlag = false;
+  private stopped = false;
   private toolExecutor: ToolExecutor | null = null;
   private responseHandler: ResponseHandler | null = null;
   private extraToolsProvider: (() => import('../providers/types.js').ToolDefinition[]) | null = null;
@@ -111,6 +112,13 @@ export class Agent {
     this.systemPrompt = this.buildSystemPrompt();
   }
 
+  /** Update visual description and/or backstory, then rebuild the system prompt. */
+  setIdentity(visualDescription: string | undefined, backstory: string | undefined): void {
+    if (visualDescription !== undefined) this.config.identity.visualDescription = visualDescription;
+    if (backstory !== undefined) this.config.identity.backstory = backstory;
+    this.systemPrompt = this.buildSystemPrompt();
+  }
+
   setAvatar(avatar: string | undefined): void {
     this.config.identity.avatar = avatar;
   }
@@ -126,8 +134,17 @@ export class Agent {
 
   // ── Inbox ───────────────────────────────────────────────────────────────────
 
+  /** Stop processing permanently — called when the owning project is unloaded. */
+  stop(): void {
+    this.stopped = true;
+    this.interruptFlag = true;
+    this.inbox.length = 0;
+    this.priorityInbox.length = 0;
+  }
+
   /** Deliver a message to this agent's inbox and trigger processing. */
   receive(message: TeamMessage): void {
+    if (this.stopped) return;
     this.inbox.push(message);
     // Fire-and-forget — errors surface via console
     this.processInbox().catch((err) => {
@@ -141,6 +158,7 @@ export class Agent {
    * this before resuming any queued regular messages.
    */
   interrupt(message: TeamMessage): void {
+    if (this.stopped) return;
     this.priorityInbox.push(message);
     this.interruptFlag = true;
     if (!this.processing) {
@@ -152,7 +170,7 @@ export class Agent {
   }
 
   private async processInbox(): Promise<void> {
-    if (this.processing) return; // already running
+    if (this.processing || this.stopped) return;
     this.processing = true;
 
     try {
@@ -367,6 +385,7 @@ export class Agent {
       projectDir: this.config.projectDir,
       projectGoal: this.config.projectGoal,
       specialisation: this.config.identity.specialisation,
+      email: this.config.identity.email,
     }).text;
   }
 

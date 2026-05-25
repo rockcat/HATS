@@ -1,13 +1,13 @@
 import { createServer, IncomingMessage, ServerResponse } from 'http';
-import { readFile, writeFile, mkdir } from 'fs/promises';
+import { readFile, writeFile } from 'fs/promises';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { WebSocketServer, WebSocket } from 'ws';
 import { TeamOrchestrator } from '../orchestrator/orchestrator.js';
 import { StoredEvent } from '../store/event-store.js';
-import { HumanRequest } from '../orchestrator/types.js';
-import { MCP_CATALOGUE, resolveConfig, MCPCatalogueEntry } from '../mcp/mcp-catalogue.js';
+import { resolveConfig, MCPCatalogueEntry } from '../mcp/mcp-catalogue.js';
+import { getCatalogue } from '../mcp/catalogue-store.js';
 import { isSpeechAvailable } from '../speech/pipeline.js';
 import { VoiceManager } from '../speech/voice-manager.js';
 import { log } from '../util/logger.js';
@@ -17,7 +17,11 @@ import { SpeechRouter } from './speech-router.js';
 import { ProjectManager, AgentStatus } from './project-manager.js';
 import { AgentRouter } from './agent-router.js';
 import { handleCLICommand } from './cli-handler.js';
-import { buildAgentStatuses, buildRequestsList, readBody, readBodyBuffer } from './api-utils.js';
+import { buildAgentStatuses, readBody, readBodyBuffer } from './api-utils.js';
+import { HumanRequestStore } from './human-request-store.js';
+import { EmailAllowlistStore } from './email-allowlist-store.js';
+import { EmailAllowlistRouter } from './email-allowlist-router.js';
+import { MCPCatalogueRouter } from './mcp-catalogue-router.js';
 import { handleOrchestratorEvent, bufferAgentFeedEvent } from './event-handler.js';
 import { executeProjectSwitch } from './project-switcher.js';
 
@@ -53,6 +57,8 @@ export type ProjectLoader = (projectDir: string, kanbanFile: string, stateFile: 
 export interface APIServerConfig {
   port?:            number;
   kanbanPath?:      string;
+  requestsPath?:    string;
+  allowlistPath?:   string;
   mcpEnabledPath?:  string;
   meetingsPath?:    string;
   envPath?:         string;
@@ -81,7 +87,9 @@ export class APIServer {
   private agentActivity = new Map<string, { activity: string; talkingTo?: string }>();
   private talkingTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private agentTicketMap = new Map<string, string>();
-  private humanRequests = new Map<string, HumanRequest>();
+  private humanRequestStore: HumanRequestStore;
+  private emailAllowlistStore: EmailAllowlistStore;
+  private emailAllowlistRouter: EmailAllowlistRouter;
   private agentFeeds = new Map<string, StoredEvent[]>();
   private readonly FEED_LIMIT = 200;
   private nudgeScheduler: ReturnType<typeof setInterval> | null = null;
@@ -97,6 +105,7 @@ export class APIServer {
   private speechRouter: SpeechRouter;
   private projectManager: ProjectManager;
   private agentRouter: AgentRouter;
+  private mcpCatalogueRouter: MCPCatalogueRouter;
 
   constructor(orchestrator: TeamOrchestrator, config: APIServerConfig = {}) {
     this.orchestrator  = orchestrator;
@@ -108,6 +117,8 @@ export class APIServer {
     this.projectDir     = config.projectDir ?? null;
     this.projectsRoot   = config.projectsRoot ?? null;
     this.projectLoader  = config.projectLoader ?? null;
+    this.humanRequestStore   = new HumanRequestStore(config.requestsPath ?? null);
+    this.emailAllowlistStore = new EmailAllowlistStore(config.allowlistPath ?? null);
 
     // eslint-disable-next-line @typescript-eslint/no-this-alias
     const self = this;
@@ -157,7 +168,7 @@ export class APIServer {
     this.agentRouter = new AgentRouter({
       getOrchestrator:    () => self.orchestrator,
       agentFeeds:         self.agentFeeds,
-      humanRequests:      self.humanRequests,
+      humanRequestStore:  self.humanRequestStore,
       agentTicketMap:     self.agentTicketMap,
       agentActivity:      self.agentActivity,
       talkingTimers:      self.talkingTimers,
@@ -176,6 +187,17 @@ export class APIServer {
       json: (r, s, b) => self.json(r, s, b),
       readBody,
       avatarsDir: AVATARS_DIR,
+    });
+    this.mcpCatalogueRouter = new MCPCatalogueRouter({
+      json:         (r, s, b) => self.json(r, s, b),
+      readBody,
+      sseBroadcast: (d) => self.sseBroadcast(d),
+    });
+    this.emailAllowlistRouter = new EmailAllowlistRouter({
+      store:        self.emailAllowlistStore,
+      sseBroadcast: (d) => self.sseBroadcast(d),
+      json:         (r, s, b) => self.json(r, s, b),
+      readBody,
     });
 
     this.server = createServer((req, res) => {
@@ -232,6 +254,9 @@ export class APIServer {
       });
     });
 
+    await this.humanRequestStore.load();
+    await this.emailAllowlistStore.load();
+    this.orchestrator.setEmailAllowlistStore(this.emailAllowlistStore);
     this.loadMCPEnabled().catch(() => {});
     if (this.meetingsPath) this.orchestrator.initMeetingStore(this.meetingsPath).catch(() => {});
 
@@ -262,6 +287,7 @@ export class APIServer {
     this.kanbanManager.closeWatcher();
     if (this.meetingScheduler) { clearInterval(this.meetingScheduler); this.meetingScheduler = null; }
     if (this.nudgeScheduler)   { clearInterval(this.nudgeScheduler);   this.nudgeScheduler   = null; }
+    this.orchestrator.stopAgendaRunner();
     this.voiceManager.stop();
     this.wss.close();
     this.server.close();
@@ -315,8 +341,9 @@ export class APIServer {
     const tickets  = this.kanbanManager.kanbanPath ? await this.kanbanManager.readTickets() : [];
     const meta     = await this.projectManager.readProjectMeta();
     const project  = { id: this.projectId, dir: this.projectDir, goal: meta['goal'] ?? '', humanName: meta['humanName'] ?? 'Human' };
-    const requests = this.buildRequestsList();
-    res.write(`data: ${JSON.stringify({ type: 'init', agents, tickets, project, requests })}\n\n`);
+    const requests  = this.buildRequestsList();
+    const allowlist = this.emailAllowlistStore.list();
+    res.write(`data: ${JSON.stringify({ type: 'init', agents, tickets, project, requests, allowlist })}\n\n`);
     this.sseClients.push(res);
   }
 
@@ -332,24 +359,24 @@ export class APIServer {
 
   private handleOrchestratorEvent(ev: StoredEvent): void {
     handleOrchestratorEvent(ev, {
-      agentActivity:     this.agentActivity,
-      talkingTimers:     this.talkingTimers,
-      pendingHumanTurns: this.pendingHumanTurns,
-      pendingTurnAcks:   this.pendingTurnAcks,
-      humanRequests:     this.humanRequests,
-      agentTicketMap:    this.agentTicketMap,
-      kanban:            this.kanbanManager,
-      getOrchestrator:   () => this.orchestrator,
-      speechInterest:    this.speechInterest,
-      voiceManager:      this.voiceManager,
-      sseBroadcast:      (d) => this.sseBroadcast(d),
-      buildAgentStatuses: () => this.buildAgentStatuses(),
-      buildRequestsList:  () => this.buildRequestsList(),
+      agentActivity:        this.agentActivity,
+      talkingTimers:        this.talkingTimers,
+      pendingHumanTurns:    this.pendingHumanTurns,
+      pendingTurnAcks:      this.pendingTurnAcks,
+      humanRequestStore:    this.humanRequestStore,
+      emailAllowlistStore:  this.emailAllowlistStore,
+      agentTicketMap:       this.agentTicketMap,
+      kanban:               this.kanbanManager,
+      getOrchestrator:      () => this.orchestrator,
+      speechInterest:       this.speechInterest,
+      voiceManager:         this.voiceManager,
+      sseBroadcast:         (d) => this.sseBroadcast(d),
+      buildAgentStatuses:   () => this.buildAgentStatuses(),
     });
     bufferAgentFeedEvent(ev, this.agentFeeds, this.FEED_LIMIT, (d) => this.sseBroadcast(d));
   }
 
-  private buildRequestsList(): HumanRequest[] { return buildRequestsList(this.humanRequests); }
+  private buildRequestsList() { return this.humanRequestStore.list(); }
   private buildAgentStatuses(): AgentStatus[]  { return buildAgentStatuses(this.orchestrator, this.agentActivity); }
 
   // ── HTTP routing ──────────────────────────────────────────────────────────
@@ -388,11 +415,50 @@ export class APIServer {
       return;
     }
 
-    if (await this.kanbanManager.handleRoutes(pathname, method, url, req, res))  return;
-    if (await this.meetingRouter.handleRoutes(pathname, method, req, res))        return;
-    if (await this.speechRouter.handleRoutes(pathname, method, req, res))         return;
-    if (await this.projectManager.handleRoutes(pathname, method, url, req, res))  return;
-    if (await this.agentRouter.handleRoutes(pathname, method, url, req, res))     return;
+    if (await this.kanbanManager.handleRoutes(pathname, method, url, req, res))       return;
+    if (await this.meetingRouter.handleRoutes(pathname, method, req, res))            return;
+    if (await this.speechRouter.handleRoutes(pathname, method, req, res))             return;
+    if (await this.projectManager.handleRoutes(pathname, method, url, req, res))      return;
+    if (await this.agentRouter.handleRoutes(pathname, method, url, req, res))         return;
+    if (await this.mcpCatalogueRouter.handleRoutes(pathname, method, req, res))       return;
+    if (await this.emailAllowlistRouter.handleRoutes(pathname, method, req, res))     return;
+
+    // ── Agent agenda ────────────────────────────────────────────────────────
+    if (pathname === '/api/agenda' && method === 'GET') {
+      const agentName = url.searchParams.get('agent') ?? undefined;
+      const store = this.orchestrator.getAgendaStore();
+      this.json(res, 200, store ? store.list(agentName) : []);
+      return;
+    }
+    if (pathname === '/api/agenda' && method === 'POST') {
+      const body = JSON.parse(await readBody(req)) as { agentName: string; label: string; description: string; intervalMinutes?: number; delayMinutes?: number };
+      const store = this.orchestrator.getAgendaStore();
+      if (!store) { this.json(res, 503, { error: 'Agenda store not ready' }); return; }
+      if (!body.agentName || !body.label || !body.description) {
+        this.json(res, 400, { error: 'agentName, label, and description are required' }); return;
+      }
+      const intervalSeconds = (body.intervalMinutes && body.intervalMinutes > 0) ? Math.round(body.intervalMinutes * 60) : null;
+      const delaySeconds    = body.delayMinutes != null ? Math.round(body.delayMinutes * 60) : undefined;
+      const entry = await store.add({ agentName: body.agentName, label: body.label, description: body.description, intervalSeconds, delaySeconds });
+      this.json(res, 201, entry);
+      return;
+    }
+    if (pathname.startsWith('/api/agenda/') && method === 'DELETE') {
+      const id = pathname.slice('/api/agenda/'.length);
+      const store = this.orchestrator.getAgendaStore();
+      const ok = store ? await store.remove(id) : false;
+      this.json(res, ok ? 200 : 404, ok ? { ok: true } : { error: 'Not found' });
+      return;
+    }
+    if (pathname.startsWith('/api/agenda/') && method === 'PATCH') {
+      const id    = pathname.slice('/api/agenda/'.length);
+      const body  = JSON.parse(await readBody(req)) as Partial<import('./agenda-store.js').AgendaEntry>;
+      const store = this.orchestrator.getAgendaStore();
+      if (!store) { this.json(res, 503, { error: 'Agenda store not ready' }); return; }
+      const updated = await store.update(id, body);
+      this.json(res, updated ? 200 : 404, updated ?? { error: 'Not found' });
+      return;
+    }
 
     if (pathname.startsWith('/api/')) { this.json(res, 404, { error: 'Not found' }); return; }
 
@@ -428,7 +494,7 @@ export class APIServer {
       const raw  = await readFile(this.mcpEnabledPath, 'utf-8');
       const data = JSON.parse(raw) as { ids: string[] };
       for (const id of data.ids ?? []) {
-        const entry = MCP_CATALOGUE.find(e => e.id === id);
+        const entry = getCatalogue().find(e => e.id === id);
         if (!entry || this.orchestrator.hasMCPServer(id)) continue;
         try {
           const config = this.resolveMCPConfig(id, entry);
@@ -461,12 +527,14 @@ export class APIServer {
   private async switchProject(newId: string): Promise<void> {
     if (!this.projectLoader || !this.projectsRoot) throw new Error('Project loader not configured');
     await executeProjectSwitch(newId, {
-      projectLoader:    this.projectLoader,
-      projectsRoot:     this.projectsRoot,
-      projectDir:       this.projectDir,
-      orchestrator:     this.orchestrator,
-      kanbanManager:    this.kanbanManager,
-      projectManager:   this.projectManager,
+      projectLoader:        this.projectLoader,
+      projectsRoot:         this.projectsRoot,
+      projectDir:           this.projectDir,
+      orchestrator:         this.orchestrator,
+      kanbanManager:        this.kanbanManager,
+      humanRequestStore:    this.humanRequestStore,
+      emailAllowlistStore:  this.emailAllowlistStore,
+      projectManager:       this.projectManager,
       enabledMCPIds:    this.enabledMCPIds,
       agentActivity:    this.agentActivity,
       agentFeeds:       this.agentFeeds,

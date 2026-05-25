@@ -91,31 +91,6 @@ export class KanbanManager {
     await this.writeKanban(board);
   }
 
-  async createEscalationTicket(from: string, message: string, urgency: string): Promise<void> {
-    if (!this.kanbanPath) return;
-    const board = await this.readKanban();
-    const id    = `TKT-${String(board.nextSeq).padStart(3, '0')}`;
-    board.nextSeq++;
-    const now      = new Date().toISOString();
-    const shortMsg = message.length > 80 ? `${message.slice(0, 77)}…` : message;
-    const priority = urgency === 'high' || urgency === 'critical' ? 'high' : 'medium';
-    board.tickets[id] = {
-      id,
-      title:       `Escalation from ${from}: ${shortMsg}`,
-      description: message,
-      priority:    priority as never,
-      column:      'ready' as never,
-      creator:     from,
-      assignee:    'human',
-      tags:        ['escalation'],
-      comments:    [],
-      createdAt:   now,
-      updatedAt:   now,
-    };
-    await this.writeKanban(board);
-    log.info(`[API] Created escalation ticket ${id} for human from ${from}`);
-  }
-
   async unblockDependents(completedId: string): Promise<void> {
     if (!this.kanbanPath) return;
     const board = await this.readKanban();
