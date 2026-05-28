@@ -4100,7 +4100,7 @@ body.has-expanded-panel main > section:not(.panel--expanded) {
 
 /* ── Agent Library tab ──────────────────────────────────────────────────────── */
 
-.library-pane { display: flex; flex-direction: column; gap: 0; padding: 0; overflow-y: auto; }
+.library-pane { flex-direction: column; gap: 0; padding: 0; overflow-y: auto; }
 
 .library-toolbar {
   display: flex; align-items: center; gap: 8px;
@@ -4141,7 +4141,7 @@ body.has-expanded-panel main > section:not(.panel--expanded) {
 
 /* ── Schedules tab ──────────────────────────────────────────────────────────── */
 
-.schedules-pane { display: flex; flex-direction: column; gap: 0; overflow-y: auto; }
+.schedules-pane { flex-direction: column; gap: 0; overflow-y: auto; }
 
 .schedules-list { flex: 1; overflow-y: auto; }
 
@@ -4171,6 +4171,8 @@ body.has-expanded-panel main > section:not(.panel--expanded) {
 }
 .schedules-add-summary::before { content: '▶'; font-size: 9px; transition: transform .15s; }
 details.schedules-add-section[open] .schedules-add-summary::before { transform: rotate(90deg); }
+
+#schedules-add-description { color: var(--text-muted); font-size: 11px; margin-top: 2px; height: 100px;}
 
 .schedules-add-form { padding: 8px 12px; display: flex; flex-direction: column; gap: 6px; }
 

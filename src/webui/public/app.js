@@ -107,7 +107,7 @@ async function loadSpecialisations() {
 }
 
 function populateSpecSelects() {
-  for (const id of ['agent-config-specialisation', 'add-agent-specialisation']) {
+  for (const id of ['agent-config-specialisation', 'add-agent-specialisation', 'lib-edit-specialisation']) {
     const sel = document.getElementById(id);
     if (!sel) continue;
     const current = sel.value;
@@ -4264,6 +4264,7 @@ initFileUpload();
 initFileViewer();
 initGenBgModal();
 initLibraryTab();
+initLibraryEditModal();
 initSchedulesTab();
 connect();
 
@@ -4745,10 +4746,10 @@ function renderGlobalAgents(agents, projectIds) {
     return;
   }
   list.innerHTML = agents.map(agent => {
-    const hats    = (agent.hatType ?? []).filter(h => h !== 'none').map(h => h.charAt(0).toUpperCase() + h.slice(1)).join('+') || 'No Hat';
-    const inProj  = projectIds.has(agent.id);
+    const hats   = (agent.hatType ?? []).filter(h => h !== 'none').map(h => h.charAt(0).toUpperCase() + h.slice(1)).join('+') || 'No Hat';
+    const inProj = projectIds.has(agent.id);
     return `
-      <div class="library-agent-row" data-agent-id="${agent.id}">
+      <div class="library-agent-row" data-agent-id="${agent.id}" style="cursor:pointer" title="Click to edit">
         <div class="library-agent-body" style="flex:1;min-width:0">
           <div class="library-agent-name">${escHtml(agent.identity?.name ?? 'Unnamed')}</div>
           <div class="library-agent-meta">${escHtml(hats)} · ${escHtml(agent.model ?? '')}</div>
@@ -4773,7 +4774,8 @@ function renderGlobalAgents(agents, projectIds) {
   });
 
   list.querySelectorAll('[data-action="delete"]').forEach(btn => {
-    btn.addEventListener('click', async () => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
       const agentId = btn.dataset.agentId;
       const name    = btn.closest('.library-agent-row').querySelector('.library-agent-name')?.textContent ?? agentId;
       if (!confirm(`Remove "${name}" from the global library? This does not affect active projects.`)) return;
@@ -4783,11 +4785,95 @@ function renderGlobalAgents(agents, projectIds) {
       } catch { alert('Network error'); }
     });
   });
+
+  list.querySelectorAll('[data-action="add"]').forEach(btn => {
+    btn.addEventListener('click', (e) => e.stopPropagation());
+  });
+
+  list.querySelectorAll('.library-agent-row').forEach(row => {
+    row.addEventListener('click', () => {
+      const agentId = row.dataset.agentId;
+      const agent   = agents.find(a => a.id === agentId);
+      if (agent) openLibraryEdit(agent);
+    });
+  });
+}
+
+let _libEditAgentId = null;
+
+function openLibraryEdit(agent) {
+  _libEditAgentId = agent.id;
+  document.getElementById('lib-edit-name').value          = agent.identity?.name ?? '';
+  document.getElementById('lib-edit-visual-desc').value   = agent.identity?.visualDescription ?? '';
+  document.getElementById('lib-edit-backstory').value     = agent.identity?.backstory ?? '';
+  document.getElementById('lib-edit-email').value         = agent.identity?.email ?? '';
+  document.getElementById('lib-edit-error').textContent   = '';
+  populateHatGroup('lib-edit-hat-group', agent.hatType ?? ['none']);
+  setSpecValue('lib-edit-specialisation', 'lib-edit-specialisation-custom', agent.identity?.specialisation ?? '');
+
+  const provSel  = document.getElementById('lib-edit-provider');
+  const modelSel = document.getElementById('lib-edit-model');
+  if (_providersCache) {
+    provSel.innerHTML = _providersCache.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+    provSel.value     = agent.providerName ?? 'anthropic';
+    populateModelSelect(modelSel, _providersCache, provSel.value, agent.model ?? '');
+  }
+
+  document.getElementById('library-edit-modal').hidden = false;
+  document.getElementById('lib-edit-name').focus();
 }
 
 function initLibraryTab() {
   document.getElementById('library-new-agent-btn')?.addEventListener('click', () => {
     openAddAgent();
+  });
+}
+
+function initLibraryEditModal() {
+  const modal   = document.getElementById('library-edit-modal');
+  const close   = document.getElementById('library-edit-close');
+  const cancel  = document.getElementById('lib-edit-cancel');
+  const save    = document.getElementById('lib-edit-save');
+  const provSel = document.getElementById('lib-edit-provider');
+  const modSel  = document.getElementById('lib-edit-model');
+
+  const closeModal = () => { modal.hidden = true; _libEditAgentId = null; };
+  close.addEventListener('click', closeModal);
+  cancel.addEventListener('click', closeModal);
+  modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
+
+  provSel?.addEventListener('change', () => {
+    if (_providersCache) populateModelSelect(modSel, _providersCache, provSel.value, '');
+  });
+
+  document.getElementById('lib-edit-specialisation')?.addEventListener('change', function () {
+    const custom = document.getElementById('lib-edit-specialisation-custom');
+    if (custom) custom.hidden = this.value !== '__custom__';
+  });
+
+  save.addEventListener('click', async () => {
+    if (!_libEditAgentId) return;
+    const name     = document.getElementById('lib-edit-name').value.trim();
+    const hatTypes = getSelectedHats('lib-edit-hat-group');
+    if (!name) { document.getElementById('lib-edit-error').textContent = 'Name is required'; return; }
+    const body = {
+      name,
+      hatTypes,
+      visualDescription: document.getElementById('lib-edit-visual-desc').value.trim(),
+      backstory:         document.getElementById('lib-edit-backstory').value.trim(),
+      specialisation:    getSpecValue('lib-edit-specialisation', 'lib-edit-specialisation-custom'),
+      email:             document.getElementById('lib-edit-email').value.trim(),
+      provider:          provSel?.value ?? 'anthropic',
+      model:             modSel?.value ?? '',
+    };
+    try {
+      const r = await fetch(`/api/global-agents/${encodeURIComponent(_libEditAgentId)}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+      });
+      if (!r.ok) { const e = await r.json(); document.getElementById('lib-edit-error').textContent = e.error ?? 'Save failed'; return; }
+      closeModal();
+      fetchGlobalAgents();
+    } catch { document.getElementById('lib-edit-error').textContent = 'Network error'; }
   });
 }
 

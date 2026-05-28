@@ -863,6 +863,61 @@
     </div>
   </div>
 
+<!-- Library Agent Edit Modal -->
+<div id="library-edit-modal" class="modal-overlay" hidden>
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="modal-header">
+      <span class="modal-ticket-id">Edit Agent</span>
+      <button class="modal-close" id="library-edit-close" title="Close"><img src="/assets/close.svg" class="svg-icon" alt="Close"></button>
+    </div>
+    <div class="modal-body">
+      <div class="field-group">
+        <label class="field-label">Name</label>
+        <input type="text" id="lib-edit-name" class="modal-input" autocomplete="off">
+      </div>
+      <div class="field-group">
+        <label class="field-label">Hat(s)</label>
+        <div id="lib-edit-hat-group" class="hat-check-group hat-check-group--modal"></div>
+      </div>
+      <div class="field-group">
+        <label class="field-label">Visual description</label>
+        <input type="text" id="lib-edit-visual-desc" class="modal-input" autocomplete="off">
+      </div>
+      <div class="field-group">
+        <label class="field-label">Backstory</label>
+        <textarea id="lib-edit-backstory" class="modal-textarea" rows="2"></textarea>
+      </div>
+      <div class="field-group">
+        <label class="field-label">Specialisation</label>
+        <select id="lib-edit-specialisation" class="modal-select">
+          <option value="">— none —</option>
+          <option value="__custom__">Custom…</option>
+        </select>
+        <input type="text" id="lib-edit-specialisation-custom" class="modal-input" placeholder="Type your specialisation…" autocomplete="off" hidden>
+      </div>
+      <div class="field-group">
+        <label class="field-label">Email</label>
+        <input type="email" id="lib-edit-email" class="modal-input" autocomplete="off">
+      </div>
+      <div class="field-row">
+        <div class="field-group">
+          <label class="field-label">Provider</label>
+          <select id="lib-edit-provider" class="modal-select"></select>
+        </div>
+        <div class="field-group">
+          <label class="field-label">Model</label>
+          <select id="lib-edit-model" class="modal-select"></select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <span id="lib-edit-error" class="modal-error"></span>
+      <button class="modal-btn secondary" id="lib-edit-cancel">Cancel</button>
+      <button class="modal-btn primary" id="lib-edit-save">Save</button>
+    </div>
+  </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
   <script src="app.js"></script>
   <script type="module" src="avatar.js"></script>

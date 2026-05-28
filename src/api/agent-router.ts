@@ -580,6 +580,54 @@ export class AgentRouter {
       return true;
     }
 
+    if (pathname.match(/^\/api\/global-agents\/[^/]+$/) && method === 'PATCH') {
+      const agentId = decodeURIComponent(pathname.slice('/api/global-agents/'.length));
+      const store   = this.deps.getAgentStore();
+      if (!store) { json(res, 503, { error: 'Agent store not ready' }); return true; }
+      const def = store.get(agentId);
+      if (!def) { json(res, 404, { error: 'Agent not found' }); return true; }
+      const body = await readBody(req);
+      const patch = JSON.parse(body) as {
+        name?: string; hatTypes?: string[]; visualDescription?: string;
+        backstory?: string; specialisation?: string; email?: string;
+        provider?: string; model?: string;
+      };
+      const validHats = new Set(['none', 'white', 'red', 'black', 'yellow', 'green', 'blue']);
+      if (patch.hatTypes && patch.hatTypes.some(h => !validHats.has(h))) {
+        json(res, 400, { error: 'Invalid hat type' }); return true;
+      }
+      const updated = {
+        ...def,
+        identity: {
+          ...def.identity,
+          ...(patch.name              !== undefined && { name: patch.name.trim() }),
+          ...(patch.visualDescription !== undefined && { visualDescription: patch.visualDescription.trim() || undefined }),
+          ...(patch.backstory         !== undefined && { backstory: patch.backstory.trim() || undefined }),
+          ...(patch.specialisation    !== undefined && { specialisation: patch.specialisation.trim() || undefined }),
+          ...(patch.email             !== undefined && { email: patch.email.trim() || undefined }),
+        },
+        ...(patch.hatTypes  !== undefined && { hatType: patch.hatTypes as import('../hats/types.js').HatType[] }),
+        ...(patch.provider  !== undefined && { providerName: patch.provider }),
+        ...(patch.model     !== undefined && { model: patch.model.trim() }),
+      };
+      await store.addOrUpdate(updated);
+      // Sync name change to running agent if in current project
+      if (patch.name) {
+        const runningAgent = orch.listAgents().find(a => a.id === agentId);
+        if (runningAgent && patch.name.trim() !== runningAgent.name) {
+          try { orch.renameAgent(runningAgent.name, patch.name.trim()); } catch { /* non-fatal */ }
+        }
+      }
+      if (patch.hatTypes) {
+        const runningAgent = orch.listAgents().find(a => a.id === agentId);
+        if (runningAgent) orch.changeAgentHat(runningAgent.name, updated.hatType);
+      }
+      saveCurrentState().catch(() => {});
+      sseBroadcast({ type: 'agent_update', agents: this.deps.buildAgentStatuses() });
+      json(res, 200, updated);
+      return true;
+    }
+
     if (pathname.match(/^\/api\/global-agents\/[^/]+$/) && method === 'DELETE') {
       const agentId = decodeURIComponent(pathname.slice('/api/global-agents/'.length));
       const store   = this.deps.getAgentStore();
