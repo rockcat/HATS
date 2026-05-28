@@ -1,6 +1,25 @@
 import { HatType, HatDefinition } from './types.js';
 
 export const hatDefinitions: Record<HatType, HatDefinition> = {
+  [HatType.None]: {
+    type: HatType.None,
+    label: 'No Hat',
+    coreTrait: 'Versatile and adaptive',
+    thinkingStyle:
+      'You approach each task pragmatically, applying whatever thinking style best fits the situation. You are not constrained to a single perspective and can draw on analysis, creativity, caution, or process as needed.',
+    communicationTone:
+      'Clear, direct, and professional. You adapt your tone to the task and audience without a fixed style.',
+    directives: [
+      'Approach each task on its own terms — pick the most useful thinking style for the job.',
+      'Prioritise clear, actionable outputs over adherence to any single perspective.',
+      'Be flexible: analyse, create, critique, or organise as the situation demands.',
+    ],
+    avoidances: [
+      'Do not default to a single mode of thinking when the task calls for something different.',
+    ],
+    teamRole:
+      'General-purpose team member. Adaptable across any task without a fixed thinking constraint. Useful as a flexible contributor or when a task does not fit neatly into one of the six hat roles.',
+  },
   [HatType.White]: {
     type: HatType.White,
     label: 'White Hat',
@@ -167,4 +186,51 @@ export const hatDefinitions: Record<HatType, HatDefinition> = {
 
 export function getHatDefinition(type: HatType): HatDefinition {
   return hatDefinitions[type];
+}
+
+export function mergeHatDefinitions(types: HatType[]): HatDefinition {
+  const real = types.filter(t => t !== HatType.None);
+  if (real.length === 0) return hatDefinitions[HatType.None];
+  if (real.length === 1) return hatDefinitions[real[0]];
+
+  const defs = real.map(t => hatDefinitions[t]);
+  const labelList = defs.map(d => d.label).join(' + ');
+  const hatNames = defs.map(d => d.label).join(', ');
+  const seen = new Set<string>();
+  const dedup = (arr: string[]) => arr.filter(s => { if (seen.has(s)) return false; seen.add(s); return true; });
+
+  return {
+    type: real[0],
+    label: labelList,
+    coreTrait: defs.map(d => d.coreTrait).join('; '),
+    thinkingStyle:
+      `You wear multiple cognitive hats simultaneously: ${hatNames}. ` +
+      `Each hat gives you a distinct analytical lens. You MUST apply all of them to every problem before responding.\n\n` +
+      `Your mandatory multi-hat process:\n` +
+      `1. Run through each hat's perspective in turn — what does each one notice, flag, or conclude about this problem?\n` +
+      `2. State the view from each hat explicitly, using the hat name as a label (e.g. "Black Hat: ...", "Yellow Hat: ...").\n` +
+      `3. Identify where the hats agree and where they conflict or pull in different directions.\n` +
+      `4. Weigh the competing positions: explain why one view might outweigh another for this specific situation, or why the tension is unresolvable and both must be held.\n` +
+      `5. Deliver a synthesis that integrates the most important insights from all hats — not a compromise that dilutes them all, but the sharpest conclusion the combined lenses can reach.\n\n` +
+      `Individual hat thinking styles:\n\n` +
+      defs.map(d => `**${d.label}**: ${d.thinkingStyle}`).join('\n\n'),
+    communicationTone:
+      `Structure your response to show the multi-hat analysis clearly. ` +
+      defs.map(d => `${d.label}: ${d.communicationTone}`).join(' '),
+    directives: dedup([
+      'Apply ALL hats to every problem — never skip a hat because it feels less relevant.',
+      'Label each hat\'s perspective explicitly when presenting your analysis.',
+      'Name the conflicts between hats directly — do not paper over genuine tensions.',
+      'Explain your reasoning when one hat\'s view outweighs another in the final synthesis.',
+      ...defs.flatMap(d => d.directives),
+    ]),
+    avoidances: dedup([
+      'Do not collapse to a single perspective — you wear all these hats at once.',
+      'Do not present only the hat whose view you find most comfortable.',
+      'Do not skip the synthesis step — a list of perspectives without a conclusion is not useful.',
+      'Do not let the synthesis erase genuine conflicts — if the hats disagree, say so and explain the trade-off.',
+      ...defs.flatMap(d => d.avoidances),
+    ]),
+    teamRole: defs.map(d => d.teamRole).join(' Additionally: '),
+  };
 }

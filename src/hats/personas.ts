@@ -8,6 +8,7 @@ export interface AgentPersona {
 }
 
 export const personasByHat: Record<HatType, AgentPersona[]> = {
+  [HatType.None]: [],
   [HatType.Blue]: [
     {
       name: 'Amara',

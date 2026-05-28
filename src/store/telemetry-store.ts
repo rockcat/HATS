@@ -58,30 +58,23 @@ export class TelemetryStore {
   }
 
   getSummary(): TelemetrySummary {
+    return TelemetryStore.summarize(this.records);
+  }
+
+  static summarize(records: TelemetryRecord[]): TelemetrySummary {
     const byModel:  TelemetrySummary['byModel'] = {};
     const byAgent:  TelemetrySummary['byAgent'] = {};
     let totalCalls = 0, totalIn = 0, totalOut = 0, totalCost = 0;
-
-    for (const r of this.records) {
+    for (const r of records) {
       totalCalls++;
       totalIn   += r.inputTokens;
       totalOut  += r.outputTokens;
       totalCost += r.cost;
-
       const m = byModel[r.model] ??= { calls: 0, inputTokens: 0, outputTokens: 0, cost: 0 };
       m.calls++; m.inputTokens += r.inputTokens; m.outputTokens += r.outputTokens; m.cost += r.cost;
-
       const a = byAgent[r.agent] ??= { calls: 0, inputTokens: 0, outputTokens: 0, cost: 0 };
       a.calls++; a.inputTokens += r.inputTokens; a.outputTokens += r.outputTokens; a.cost += r.cost;
     }
-
-    return {
-      totalCalls,
-      totalInputTokens:  totalIn,
-      totalOutputTokens: totalOut,
-      totalCost,
-      byModel,
-      byAgent,
-    };
+    return { totalCalls, totalInputTokens: totalIn, totalOutputTokens: totalOut, totalCost, byModel, byAgent };
   }
 }

@@ -1,4 +1,6 @@
 import { IncomingMessage, ServerResponse } from 'http';
+import { rm, mkdir, readdir } from 'fs/promises';
+import * as path from 'path';
 import { TeamOrchestrator } from '../orchestrator/orchestrator.js';
 import { HumanRequest } from '../orchestrator/types.js';
 import { HumanRequestStore } from './human-request-store.js';
@@ -9,7 +11,7 @@ import { getCatalogue } from '../mcp/catalogue-store.js';
 import { debugState } from '../providers/debug-state.js';
 import { HatType } from '../hats/types.js';
 import { SPECIALISATION_DIRECTIVES, generateSystemPrompt } from '../prompt/generator.js';
-import { getHatDefinition } from '../hats/definitions.js';
+import { mergeHatDefinitions } from '../hats/definitions.js';
 import { personasByHat } from '../hats/personas.js';
 import { getPricingTable, FREE_PROVIDERS } from '../providers/pricing.js';
 import { AnthropicProvider } from '../providers/anthropic.js';
@@ -23,6 +25,7 @@ export interface AgentRouterDeps {
   agentTicketMap: Map<string, string>;
   agentActivity: Map<string, { activity: string; talkingTo?: string }>;
   talkingTimers: Map<string, ReturnType<typeof setTimeout>>;
+  getProjectDir(): string | null;
   getKanbanPath(): string | null;
   readKanban(): Promise<Board>;
   writeKanban(board: Board): Promise<void>;
@@ -73,16 +76,16 @@ export class AgentRouter {
 
     if (pathname.match(/^\/api\/agents\/[^/]+\/prompt-preview$/) && method === 'GET') {
       const agentName = decodeURIComponent(pathname.slice('/api/agents/'.length, -'/prompt-preview'.length));
-      const hatParam  = url.searchParams.get('hat') as HatType | null;
+      const hatParams = url.searchParams.getAll('hat') as HatType[];
       const specParam = url.searchParams.get('specialisation') ?? undefined;
       const nameParam = url.searchParams.get('name') ?? undefined;
       try {
         const resolved = resolveAgentName(agentName);
         const agent    = orch.getAgent(resolved);
         if (!agent) { json(res, 404, { error: `Agent "${agentName}" not found` }); return true; }
-        const hatType = hatParam ?? agent.hatType;
-        const hat     = getHatDefinition(hatType);
-        const prompt  = generateSystemPrompt({
+        const hatTypes = hatParams.length > 0 ? hatParams : agent.hatType;
+        const hat      = mergeHatDefinitions(hatTypes);
+        const prompt   = generateSystemPrompt({
           name: nameParam ?? agent.config.identity.name,
           visualDescription: agent.config.identity.visualDescription,
           backstory: agent.config.identity.backstory,
@@ -205,11 +208,12 @@ export class AgentRouter {
     if (pathname.match(/^\/api\/agents\/[^/]+\/hat$/) && method === 'PATCH') {
       const agentName = decodeURIComponent(pathname.slice('/api/agents/'.length, -'/hat'.length));
       const body = await readBody(req);
-      const { hatType } = JSON.parse(body) as { hatType: string };
-      const validHats = ['white', 'red', 'black', 'yellow', 'green', 'blue'];
-      if (!validHats.includes(hatType)) { json(res, 400, { error: `Invalid hat type "${hatType}"` }); return true; }
+      const { hatTypes } = JSON.parse(body) as { hatTypes: string[] };
+      const validHats = new Set(['none', 'white', 'red', 'black', 'yellow', 'green', 'blue']);
+      const normalized = (hatTypes?.length ? hatTypes : ['none']);
+      if (normalized.some(h => !validHats.has(h))) { json(res, 400, { error: `Invalid hat type in "${normalized}"` }); return true; }
       try {
-        orch.changeAgentHat(resolveAgentName(agentName), hatType as HatType);
+        orch.changeAgentHat(resolveAgentName(agentName), normalized as HatType[]);
         sseBroadcast({ type: 'agent_update', agents: this.deps.buildAgentStatuses() }); saveCurrentState().catch(() => {}); json(res, 200, { ok: true });
       } catch (err) { json(res, 404, { error: (err as Error).message }); }
       return true;
@@ -217,11 +221,12 @@ export class AgentRouter {
 
     if (pathname === '/api/agents' && method === 'POST') {
       const body = await readBody(req);
-      const { name, hatType, visualDescription, specialisation, backstory, provider: providerName, model } =
-        JSON.parse(body) as { name: string; hatType: string; visualDescription?: string; specialisation?: string; backstory?: string; provider?: string; model?: string };
+      const { name, hatTypes: rawHatTypes, visualDescription, specialisation, backstory, provider: providerName, model } =
+        JSON.parse(body) as { name: string; hatTypes?: string[]; visualDescription?: string; specialisation?: string; backstory?: string; provider?: string; model?: string };
       if (!name?.trim()) { json(res, 400, { error: 'name is required' }); return true; }
-      const validHats = ['white', 'red', 'black', 'yellow', 'green', 'blue'];
-      if (!validHats.includes(hatType)) { json(res, 400, { error: `Invalid hat type "${hatType}"` }); return true; }
+      const validHats = new Set(['none', 'white', 'red', 'black', 'yellow', 'green', 'blue']);
+      const hatTypes = rawHatTypes?.length ? rawHatTypes : ['none'];
+      if (hatTypes.some(h => !validHats.has(h))) { json(res, 400, { error: `Invalid hat type in "${hatTypes}"` }); return true; }
       if (orch.listAgents().some(a => a.name.toLowerCase() === name.trim().toLowerCase())) {
         json(res, 409, { error: `Agent "${name}" already exists` }); return true;
       }
@@ -235,7 +240,7 @@ export class AgentRouter {
       );
       orch.registerAgent({
         identity: { name: name.trim(), visualDescription: visualDescription?.trim() || 'a focused, capable team member', specialisation: specialisation?.trim() || undefined, backstory: backstory?.trim() || undefined },
-        hatType: hatType as HatType, provider, model: resolvedModel,
+        hatType: hatTypes as HatType[], provider, model: resolvedModel,
       });
       sseBroadcast({ type: 'agent_update', agents: this.deps.buildAgentStatuses() }); saveCurrentState().catch(() => {}); json(res, 201, { ok: true });
       return true;
@@ -331,12 +336,61 @@ export class AgentRouter {
       const { response } = JSON.parse(body) as { response?: string };
       if (!response?.trim()) { json(res, 400, { error: 'Response is required' }); return true; }
       await humanRequestStore.respond(reqId, response.trim());
-      await orch.humanReply(request.agentName, response.trim());
+      const replyContent = `You asked: "${request.message}"\n\nHuman's answer: ${response.trim()}\n\nNow continue your work based on this answer.`;
+      await orch.humanReply(request.agentName, replyContent);
       const ticketId = request.relatedTicketId ?? agentTicketMap.get(request.agentName.toLowerCase());
       if (ticketId) this.deps.updateKanbanColumn(ticketId, 'in_progress').catch(() => {});
       sseBroadcast({ type: 'requests_update', requests: this.deps.buildRequestsList() });
       sseBroadcast({ type: 'agent_update',   agents:   this.deps.buildAgentStatuses() });
       json(res, 200, { ok: true });
+      return true;
+    }
+
+    if (pathname === '/api/project/clear' && method === 'POST') {
+      const dir = this.deps.getProjectDir();
+      if (!dir) { json(res, 503, { error: 'No project loaded' }); return true; }
+      try {
+        // Stop all running agents first to prevent race conditions with saveCurrentState
+        orch.stopAllAgents();
+
+        // Clear agent histories and in-memory tasks
+        orch.clearProject();
+
+        // Persist the cleared state — agents preserved, histories/tasks gone
+        await saveCurrentState();
+
+        // Clear kanban board
+        await this.deps.writeKanban({ tickets: {}, nextSeq: 1 });
+
+        // Clear human requests
+        await humanRequestStore.clear();
+
+        // Delete and recreate sources/ and outputs/ folders
+        for (const sub of ['sources', 'outputs']) {
+          await rm(path.join(dir, sub), { recursive: true, force: true });
+          await mkdir(path.join(dir, sub), { recursive: true });
+        }
+        await mkdir(path.join(dir, 'outputs', 'minutes'), { recursive: true });
+
+        // Delete all TKT-* ticket work folders
+        const entries = await readdir(dir, { withFileTypes: true });
+        await Promise.all(
+          entries
+            .filter(e => e.isDirectory() && /^TKT-/i.test(e.name))
+            .map(e => rm(path.join(dir, e.name), { recursive: true, force: true })),
+        );
+
+        // Broadcast refreshed state
+        const agents   = this.deps.buildAgentStatuses();
+        const requests = this.deps.buildRequestsList();
+        sseBroadcast({ type: 'board_update',    board:    { tickets: {}, nextSeq: 1 } });
+        sseBroadcast({ type: 'agent_update',    agents });
+        sseBroadcast({ type: 'requests_update', requests });
+        sseBroadcast({ type: 'files_update',    sources: [], outputs: [], tickets: [] });
+        json(res, 200, { ok: true });
+      } catch (err) {
+        json(res, 500, { error: (err as Error).message });
+      }
       return true;
     }
 
@@ -376,6 +430,7 @@ export class AgentRouter {
         id:          e.id,
         name:        e.name,
         description: e.description,
+        url:         e.url,
         envVars:     e.envVars ?? [],
         notes:       e.notes,
         configured:  !!savedCreds[e.id],

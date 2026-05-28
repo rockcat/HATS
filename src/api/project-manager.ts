@@ -1,6 +1,6 @@
 import { IncomingMessage, ServerResponse } from 'http';
 import { spawn } from 'child_process';
-import { readFile, writeFile, mkdir, readdir, stat } from 'fs/promises';
+import { readFile, writeFile, mkdir, readdir, stat, rm } from 'fs/promises';
 import * as path from 'path';
 import { TeamOrchestrator } from '../orchestrator/orchestrator.js';
 import { TelemetryStore } from '../store/telemetry-store.js';
@@ -9,7 +9,7 @@ import { listFilesRecursive } from './api-utils.js';
 import { log } from '../util/logger.js';
 
 export interface AgentStatus {
-  name: string; hatType: string; state: string; activity: string;
+  name: string; hatType: string[]; state: string; activity: string;
   talkingTo?: string; model?: string; provider?: string;
   specialisation?: string; visualDescription?: string; backstory?: string;
   email?: string; avatar?: string; voice?: string; speakerName?: string; enabledMcpServers?: string[];
@@ -264,9 +264,17 @@ export class ProjectManager {
       try {
         const sources = await listFilesRecursive(path.join(dir, 'sources'), dir, 'sources');
         const outputs = await listFilesRecursive(path.join(dir, 'outputs'), dir, 'outputs');
-        json(res, 200, { sources, outputs });
+        const rootEntries = await readdir(dir, { withFileTypes: true }).catch(() => [] as import('fs').Dirent<string>[]);
+        const ticketDirs  = rootEntries.filter(e => e.isDirectory() && /^TKT-/i.test(e.name))
+          .sort((a, b) => a.name.localeCompare(b.name));
+        const tickets: Array<{ id: string; files: Awaited<ReturnType<typeof listFilesRecursive>> }> = [];
+        for (const td of ticketDirs) {
+          const files = await listFilesRecursive(path.join(dir, td.name), dir, td.name);
+          if (files.length > 0) tickets.push({ id: td.name, files });
+        }
+        json(res, 200, { sources, outputs, tickets });
       } catch {
-        json(res, 200, { sources: [], outputs: [] });
+        json(res, 200, { sources: [], outputs: [], tickets: [] });
       }
       return true;
     }
@@ -371,6 +379,27 @@ export class ProjectManager {
         json(res, 200, { summary: this.telemetry.getSummary(), records: this.telemetry.getAll() });
       } else {
         json(res, 200, { summary: null, records: [] });
+      }
+      return true;
+    }
+
+    if (pathname === '/api/telemetry/all' && method === 'GET') {
+      const root = this.deps.getProjectsRoot();
+      if (!root) { json(res, 200, { summary: null }); return true; }
+      try {
+        const dirs = await readdir(root, { withFileTypes: true });
+        const allRecords: import('../store/telemetry-store.js').TelemetryRecord[] = [];
+        await Promise.all(dirs.filter(e => e.isDirectory()).map(async (d) => {
+          try {
+            const raw = await readFile(path.join(root, d.name, 'telemetry.jsonl'), 'utf-8');
+            for (const line of raw.split('\n')) {
+              if (line.trim()) allRecords.push(JSON.parse(line));
+            }
+          } catch { /* project has no telemetry yet */ }
+        }));
+        json(res, 200, { summary: (await import('../store/telemetry-store.js')).TelemetryStore.summarize(allRecords) });
+      } catch (err) {
+        json(res, 500, { error: (err as Error).message });
       }
       return true;
     }

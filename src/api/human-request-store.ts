@@ -60,6 +60,11 @@ export class HumanRequestStore {
     return request;
   }
 
+  async clear(): Promise<void> {
+    this.requests.clear();
+    await this.save();
+  }
+
   private async save(): Promise<void> {
     if (!this.filePath) return;
     await writeFile(this.filePath, JSON.stringify(this.list(), null, 2), 'utf-8');

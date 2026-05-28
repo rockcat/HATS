@@ -1,5 +1,5 @@
 import * as path from 'path';
-import { mkdir } from 'fs/promises';
+import { mkdir, writeFile } from 'fs/promises';
 import { TeamOrchestrator } from '../orchestrator/orchestrator.js';
 import { StoredEvent } from '../store/event-store.js';
 import { log } from '../util/logger.js';
@@ -99,6 +99,7 @@ export async function executeProjectSwitch(newId: string, ctx: ProjectSwitchCont
   ctx.sseBroadcast({ type: 'telemetry_update', summary: ctx.projectManager.telemetry?.getSummary() ?? null });
 
   ctx.kanbanManager.dispatchUnstartedTickets().catch(() => {});
+  writeFile(path.join(ctx.projectsRoot, 'last-project.json'), JSON.stringify({ id: newId }), 'utf-8').catch(() => {});
   log.info(`[API] Project switched to "${newId}"`);
   ctx.projectSwitchCallback?.(newOrchestrator);
 }

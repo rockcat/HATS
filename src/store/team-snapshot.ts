@@ -8,7 +8,7 @@ export const SNAPSHOT_VERSION = 1;
 export interface AgentSnapshot {
   id: string;             // stable UUID, used as map key so renames don't break anything
   identity: AgentIdentity;
-  hatType: HatType;
+  hatType: HatType | HatType[];  // HatType for legacy snapshots; migrated to array on load
   model: string;
   providerName: string;   // used by ProviderFactory to reconstruct the right provider
   teamContext?: string;

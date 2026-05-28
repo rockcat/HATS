@@ -17,7 +17,7 @@
  * Set TEAM_PROJECT env var or pass as first CLI arg to select a project (default: default).
  */
 
-import { existsSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { mkdir } from 'fs/promises';
 import * as path from 'path';
 import { TeamOrchestrator } from './src/orchestrator/orchestrator.js';
@@ -34,7 +34,17 @@ import { initCatalogue } from './src/mcp/catalogue-store.js';
 
 const CATALOGUE_FILE = path.join(process.cwd(), 'config', 'mcp-catalogue.json');
 const PROJECTS_ROOT = path.resolve(process.env['PROJECTS_ROOT'] ?? './projects');
-const PROJECT_ID    = process.argv[2] ?? process.env['TEAM_PROJECT'] ?? 'default';
+const PROJECT_ID    = (() => {
+  if (process.argv[2]) return process.argv[2];
+  // Only honour TEAM_PROJECT if it's explicitly non-default; otherwise let last-project.json win
+  const envProject = process.env['TEAM_PROJECT'];
+  if (envProject && envProject !== 'default') return envProject;
+  const lastFile = path.join(PROJECTS_ROOT, 'last-project.json');
+  if (existsSync(lastFile)) {
+    try { const { id } = JSON.parse(readFileSync(lastFile, 'utf8')); if (id) return id; } catch {}
+  }
+  return envProject ?? 'default';
+})();
 const PROJECT_DIR   = path.join(PROJECTS_ROOT, PROJECT_ID);
 
 const STATE_FILE     = path.join(PROJECT_DIR, 'team-state.json');
@@ -155,6 +165,7 @@ async function main() {
 
   console.log(`[Team] Project : ${PROJECT_ID}`);
   console.log(`[Team] Folder  : ${PROJECT_DIR}`);
+  writeFileSync(path.join(PROJECTS_ROOT, 'last-project.json'), JSON.stringify({ id: PROJECT_ID }));
 
   const loader = makeProjectLoader();
   const orchestrator = await loader(PROJECT_DIR, KANBAN_FILE, STATE_FILE);

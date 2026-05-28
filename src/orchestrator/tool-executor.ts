@@ -41,6 +41,15 @@ export interface ToolCallContext {
   resolveAgentPath(agentName: string, filePath: string): string;
 }
 
+/** Return the outputs folder for the agent's active task, falling back to projectDir. */
+function agentOutputsDir(ctx: ToolCallContext, agentName: string, ticket?: string): string {
+  const activeTask = Array.from(ctx.tasks.values()).find(
+    t => t.status === 'active' && t.assignedTo.toLowerCase() === agentName.toLowerCase(),
+  );
+  const base = activeTask?.projectFolder ?? ctx.projectDir ?? process.cwd();
+  return ticket ? path.join(base, 'outputs', ticket) : path.join(base, 'outputs');
+}
+
 const EMAIL_STANDALONE_RE = /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/;
 
 function extractEmailsFromArgs(args: Record<string, unknown>): string[] {
@@ -182,13 +191,13 @@ export async function executeToolCall(ctx: ToolCallContext, agentName: string, c
       const taskId = await ctx.createTask(agent, agentName, task, context, projectName);
       const storedTask = ctx.tasks.get(taskId)!;
       const folderNote = storedTask.projectFolder
-        ? `\n\nProject folder: ${storedTask.projectFolder}\nUse read_file, write_file, and list_files to save and retrieve work there.`
+        ? `\n\nA project workspace has been created for this task. Use read_file, write_file, list_files, and fetch_url to save and retrieve your work.`
         : '';
       const content = (context ? `${task}\n\nContext: ${context}` : task) + folderNote;
       const msg = buildMessage(agentName, agent, 'task', content, { taskId });
       await ctx.store.append('task_assigned', { taskId, from: agentName, to: agent, task, context, projectName: storedTask.projectName });
       ctx.deliverToAgent(agent, msg);
-      return `Task assigned to ${agent}. Project folder: ${storedTask.projectFolder ?? 'none'}`;
+      return `Task assigned to ${agent}. Project: ${storedTask.projectName ?? 'none'}`;
     }
 
     case 'request_meeting': {
@@ -220,9 +229,9 @@ export async function executeToolCall(ctx: ToolCallContext, agentName: string, c
     }
 
     case 'read_file': {
-      const { path: filePath } = call.arguments as { path: string };
-      const resolved = ctx.resolveAgentPath(agentName, filePath);
+      const { filename, ticket } = call.arguments as { filename: string; ticket?: string };
       try {
+        const resolved = path.join(agentOutputsDir(ctx, agentName, ticket), filename);
         return await readFile(resolved, 'utf-8');
       } catch (err) {
         return `Error reading file: ${(err as Error).message}`;
@@ -230,9 +239,9 @@ export async function executeToolCall(ctx: ToolCallContext, agentName: string, c
     }
 
     case 'write_file': {
-      const { path: filePath, content } = call.arguments as { path: string; content: string };
-      const resolved = ctx.resolveAgentPath(agentName, filePath);
+      const { filename, content, ticket } = call.arguments as { filename: string; content: string; ticket?: string };
       try {
+        const resolved = path.join(agentOutputsDir(ctx, agentName, ticket), filename);
         await mkdir(path.dirname(resolved), { recursive: true });
         await writeFile(resolved, content, 'utf-8');
         return `File written: ${resolved}`;
@@ -242,10 +251,10 @@ export async function executeToolCall(ctx: ToolCallContext, agentName: string, c
     }
 
     case 'list_files': {
-      const { directory } = call.arguments as { directory?: string };
-      const resolved = ctx.resolveAgentPath(agentName, directory ?? '.');
+      const { ticket } = call.arguments as { ticket?: string };
       try {
-        const entries = await readdir(resolved, { withFileTypes: true });
+        const dir = agentOutputsDir(ctx, agentName, ticket);
+        const entries = await readdir(dir, { withFileTypes: true });
         const lines = entries.map((e) => `${e.isDirectory() ? '[dir] ' : '      '}${e.name}`);
         return lines.length ? lines.join('\n') : '(empty directory)';
       } catch (err) {
@@ -255,9 +264,9 @@ export async function executeToolCall(ctx: ToolCallContext, agentName: string, c
 
     case 'web_search': {
       const { query, count = 5 } = call.arguments as { query: string; count?: number };
-      const apiKey = process.env.BRAVE_SEARCH_API_KEY;
+      const apiKey = process.env.BRAVE_API_KEY;
       if (!apiKey) {
-        return 'web_search requires the BRAVE_SEARCH_API_KEY environment variable to be set. Get a free key at https://brave.com/search/api/';
+        return 'web_search requires the BRAVE_API_KEY environment variable to be set. Get a free key at https://brave.com/search/api/';
       }
       try {
         const url = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=${Math.min(count, 10)}`;
@@ -280,30 +289,34 @@ export async function executeToolCall(ctx: ToolCallContext, agentName: string, c
     }
 
     case 'fetch_url': {
-      const { url, filePath: rawPath } = call.arguments as { url: string; filePath?: string };
+      const { url, filename: rawFilename, ticket } = call.arguments as { url: string; filename?: string; ticket?: string };
       if (!url?.trim()) return 'url argument is required.';
-      const projectDir = ctx.projectDir ?? '.';
-      const outputsDir = path.join(projectDir, 'outputs');
 
-      // Derive filename from URL if not provided
-      const derivedName = rawPath?.trim() || (() => {
+      const filename = (() => {
+        if (rawFilename?.trim()) return rawFilename.trim();
         try {
           const u = new URL(url);
           const base = path.basename(u.pathname) || u.hostname;
           return base.includes('.') ? base : `${base}.html`;
         } catch { return 'fetched-content.html'; }
       })();
-      const dest = path.isAbsolute(derivedName)
-        ? derivedName
-        : path.join(outputsDir, derivedName);
+      const dest = path.join(agentOutputsDir(ctx, agentName, ticket), filename);
 
       try {
         const resp = await fetch(url);
         if (!resp.ok) return `Fetch failed: ${resp.status} ${resp.statusText}`;
-        const body = await resp.text();
+        const contentType = resp.headers.get('content-type') ?? '';
+        const isText = contentType.startsWith('text/') || contentType.includes('json') || contentType.includes('xml') || contentType.includes('javascript');
         await mkdir(path.dirname(dest), { recursive: true });
-        await writeFile(dest, body, 'utf-8');
-        return `Saved ${body.length} characters to ${dest}`;
+        if (isText) {
+          const body = await resp.text();
+          await writeFile(dest, body, 'utf-8');
+          return `Saved ${body.length} characters to ${dest}`;
+        } else {
+          const buf = Buffer.from(await resp.arrayBuffer());
+          await writeFile(dest, buf);
+          return `Saved ${buf.length} bytes to ${dest}`;
+        }
       } catch (err) {
         return `Fetch error: ${(err as Error).message}`;
       }

@@ -33,7 +33,7 @@ export interface AgentIdentity {
 export interface AgentConfig {
   id?: string;             // stable UUID — if provided, preserved across save/restore
   identity: AgentIdentity;
-  hatType: HatType;
+  hatType: HatType[];
   provider: AIProvider;
   model: string;
   teamContext?: string;    // injected by orchestrator after team is assembled

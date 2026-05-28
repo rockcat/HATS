@@ -1,7 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { log } from '../util/logger.js';
 import { HatType } from '../hats/types.js';
-import { getHatDefinition } from '../hats/definitions.js';
+import { mergeHatDefinitions } from '../hats/definitions.js';
 import { generateSystemPrompt } from '../prompt/generator.js';
 import { AIProvider, CompletionRequest, Message, ToolCall } from '../providers/types.js';
 import { getToolsForHat } from '../tools/definitions.js';
@@ -82,9 +82,9 @@ export class Agent {
     this.config.model    = model;
   }
 
-  /** Change the agent's thinking hat and rebuild the system prompt. */
-  setHat(hatType: HatType): void {
-    this.config.hatType = hatType;
+  /** Change the agent's thinking hat(s) and rebuild the system prompt. */
+  setHat(hatTypes: HatType[]): void {
+    this.config.hatType = hatTypes;
     this.systemPrompt = this.buildSystemPrompt();
   }
 
@@ -331,7 +331,7 @@ export class Agent {
 
   get state(): AgentState { return this._state; }
   get name(): string { return this.config.identity.name; }
-  get hatType(): HatType { return this.config.hatType; }
+  get hatType(): HatType[] { return this.config.hatType; }
 
   private applyEvent(event: AgentEvent): void {
     try {
@@ -370,7 +370,7 @@ export class Agent {
   }
 
   private buildSystemPrompt(): string {
-    const hat = getHatDefinition(this.config.hatType);
+    const hat = mergeHatDefinitions(this.config.hatType);
     return generateSystemPrompt({
       name: this.config.identity.name,
       visualDescription: this.config.identity.visualDescription,

@@ -240,6 +240,9 @@ export class KanbanManager {
       };
       if (!fields.title?.trim()) { json(res, 400, { error: 'Title is required' }); return true; }
       const board = await this.readKanban();
+      const norm  = fields.title.trim().toLowerCase();
+      const dup   = Object.values(board.tickets).find(t => t.title.toLowerCase() === norm);
+      if (dup) { json(res, 409, { error: `Ticket already exists: ${dup.id} — "${dup.title}"`, existing: dup }); return true; }
       const id    = `TKT-${String(board.nextSeq).padStart(3, '0')}`;
       board.nextSeq++;
       const now   = new Date().toISOString();

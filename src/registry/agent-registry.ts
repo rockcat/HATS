@@ -24,7 +24,7 @@ export class AgentRegistry {
   }
 
   listByHat(hatType: HatType): Agent[] {
-    return Array.from(this.agents.values()).filter((a) => a.hatType === hatType);
+    return Array.from(this.agents.values()).filter((a) => a.hatType.includes(hatType));
   }
 
   listByState(state: AgentState): Agent[] {

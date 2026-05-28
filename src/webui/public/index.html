@@ -31,9 +31,10 @@
           <div id="project-switcher-list" class="project-switcher-list"></div>
         </div>
       </span>
+      <button id="files-clear-btn" class="files-clear-btn" title="Clear all project files, tickets and history">Clear</button>
     </div>
     <div class="telemetry-bar" id="telemetry-bar" title="LLM usage totals">
-      Usage
+      <button id="tel-scope-btn" class="tel-scope-btn" title="Toggle project / all-time">Project</button>
       <span class="telemetry-stat"><span class="telemetry-label">In</span> <span id="tel-in">0</span></span>
       <span class="telemetry-sep">|</span>
       <span class="telemetry-stat"><span class="telemetry-label">Out</span> <span id="tel-out">0</span></span>
@@ -41,6 +42,7 @@
       <span class="telemetry-stat"><span class="telemetry-label">Cost</span> <span id="tel-cost">$0.0000</span></span>
       <button id="telemetry-btn" class="telemetry-detail-btn" title="View LLM usage details"><img src="/assets/info.svg" class="svg-icon" alt="Info"></button>
     </div>
+    <button id="mute-btn" class="header-btn mute-btn" title="Mute / unmute all speech">Mute</button>
     <button id="settings-btn" class="header-btn header-btn--icon" title="Settings"><img src="/assets/settings.svg" class="svg-icon" alt="Settings"></button>
     <div id="connection-status" class="status-dot" title="Connecting…"></div>
   </header>
@@ -110,18 +112,28 @@
         <div class="files-toolbar files-toolbar--top">
           <button id="files-open-folder-btn" class="files-open-folder-btn" title="Open project folder in file explorer">Open folder ↗</button>
         </div>
-        <div class="files-toolbar">
-          <span class="files-section-label">Sources</span>
-          <label class="files-upload-btn" title="Upload a file to sources/">
-            + Upload
-            <input type="file" id="files-upload-input" multiple hidden>
-          </label>
-        </div>
-        <div id="files-sources-list" class="files-list"></div>
-        <div class="files-toolbar files-toolbar--outputs">
-          <span class="files-section-label">Outputs</span>
-        </div>
-        <div id="files-outputs-list" class="files-list"></div>
+        <details class="files-section" open>
+          <summary class="files-section-summary">
+            <span class="files-section-label">Sources</span>
+            <label class="files-upload-btn" title="Upload a file to sources/">
+              + Upload
+              <input type="file" id="files-upload-input" multiple hidden>
+            </label>
+          </summary>
+          <div id="files-sources-list" class="files-list"></div>
+        </details>
+        <details class="files-section" open>
+          <summary class="files-section-summary">
+            <span class="files-section-label">Outputs</span>
+          </summary>
+          <div id="files-outputs-list" class="files-list"></div>
+        </details>
+        <details id="files-tickets-section" class="files-section" hidden>
+          <summary class="files-section-summary">
+            <span class="files-section-label">Ticket Work</span>
+          </summary>
+          <div id="files-tickets-list"></div>
+        </details>
       </div>
     </section>
 
@@ -263,9 +275,11 @@
         <button id="agent-detail-close" class="modal-close" title="Close"><img src="/assets/close.svg" class="svg-icon" alt="Close"></button>
       </div>
       <div class="agent-config-row">
+        <details class="agent-config-section" open>
+          <summary class="agent-config-section-summary">Configuration</summary>
         <div class="agent-config-line">
-          <label class="agent-config-label">Hat</label>
-          <select id="agent-config-hat" class="agent-config-select agent-config-hat-select" title="Hat type"></select>
+          <label class="agent-config-label">Hats</label>
+          <div id="agent-config-hat-group" class="hat-check-group"></div>
         </div>
         <div class="agent-config-line">
           <label class="agent-config-label">Persona</label>
@@ -322,6 +336,7 @@
           <label class="agent-config-label">Shared MCPs</label>
           <div id="agent-config-mcp-list" class="agent-config-mcp-list"></div>
         </div>
+        </details>
         <details class="agent-config-details" id="agent-config-personal-mcp-line" hidden>
           <summary class="agent-config-details-summary">Personal MCPs</summary>
           <div id="agent-config-personal-mcp-list" class="agent-config-personal-mcp-list"></div>
@@ -557,14 +572,7 @@
         <div class="field-row">
           <div class="field-group">
             <label class="field-label">Hat</label>
-            <select id="add-agent-hat" class="modal-select">
-              <option value="white">White — Facts</option>
-              <option value="red">Red — Emotion</option>
-              <option value="black">Black — Caution</option>
-              <option value="yellow">Yellow — Optimism</option>
-              <option value="green">Green — Creativity</option>
-              <option value="blue">Blue — Process</option>
-            </select>
+            <div id="add-agent-hat-group" class="hat-check-group hat-check-group--modal"></div>
           </div>
           <div class="field-group">
             <label class="field-label">Persona <span class="field-hint">(optional)</span></label>

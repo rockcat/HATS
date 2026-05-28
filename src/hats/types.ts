@@ -1,4 +1,5 @@
 export enum HatType {
+  None = 'none',
   White = 'white',
   Red = 'red',
   Black = 'black',

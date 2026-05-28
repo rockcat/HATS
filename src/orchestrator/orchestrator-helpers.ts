@@ -27,7 +27,7 @@ export function deliverToAgent(
 
 export function findBlueHat(agents: Map<string, Agent>): Agent | undefined {
   for (const a of agents.values()) {
-    if (a.hatType === HatType.Blue) return a;
+    if (a.hatType.includes(HatType.Blue)) return a;
   }
   return undefined;
 }

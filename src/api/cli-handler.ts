@@ -64,7 +64,11 @@ export async function handleCLICommand(line: string, ctx: CLIContext): Promise<s
   if (line === 'status') {
     const agents = ctx.orchestrator.listAgents();
     if (agents.length === 0) return 'No agents.';
-    return agents.map(a => `  ${a.name} (${a.hatType} hat) — ${a.state}`).join('\n');
+    return agents.map(a => {
+      const hats = (a.hatType as unknown as string[]).filter(h => h !== 'none');
+      const label = hats.length ? hats.join('+') + ' hat' : 'no hat';
+      return `  ${a.name} (${label}) — ${a.state}`;
+    }).join('\n');
   }
 
   if (line === 'tasks') {

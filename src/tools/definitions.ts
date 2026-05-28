@@ -49,36 +49,38 @@ const REPORT_TASK_COMPLETE: ToolDefinition = {
 
 const READ_FILE: ToolDefinition = {
   name: 'read_file',
-  description: 'Read the contents of a file. Use paths within your project folder to access saved work.',
+  description: 'Read a file from your project outputs folder.',
   parameters: {
     type: 'object',
     properties: {
-      path: { type: 'string', description: 'File path to read. Relative to the current working directory.' },
+      filename: { type: 'string', description: 'File name to read, e.g. "report.md".' },
+      ticket:   { type: 'string', description: 'Sub-folder within outputs/, e.g. "TKT-003" for ticket work or "minutes" for meeting notes. Omit to read directly from outputs/.' },
     },
-    required: ['path'],
+    required: ['filename'],
   },
 };
 
 const WRITE_FILE: ToolDefinition = {
   name: 'write_file',
-  description: 'Write or create a file. Save research, notes, drafts, and documents to your project folder.',
+  description: 'Write or create a file in your project outputs folder.',
   parameters: {
     type: 'object',
     properties: {
-      path: { type: 'string', description: 'File path to write. Relative to the current working directory.' },
-      content: { type: 'string', description: 'Full content to write to the file.' },
+      filename: { type: 'string', description: 'File name to write, e.g. "analysis.md".' },
+      content:  { type: 'string', description: 'Full content to write to the file.' },
+      ticket:   { type: 'string', description: 'Sub-folder within outputs/, e.g. "TKT-003" for ticket work or "minutes" for meeting notes. Omit to save directly in outputs/.' },
     },
-    required: ['path', 'content'],
+    required: ['filename', 'content'],
   },
 };
 
 const LIST_FILES: ToolDefinition = {
   name: 'list_files',
-  description: 'List files and subdirectories at a given path.',
+  description: 'List files in your project outputs folder, optionally scoped to a sub-folder.',
   parameters: {
     type: 'object',
     properties: {
-      directory: { type: 'string', description: 'Directory to list. Defaults to the current working directory.' },
+      ticket: { type: 'string', description: 'Sub-folder within outputs/ to list, e.g. "TKT-003" or "minutes". Omit to list the top-level outputs/ folder.' },
     },
     required: [],
   },
@@ -105,12 +107,13 @@ const GET_CURRENT_DATETIME: ToolDefinition = {
 
 const FETCH_URL: ToolDefinition = {
   name: 'fetch_url',
-  description: 'Fetch the content of a URL and save it to a file in the project workspace. Returns the path of the saved file. Useful for downloading web pages, JSON feeds, documents, or any publicly accessible resource.',
+  description: 'Fetch the content of a URL and save it to your project outputs folder.',
   parameters: {
     type: 'object',
     properties: {
       url:      { type: 'string', description: 'The URL to fetch.' },
-      filePath: { type: 'string', description: 'Where to save the content, relative to the project outputs/ folder. If omitted a filename is derived from the URL.' },
+      filename: { type: 'string', description: 'File name to save as (e.g. "page.html"). Derived from the URL if omitted.' },
+      ticket:   { type: 'string', description: 'Sub-folder within outputs/, e.g. "TKT-003" or "minutes". Omit to save directly in outputs/.' },
     },
     required: ['url'],
   },
@@ -249,6 +252,7 @@ const CANCEL_ACTION: ToolDefinition = {
 const BASE_TOOLS = [SEND_MESSAGE, ESCALATE_TO_HUMAN, REPORT_TASK_COMPLETE, DISENGAGE_CONVERSATION, READ_FILE, WRITE_FILE, LIST_FILES, WEB_SEARCH, FETCH_URL, GET_CURRENT_DATETIME, REQUEST_EMAIL_APPROVAL, CHECK_EMAIL_PERMISSIONS, SCHEDULE_ACTION, LIST_MY_ACTIONS, CANCEL_ACTION];
 const BLUE_HAT_TOOLS = [...BASE_TOOLS, ASSIGN_TASK, REQUEST_MEETING, SCHEDULE_MEETING];
 
-export function getToolsForHat(hatType: HatType): ToolDefinition[] {
-  return hatType === HatType.Blue ? BLUE_HAT_TOOLS : BASE_TOOLS;
+export function getToolsForHat(hatTypes: HatType[]): ToolDefinition[] {
+  return hatTypes.includes(HatType.Blue) ? BLUE_HAT_TOOLS : BASE_TOOLS;
 }
+

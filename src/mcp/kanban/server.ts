@@ -188,6 +188,10 @@ async function handleTool(name: string, args: Record<string, unknown>, store: Ka
     case 'create_ticket': {
       const title = (args['title'] as string | undefined)?.trim();
       if (!title) throw new Error('title is required and cannot be empty');
+      const existing = store.findByTitle(title);
+      if (existing) {
+        return `Ticket already exists — ${existing.id}: "${existing.title}" (${existing.column}). No duplicate created.`;
+      }
       const ticket = await store.createTicket({
         title,
         description: args['description'] as string,

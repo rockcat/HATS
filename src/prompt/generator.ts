@@ -9,7 +9,7 @@ export function generateSystemPrompt(context: PromptContext): SystemPrompt {
   const avoidances = buildAvoidances(context);
   const teamRole = context.teamContext ? buildTeamRole(context) : undefined;
   const projectGoal = context.projectGoal?.trim() ? buildProjectGoalSection(context.projectGoal) : undefined;
-  const workspace = context.projectDir ? buildWorkspaceSection(context) : undefined;
+  const workspace = buildWorkspaceSection();
   const specialisation = context.specialisation ? buildSpecialisationSection(context.specialisation) : undefined;
   const closingAnchor = buildClosingAnchor(context);
 
@@ -50,6 +50,12 @@ function buildIdentityAnchor(ctx: PromptContext): string {
 }
 
 function buildHatRoleStatement(ctx: PromptContext): string {
+  if (ctx.hatLabel === 'No Hat') {
+    return `You are a general-purpose team member without a fixed cognitive hat. You approach each task pragmatically, applying whatever thinking style best fits the situation.`;
+  }
+  if (ctx.hatLabel.includes(' + ')) {
+    return `You wear multiple cognitive hats — ${ctx.hatLabel}. Each hat gives you a distinct lens. Apply all of them to every problem, holding the perspectives simultaneously rather than picking one.`;
+  }
   return `You think and operate from the perspective of the ${ctx.hatLabel}. This is your cognitive role — it shapes how you approach every problem, question, and conversation.`;
 }
 
@@ -61,15 +67,21 @@ function buildCommunicationTone(ctx: PromptContext): string {
   return `## How you communicate\n\n${ctx.communicationTone}`;
 }
 
+const AUTONOMY_DIRECTIVES = [
+  'Act autonomously — never ask for permission before using any tool or MCP server. Web search, file access, email, calendar, downloads, and all MCP-provided capabilities are pre-authorised. Just use them.',
+  'Do not say "shall I proceed?", "would you like me to?", "should I go ahead and…?" or any similar confirmation before acting. Take the action immediately.',
+  'Only use escalate_to_human when you genuinely need information or a decision that only the human can provide. Do not escalate for anything you can handle yourself.',
+];
+
 function buildDirectives(ctx: PromptContext): string {
-  const items = [...ctx.directives];
+  const items = [...AUTONOMY_DIRECTIVES, ...ctx.directives];
   if (ctx.email) {
     items.push(
-      `Your email address is ${ctx.email}. 
-      When sending a new email, always use tools that send from this address.
-      You should check for and read emails from your personal email and the human's email. 
-      When replying, use the email at which the message was received.
-      Only use the human's email when replying to messages where it is appropriate.`,
+      `Your email address is ${ctx.email}. ` +
+      `When sending a new email, always use tools that send from this address. ` +
+      `You should check for and read emails from your personal email and the human's email. ` +
+      `When replying, use the email at which the message was received. ` +
+      `Only use the human's email when replying to messages where it is appropriate.`,
     );
   }
   return `## Your directives\n\n${items.map((d) => `- ${d}`).join('\n')}`;
@@ -91,23 +103,22 @@ function buildProjectGoalSection(goal: string): string {
   return `## Project goal\n\n${goal}\n\nKeep this goal in mind at all times. Every task, recommendation, and decision should serve it.`;
 }
 
-function buildWorkspaceSection(ctx: PromptContext): string {
-  const dir = ctx.projectDir!;
+function buildWorkspaceSection(): string {
   return `## Project workspace
 
-Your project folder is: \`${dir}\`
+Each task gives you a dedicated workspace. File tools automatically resolve to the right folder — you only need to supply a filename and an optional sub-folder.
 
-Two sub-folders are always available:
-- \`${dir}/sources/\` — materials provided by the human team lead: uploaded documents, web research, reference files. Read these when starting a task.
-- \`${dir}/outputs/\` — where you save final deliverables. Always save completed work here.
+File tools:
+- \`write_file(filename, content)\` — saves to your workspace outputs folder
+- \`write_file(filename, content, ticket)\` — saves to \`outputs/<ticket>/\` (use a ticket ID like \`TKT-003\` or a category name like \`minutes\`)
+- \`read_file(filename)\` / \`read_file(filename, ticket)\` — reads a saved file
+- \`list_files()\` / \`list_files(ticket)\` — lists your outputs folder or a sub-folder
+- \`fetch_url(url, filename)\` / \`fetch_url(url, filename, ticket)\` — fetches a URL and saves it
 
-**When completing a task that produces a document, report, plan, or analysis:**
-- Save the result to \`${dir}/outputs/\` (or a relevant sub-folder such as \`outputs/marketing/\`, \`outputs/reports/\`, \`outputs/code/\`)
-- Prefer DOCX for prose documents, PDF for final formatted reports, markdown (.md) for technical docs
-- Use clear, descriptive filenames (e.g. \`q1-marketing-plan.docx\`, \`competitor-analysis.md\`)
-- Create sub-folders freely to keep outputs organised
-
-Always check \`sources/\` for relevant materials before starting work.`;
+**When saving work:**
+- Use clear, descriptive filenames (e.g. \`competitor-analysis.md\`, \`q1-plan.docx\`)
+- Pass a ticket ID or category as \`ticket\` to keep work organised in sub-folders
+- Prefer DOCX for prose, PDF for final formatted reports, markdown (.md) for technical docs`;
 }
 
 export const SPECIALISATION_DIRECTIVES: Record<string, string[]> = {

@@ -193,7 +193,7 @@ export class TeamOrchestrator {
       const config: AgentConfig = {
         id: snap.id,
         identity: snap.identity,
-        hatType: snap.hatType,
+        hatType: Array.isArray(snap.hatType) ? snap.hatType : [snap.hatType as HatType],
         provider,
         model: snap.model,
         teamContext: snap.teamContext,
@@ -342,12 +342,23 @@ export class TeamOrchestrator {
   getAgent(name: string): Agent | undefined { return this.findByName(name); }
   listAgents(): Agent[] { return Array.from(this.agents.values()); }
 
+  /** Clear tasks and agent histories while keeping agent definitions. */
+  stopAllAgents(): void {
+    for (const agent of this.agents.values()) agent.stop();
+  }
+
+  clearProject(): void {
+    this.tasks.clear();
+    this.meetings.clear();
+    for (const agent of this.agents.values()) agent.setHistory([]);
+  }
+
   updateAgentConfig(name: string, provider: AIProvider, model: string): void {
     this.requireAgent(name).setProvider(provider, model);
   }
 
-  changeAgentHat(name: string, hatType: HatType): void {
-    this.requireAgent(name).setHat(hatType);
+  changeAgentHat(name: string, hatTypes: HatType[]): void {
+    this.requireAgent(name).setHat(hatTypes);
     this.rebuildTeamContext();
   }
 
@@ -434,7 +445,7 @@ export class TeamOrchestrator {
     const taskId = await this.createTask(toAgentName, this.humanName, task, context, projectName);
     const storedTask = this.tasks.get(taskId)!;
     const folderNote = storedTask.projectFolder
-      ? `\n\nProject folder: ${storedTask.projectFolder}\nUse read_file, write_file, and list_files to save and retrieve work there.`
+      ? `\n\nA project workspace has been created for this task. Use read_file, write_file, list_files, and fetch_url to save and retrieve your work.`
       : '';
     const content = (context ? `${task}\n\nContext: ${context}` : task) + folderNote;
     const msg = buildMessage('human', toAgentName, 'task', content, { taskId });
@@ -603,10 +614,10 @@ export class TeamOrchestrator {
   private doRebuildTeamContext(): void {
     const roster = Array.from(this.agents.values())
       .map((a) => {
-        const hat = a.config.hatType;
+        const hats = a.config.hatType;
         const spec = a.config.identity.specialisation;
-        const hatLabel = hat.charAt(0).toUpperCase() + hat.slice(1);
-        return `- ${a.name} (${hatLabel} Hat)${spec ? ` — ${spec}` : ''}`;
+        const hatLabel = hats.filter(h => h !== 'none').map(h => h.charAt(0).toUpperCase() + h.slice(1)).join(' + ') || 'No Hat';
+        return `- ${a.name} (${hatLabel})${spec ? ` — ${spec}` : ''}`;
       })
       .join('\n');
 

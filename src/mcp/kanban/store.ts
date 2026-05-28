@@ -70,6 +70,11 @@ export class KanbanStore {
     return result;
   }
 
+  findByTitle(title: string): Ticket | undefined {
+    const norm = title.trim().toLowerCase();
+    return Object.values(this.board.tickets).find(t => t.title.toLowerCase() === norm);
+  }
+
   // ── Mutations ──────────────────────────────────────────────────────────────
 
   createTicket(fields: {
@@ -82,6 +87,8 @@ export class KanbanStore {
   }): Promise<Ticket> {
     return this.serialise(async () => {
       await this.reload();
+      const existing = this.findByTitle(fields.title);
+      if (existing) return existing;
       // Derive next seq from actual tickets in case nextSeq drifted
       const maxExisting = Object.keys(this.board.tickets)
         .map(k => parseInt(k.replace('TKT-', ''), 10))

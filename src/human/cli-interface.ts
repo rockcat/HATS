@@ -5,6 +5,7 @@ import { HatType } from '../hats/types.js';
 import { DEFAULT_MODEL, DEFAULT_PROVIDER } from '../providers/default-provider.js';
 
 const HAT_NAMES: Record<string, HatType> = {
+  none:   HatType.None,
   white:  HatType.White,
   red:    HatType.Red,
   black:  HatType.Black,
@@ -387,7 +388,7 @@ export class CLIInterface {
         visualDescription: description,
         specialisation: description,
       },
-      hatType,
+      hatType: [hatType],
       provider,
       model,
     });
@@ -446,7 +447,9 @@ export class CLIInterface {
       const info = agent.toJSON() as Record<string, unknown>;
       const spec = agent.config.identity.specialisation;
       const detail = spec ? `  ${spec}` : '';
-      log.info(`  ${info['name']} (${String(info['hatType']).padEnd(6)} hat) — ${info['state']}${detail}`);
+      const hats = (info['hatType'] as string[]).filter(h => h !== 'none');
+      const hatLabel = hats.length ? hats.join('+') + ' hat' : 'no hat';
+      log.info(`  ${info['name']} (${hatLabel.padEnd(10)}) — ${info['state']}${detail}`);
     }
     log.info('─────────────────────────────────────────────');
   }

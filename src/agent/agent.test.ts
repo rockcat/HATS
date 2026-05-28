@@ -8,7 +8,7 @@ import { TeamMessage } from '../orchestrator/types.js';
 function makeAgent(overrides: Partial<ConstructorParameters<typeof Agent>[0]> = {}): Agent {
   return new Agent({
     identity: { name: 'TestAgent', visualDescription: 'A test agent.' },
-    hatType: HatType.Black,
+    hatType: [HatType.Black],
     provider: new MockProvider({ content: 'This plan has three critical risks.' }),
     model: 'mock-model',
     ...overrides,
@@ -76,7 +76,7 @@ describe('Agent', () => {
     const provider = new MockProvider({ content: 'ok' });
     const agent = new Agent({
       identity: { name: 'Alex', visualDescription: 'Sharp analyst.' },
-      hatType: HatType.Black, provider, model: 'mock-model',
+      hatType: [HatType.Black], provider, model: 'mock-model',
     });
     agent.receive(makeDirectMessage('Hello', 'human'));
     await waitForProcessing();
@@ -87,7 +87,7 @@ describe('Agent', () => {
     const provider = new MockProvider({ content: 'ok' });
     const agent = new Agent({
       identity: { name: 'Alex', visualDescription: 'Sharp analyst.' },
-      hatType: HatType.Black,
+      hatType: [HatType.Black],
       provider,
       model: 'mock-model',
     });
@@ -100,7 +100,7 @@ describe('Agent', () => {
     const provider = new MockProvider({ content: 'ok' });
     const agent = new Agent({
       identity: { name: 'Alex', visualDescription: 'Sharp analyst.' },
-      hatType: HatType.Black, provider, model: 'mock-model',
+      hatType: [HatType.Black], provider, model: 'mock-model',
       teamContext: 'You are part of Team Alpha.',
     });
     agent.receive(makeDirectMessage('Hello', 'human'));

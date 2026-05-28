@@ -1,6 +1,7 @@
 // ── Constants ────────────────────────────────────────────────────────────────
 
 const HAT = {
+  none:   { bar: '#30363d', label: '#6e7681', bg: 'rgba(48,54,61,0.20)'   },
   white:  { bar: '#e6edf3', label: '#0d1117', bg: 'rgba(230,237,243,0.40)' },
   red:    { bar: '#f85149', label: '#f85149', bg: 'rgba(248,81,73,0.12)'   },
   black:  { bar: '#8b949e', label: '#8b949e', bg: 'rgba(139,148,158,0.12)' },
@@ -9,7 +10,18 @@ const HAT = {
   blue:   { bar: '#58a6ff', label: '#58a6ff', bg: 'rgba(88,166,255,0.12)'  },
 };
 
+const HAT_OPTIONS = [
+  { value: 'none',   label: 'No Hat'             },
+  { value: 'white',  label: 'White — Facts'      },
+  { value: 'red',    label: 'Red — Emotion'      },
+  { value: 'black',  label: 'Black — Caution'    },
+  { value: 'yellow', label: 'Yellow — Optimism'  },
+  { value: 'green',  label: 'Green — Creativity' },
+  { value: 'blue',   label: 'Blue — Process'     },
+];
+
 const HAT_DESC = {
+  none:   'No Hat',
   white:  'Facts',
   yellow: 'Optimism',
   black:  'Caution',
@@ -19,8 +31,58 @@ const HAT_DESC = {
 };
 
 function hatLabel(type) {
-  const desc = HAT_DESC[type];
-  return desc ? `${type} hat — ${desc}` : `${type} hat`;
+  const types = Array.isArray(type) ? type : [type];
+  const real = types.filter(t => t && t !== 'none');
+  if (real.length === 0) return 'No Hat';
+  if (real.length === 1) {
+    const desc = HAT_DESC[real[0]];
+    return desc ? `${real[0]} hat — ${desc}` : `${real[0]} hat`;
+  }
+  return real.map(t => t + ' hat').join(' + ');
+}
+
+function hat(type) {
+  const types = Array.isArray(type) ? type : [type ?? 'none'];
+  const real = types.filter(t => t && t !== 'none');
+  if (real.length === 0) return HAT.none;
+  if (real.length === 1) return HAT[real[0]] ?? HAT.white;
+  const bars = real.map(t => HAT[t]?.bar ?? '#888');
+  return {
+    bar: `linear-gradient(135deg, ${bars.join(', ')})`,
+    label: HAT[real[0]]?.label ?? HAT.white.label,
+    bg: HAT[real[0]]?.bg ?? HAT.white.bg,
+  };
+}
+
+function populateHatGroup(containerId, selectedHats) {
+  const group = document.getElementById(containerId);
+  if (!group) return;
+  const selected = new Set(Array.isArray(selectedHats) ? selectedHats : [selectedHats ?? 'none']);
+  group.innerHTML = '';
+  for (const h of HAT_OPTIONS) {
+    const lbl = document.createElement('label');
+    lbl.className = 'hat-check-item';
+    const inp = document.createElement('input');
+    inp.type = 'checkbox';
+    inp.value = h.value;
+    inp.checked = selected.has(h.value);
+    const dot = document.createElement('span');
+    dot.className = 'hat-check-dot';
+    dot.style.background = HAT[h.value]?.bar ?? '#888';
+    const txt = document.createElement('span');
+    txt.className = 'hat-check-label';
+    txt.textContent = h.label;
+    lbl.append(inp, dot, txt);
+    lbl.classList.toggle('hat-check-item--on', inp.checked);
+    inp.addEventListener('change', () => lbl.classList.toggle('hat-check-item--on', inp.checked));
+    group.appendChild(lbl);
+  }
+}
+
+function getSelectedHats(containerId) {
+  const checks = document.querySelectorAll(`#${containerId} input[type=checkbox]:checked`);
+  const vals = Array.from(checks).map(c => c.value);
+  return vals.length ? vals : ['none'];
 }
 
 const STATE_LABEL = {
@@ -229,7 +291,7 @@ function setAvatarOverride(agentName, avatarFile) {
 
 // ── Hat helpers ───────────────────────────────────────────────────────────────
 
-function hat(type) { return HAT[type] || HAT.white; }
+// hat() is defined above near hatLabel()
 
 // ── Agent rendering ───────────────────────────────────────────────────────────
 
@@ -979,6 +1041,7 @@ let audioCtx         = null;   // lazy AudioContext (requires user gesture first
 const speechQueues   = new Map(); // agentName → SpeechChunk[]
 const speechPlaying  = new Set(); // agentName set — currently draining
 let currentSource    = null;   // active AudioBufferSourceNode (for stop)
+let speechMuted      = false;
 
 function getSpeechWs() {
   if (speechWs && speechWs.readyState <= WebSocket.OPEN) return speechWs;
@@ -1035,6 +1098,7 @@ function setSpeechAgent(agentName, voiceName, speakerName) {
 
 function handleSpeechChunk(chunk) {
   if (chunk.agentName !== activeDetailAgent) return; // stale — ignore
+  if (speechMuted) return;
 
   const q = speechQueues.get(chunk.agentName) ?? [];
   q.push(chunk);
@@ -1047,7 +1111,7 @@ async function drainSpeechQueue(agentName) {
   speechPlaying.add(agentName);
   while (true) {
     const q = speechQueues.get(agentName) ?? [];
-    if (q.length === 0 || agentName !== activeDetailAgent) break;
+    if (q.length === 0 || agentName !== activeDetailAgent || speechMuted) break;
     const chunk = q.shift();
     try {
       await playSpeechChunk(chunk);
@@ -1115,6 +1179,24 @@ function stopSpeech(agentName) {
   window.avatarAPI?.endSpeech();
 }
 
+function stopAllSpeech() {
+  if (currentSource) {
+    try { currentSource.stop(); } catch { /* already stopped */ }
+    currentSource = null;
+  }
+  speechQueues.clear();
+  speechPlaying.clear();
+  window.avatarAPI?.endSpeech();
+}
+
+function toggleMute() {
+  speechMuted = !speechMuted;
+  const btn = document.getElementById('mute-btn');
+  btn.textContent = speechMuted ? 'Unmute' : 'Mute';
+  btn.classList.toggle('mute-btn--active', speechMuted);
+  if (speechMuted) stopAllSpeech();
+}
+
 function clearSpeechQueue(agentName) {
   speechQueues.delete(agentName);
   // endSpeech is called when the current chunk finishes
@@ -1142,6 +1224,7 @@ function connect() {
       updateGoalBar(msg.project?.goal, msg.tickets);
       fetchTools();
       fetchFiles();
+      startFilesRefresh();
       fetchCalendar();
       fetch('/api/telemetry').then(r => r.json()).then(d => applyTelemetrySummary(d.summary)).catch(() => {});
       renderRequests(msg.requests ?? []);
@@ -1173,13 +1256,14 @@ function connect() {
     } else if (msg.type === 'cli_output') {
       appendCLIAgent(msg.from, msg.content, msg.kind);
     } else if (msg.type === 'telemetry_update') {
-      applyTelemetrySummary(msg.summary);
+      if (telScope === 'project') applyTelemetrySummary(msg.summary);
+      else refreshTelemetryBar();
     } else if (msg.type === 'requests_update') {
       renderRequests(msg.requests ?? []);
     } else if (msg.type === 'email_allowlist_update') {
       renderAllowlist(msg.allowlist ?? []);
     } else if (msg.type === 'files_update') {
-      renderFilesList(msg.sources, msg.outputs);
+      renderFilesList(msg.sources, msg.outputs, msg.tickets);
     } else if (msg.type === 'meeting_started') {
       const avatarMap = {}, voiceMap = {}, speakerMap = {}, backgroundMap = {}, hatMap = {};
       for (const a of state.agents) {
@@ -1423,6 +1507,14 @@ function renderMCPCatalogue(catalogue) {
   const categories = [...new Set(sharedCatalogue.map(e => e.category))];
   let html = '';
 
+  
+  if (personalCatalogue.length > 0) {
+    html += `<div class="mcp-personal-note">
+      <span class="mcp-personal-note-icon">👤</span>
+      <span><strong>Personal MCPs</strong> (${personalCatalogue.map(e => e.name).join(', ')}) are configured per-agent with individual credentials — open an agent's detail panel to set them up.</span>
+    </div>`;
+  }
+
   for (const cat of categories) {
     const entries = sharedCatalogue.filter(e => e.category === cat);
     const cc = CATEGORY_COLOR[cat] || CATEGORY_COLOR.dev;
@@ -1454,12 +1546,7 @@ function renderMCPCatalogue(catalogue) {
     }
   }
 
-  if (personalCatalogue.length > 0) {
-    html += `<div class="mcp-personal-note">
-      <span class="mcp-personal-note-icon">👤</span>
-      <span><strong>Personal MCPs</strong> (${personalCatalogue.map(e => e.name).join(', ')}) are configured per-agent with individual credentials — open an agent's detail panel to set them up.</span>
-    </div>`;
-  }
+
 
   el.innerHTML = html || '<p class="tools-empty">No servers in catalogue</p>';
 
@@ -1730,6 +1817,7 @@ function initMCPEditor() {
 
 let activeDetailAgent = null;
 let activeChatAgent   = null;
+let filesRefreshTimer = null;
 
 // ── Pricing ───────────────────────────────────────────────────────────────────
 
@@ -1747,12 +1835,13 @@ async function loadPricing() {
 async function refreshPromptPreview() {
   if (!activeDetailAgent) return;
   const textEl = document.getElementById('agent-prompt-preview-text');
-  const hat    = document.getElementById('agent-config-hat').value;
+  const hats   = getSelectedHats('agent-config-hat-group');
   const name   = (document.getElementById('agent-detail-name').value.trim()) || activeDetailAgent;
   const spec   = getSpecValue('agent-config-specialisation', 'agent-config-specialisation-custom');
   textEl.textContent = 'Loading…';
   try {
-    const params = new URLSearchParams({ hat, name });
+    const params = new URLSearchParams({ name });
+    for (const h of hats) params.append('hat', h);
     if (spec) params.set('specialisation', spec);
     const res = await fetch(`/api/agents/${encodeURIComponent(activeDetailAgent)}/prompt-preview?${params}`);
     const data = await res.json();
@@ -2362,9 +2451,9 @@ function initAgentDetail() {
   });
 
 
-  // Auto-refresh prompt preview when hat changes; repopulate persona select
-  document.getElementById('agent-config-hat').addEventListener('change', () => {
-    const hatType = document.getElementById('agent-config-hat').value;
+  // Auto-refresh prompt preview when hats change; repopulate persona select
+  document.getElementById('agent-config-hat-group').addEventListener('change', () => {
+    const hatType = getSelectedHats('agent-config-hat-group').filter(h => h !== 'none')[0] ?? 'none';
     populatePersonaSelect('agent-config-persona', hatType, '');
     const panel = document.getElementById('agent-prompt-preview');
     if (!panel.hidden) refreshPromptPreview();
@@ -2372,7 +2461,7 @@ function initAgentDetail() {
 
   // Persona select — auto-fill name, visual description and backstory
   document.getElementById('agent-config-persona').addEventListener('change', () => {
-    const hatType = document.getElementById('agent-config-hat').value;
+    const hatType = getSelectedHats('agent-config-hat-group').filter(h => h !== 'none')[0] ?? 'none';
     const personaName = document.getElementById('agent-config-persona').value;
     const persona = (personasByHat[hatType] ?? []).find(p => p.name === personaName);
     if (!persona) return;
@@ -2411,7 +2500,7 @@ function initAgentDetail() {
       const modelSel       = document.getElementById('agent-config-model');
       const modelInput     = document.getElementById('agent-config-model-custom');
       const model          = modelInput.hidden ? modelSel.value : modelInput.value.trim();
-      const hatType        = document.getElementById('agent-config-hat').value;
+      const hatTypes       = getSelectedHats('agent-config-hat-group');
       const specialisation = getSpecValue('agent-config-specialisation', 'agent-config-specialisation-custom') || undefined;
       const agent          = state.agents.find(a => a.name === activeDetailAgent);
       const tasks = [];
@@ -2419,10 +2508,10 @@ function initAgentDetail() {
         method: 'PATCH', headers: {'Content-Type':'application/json'},
         body: JSON.stringify({ provider, model }),
       }));
-      if (hatType && agent && hatType !== agent.hatType) tasks.push(
+      if (agent && JSON.stringify(hatTypes.slice().sort()) !== JSON.stringify((agent.hatType ?? []).slice().sort())) tasks.push(
         fetch(`/api/agents/${encodeURIComponent(activeDetailAgent)}/hat`, {
           method: 'PATCH', headers: {'Content-Type':'application/json'},
-          body: JSON.stringify({ hatType }),
+          body: JSON.stringify({ hatTypes }),
         })
       );
       tasks.push(fetch(`/api/agents/${encodeURIComponent(activeDetailAgent)}/specialisation`, {
@@ -2478,27 +2567,8 @@ function openAgentDetail(name, chatOnly = false) {
   nameInput.value = name;
   document.getElementById('agent-detail-hat').textContent  = agent ? hatLabel(agent.hatType) : '';
   document.getElementById('agent-detail-hat').style.color  = c.bar;
-  // Populate hat select with usage counts
-  const hatSel = document.getElementById('agent-config-hat');
-  if (hatSel) {
-    const HAT_OPTIONS = [
-      { value: 'white',  label: 'White — Facts'      },
-      { value: 'red',    label: 'Red — Emotion'       },
-      { value: 'black',  label: 'Black — Caution'     },
-      { value: 'yellow', label: 'Yellow — Optimism'   },
-      { value: 'green',  label: 'Green — Creativity'  },
-      { value: 'blue',   label: 'Blue — Process'      },
-    ];
-    hatSel.innerHTML = '';
-    for (const h of HAT_OPTIONS) {
-      const opt = document.createElement('option');
-      opt.value = h.value;
-      const n = usageCount('hatType', h.value, name);
-      opt.textContent = n > 0 ? `${h.label}  (${n})` : h.label;
-      hatSel.appendChild(opt);
-    }
-    hatSel.value = agent?.hatType || 'white';
-  }
+  // Populate hat checkboxes
+  populateHatGroup('agent-config-hat-group', agent?.hatType ?? ['white']);
 
   // Set specialisation select value
   setSpecValue('agent-config-specialisation', 'agent-config-specialisation-custom', agent?.specialisation || '');
@@ -2668,6 +2738,16 @@ function buildPersonalMcpEntry(agentName, entry) {
     desc.className = 'personal-mcp-desc';
     desc.textContent = entry.description;
     header.appendChild(desc);
+  }
+  if (entry.url) {
+    const link = document.createElement('a');
+    link.className = 'mcp-entry-link';
+    link.href = entry.url;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.title = 'Setup docs ↗';
+    link.textContent = 'docs ↗';
+    header.appendChild(link);
   }
   wrap.appendChild(header);
 
@@ -3062,6 +3142,7 @@ const GROUP_ORDER = ['API Keys', 'Models', 'Local Models', 'Other'];
 
 function initSettings() {
   document.getElementById('settings-btn').addEventListener('click', openSettings);
+  document.getElementById('mute-btn').addEventListener('click', toggleMute);
   document.getElementById('settings-close').addEventListener('click', closeSettings);
   document.getElementById('settings-cancel').addEventListener('click', closeSettings);
   document.getElementById('settings-save').addEventListener('click', saveSettings);
@@ -3420,6 +3501,7 @@ function doSwitchProject(id) {
       updateGoalBar(res.project?.goal, res.tickets);
       fetchTools();
       fetchFiles();
+      startFilesRefresh();
       fetchCalendar();
       fetch('/api/telemetry').then(r => r.json()).then(d => applyTelemetrySummary(d.summary)).catch(() => {});
     })
@@ -3454,15 +3536,18 @@ function initAddAgent() {
     populateModelSelect(document.getElementById('add-agent-model'), providers, pid, p?.defaultModel ?? '');
   });
 
+  // Populate hat checkboxes
+  populateHatGroup('add-agent-hat-group', ['white']);
+
   // Repopulate persona select when hat changes
-  document.getElementById('add-agent-hat').addEventListener('change', () => {
-    const hatType = document.getElementById('add-agent-hat').value;
+  document.getElementById('add-agent-hat-group').addEventListener('change', () => {
+    const hatType = getSelectedHats('add-agent-hat-group').filter(h => h !== 'none')[0] ?? 'none';
     populatePersonaSelect('add-agent-persona', hatType, '');
   });
 
   // Auto-fill name when a persona is selected
   document.getElementById('add-agent-persona').addEventListener('change', () => {
-    const hatType = document.getElementById('add-agent-hat').value;
+    const hatType = getSelectedHats('add-agent-hat-group').filter(h => h !== 'none')[0] ?? 'none';
     const personaName = document.getElementById('add-agent-persona').value;
     const persona = (personasByHat[hatType] ?? []).find(p => p.name === personaName);
     if (persona) {
@@ -3488,7 +3573,7 @@ function openAddAgent() {
   document.getElementById('add-agent-name').value = '';
   setSpecValue('add-agent-specialisation', 'add-agent-specialisation-custom', '');
   document.getElementById('add-agent-error').textContent = '';
-  const hatType = document.getElementById('add-agent-hat').value;
+  const hatType = getSelectedHats('add-agent-hat-group').filter(h => h !== 'none')[0] ?? 'none';
   populatePersonaSelect('add-agent-persona', hatType, '');
   document.getElementById('add-agent-modal').hidden = false;
   document.getElementById('add-agent-name').focus();
@@ -3500,7 +3585,8 @@ function closeAddAgent() {
 
 async function saveAddAgent() {
   const name = document.getElementById('add-agent-name').value.trim();
-  const hatType = document.getElementById('add-agent-hat').value;
+  const hatTypes = getSelectedHats('add-agent-hat-group');
+  const hatType = hatTypes.filter(h => h !== 'none')[0] ?? 'none';
   const specialisation = getSpecValue('add-agent-specialisation', 'add-agent-specialisation-custom');
   const provider = document.getElementById('add-agent-provider').value;
   const model = document.getElementById('add-agent-model').value;
@@ -3515,7 +3601,7 @@ async function saveAddAgent() {
     const res = await fetch('/api/agents', {
       method: 'POST', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({
-        name, hatType,
+        name, hatTypes,
         visualDescription: persona?.visualDescription || undefined,
         backstory: persona?.backstory || undefined,
         specialisation: specialisation || persona?.specialisation || undefined,
@@ -4171,6 +4257,7 @@ initMicButtons();
 initBacklogCalendarTabs();
 initPanelExpand();
 initTelemetry();
+initTelScopeToggle();
 initFileUpload();
 initFileViewer();
 initGenBgModal();
@@ -4229,11 +4316,29 @@ function fmtTokens(n) {
   return String(n);
 }
 
+let telScope = 'project'; // 'project' | 'all'
+
 function applyTelemetrySummary(summary) {
   if (!summary) return;
   document.getElementById('tel-in').textContent   = fmtTokens(summary.totalInputTokens  ?? 0);
   document.getElementById('tel-out').textContent  = fmtTokens(summary.totalOutputTokens ?? 0);
   document.getElementById('tel-cost').textContent = '$' + (summary.totalCost ?? 0).toFixed(4);
+}
+
+function refreshTelemetryBar() {
+  const url = telScope === 'all' ? '/api/telemetry/all' : '/api/telemetry';
+  fetch(url).then(r => r.json()).then(d => { if (d.summary) applyTelemetrySummary(d.summary); }).catch(() => {});
+}
+
+function initTelScopeToggle() {
+  const btn = document.getElementById('tel-scope-btn');
+  if (!btn) return;
+  btn.addEventListener('click', () => {
+    telScope = telScope === 'project' ? 'all' : 'project';
+    btn.textContent = telScope === 'all' ? 'All time' : 'Project';
+    btn.classList.toggle('tel-scope-btn--all', telScope === 'all');
+    refreshTelemetryBar();
+  });
 }
 
 function drawPie(canvas, data) {
@@ -4515,21 +4620,70 @@ function openFileViewer(name, relativePath) {
 }
 
 
-function renderFilesList(sources, outputs) {
+function renderFilesList(sources, outputs, tickets) {
   renderFilesSection('files-sources-list', sources);
   renderFilesSection('files-outputs-list', outputs);
+
+  const section = document.getElementById('files-tickets-section');
+  const list    = document.getElementById('files-tickets-list');
+  if (!section || !list) return;
+
+  if (!tickets || tickets.length === 0) {
+    section.hidden = true;
+    return;
+  }
+  section.hidden = false;
+  list.innerHTML = tickets.map(t => {
+    const rows = t.files.map(f => {
+      const depth  = Math.max(0, (f.relativePath.match(/\//g) || []).length - 1);
+      const indent = depth > 0 ? ` file-row--indent-${Math.min(depth, 3)}` : '';
+      const actions = f.isDir ? '' : buildFileActions(f);
+      return `<div class="file-row${f.isDir ? ' file-row--dir' : ''}${indent}">
+        <span class="file-icon">${fileIcon(f.name, f.isDir)}</span>
+        <span class="file-name" title="${esc(f.relativePath)}">${esc(f.name)}</span>
+        ${!f.isDir ? `<span class="file-size">${fmtSize(f.size)}</span>` : ''}
+        ${actions}
+      </div>`;
+    }).join('');
+    return `<details class="files-ticket-group" open>
+      <summary class="files-ticket-header">${esc(t.id)}</summary>
+      ${rows || '<div class="files-list-empty">Empty</div>'}
+    </details>`;
+  }).join('');
 }
 
 function fetchFiles() {
   fetch('/api/project/files')
     .then(r => r.json())
-    .then(data => renderFilesList(data.sources, data.outputs))
+    .then(data => renderFilesList(data.sources, data.outputs, data.tickets))
     .catch(() => {});
+}
+
+function startFilesRefresh() {
+  if (filesRefreshTimer) clearInterval(filesRefreshTimer);
+  filesRefreshTimer = setInterval(fetchFiles, 30_000);
 }
 
 function initFileUpload() {
   document.getElementById('files-open-folder-btn')?.addEventListener('click', () => {
     fetch('/api/project/open-folder', { method: 'POST' }).catch(() => {});
+  });
+
+  document.getElementById('files-clear-btn')?.addEventListener('click', async () => {
+    if (!confirm('Clear all project files, tickets, and agent history? Agent definitions will be kept. This cannot be undone.')) return;
+    const btn = document.getElementById('files-clear-btn');
+    btn.disabled = true;
+    btn.textContent = 'Clearing…';
+    try {
+      const r = await fetch('/api/project/clear', { method: 'POST' });
+      if (!r.ok) { const d = await r.json(); alert('Clear failed: ' + (d.error ?? r.status)); }
+      else fetchFiles();
+    } catch (err) {
+      alert('Clear failed: ' + err.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Clear project';
+    }
   });
 
   const input = document.getElementById('files-upload-input');

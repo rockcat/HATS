@@ -172,6 +172,7 @@ export class APIServer {
       agentTicketMap:     self.agentTicketMap,
       agentActivity:      self.agentActivity,
       talkingTimers:      self.talkingTimers,
+      getProjectDir:      () => self.projectDir,
       getKanbanPath:      () => self.kanbanManager.kanbanPath,
       readKanban:         () => self.kanbanManager.readKanban(),
       writeKanban:        (b) => self.kanbanManager.writeKanban(b),

@@ -154,6 +154,19 @@ header h1 {
 }
 .header-btn:hover { opacity: 0.85; }
 
+.mute-btn {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--text-muted);
+  margin-left: 0;
+}
+.mute-btn:hover { background: var(--surface-2); color: var(--text); opacity: 1; }
+.mute-btn--active {
+  background: rgba(248,81,73,0.15);
+  border-color: #f85149;
+  color: #f85149;
+}
+
 .header-btn--ghost {
   background: transparent;
   border-color: var(--border);
@@ -1354,7 +1367,7 @@ main {
   transition: max-width 0.22s ease;
 }
 .agent-detail.prompt-open {
-  max-width: 960px;
+  max-width: 90%;
 }
 
 /* Chat-only mode: hide configuration rows and the prompt preview */
@@ -1380,7 +1393,7 @@ main {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow-y: auto;
 }
 
 .agent-detail-header {
@@ -1435,7 +1448,7 @@ main {
   border-left: 1px solid var(--border);
   border-radius: 0 10px 10px 0;
   background: var(--surface-2);
-  width: 400px;
+  width: 50%;
   flex-shrink: 0;
   overflow: hidden;
 }
@@ -1487,13 +1500,14 @@ main {
 }
 
 .agent-detail-feed {
-  flex: 1;
-  overflow-y: auto;
-  min-height: 110px;
+  flex-shrink: 0;
+  min-height: 100px;
   padding: 8px 10px;
   display: flex;
   flex-direction: column;
   gap: 4px;
+  overflow-y: auto;
+  max-height: 440px;
 }
 
 /* Agent compose area */
@@ -1599,7 +1613,6 @@ main {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  max-height: 220px;
   overflow-y: auto;
 }
 
@@ -1723,6 +1736,7 @@ main {
   font-size: 12px;
   padding: 5px 8px;
   resize: vertical;
+  height: 130px;
   min-height: 38px;
   outline: none;
   transition: border-color 0.15s;
@@ -2096,15 +2110,14 @@ main {
   padding: 7px 14px;
   border-bottom: 1px solid var(--border);
   background: var(--surface);
-  overflow-y: auto;
-  max-height: 50vh;
-  flex: 0 1 auto;
+  flex-shrink: 0;
 }
 
 .agent-config-line {
   display: flex;
   gap: 6px;
   align-items: center;
+  margin-bottom: 4px;
 }
 
 .agent-config-label {
@@ -2183,6 +2196,76 @@ main {
   cursor: pointer;
   white-space: nowrap;
 }
+
+.hat-check-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.hat-check-group input[type=checkbox] {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+.hat-check-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px 3px 5px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  user-select: none;
+  transition: border-color 0.12s, background 0.12s;
+}
+.hat-check-item:hover { border-color: var(--border-hover); }
+.hat-check-item--on {
+  border-color: var(--border-hover);
+  background: var(--surface-2);
+}
+.hat-check-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.hat-check-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.hat-check-item--on .hat-check-label { color: var(--text); }
+
+.agent-config-section {
+  border: none;
+  padding: 0;
+  margin: 0;
+}
+.agent-config-section-summary {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+  padding: 2px 0 4px;
+}
+.agent-config-section-summary::-webkit-details-marker { display: none; }
+.agent-config-section-summary::before {
+  content: '▶';
+  font-size: 7px;
+  display: inline-block;
+  transition: transform 0.15s ease;
+  opacity: 0.6;
+  flex-shrink: 0;
+}
+.agent-config-section[open] .agent-config-section-summary::before { transform: rotate(90deg); }
 
 .agent-config-details {
   border: none;
@@ -2488,7 +2571,7 @@ main {
 .avatar-panel {
   flex-shrink: 0;
   align-self: center;
-  width: min(100%, 180px);
+  width: min(100%, 280px);
   aspect-ratio: 1 / 1;
   margin: 8px auto;
   border-radius: 14px;
@@ -2903,9 +2986,10 @@ main {
   padding: 0;
 }
 
-.files-toolbar {
+.files-toolbar--top {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
   padding: 7px 12px 6px;
   border-bottom: 1px solid var(--border);
@@ -2913,16 +2997,39 @@ main {
   position: sticky;
   top: 0;
   background: var(--surface);
+  z-index: 2;
+}
+
+.files-section {
+  border-bottom: 1px solid var(--border);
+}
+
+.files-section-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px 6px;
+  position: sticky;
+  top: 37px;
+  background: var(--surface);
   z-index: 1;
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
 }
-
-.files-toolbar--outputs {
-  border-top: 1px solid var(--border);
+.files-section-summary::-webkit-details-marker { display: none; }
+.files-section-summary::before {
+  content: '›';
+  font-size: 13px;
+  line-height: 1;
+  width: 10px;
+  text-align: center;
+  color: var(--text-muted);
+  transition: transform 0.15s;
+  flex-shrink: 0;
 }
-
-.files-toolbar--top {
-  justify-content: flex-end;
-}
+.files-section[open] > .files-section-summary::before { transform: rotate(90deg); }
+.files-section-summary:hover { background: var(--surface-2); }
 
 .files-open-folder-btn {
   font-size: 10px;
@@ -2937,6 +3044,16 @@ main {
 }
 .files-open-folder-btn:hover { color: var(--text); border-color: var(--border-hover); }
 
+.files-clear-btn {
+  font-size: 10px; font-weight: 600; color: var(--hat-red);
+  background: none; border: 1px solid var(--hat-red); border-radius: 4px;
+  padding: 3px 9px; cursor: pointer; opacity: 0.7;
+  transition: opacity 0.15s;
+  margin-left: 8px;
+}
+.files-clear-btn:hover { opacity: 1; }
+.files-clear-btn:disabled { opacity: 0.4; cursor: wait; }
+
 .files-section-label {
   font-size: 10px;
   font-weight: 700;
@@ -2944,6 +3061,7 @@ main {
   letter-spacing: 0.08em;
   color: var(--text-muted);
   flex: 1;
+  pointer-events: none;
 }
 
 .files-upload-btn {
@@ -2970,6 +3088,32 @@ main {
   color: var(--text-muted);
   font-style: italic;
 }
+
+.files-ticket-group { border-top: 1px solid var(--border); }
+.files-ticket-group:first-child { border-top: none; }
+.files-ticket-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px; font-weight: 700; color: var(--text-muted);
+  padding: 4px 12px;
+  background: var(--surface);
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+}
+.files-ticket-header::-webkit-details-marker { display: none; }
+.files-ticket-header::before {
+  content: '›';
+  font-size: 12px;
+  line-height: 1;
+  width: 10px;
+  text-align: center;
+  transition: transform 0.15s;
+  flex-shrink: 0;
+}
+.files-ticket-group[open] > .files-ticket-header::before { transform: rotate(90deg); }
+.files-ticket-header:hover { background: var(--surface-2); color: var(--text); }
 
 .file-row {
   display: flex;
@@ -3334,6 +3478,24 @@ main {
 }
 
 .telemetry-table tbody tr:hover td { background: var(--surface-2); }
+
+.tel-scope-btn {
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.tel-scope-btn:hover { background: var(--surface-2); color: var(--text); }
+.tel-scope-btn--all {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
 
 /* ── Panel expand/restore ───────────────────────────── */
 
