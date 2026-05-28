@@ -8,6 +8,7 @@ import { HumanRequestStore } from './human-request-store.js';
 import { EmailAllowlistStore } from './email-allowlist-store.js';
 import { ProjectManager, AgentStatus } from './project-manager.js';
 import { ProjectLoader } from './api-server.js';
+import { AgentStore } from './agent-store.js';
 
 export interface ProjectSwitchContext {
   projectLoader: ProjectLoader;
@@ -37,6 +38,7 @@ export interface ProjectSwitchContext {
   buildAgentStatuses(): AgentStatus[];
   sseBroadcast(data: object): void;
   projectSwitchCallback: ((o: TeamOrchestrator) => void) | null;
+  agentStore: AgentStore | null;
 }
 
 export async function executeProjectSwitch(newId: string, ctx: ProjectSwitchContext): Promise<void> {
@@ -67,6 +69,11 @@ export async function executeProjectSwitch(newId: string, ctx: ProjectSwitchCont
   if (snapshotPath) log.info(`[API] Saved state for project "${ctx.projectDir}"`);
 
   log.info(`[API] Switching to project "${newId}" (${newProjectDir})`);
+  if (ctx.agentStore) {
+    // The project loader closes over agentStore via makeProjectLoader — the new orchestrator
+    // will already have it set. We just need it loaded before the loader is called.
+    await ctx.agentStore.load().catch(() => {});
+  }
   const newOrchestrator = await ctx.projectLoader(newProjectDir, newKanbanFile, newStateFile);
 
   ctx.onStateChange({ orchestrator: newOrchestrator, mcpEnabledPath: newMcpFile, meetingsPath: newMeetingsFile, projectId: newId, projectDir: newProjectDir });

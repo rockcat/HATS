@@ -3,33 +3,71 @@ import { HatType } from '../hats/types.js';
 import { MCPServerDef } from '../mcp/mcp-client.js';
 import { Task, Meeting } from '../orchestrator/types.js';
 
-export const SNAPSHOT_VERSION = 1;
+export const SNAPSHOT_VERSION = 2;
 
-export interface AgentSnapshot {
-  id: string;             // stable UUID, used as map key so renames don't break anything
-  identity: AgentIdentity;
-  hatType: HatType | HatType[];  // HatType for legacy snapshots; migrated to array on load
-  model: string;
-  providerName: string;   // used by ProviderFactory to reconstruct the right provider
-  teamContext?: string;
-  enabledMcpServers?: string[]; // per-agent MCP server IDs; absent = all project servers
-  personalMcpCredentials?: Record<string, Record<string, string>>;
-  history: Array<{
-    role: 'user' | 'assistant' | 'tool';
-    content: string;
-    timestamp: string;    // ISO string — Date isn't JSON-serializable
-    toolCalls?: unknown;
-    toolCallId?: string;
-    toolName?: string;
-  }>;
+export interface HistoryEntry {
+  role: 'user' | 'assistant' | 'tool';
+  content: string;
+  timestamp: string;
+  toolCalls?: unknown;
+  toolCallId?: string;
+  toolName?: string;
 }
 
-export interface TeamSnapshot {
-  version: number;
-  savedAt: string;        // ISO string
+// Global agent definition (config only — no history)
+export interface AgentDefinition {
+  id: string;
+  identity: AgentIdentity;
+  hatType: HatType[];
+  model: string;
+  providerName: string;
+  teamContext?: string;
+  enabledMcpServers?: string[];
+  personalMcpCredentials?: Record<string, Record<string, string>>;
+  scheduledActionIds: string[];
+}
+
+// Global scheduled action definition
+export interface ScheduledActionDef {
+  id: string;
+  label: string;
+  description: string;
+  intervalSeconds: number | null;
+  createdAt: string;
+}
+
+// V1 format kept for migration only
+export interface AgentSnapshot {
+  id: string;
+  identity: AgentIdentity;
+  hatType: HatType | HatType[];
+  model: string;
+  providerName: string;
+  teamContext?: string;
+  enabledMcpServers?: string[];
+  personalMcpCredentials?: Record<string, Record<string, string>>;
+  history: HistoryEntry[];
+}
+
+export interface TeamSnapshotV1 {
+  version: 1;
+  savedAt: string;
   humanName: string;
   agents: AgentSnapshot[];
   tasks: Task[];
   meetings: Meeting[];
   mcpServers: MCPServerDef[];
 }
+
+export interface TeamSnapshotV2 {
+  version: 2;
+  savedAt: string;
+  humanName: string;
+  agentIds: string[];
+  agentHistories: Record<string, HistoryEntry[]>;
+  tasks: Task[];
+  meetings: Meeting[];
+  mcpServers: MCPServerDef[];
+}
+
+export type TeamSnapshot = TeamSnapshotV1 | TeamSnapshotV2;

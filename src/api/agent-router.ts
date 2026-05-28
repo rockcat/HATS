@@ -17,6 +17,8 @@ import { getPricingTable, FREE_PROVIDERS } from '../providers/pricing.js';
 import { AnthropicProvider } from '../providers/anthropic.js';
 import { makeProvider, KNOWN_PROVIDERS, probeLocalLLM, getCachedModels, getModelCacheEntry, clearModelCache } from './providers.js';
 import { AgentStatus } from './project-manager.js';
+import { AgentStore } from './agent-store.js';
+import { ScheduledActionStore } from './scheduled-action-store.js';
 
 export interface AgentRouterDeps {
   getOrchestrator(): TeamOrchestrator;
@@ -37,6 +39,8 @@ export interface AgentRouterDeps {
   resolveMCPConfig(id: string, entry: import('../mcp/mcp-catalogue.js').MCPCatalogueEntry): ReturnType<typeof import('../mcp/mcp-catalogue.js').resolveConfig>;
   saveMCPEnabled(): Promise<void>;
   enabledMCPIds: Set<string>;
+  getAgentStore(): AgentStore | null;
+  getActionStore(): ScheduledActionStore | null;
   sseBroadcast(data: object): void;
   json(res: ServerResponse, status: number, body: unknown): void;
   readBody(req: IncomingMessage): Promise<string>;
@@ -488,6 +492,84 @@ export class AgentRouter {
         saveCurrentState().catch(() => {});
         json(res, 200, { ok: true });
       } catch (err) { json(res, 404, { error: (err as Error).message }); }
+      return true;
+    }
+
+    // ── Global agent library ───────────────────────────────────────────────
+
+    if (pathname === '/api/global-agents' && method === 'GET') {
+      const store = this.deps.getAgentStore();
+      json(res, 200, store ? store.list() : []);
+      return true;
+    }
+
+    if (pathname.match(/^\/api\/global-agents\/[^/]+\/scheduled-actions$/) && method === 'PUT') {
+      const agentId = decodeURIComponent(pathname.slice('/api/global-agents/'.length, -'/scheduled-actions'.length));
+      const store   = this.deps.getAgentStore();
+      if (!store) { json(res, 503, { error: 'Agent store not ready' }); return true; }
+      const def = store.get(agentId);
+      if (!def) { json(res, 404, { error: 'Agent not found' }); return true; }
+      const body = await readBody(req);
+      const { scheduledActionIds } = JSON.parse(body) as { scheduledActionIds: string[] };
+      await store.addOrUpdate({ ...def, scheduledActionIds: scheduledActionIds ?? [] });
+      json(res, 200, { ok: true });
+      return true;
+    }
+
+    if (pathname.match(/^\/api\/global-agents\/[^/]+$/) && method === 'DELETE') {
+      const agentId = decodeURIComponent(pathname.slice('/api/global-agents/'.length));
+      const store   = this.deps.getAgentStore();
+      if (!store) { json(res, 503, { error: 'Agent store not ready' }); return true; }
+      const ok = await store.remove(agentId);
+      json(res, ok ? 200 : 404, ok ? { ok: true } : { error: 'Agent not found in library' });
+      return true;
+    }
+
+    // ── Global scheduled actions ───────────────────────────────────────────
+
+    if (pathname === '/api/scheduled-actions' && method === 'GET') {
+      const store = this.deps.getActionStore();
+      json(res, 200, store ? store.list() : []);
+      return true;
+    }
+
+    if (pathname === '/api/scheduled-actions' && method === 'POST') {
+      const store = this.deps.getActionStore();
+      if (!store) { json(res, 503, { error: 'Action store not ready' }); return true; }
+      const body = await readBody(req);
+      const { label, description, intervalMinutes } = JSON.parse(body) as { label: string; description: string; intervalMinutes?: number };
+      if (!label?.trim() || !description?.trim()) {
+        json(res, 400, { error: 'label and description are required' }); return true;
+      }
+      const intervalSeconds = (intervalMinutes && intervalMinutes > 0) ? Math.round(intervalMinutes * 60) : null;
+      const def = await store.add({ label: label.trim(), description: description.trim(), intervalSeconds });
+      json(res, 201, def);
+      return true;
+    }
+
+    if (pathname.match(/^\/api\/scheduled-actions\/[^/]+$/) && method === 'PATCH') {
+      const actionId = decodeURIComponent(pathname.slice('/api/scheduled-actions/'.length));
+      const store    = this.deps.getActionStore();
+      if (!store) { json(res, 503, { error: 'Action store not ready' }); return true; }
+      const body = await readBody(req);
+      const { label, description, intervalMinutes } = JSON.parse(body) as { label?: string; description?: string; intervalMinutes?: number | null };
+      const patch: Record<string, unknown> = {};
+      if (label       !== undefined) patch['label']           = label.trim();
+      if (description !== undefined) patch['description']     = description.trim();
+      if (intervalMinutes !== undefined) {
+        patch['intervalSeconds'] = (intervalMinutes && intervalMinutes > 0) ? Math.round(intervalMinutes * 60) : null;
+      }
+      const updated = await store.update(actionId, patch as never);
+      json(res, updated ? 200 : 404, updated ?? { error: 'Action not found' });
+      return true;
+    }
+
+    if (pathname.match(/^\/api\/scheduled-actions\/[^/]+$/) && method === 'DELETE') {
+      const actionId = decodeURIComponent(pathname.slice('/api/scheduled-actions/'.length));
+      const store    = this.deps.getActionStore();
+      if (!store) { json(res, 503, { error: 'Action store not ready' }); return true; }
+      const ok = await store.remove(actionId);
+      json(res, ok ? 200 : 404, ok ? { ok: true } : { error: 'Action not found' });
       return true;
     }
 
