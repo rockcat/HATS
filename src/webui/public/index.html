@@ -86,6 +86,8 @@
         <button class="panel-tab" data-tab="requests">Requests <span id="requests-badge" class="tab-badge" hidden></span></button>
         <button class="panel-tab" data-tab="allowlist">Email Permissions <span id="allowlist-badge" class="tab-badge" hidden></span></button>
         <button class="panel-tab" data-tab="files">Project Files</button>
+        <button class="panel-tab" data-tab="library">Agent Library</button>
+        <button class="panel-tab" data-tab="schedules">Schedules</button>
         <button id="mcp-catalogue-edit-btn" class="panel-header-action-btn" title="Edit MCP catalogue" hidden><img src="/assets/settings.svg" class="svg-icon" alt="Edit catalogue"></button>
         <button class="panel-expand-btn" data-panel="tools-panel" title="Expand"><img src="/assets/expand.svg" class="svg-icon" alt="Expand"></button>
       </div>
@@ -107,6 +109,26 @@
           <input type="text" id="cli-input" placeholder="Type a command or message…" autocomplete="off" spellcheck="false">
           <button id="cli-mic-btn" class="mic-btn" title="Hold to speak (Whisper)"><img src="/assets/mic.svg" class="svg-icon" alt="Mic"></button>
         </div>
+      </div>
+      <div id="library-content" class="tab-pane library-pane">
+        <div class="library-toolbar">
+          <button id="library-new-agent-btn" class="panel-add-btn">+ New Agent</button>
+        </div>
+        <div id="library-agent-list" class="library-agent-list"></div>
+      </div>
+      <div id="schedules-content" class="tab-pane schedules-pane">
+        <div id="schedules-list" class="schedules-list"></div>
+        <details class="schedules-add-section" open>
+          <summary class="schedules-add-summary">New Scheduled Action</summary>
+          <div class="schedules-add-form">
+            <input type="text" id="schedules-add-label" class="schedules-input" placeholder="Label (e.g. Check inbox)">
+            <textarea id="schedules-add-description" class="schedules-textarea" placeholder="What should the agent do when this fires?" rows="2"></textarea>
+            <div class="schedules-add-footer">
+              <input type="number" id="schedules-add-interval" class="schedules-input schedules-interval" placeholder="Interval (mins, blank=once)" min="1" step="1">
+              <button id="schedules-add-btn" type="button" class="schedules-add-btn">+ Add</button>
+            </div>
+          </div>
+        </details>
       </div>
       <div id="files-content" class="tab-pane files-pane">
         <div class="files-toolbar files-toolbar--top">

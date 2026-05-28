@@ -3113,8 +3113,10 @@ function initTabs() {
       const tab = btn.dataset.tab;
       document.querySelectorAll('.panel-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
       document.querySelectorAll('.tab-pane').forEach(p => p.classList.toggle('active', p.id === tab + '-content'));
-      if (tab === 'mcp') fetchMCPCatalogue();
-      if (tab === 'cli') document.getElementById('cli-input')?.focus();
+      if (tab === 'mcp')       fetchMCPCatalogue();
+      if (tab === 'cli')       document.getElementById('cli-input')?.focus();
+      if (tab === 'library')   fetchGlobalAgents();
+      if (tab === 'schedules') fetchScheduledActions();
       const mcpEditBtn = document.getElementById('mcp-catalogue-edit-btn');
       if (mcpEditBtn) mcpEditBtn.hidden = (tab !== 'mcp');
     });
@@ -4261,6 +4263,8 @@ initTelScopeToggle();
 initFileUpload();
 initFileViewer();
 initGenBgModal();
+initLibraryTab();
+initSchedulesTab();
 connect();
 
 // ── Panel expand / restore ────────────────────────────────────────────────────
@@ -4719,4 +4723,137 @@ function initTelemetry() {
 
   close.addEventListener('click', () => { modal.hidden = true; });
   modal.addEventListener('click', e => { if (e.target === modal) modal.hidden = true; });
+}
+
+// ── Agent Library tab ─────────────────────────────────────────────────────────
+
+async function fetchGlobalAgents() {
+  try {
+    const [globalAgents, projectAgents] = await Promise.all([
+      fetch('/api/global-agents').then(r => r.json()),
+      fetch('/api/agents').then(r => r.json()),
+    ]);
+    renderGlobalAgents(globalAgents, new Set(projectAgents.map(a => a.id ?? a.name)));
+  } catch { /* ignore */ }
+}
+
+function renderGlobalAgents(agents, projectIds) {
+  const list = document.getElementById('library-agent-list');
+  if (!list) return;
+  if (!agents.length) {
+    list.innerHTML = '<div style="padding:16px 12px;color:var(--text-muted);font-size:13px">No agents in the library yet. Create one with the button above.</div>';
+    return;
+  }
+  list.innerHTML = agents.map(agent => {
+    const hats    = (agent.hatType ?? []).filter(h => h !== 'none').map(h => h.charAt(0).toUpperCase() + h.slice(1)).join('+') || 'No Hat';
+    const inProj  = projectIds.has(agent.id);
+    return `
+      <div class="library-agent-row" data-agent-id="${agent.id}">
+        <div class="library-agent-body" style="flex:1;min-width:0">
+          <div class="library-agent-name">${escHtml(agent.identity?.name ?? 'Unnamed')}</div>
+          <div class="library-agent-meta">${escHtml(hats)} · ${escHtml(agent.model ?? '')}</div>
+        </div>
+        ${inProj ? '<span class="library-agent-in-project">In project</span>' : ''}
+        <div class="library-agent-actions">
+          ${inProj ? '' : `<button class="library-btn library-btn--add" data-action="add" data-agent-id="${agent.id}">+ Add to project</button>`}
+          <button class="library-btn library-btn--del" data-action="delete" data-agent-id="${agent.id}" title="Remove from library">✕</button>
+        </div>
+      </div>`;
+  }).join('');
+
+  list.querySelectorAll('[data-action="add"]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const agentId = btn.dataset.agentId;
+      try {
+        const r = await fetch('/api/project/add-agent', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ agentId }) });
+        if (!r.ok) { const e = await r.json(); alert(e.error ?? 'Failed to add agent'); return; }
+        fetchGlobalAgents();
+      } catch { alert('Network error'); }
+    });
+  });
+
+  list.querySelectorAll('[data-action="delete"]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const agentId = btn.dataset.agentId;
+      const name    = btn.closest('.library-agent-row').querySelector('.library-agent-name')?.textContent ?? agentId;
+      if (!confirm(`Remove "${name}" from the global library? This does not affect active projects.`)) return;
+      try {
+        await fetch(`/api/global-agents/${encodeURIComponent(agentId)}`, { method: 'DELETE' });
+        fetchGlobalAgents();
+      } catch { alert('Network error'); }
+    });
+  });
+}
+
+function initLibraryTab() {
+  document.getElementById('library-new-agent-btn')?.addEventListener('click', () => {
+    openAddAgent();
+  });
+}
+
+// ── Scheduled Actions tab ─────────────────────────────────────────────────────
+
+async function fetchScheduledActions() {
+  try {
+    const actions = await fetch('/api/scheduled-actions').then(r => r.json());
+    renderScheduledActions(actions);
+  } catch { /* ignore */ }
+}
+
+function renderScheduledActions(actions) {
+  const list = document.getElementById('schedules-list');
+  if (!list) return;
+  if (!actions.length) {
+    list.innerHTML = '<div style="padding:16px 12px;color:var(--text-muted);font-size:13px">No global scheduled actions yet. Add one below.</div>';
+    return;
+  }
+  list.innerHTML = actions.map(action => {
+    const interval = action.intervalSeconds
+      ? `Every ${Math.round(action.intervalSeconds / 60)} min`
+      : 'Once';
+    return `
+      <div class="schedules-row" data-action-id="${action.id}">
+        <div class="schedules-row-body">
+          <div class="schedules-row-label">${escHtml(action.label)}</div>
+          <div class="schedules-row-desc" title="${escHtml(action.description)}">${escHtml(action.description)}</div>
+        </div>
+        <span class="schedules-row-interval">${interval}</span>
+        <div class="schedules-row-actions">
+          <button class="library-btn library-btn--del" data-action="delete" data-action-id="${action.id}" title="Delete">✕</button>
+        </div>
+      </div>`;
+  }).join('');
+
+  list.querySelectorAll('[data-action="delete"]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const actionId = btn.dataset.actionId;
+      if (!confirm('Delete this scheduled action?')) return;
+      try {
+        await fetch(`/api/scheduled-actions/${encodeURIComponent(actionId)}`, { method: 'DELETE' });
+        fetchScheduledActions();
+      } catch { alert('Network error'); }
+    });
+  });
+}
+
+function initSchedulesTab() {
+  document.getElementById('schedules-add-btn')?.addEventListener('click', async () => {
+    const label       = document.getElementById('schedules-add-label').value.trim();
+    const description = document.getElementById('schedules-add-description').value.trim();
+    const intervalRaw = document.getElementById('schedules-add-interval').value;
+    const intervalMinutes = intervalRaw ? parseInt(intervalRaw, 10) : null;
+    if (!label || !description) { alert('Label and description are required'); return; }
+    try {
+      const r = await fetch('/api/scheduled-actions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ label, description, intervalMinutes }),
+      });
+      if (!r.ok) { const e = await r.json(); alert(e.error ?? 'Failed to create action'); return; }
+      document.getElementById('schedules-add-label').value = '';
+      document.getElementById('schedules-add-description').value = '';
+      document.getElementById('schedules-add-interval').value = '';
+      fetchScheduledActions();
+    } catch { alert('Network error'); }
+  });
 }

@@ -503,15 +503,79 @@ export class AgentRouter {
       return true;
     }
 
-    if (pathname.match(/^\/api\/global-agents\/[^/]+\/scheduled-actions$/) && method === 'PUT') {
-      const agentId = decodeURIComponent(pathname.slice('/api/global-agents/'.length, -'/scheduled-actions'.length));
-      const store   = this.deps.getAgentStore();
+    if (pathname === '/api/global-agents' && method === 'POST') {
+      const store = this.deps.getAgentStore();
       if (!store) { json(res, 503, { error: 'Agent store not ready' }); return true; }
-      const def = store.get(agentId);
+      const body = await readBody(req);
+      const { name, hatTypes: rawHatTypes, visualDescription, specialisation, backstory, provider: providerName, model } =
+        JSON.parse(body) as { name: string; hatTypes?: string[]; visualDescription?: string; specialisation?: string; backstory?: string; provider?: string; model?: string };
+      if (!name?.trim()) { json(res, 400, { error: 'name is required' }); return true; }
+      const validHats = new Set(['none', 'white', 'red', 'black', 'yellow', 'green', 'blue']);
+      const hatTypes  = rawHatTypes?.length ? rawHatTypes : ['none'];
+      if (hatTypes.some(h => !validHats.has(h))) { json(res, 400, { error: `Invalid hat type` }); return true; }
+      const resolvedProvider = providerName ?? 'anthropic';
+      const resolvedModel    = model?.trim() || (process.env['ANTHROPIC_MODEL'] ?? 'claude-haiku-4-5-20251001');
+      const { v4: uuidv4 } = await import('uuid');
+      const def = await store.addOrUpdate({
+        id: uuidv4(),
+        identity: { name: name.trim(), visualDescription: visualDescription?.trim() || 'a focused, capable team member', specialisation: specialisation?.trim() || undefined, backstory: backstory?.trim() || undefined },
+        hatType: hatTypes as import('../hats/types.js').HatType[],
+        model: resolvedModel, providerName: resolvedProvider,
+        scheduledActionIds: [],
+      });
+      json(res, 201, def);
+      return true;
+    }
+
+    // Add a global agent into the current project's running team
+    if (pathname === '/api/project/add-agent' && method === 'POST') {
+      const agentStore = this.deps.getAgentStore();
+      if (!agentStore) { json(res, 503, { error: 'Agent store not ready' }); return true; }
+      const body    = await readBody(req);
+      const { agentId } = JSON.parse(body) as { agentId: string };
+      const def = agentStore.get(agentId);
+      if (!def) { json(res, 404, { error: 'Agent not found in library' }); return true; }
+      if (orch.listAgents().some(a => a.id === agentId)) {
+        json(res, 409, { error: 'Agent is already in this project' }); return true;
+      }
+      const provider = makeProvider(def.providerName) ?? new AnthropicProvider();
+      orch.registerAgent({ id: def.id, identity: def.identity, hatType: def.hatType, provider, model: def.model, enabledMcpServers: def.enabledMcpServers, personalMcpCredentials: def.personalMcpCredentials });
+      sseBroadcast({ type: 'agent_update', agents: this.deps.buildAgentStatuses() });
+      saveCurrentState().catch(() => {});
+      json(res, 200, { ok: true });
+      return true;
+    }
+
+    if (pathname.match(/^\/api\/global-agents\/[^/]+\/scheduled-actions$/) && method === 'PUT') {
+      const agentId    = decodeURIComponent(pathname.slice('/api/global-agents/'.length, -'/scheduled-actions'.length));
+      const agentStore = this.deps.getAgentStore();
+      const actionStore = this.deps.getActionStore();
+      if (!agentStore) { json(res, 503, { error: 'Agent store not ready' }); return true; }
+      const def = agentStore.get(agentId);
       if (!def) { json(res, 404, { error: 'Agent not found' }); return true; }
       const body = await readBody(req);
       const { scheduledActionIds } = JSON.parse(body) as { scheduledActionIds: string[] };
-      await store.addOrUpdate({ ...def, scheduledActionIds: scheduledActionIds ?? [] });
+      const ids = scheduledActionIds ?? [];
+      await agentStore.addOrUpdate({ ...def, scheduledActionIds: ids });
+      // Seed runtime agenda entries for newly assigned actions
+      if (actionStore) {
+        const agendaStore = orch.getAgendaStore();
+        const agent       = orch.listAgents().find(a => a.id === agentId);
+        if (agendaStore && agent) {
+          const existing = agendaStore.list(agent.name).map(e => (e as { actionId?: string }).actionId).filter(Boolean);
+          for (const actionId of ids) {
+            if (existing.includes(actionId)) continue;
+            const actionDef = actionStore.get(actionId);
+            if (!actionDef) continue;
+            await agendaStore.add({
+              agentName: agent.name,
+              label: actionDef.label,
+              description: actionDef.description,
+              intervalSeconds: actionDef.intervalSeconds,
+            } as Parameters<typeof agendaStore.add>[0]);
+          }
+        }
+      }
       json(res, 200, { ok: true });
       return true;
     }
