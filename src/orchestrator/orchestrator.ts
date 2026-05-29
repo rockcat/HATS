@@ -26,7 +26,7 @@ import { buildToolExecutor, ToolCallContext } from './tool-executor.js';
 import { EmailAllowlistStore } from '../api/email-allowlist-store.js';
 import { AgendaStore } from '../api/agenda-store.js';
 import { AgendaRunner } from './agenda-runner.js';
-import { resolvePersonalConfig } from '../mcp/mcp-catalogue.js';
+import { resolvePersonalConfig, isAgentMcp } from '../mcp/mcp-catalogue.js';
 import { getCatalogue } from '../mcp/catalogue-store.js';
 import {
   startMeeting as startMeetingFn,
@@ -169,9 +169,10 @@ export class TeamOrchestrator {
           model:                 agent.config.model,
           providerName:          agent.config.provider.name,
           teamContext:           agent.config.teamContext,
-          enabledMcpServers:     agent.config.enabledMcpServers,
-          personalMcpCredentials: agent.config.personalMcpCredentials,
-          scheduledActionIds:    existingDef?.scheduledActionIds ?? [],
+          enabledMcpServers:          agent.config.enabledMcpServers,
+          personalMcpCredentials:     agent.config.personalMcpCredentials,
+          disabledPersonalMcpServers: agent.config.disabledPersonalMcpServers,
+          scheduledActionIds:         existingDef?.scheduledActionIds ?? [],
         };
         await this.agentStore.addOrUpdate(def);
       }
@@ -293,8 +294,9 @@ export class TeamOrchestrator {
         provider,
         model:                 def.model,
         teamContext:           def.teamContext,
-        enabledMcpServers:     def.enabledMcpServers,
-        personalMcpCredentials: def.personalMcpCredentials,
+        enabledMcpServers:          def.enabledMcpServers,
+        personalMcpCredentials:     def.personalMcpCredentials,
+        disabledPersonalMcpServers: def.disabledPersonalMcpServers,
       };
       const agent = this.registerAgent(config);
       agent.setHistory(s.agentHistories[agentId] ?? []);
@@ -329,20 +331,22 @@ export class TeamOrchestrator {
 
   async enablePersonalMcp(agentName: string, serverId: string, credentials: Record<string, string>): Promise<void> {
     const agent = this.requireAgent(agentName);
-    const entry = getCatalogue().find(e => e.id === serverId && e.personal);
+    const entry = getCatalogue().find(e => e.id === serverId && isAgentMcp(e));
     if (!entry) throw new Error(`"${serverId}" is not a personal MCP catalogue entry.`);
     if (!agent.config.personalMcpCredentials) agent.config.personalMcpCredentials = {};
     agent.config.personalMcpCredentials[serverId] = credentials;
-    await this.startPersonalMcp(agentName, serverId, credentials);
+    // Remove from disabled list so it (re-)starts
+    agent.config.disabledPersonalMcpServers = (agent.config.disabledPersonalMcpServers ?? []).filter(id => id !== serverId);
+    // Force reconnect — user may have updated credentials
+    await this.startPersonalMcp(agentName, serverId, credentials, true);
   }
 
   async disablePersonalMcp(agentName: string, serverId: string): Promise<void> {
     const agent = this.requireAgent(agentName);
-    if (agent.config.personalMcpCredentials) {
-      delete agent.config.personalMcpCredentials[serverId];
-      if (Object.keys(agent.config.personalMcpCredentials).length === 0) {
-        delete agent.config.personalMcpCredentials;
-      }
+    // Mark as disabled but keep credentials so they can be restored on re-enable
+    if (!agent.config.disabledPersonalMcpServers) agent.config.disabledPersonalMcpServers = [];
+    if (!agent.config.disabledPersonalMcpServers.includes(serverId)) {
+      agent.config.disabledPersonalMcpServers.push(serverId);
     }
     const personalMcp = this.personalMcpByAgent.get(agentName.toLowerCase());
     if (personalMcp?.has(serverId)) await personalMcp.disconnect(serverId);
@@ -352,12 +356,21 @@ export class TeamOrchestrator {
     return this.findByName(agentName)?.config.personalMcpCredentials ?? {};
   }
 
-  private async startPersonalMcp(agentName: string, serverId: string, credentials: Record<string, string>): Promise<void> {
+  getDisabledPersonalMcpServers(agentName: string): Set<string> {
+    return new Set(this.findByName(agentName)?.config.disabledPersonalMcpServers ?? []);
+  }
+
+  private async startPersonalMcp(agentName: string, serverId: string, credentials: Record<string, string>, force = false): Promise<void> {
     const entry = getCatalogue().find(e => e.id === serverId);
     if (!entry) return;
     const key = agentName.toLowerCase();
     if (!this.personalMcpByAgent.has(key)) this.personalMcpByAgent.set(key, new MCPRegistry());
     const personalMcp = this.personalMcpByAgent.get(key)!;
+    // HTTP MCPs have no local process — skip reconnect if already live (unless credentials changed)
+    if (!force && entry.config.transport === 'http' && personalMcp.has(serverId)) {
+      log.info(`[Team] Personal HTTP MCP "${serverId}" already connected for ${agentName} — skipping`);
+      return;
+    }
     if (personalMcp.has(serverId)) await personalMcp.disconnect(serverId);
     const config = resolvePersonalConfig(entry, credentials);
     await personalMcp.add({ name: serverId, config });
@@ -404,9 +417,11 @@ export class TeamOrchestrator {
     if (this.telemetryRecorder) agent.setTelemetryRecorder(this.telemetryRecorder);
     this.agents.set(agent.id, agent);
     this.rebuildTeamContext();
-    // Start personal MCPs from config (fire-and-forget; they connect async)
+    // Start personal MCPs from config, skipping any that are explicitly disabled
     if (config.personalMcpCredentials) {
+      const disabled = new Set(config.disabledPersonalMcpServers ?? []);
       for (const [serverId, creds] of Object.entries(config.personalMcpCredentials)) {
+        if (disabled.has(serverId)) continue;
         this.startPersonalMcp(agent.name, serverId, creds).catch((err: Error) => {
           log.warn(`[Team] Personal MCP "${serverId}" for ${agent.name} failed to start:`, err.message);
         });

@@ -107,7 +107,7 @@ async function loadSpecialisations() {
 }
 
 function populateSpecSelects() {
-  for (const id of ['agent-config-specialisation', 'add-agent-specialisation', 'lib-edit-specialisation']) {
+  for (const id of ['add-agent-specialisation']) {
     const sel = document.getElementById(id);
     if (!sel) continue;
     const current = sel.value;
@@ -1058,28 +1058,6 @@ function getSpeechWs() {
   return speechWs;
 }
 
-function populateSpeakerSelect(agentName, voices, voiceName) {
-  const speakerSel = document.getElementById('agent-config-speaker');
-  if (!speakerSel) return;
-  const voice = voices.find(v => v.name === voiceName);
-  const speakers = voice?.speakers ?? [];   // [{name, id}, ...]
-  if (speakers.length === 0) {
-    speakerSel.hidden = true;
-    speakerSel.innerHTML = '';
-    return;
-  }
-  speakerSel.hidden = false;
-  speakerSel.innerHTML = '';
-  const saved = getSpeakerOverrides()[agentName];
-  const names = speakers.map(s => s.name);
-  for (const s of speakers) {
-    const opt = document.createElement('option');
-    opt.value = s.name;
-    opt.textContent = s.name;
-    speakerSel.appendChild(opt);
-  }
-  speakerSel.value = saved && names.includes(saved) ? saved : speakers[0].name;
-}
 
 function setSpeechAgent(agentName, voiceName, speakerName) {
   const ws = getSpeechWs();
@@ -1501,8 +1479,8 @@ function renderMCPCatalogue(catalogue) {
   const el = document.getElementById('mcp-content');
   if (!el) return;
 
-  const sharedCatalogue  = catalogue.filter(e => !e.personal);
-  const personalCatalogue = catalogue.filter(e => e.personal);
+  const sharedCatalogue   = catalogue.filter(e => e.users?.includes('human'));
+  const personalCatalogue = catalogue.filter(e => e.users?.includes('agent'));
 
   const categories = [...new Set(sharedCatalogue.map(e => e.category))];
   let html = '';
@@ -1620,7 +1598,9 @@ function fetchMCPCatalogue() {
 
 // ── MCP Catalogue Editor ──────────────────────────────────────────────────────
 
-let _mcpEditorSelected = null; // id of selected entry, or null for new
+let _mcpEditorSelected = null;     // id of selected entry, or null for new
+let _mcpEditorCurrentEntry = null; // full entry object for the selected entry
+let _mcpEditorFeatureGetter = () => ({}); // returns { envVarName: 'key:on,key:off,...' }
 
 function openMCPEditor() {
   _mcpEditorSelected = null;
@@ -1676,6 +1656,7 @@ function selectEditorEntry(id, entries) {
   _mcpEditorSelected = id;
   const entry = entries.find(e => e.id === id);
   if (!entry) return;
+  _mcpEditorCurrentEntry = entry;
 
   document.getElementById('mcp-editor-placeholder').hidden = true;
   document.getElementById('mcp-editor-fields').hidden = false;
@@ -1688,7 +1669,8 @@ function selectEditorEntry(id, entries) {
   document.getElementById('mcp-ef-category').value    = entry.category || 'productivity';
   document.getElementById('mcp-ef-notes').value       = entry.notes || '';
   document.getElementById('mcp-ef-docs-url').value    = entry.url || '';
-  document.getElementById('mcp-ef-personal').checked  = !!entry.personal;
+  document.getElementById('mcp-ef-users-human').checked = !!entry.users?.includes('human');
+  document.getElementById('mcp-ef-users-agent').checked = !!entry.users?.includes('agent');
 
   const transport = entry.config?.transport || 'stdio';
   document.getElementById('mcp-ef-transport').value = transport;
@@ -1697,19 +1679,81 @@ function selectEditorEntry(id, entries) {
   if (transport === 'stdio') {
     document.getElementById('mcp-ef-command').value = entry.config.command || '';
     document.getElementById('mcp-ef-args').value    = (entry.config.args || []).join('\n');
-    document.getElementById('mcp-ef-envvars').value = (entry.envVars || []).join('\n');
+    const nonFeatureVars = (entry.envVars || []).filter(v => (typeof v === 'string' || v.type !== 'features'));
+    document.getElementById('mcp-ef-envvars').value = nonFeatureVars.map(v => typeof v === 'string' ? v : v.name).join('\n');
   } else {
     document.getElementById('mcp-ef-url-endpoint').value = entry.config.url || '';
+    const headers = entry.config.headers ?? {};
+    document.getElementById('mcp-ef-headers').value =
+      Object.entries(headers).map(([k, v]) => `${k}: ${v}`).join('\n');
   }
+
+  // Populate feature checkboxes for any envVar with type='features'
+  populateEditorFeatures(entry);
 
   // Highlight selected in list
   document.querySelectorAll('.mcp-editor-item').forEach(b =>
     b.classList.toggle('selected', b.dataset.id === id));
 }
 
+function populateEditorFeatures(entry) {
+  const container = document.getElementById('mcp-ef-features-container');
+  container.innerHTML = '';
+  container.hidden = true;
+  _mcpEditorFeatureGetter = () => ({});
+
+  const featureVars = (entry?.envVars || []).filter(v => typeof v === 'object' && v.type === 'features');
+  if (!featureVars.length) return;
+
+  container.hidden = false;
+  const allChecks = {}; // varName -> { getter }
+
+  for (const varDef of featureVars) {
+    const currentVal = entry.config?.env?.[varDef.name] ?? '';
+    const overrides = parseFeatureOverrides(currentVal);
+
+    const section = document.createElement('div');
+    section.className = 'mcp-ef-group personal-mcp-features-section';
+
+    const label = document.createElement('label');
+    label.className = 'mcp-ef-label';
+    label.textContent = varDef.name;
+    section.appendChild(label);
+
+    const grid = document.createElement('div');
+    grid.className = 'personal-mcp-features-grid';
+
+    const checksMap = {};
+    for (const feat of (varDef.features || [])) {
+      const isOn = feat.key in overrides ? overrides[feat.key] : feat.defaultOn;
+      const item = document.createElement('label');
+      item.className = 'personal-mcp-feature-item';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = isOn;
+      item.appendChild(cb);
+      item.appendChild(document.createTextNode(feat.label));
+      grid.appendChild(item);
+      checksMap[feat.key] = { cb, defaultOn: feat.defaultOn };
+    }
+    section.appendChild(grid);
+    container.appendChild(section);
+    allChecks[varDef.name] = { checksMap, varDef };
+  }
+
+  _mcpEditorFeatureGetter = () => {
+    const result = {};
+    for (const [varName, { checksMap }] of Object.entries(allChecks)) {
+      result[varName] = serializeFeatureOverrides(checksMap);
+    }
+    return result;
+  };
+}
+
 function toggleTransportFields(transport) {
-  document.getElementById('mcp-ef-stdio-fields').hidden = transport !== 'stdio';
-  document.getElementById('mcp-ef-url-fields').hidden   = transport === 'stdio';
+  document.getElementById('mcp-ef-stdio-fields').hidden   = transport !== 'stdio';
+  document.getElementById('mcp-ef-url-fields').hidden     = transport === 'stdio';
+  document.getElementById('mcp-ef-headers-group').hidden  = transport !== 'http';
 }
 
 function buildEntryFromForm() {
@@ -1717,20 +1761,41 @@ function buildEntryFromForm() {
   const envVarNames = document.getElementById('mcp-ef-envvars').value
     .split('\n').map(s => s.trim()).filter(Boolean);
 
+  // Collect feature var values from checkboxes
+  const featureEnvValues = _mcpEditorFeatureGetter();
+  const featureVarNames = Object.keys(featureEnvValues);
+
   const config = transport === 'stdio'
     ? {
         transport: 'stdio',
         command: document.getElementById('mcp-ef-command').value.trim(),
         args: document.getElementById('mcp-ef-args').value
           .split('\n').map(s => s.trim()).filter(Boolean),
-        ...(envVarNames.length > 0
-          ? { env: Object.fromEntries(envVarNames.map(k => [k, ''])) }
+        ...((envVarNames.length > 0 || featureVarNames.length > 0)
+          ? { env: {
+                ...Object.fromEntries(envVarNames.map(k => [k, ''])),
+                ...Object.fromEntries(featureVarNames.map(k => [k, featureEnvValues[k]])),
+              } }
           : {}),
       }
-    : {
-        transport,
-        url: document.getElementById('mcp-ef-url-endpoint').value.trim(),
-      };
+    : (() => {
+        const cfg = { transport, url: document.getElementById('mcp-ef-url-endpoint').value.trim() };
+        if (transport === 'http') {
+          const headerLines = document.getElementById('mcp-ef-headers').value
+            .split('\n').map(s => s.trim()).filter(Boolean);
+          const headers = Object.fromEntries(
+            headerLines.map(line => { const i = line.indexOf(':'); return [line.slice(0, i).trim(), line.slice(i + 1).trim()]; })
+              .filter(([k]) => k),
+          );
+          if (Object.keys(headers).length) cfg.headers = headers;
+        }
+        return cfg;
+      })();
+
+  // Preserve EnvVarDef objects for feature vars from the current entry
+  const preservedFeatureVarDefs = (_mcpEditorCurrentEntry?.envVars || [])
+    .filter(v => typeof v === 'object' && v.type === 'features' && featureVarNames.includes(v.name));
+  const allEnvVars = [...envVarNames, ...preservedFeatureVarDefs];
 
   return {
     id:          document.getElementById('mcp-ef-id').value.trim(),
@@ -1738,8 +1803,8 @@ function buildEntryFromForm() {
     description: document.getElementById('mcp-ef-description').value.trim(),
     category:    document.getElementById('mcp-ef-category').value,
     config,
-    ...(envVarNames.length > 0 ? { envVars: envVarNames } : {}),
-    ...(document.getElementById('mcp-ef-personal').checked ? { personal: true } : {}),
+    ...(allEnvVars.length > 0 ? { envVars: allEnvVars } : {}),
+    ...(() => { const u = []; if (document.getElementById('mcp-ef-users-human').checked) u.push('human'); if (document.getElementById('mcp-ef-users-agent').checked) u.push('agent'); return { users: u }; })(),
     notes:   document.getElementById('mcp-ef-notes').value.trim() || undefined,
     url:     document.getElementById('mcp-ef-docs-url').value.trim() || undefined,
   };
@@ -1759,14 +1824,20 @@ function initMCPEditor() {
     document.getElementById('mcp-ef-error').textContent = '';
     // Clear all fields for a new entry
     ['mcp-ef-id','mcp-ef-name','mcp-ef-description','mcp-ef-notes','mcp-ef-docs-url',
-     'mcp-ef-command','mcp-ef-args','mcp-ef-envvars','mcp-ef-url-endpoint'].forEach(id => {
+     'mcp-ef-command','mcp-ef-args','mcp-ef-envvars','mcp-ef-url-endpoint','mcp-ef-headers'].forEach(id => {
       document.getElementById(id).value = '';
     });
     document.getElementById('mcp-ef-id').readOnly = false;
-    document.getElementById('mcp-ef-personal').checked = false;
+    document.getElementById('mcp-ef-users-human').checked = true;
+    document.getElementById('mcp-ef-users-agent').checked = false;
     document.getElementById('mcp-ef-transport').value = 'stdio';
     document.getElementById('mcp-ef-category').value = 'productivity';
     toggleTransportFields('stdio');
+    const fc = document.getElementById('mcp-ef-features-container');
+    fc.innerHTML = '';
+    fc.hidden = true;
+    _mcpEditorCurrentEntry = null;
+    _mcpEditorFeatureGetter = () => ({});
     document.querySelectorAll('.mcp-editor-item').forEach(b => b.classList.remove('selected'));
   });
 
@@ -1834,10 +1905,11 @@ async function loadPricing() {
 /** Fetch and display the system prompt for the currently configured hat/name/specialisation. */
 async function refreshPromptPreview() {
   if (!activeDetailAgent) return;
-  const textEl = document.getElementById('agent-prompt-preview-text');
-  const hats   = getSelectedHats('agent-config-hat-group');
-  const name   = (document.getElementById('agent-detail-name').value.trim()) || activeDetailAgent;
-  const spec   = getSpecValue('agent-config-specialisation', 'agent-config-specialisation-custom');
+  const textEl  = document.getElementById('agent-prompt-preview-text');
+  const agent   = state.agents.find(a => a.name === activeDetailAgent);
+  const hats    = agent?.hatType ?? ['white'];
+  const name    = (document.getElementById('agent-detail-name').value.trim()) || activeDetailAgent;
+  const spec    = agent?.specialisation ?? '';
   textEl.textContent = 'Loading…';
   try {
     const params = new URLSearchParams({ name });
@@ -2004,181 +2076,6 @@ function populateModelSelect(sel, providers, providerId, selectedModel) {
   }
 }
 
-// ── Agent agenda ──────────────────────────────────────────────────────────────
-
-function formatAgendaMeta(entry) {
-  const next   = new Date(entry.nextRunAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  const repeat = entry.intervalSeconds ? `every ${Math.round(entry.intervalSeconds / 60)}m` : 'once';
-  return `${repeat} · next ${next}`;
-}
-
-async function loadAgentAgenda(agentName) {
-  const listEl   = document.getElementById('agent-agenda-list');
-  const countEl  = document.getElementById('agent-agenda-count');
-  const detailEl = document.getElementById('agent-detail-agenda');
-  if (!listEl) return;
-  const wasOpen = detailEl?.open ?? false;
-  try {
-    const entries = await fetch(`/api/agenda?agent=${encodeURIComponent(agentName)}`).then(r => r.json());
-    const active  = entries.filter(e => e.enabled);
-    if (countEl) countEl.textContent = active.length > 0 ? String(active.length) : '';
-    listEl.innerHTML = '';
-    if (active.length === 0) {
-      listEl.innerHTML = '<span style="color:var(--text-muted);font-size:11px">No scheduled actions.</span>';
-      return;
-    }
-    for (const entry of active) {
-      listEl.appendChild(buildAgendaRow(entry, agentName));
-    }
-  } catch { if (listEl) listEl.innerHTML = '<span style="color:var(--text-muted)">Failed to load.</span>'; }
-  if (detailEl && wasOpen) detailEl.open = true;
-}
-
-function buildAgendaRow(entry, agentName) {
-  const wrap = document.createElement('div');
-  wrap.className = 'agenda-entry';
-  wrap.dataset.id = entry.id;
-
-  // ── summary row ──────────────────────────────────────────────────────────
-  const summary = document.createElement('div');
-  summary.className = 'agenda-entry-summary';
-
-  const label = document.createElement('span');
-  label.className = 'agenda-entry-label';
-  label.title = entry.description;
-  label.textContent = entry.label;
-
-  const meta = document.createElement('span');
-  meta.className = 'agenda-entry-meta';
-  meta.textContent = formatAgendaMeta(entry);
-
-  const editBtn = document.createElement('button');
-  editBtn.className = 'agenda-entry-edit';
-  editBtn.title = 'Edit this action';
-  editBtn.textContent = '✎';
-
-  const del = document.createElement('button');
-  del.className = 'agenda-entry-delete';
-  del.title = 'Cancel this action';
-  del.textContent = '✕';
-  del.addEventListener('click', async () => {
-    await fetch(`/api/agenda/${encodeURIComponent(entry.id)}`, { method: 'DELETE' });
-    await loadAgentAgenda(agentName);
-  });
-
-  summary.appendChild(label);
-  summary.appendChild(meta);
-  summary.appendChild(editBtn);
-  summary.appendChild(del);
-  wrap.appendChild(summary);
-
-  // ── edit form (hidden by default) ────────────────────────────────────────
-  const form = document.createElement('div');
-  form.className = 'agenda-entry-form';
-  form.hidden = true;
-
-  const labelInput = document.createElement('input');
-  labelInput.type = 'text';
-  labelInput.className = 'agent-agenda-input';
-  labelInput.value = entry.label;
-
-  const descInput = document.createElement('textarea');
-  descInput.className = 'agent-agenda-desc-input';
-  descInput.rows = 3;
-  descInput.value = entry.description;
-
-  const footer = document.createElement('div');
-  footer.className = 'agent-agenda-add-footer';
-
-  const intervalInput = document.createElement('input');
-  intervalInput.type = 'number';
-  intervalInput.className = 'agent-agenda-input agent-agenda-interval';
-  intervalInput.placeholder = 'Mins (blank=once)';
-  intervalInput.min = '1';
-  intervalInput.value = entry.intervalSeconds ? String(Math.round(entry.intervalSeconds / 60)) : '';
-
-  const saveBtn = document.createElement('button');
-  saveBtn.type = 'button';
-  saveBtn.className = 'agent-agenda-add-btn';
-  saveBtn.textContent = 'Save';
-
-  const cancelBtn = document.createElement('button');
-  cancelBtn.type = 'button';
-  cancelBtn.className = 'agenda-entry-delete';
-  cancelBtn.textContent = 'Cancel';
-
-  footer.appendChild(intervalInput);
-  footer.appendChild(saveBtn);
-  footer.appendChild(cancelBtn);
-  form.appendChild(labelInput);
-  form.appendChild(descInput);
-  form.appendChild(footer);
-  wrap.appendChild(form);
-
-  // ── toggle logic ─────────────────────────────────────────────────────────
-  editBtn.addEventListener('click', () => {
-    form.hidden = !form.hidden;
-    wrap.classList.toggle('agenda-entry-editing', !form.hidden);
-    if (!form.hidden) labelInput.focus();
-  });
-
-  cancelBtn.addEventListener('click', () => {
-    form.hidden = true;
-    wrap.classList.remove('agenda-entry-editing');
-  });
-
-  saveBtn.addEventListener('click', async () => {
-    const newLabel = labelInput.value.trim();
-    const newDesc  = descInput.value.trim();
-    if (!newLabel || !newDesc) return;
-    const intervalMins = intervalInput.value ? Number(intervalInput.value) : null;
-    const intervalSeconds = intervalMins ? Math.round(intervalMins * 60) : null;
-    saveBtn.disabled = true; saveBtn.textContent = '…';
-    const res = await fetch(`/api/agenda/${encodeURIComponent(entry.id)}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ label: newLabel, description: newDesc, intervalSeconds }),
-    });
-    if (res.ok) {
-      await loadAgentAgenda(agentName);
-    } else {
-      saveBtn.disabled = false; saveBtn.textContent = 'Save';
-    }
-  });
-
-  return wrap;
-}
-
-function initAgendaAdd() {
-  const addBtn = document.getElementById('agenda-add-btn');
-  if (!addBtn) return;
-  addBtn.addEventListener('click', async () => {
-    if (!activeDetailAgent) return;
-    const label       = document.getElementById('agenda-add-label').value.trim();
-    const description = document.getElementById('agenda-add-description').value.trim();
-    const intervalVal = document.getElementById('agenda-add-interval').value;
-    if (!label || !description) return;
-    const intervalMinutes = intervalVal ? Number(intervalVal) : undefined;
-    addBtn.disabled = true; addBtn.textContent = '…';
-    try {
-      const res = await fetch('/api/agenda', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ agentName: activeDetailAgent, label, description, intervalMinutes }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: res.statusText }));
-        console.error('[Agenda] POST failed:', err);
-        addBtn.disabled = false; addBtn.textContent = '+ Add';
-        return;
-      }
-      document.getElementById('agenda-add-label').value       = '';
-      document.getElementById('agenda-add-description').value = '';
-      document.getElementById('agenda-add-interval').value    = '';
-      await loadAgentAgenda(activeDetailAgent);
-    } catch (e) { console.error('[Agenda] add error:', e); }
-    addBtn.disabled = false; addBtn.textContent = '+ Add';
-  });
-}
 
 // ── Shared agent feed helper ──────────────────────────────────────────────────
 
@@ -2296,117 +2193,6 @@ function initAgentDetail() {
       });
   });
 
-  // Avatar select — live preview + persist
-  document.getElementById('agent-config-avatar').addEventListener('change', () => {
-    if (!activeDetailAgent) return;
-    const file = document.getElementById('agent-config-avatar').value;
-    setAvatarOverride(activeDetailAgent, file);  // keep localStorage in sync for avatar.js
-    const cfg = agentConfigs.get(activeDetailAgent);
-    if (cfg) { cfg.avatar = file || null; }
-    // Persist to server so meeting overlay and other clients see the assignment
-    fetch(`/api/agents/${encodeURIComponent(activeDetailAgent)}/avatar`, {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ avatar: file || null }),
-    }).catch(() => {});
-    if (!file) { window.avatarAPI?.hide(); return; }
-    getAvatars().then(avatars => {
-      const av = avatars.find(a => a.file === file);
-      if (av && window.avatarAPI) {
-        const bgFile = agentConfigs.get(activeDetailAgent)?.background ?? null;
-        window.avatarAPI.show(av.file, av.camera, av.rotate, av.fov, av.scale, bgFile);
-      }
-    });
-  });
-
-  // Background select — live preview + persist
-  document.getElementById('agent-config-background').addEventListener('change', () => {
-    if (!activeDetailAgent) return;
-    const file = document.getElementById('agent-config-background').value;
-    const cfg = agentConfigs.get(activeDetailAgent);
-    if (cfg) { cfg.background = file || null; }
-    applyAvatarBackground(file || null);
-    fetch(`/api/agents/${encodeURIComponent(activeDetailAgent)}/background`, {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ background: file || null }),
-    }).catch(() => {});
-  });
-
-  // Generate Background button
-  document.getElementById('agent-config-gen-bg').addEventListener('click', () => {
-    const modal = document.getElementById('gen-bg-modal');
-    document.getElementById('gen-bg-prompt').value = '';
-    document.getElementById('gen-bg-error').textContent = '';
-    document.getElementById('gen-bg-preview').hidden = true;
-    document.getElementById('gen-bg-spinner').hidden = true;
-    document.getElementById('gen-bg-submit').disabled = false;
-    modal.hidden = false;
-    document.getElementById('gen-bg-prompt').focus();
-  });
-
-  // Voice select — persist and re-register speech interest
-  document.getElementById('agent-config-voice').addEventListener('change', () => {
-    if (!activeDetailAgent) return;
-    const voiceName = document.getElementById('agent-config-voice').value || null;
-    setVoiceOverride(activeDetailAgent, voiceName);
-    const cfg = agentConfigs.get(activeDetailAgent);
-    if (cfg) { cfg.voice = voiceName; }
-    // Reset speaker to default for the new voice
-    setSpeakerOverride(activeDetailAgent, null);
-    getVoices().then(voices => {
-      populateSpeakerSelect(activeDetailAgent, voices, voiceName);
-      const speakerName = getSpeakerOverrides()[activeDetailAgent] ?? null;
-      setSpeechAgent(activeDetailAgent, voiceName, speakerName);
-      fetch(`/api/agents/${encodeURIComponent(activeDetailAgent)}/voice`, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ voice: voiceName, speakerName }),
-      }).catch(() => {});
-    });
-  });
-
-  // Speaker select — persist and re-register
-  document.getElementById('agent-config-speaker').addEventListener('change', () => {
-    if (!activeDetailAgent) return;
-    const speakerName = document.getElementById('agent-config-speaker').value || null;
-    setSpeakerOverride(activeDetailAgent, speakerName);
-    const voiceName = document.getElementById('agent-config-voice').value || null;
-    setSpeechAgent(activeDetailAgent, voiceName, speakerName);
-    fetch(`/api/agents/${encodeURIComponent(activeDetailAgent)}/voice`, {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ voice: voiceName, speakerName }),
-    }).catch(() => {});
-  });
-
-  // Voice preview button — plays a short sample for the selected voice
-  document.getElementById('agent-config-preview-voice').addEventListener('click', async () => {
-    const voiceName   = document.getElementById('agent-config-voice').value || undefined;
-    const speakerName = document.getElementById('agent-config-speaker').value || undefined;
-    const btn = document.getElementById('agent-config-preview-voice');
-    btn.disabled = true; btn.textContent = '…';
-    try {
-      const res = await fetch('/api/speech/preview', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ voice: voiceName, speakerName }),
-      });
-      if (res.ok) {
-        const arrayBuffer = await res.arrayBuffer();
-        if (!audioCtx) audioCtx = new AudioContext();
-        if (audioCtx.state === 'suspended') audioCtx.resume();
-        const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-        const source = audioCtx.createBufferSource();
-        source.buffer = audioBuffer;
-        source.connect(audioCtx.destination);
-        source.start();
-      }
-    } catch { /* ignore preview errors */ }
-    btn.innerHTML = '<img src="/assets/play.svg" class="svg-icon" alt="Play">'; btn.disabled = false;
-  });
-
-  // Stop voice button — kills current audio source and clears the queue
-  document.getElementById('agent-config-stop-voice').addEventListener('click', () => {
-    if (!activeDetailAgent) return;
-    stopSpeech(activeDetailAgent);
-  });
-
   // Prompt preview button — shows/hides the system prompt panel
   const togglePromptPreview = async (show) => {
     const panel  = document.getElementById('agent-prompt-preview');
@@ -2420,124 +2206,25 @@ function initAgentDetail() {
   document.getElementById('agent-config-preview-prompt').addEventListener('click', () => togglePromptPreview());
   document.getElementById('agent-prompt-preview-close').addEventListener('click', () => togglePromptPreview(false));
 
-  // Re-populate model list when provider changes; show/hide URL field for local providers
-  document.getElementById('agent-config-provider').addEventListener('change', async () => {
-    const providerId = document.getElementById('agent-config-provider').value;
-    let providers = await loadProviders();
-    const isLocal = providers.find(p => p.id === providerId)?.baseUrlEnvKey;
-    if (isLocal) {
-      // For local servers, fetch live models before populating — static list is stale/empty.
-      // refreshProviderModels() merges results into _providersCache in-place.
-      await refreshProviderModels();
-      providers = _providersCache;
-    }
-    const provider = providers.find(p => p.id === providerId);
-    applyLocalProviderUI(provider);
-    const modelSel = document.getElementById('agent-config-model');
-    populateModelSelect(modelSel, providers, providerId, provider?.defaultModel ?? provider?.models?.[0] ?? '');
-    updatePricingHint(providerId, modelSel.hidden ? document.getElementById('agent-config-model-custom').value : modelSel.value);
-  });
-
-  // Update price hint when model selection changes
-  document.getElementById('agent-config-model').addEventListener('change', () => {
-    const providerId = document.getElementById('agent-config-provider').value;
-    const modelId    = document.getElementById('agent-config-model').value;
-    updatePricingHint(providerId, modelId);
-  });
-  document.getElementById('agent-config-model-custom').addEventListener('input', () => {
-    const providerId = document.getElementById('agent-config-provider').value;
-    const modelId    = document.getElementById('agent-config-model-custom').value.trim();
-    updatePricingHint(providerId, modelId);
-  });
-
-
-  // Auto-refresh prompt preview when hats change; repopulate persona select
-  document.getElementById('agent-config-hat-group').addEventListener('change', () => {
-    const hatType = getSelectedHats('agent-config-hat-group').filter(h => h !== 'none')[0] ?? 'none';
-    populatePersonaSelect('agent-config-persona', hatType, '');
-    const panel = document.getElementById('agent-prompt-preview');
-    if (!panel.hidden) refreshPromptPreview();
-  });
-
-  // Persona select — auto-fill name, visual description and backstory
-  document.getElementById('agent-config-persona').addEventListener('change', () => {
-    const hatType = getSelectedHats('agent-config-hat-group').filter(h => h !== 'none')[0] ?? 'none';
-    const personaName = document.getElementById('agent-config-persona').value;
-    const persona = (personasByHat[hatType] ?? []).find(p => p.name === personaName);
-    if (!persona) return;
-    document.getElementById('agent-detail-name').value = persona.name;
-    document.getElementById('agent-config-visual-desc').value = persona.visualDescription;
-    document.getElementById('agent-config-backstory').value = persona.backstory;
-    setSpecValue('agent-config-specialisation', 'agent-config-specialisation-custom', persona.specialisation);
-  });
-
-  // Show/hide custom spec input when "Custom…" is selected
-  document.getElementById('agent-config-specialisation').addEventListener('change', e => {
-    const cust = document.getElementById('agent-config-specialisation-custom');
-    cust.hidden = e.target.value !== '__custom__';
-    if (!cust.hidden) cust.focus();
-    const panel = document.getElementById('agent-prompt-preview');
-    if (!panel.hidden) refreshPromptPreview();
-  });
-
-  // Auto-refresh prompt preview when name or custom spec is typed (debounced)
-  let _promptRefreshTimer = null;
-  const schedulePromptRefresh = () => {
-    if (document.getElementById('agent-prompt-preview').hidden) return;
-    clearTimeout(_promptRefreshTimer);
-    _promptRefreshTimer = setTimeout(refreshPromptPreview, 350);
-  };
-  document.getElementById('agent-detail-name').addEventListener('input', schedulePromptRefresh);
-  document.getElementById('agent-config-specialisation-custom').addEventListener('input', schedulePromptRefresh);
-
-  // Single Apply button — saves hat, voice, avatar, specialisation, provider+model
+  // Apply button — saves email + MCP selection
   document.getElementById('agent-config-apply').addEventListener('click', async () => {
     if (!activeDetailAgent) return;
     const btn = document.getElementById('agent-config-apply');
     btn.textContent = '…'; btn.disabled = true;
     try {
-      const provider       = document.getElementById('agent-config-provider').value;
-      const modelSel       = document.getElementById('agent-config-model');
-      const modelInput     = document.getElementById('agent-config-model-custom');
-      const model          = modelInput.hidden ? modelSel.value : modelInput.value.trim();
-      const hatTypes       = getSelectedHats('agent-config-hat-group');
-      const specialisation = getSpecValue('agent-config-specialisation', 'agent-config-specialisation-custom') || undefined;
-      const agent          = state.agents.find(a => a.name === activeDetailAgent);
       const tasks = [];
-      if (model) tasks.push(fetch(`/api/agents/${encodeURIComponent(activeDetailAgent)}/config`, {
-        method: 'PATCH', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ provider, model }),
-      }));
-      if (agent && JSON.stringify(hatTypes.slice().sort()) !== JSON.stringify((agent.hatType ?? []).slice().sort())) tasks.push(
-        fetch(`/api/agents/${encodeURIComponent(activeDetailAgent)}/hat`, {
-          method: 'PATCH', headers: {'Content-Type':'application/json'},
-          body: JSON.stringify({ hatTypes }),
-        })
-      );
-      tasks.push(fetch(`/api/agents/${encodeURIComponent(activeDetailAgent)}/specialisation`, {
-        method: 'PATCH', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ specialisation }),
-      }));
       const email = document.getElementById('agent-config-email').value.trim() || undefined;
       tasks.push(fetch(`/api/agents/${encodeURIComponent(activeDetailAgent)}/email`, {
-        method: 'PATCH', headers: {'Content-Type':'application/json'},
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
       }));
-      const visualDescription = document.getElementById('agent-config-visual-desc').value.trim() || undefined;
-      const backstory         = document.getElementById('agent-config-backstory').value.trim() || undefined;
-      tasks.push(fetch(`/api/agents/${encodeURIComponent(activeDetailAgent)}/identity`, {
-        method: 'PATCH', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ visualDescription, backstory }),
-      }));
-      // MCP servers — only send if the section is visible
       const mcpLine = document.getElementById('agent-config-mcp-line');
       if (mcpLine && !mcpLine.hidden) {
         const checks = Array.from(document.querySelectorAll('#agent-config-mcp-list input[type="checkbox"]'));
         const allChecked = checks.every(c => c.checked);
-        // null = "all servers" (default); array = specific selection (including empty = none)
         const servers = allChecked ? null : checks.filter(c => c.checked).map(c => c.value);
         tasks.push(fetch(`/api/agents/${encodeURIComponent(activeDetailAgent)}/mcp-servers`, {
-          method: 'PATCH', headers: {'Content-Type':'application/json'},
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ servers }),
         }));
       }
@@ -2567,34 +2254,9 @@ function openAgentDetail(name, chatOnly = false) {
   nameInput.value = name;
   document.getElementById('agent-detail-hat').textContent  = agent ? hatLabel(agent.hatType) : '';
   document.getElementById('agent-detail-hat').style.color  = c.bar;
-  // Populate hat checkboxes
-  populateHatGroup('agent-config-hat-group', agent?.hatType ?? ['white']);
-
-  // Set specialisation select value
-  setSpecValue('agent-config-specialisation', 'agent-config-specialisation-custom', agent?.specialisation || '');
 
   // Set email address
   document.getElementById('agent-config-email').value = agent?.email || '';
-
-  // Populate persona select and identity fields
-  populatePersonaSelect('agent-config-persona', agent?.hatType || 'white', agent?.name);
-  document.getElementById('agent-config-visual-desc').value = agent?.visualDescription || '';
-  document.getElementById('agent-config-backstory').value   = agent?.backstory || '';
-
-  // Populate provider + model selects from the catalogue
-  loadProviders().then(providers => {
-    const providerId = (agent?.provider) || 'anthropic';
-    const modelId    = (agent?.model)    || '';
-    const provider   = providers.find(p => p.id === providerId);
-    populateProviderSelect(document.getElementById('agent-config-provider'), providers, providerId);
-    populateModelSelect(document.getElementById('agent-config-model'), providers, providerId, modelId);
-    applyLocalProviderUI(provider);
-    // For free-text model providers, prefill the text input
-    if (provider?.baseUrlEnvKey && (!provider.models || provider.models.length === 0)) {
-      document.getElementById('agent-config-model-custom').value = modelId;
-    }
-    updatePricingHint(providerId, modelId);
-  });
 
   // Populate ticket chips for this agent
   const ticketsEl = document.getElementById('agent-detail-tickets');
@@ -2621,48 +2283,17 @@ function openAgentDetail(name, chatOnly = false) {
   if (audioCtx.state === 'suspended') audioCtx.resume();
 
   loadAgentFeedInto(name, feed);
-  loadAgentAgenda(name);
 
-  // Populate voice select; then register speech interest with the resolved voice
+  // Register speech interest for this agent
   getVoices().then(voices => {
-    const voiceSel = document.getElementById('agent-config-voice');
-    voiceSel.innerHTML = '';
-    if (voices.length === 0) {
-      const opt = document.createElement('option');
-      opt.value = ''; opt.textContent = '(no voices)';
-      voiceSel.appendChild(opt);
-    } else {
-      for (const v of voices) {
-        const opt = document.createElement('option');
-        opt.value = v.name;
-        const users = usersOf('voice', v.name, name);
-        const multi = v.speakers && v.speakers.length > 0 ? ` [${v.speakers.length} spk]` : '';
-        opt.textContent = users.length > 0 ? `${v.name}${multi}  (${users.join(', ')})` : `${v.name}${multi}`;
-        voiceSel.appendChild(opt);
-      }
-    }
     const current = findVoiceForAgent(name, voices);
-    voiceSel.value = current ?? '';
-    populateSpeakerSelect(name, voices, current);
     const speakerName = getSpeakerOverrides()[name] ?? null;
     setSpeechAgent(name, current, speakerName);
-    const previewBtn = document.getElementById('agent-config-preview-voice');
-    if (previewBtn) previewBtn.disabled = voices.length === 0;
   });
 
-  // Populate avatar select and show current avatar
+  // Show avatar + apply background for this agent
   getAvatars().then(avatars => {
-    const avatarSel = document.getElementById('agent-config-avatar');
-    avatarSel.innerHTML = '<option value="">(no avatar)</option>';
-    for (const av of avatars) {
-      const opt = document.createElement('option');
-      opt.value = av.file;
-      const users = usersOf('avatar', av.file, name);
-      opt.textContent = users.length > 0 ? `${av.name}  (${users.join(', ')})` : av.name;
-      avatarSel.appendChild(opt);
-    }
     const current = findAvatarForAgent(name);
-    avatarSel.value = current ? current.file : '';
     if (current && window.avatarAPI) {
       const bgFile = agentConfigs.get(name)?.background ?? null;
       window.avatarAPI.show(current.file, current.camera, current.rotate, current.fov, current.scale, bgFile);
@@ -2670,12 +2301,7 @@ function openAgentDetail(name, chatOnly = false) {
       window.avatarAPI.hide();
     }
   });
-
-  // Populate background select and apply current background
-  const currentBg = agentConfigs.get(name)?.background ?? null;
-  populateBackgroundSelect(currentBg).then(() => {
-    applyAvatarBackground(currentBg);
-  });
+  applyAvatarBackground(agentConfigs.get(name)?.background ?? null);
 
   // Populate per-agent MCP server checkboxes
   fetch('/api/mcp/catalogue')
@@ -2720,6 +2346,24 @@ function openAgentDetail(name, chatOnly = false) {
 
 }
 
+function parseFeatureOverrides(val) {
+  const result = {};
+  if (!val) return result;
+  for (const part of val.split(',')) {
+    const [k, v] = part.split(':');
+    if (k && v) result[k.trim()] = v.trim() === 'on';
+  }
+  return result;
+}
+
+function serializeFeatureOverrides(checksMap) {
+  const parts = [];
+  for (const [key, { cb, defaultOn }] of Object.entries(checksMap)) {
+    if (cb.checked !== defaultOn) parts.push(`${key}:${cb.checked ? 'on' : 'off'}`);
+  }
+  return parts.join(',');
+}
+
 function buildPersonalMcpEntry(agentName, entry) {
   const wrap = document.createElement('div');
   wrap.className = 'personal-mcp-entry';
@@ -2754,22 +2398,53 @@ function buildPersonalMcpEntry(agentName, entry) {
   const fields = document.createElement('div');
   fields.className = 'personal-mcp-fields';
   const inputs = {};
-  for (const varName of (entry.envVars ?? [])) {
-    const row = document.createElement('div');
-    row.className = 'personal-mcp-field-row';
-    const lbl = document.createElement('label');
-    lbl.className = 'personal-mcp-field-label';
-    lbl.textContent = varName;
-    const inp = document.createElement('input');
-    inp.type = varName.toLowerCase().includes('password') || varName.toLowerCase().includes('secret') ? 'password' : 'text';
-    inp.className = 'personal-mcp-field-input';
-    inp.value = entry.credentials?.[varName] ?? '';
-    inp.placeholder = varName;
-    inp.autocomplete = 'off';
-    inputs[varName] = inp;
-    row.appendChild(lbl);
-    row.appendChild(inp);
-    fields.appendChild(row);
+  for (const varDef of (entry.envVars ?? [])) {
+    const varName = typeof varDef === 'string' ? varDef : varDef.name;
+
+    if (varDef.type === 'features' && varDef.features?.length) {
+      const section = document.createElement('div');
+      section.className = 'personal-mcp-features-section';
+      const sectionLbl = document.createElement('div');
+      sectionLbl.className = 'personal-mcp-field-label';
+      sectionLbl.textContent = 'Features';
+      section.appendChild(sectionLbl);
+      const existing = parseFeatureOverrides(entry.credentials?.[varName] ?? '');
+      const grid = document.createElement('div');
+      grid.className = 'personal-mcp-features-grid';
+      const checksMap = {};
+      for (const feat of varDef.features) {
+        const isOn = feat.key in existing ? existing[feat.key] : feat.defaultOn;
+        const item = document.createElement('label');
+        item.className = 'personal-mcp-feature-item';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = isOn;
+        item.appendChild(cb);
+        item.appendChild(document.createTextNode(' ' + feat.label));
+        grid.appendChild(item);
+        checksMap[feat.key] = { cb, defaultOn: feat.defaultOn };
+      }
+      section.appendChild(grid);
+      fields.appendChild(section);
+      inputs[varName] = { getValue: () => serializeFeatureOverrides(checksMap) };
+    } else {
+      const varHint = typeof varDef === 'string' ? varName : (varDef.placeholder ?? varName);
+      const row = document.createElement('div');
+      row.className = 'personal-mcp-field-row';
+      const lbl = document.createElement('label');
+      lbl.className = 'personal-mcp-field-label';
+      lbl.textContent = varName;
+      const inp = document.createElement('input');
+      inp.type = varName.toLowerCase().includes('password') || varName.toLowerCase().includes('secret') ? 'password' : 'text';
+      inp.className = 'personal-mcp-field-input';
+      inp.value = entry.credentials?.[varName] ?? '';
+      inp.placeholder = varHint;
+      inp.autocomplete = 'off';
+      row.appendChild(lbl);
+      row.appendChild(inp);
+      fields.appendChild(row);
+      inputs[varName] = { getValue: () => inp.value.trim() };
+    }
   }
   wrap.appendChild(fields);
 
@@ -2778,10 +2453,10 @@ function buildPersonalMcpEntry(agentName, entry) {
 
   const saveBtn = document.createElement('button');
   saveBtn.className = 'personal-mcp-save-btn';
-  saveBtn.textContent = entry.configured ? 'Update' : 'Enable';
+  saveBtn.textContent = entry.active ? 'Update' : 'Enable';
   saveBtn.onclick = async () => {
     const credentials = {};
-    for (const [k, inp] of Object.entries(inputs)) credentials[k] = inp.value.trim();
+    for (const [k, inp] of Object.entries(inputs)) credentials[k] = inp.getValue();
     saveBtn.disabled = true;
     saveBtn.textContent = 'Saving…';
     try {
@@ -2792,13 +2467,13 @@ function buildPersonalMcpEntry(agentName, entry) {
       });
       if (!res.ok) throw new Error(await res.text());
       saveBtn.textContent = 'Saved!';
-      entry.configured = true;
+      entry.active = true;
       disableBtn.hidden = false;
       setTimeout(() => { saveBtn.textContent = 'Update'; saveBtn.disabled = false; }, 1500);
     } catch (err) {
       saveBtn.textContent = 'Error';
       saveBtn.title = err.message;
-      setTimeout(() => { saveBtn.textContent = entry.configured ? 'Update' : 'Enable'; saveBtn.disabled = false; }, 2000);
+      setTimeout(() => { saveBtn.textContent = entry.active ? 'Update' : 'Enable'; saveBtn.disabled = false; }, 2000);
     }
   };
   actions.appendChild(saveBtn);
@@ -2806,17 +2481,16 @@ function buildPersonalMcpEntry(agentName, entry) {
   const disableBtn = document.createElement('button');
   disableBtn.className = 'personal-mcp-disable-btn';
   disableBtn.textContent = 'Disable';
-  disableBtn.hidden = !entry.configured;
+  disableBtn.hidden = !entry.active;
   disableBtn.onclick = async () => {
     disableBtn.disabled = true;
-    disableBtn.textContent = 'Removing…';
+    disableBtn.textContent = 'Disabling…';
     try {
       const res = await fetch(`/api/agents/${encodeURIComponent(agentName)}/personal-mcp/${encodeURIComponent(entry.id)}`, {
         method: 'DELETE',
       });
       if (!res.ok) throw new Error(await res.text());
-      entry.configured = false;
-      for (const inp of Object.values(inputs)) inp.value = '';
+      entry.active = false;
       disableBtn.hidden = true;
       saveBtn.textContent = 'Enable';
       disableBtn.disabled = false;
@@ -3547,13 +3221,15 @@ function initAddAgent() {
     populatePersonaSelect('add-agent-persona', hatType, '');
   });
 
-  // Auto-fill name when a persona is selected
+  // Auto-fill fields when a persona is selected
   document.getElementById('add-agent-persona').addEventListener('change', () => {
     const hatType = getSelectedHats('add-agent-hat-group').filter(h => h !== 'none')[0] ?? 'none';
     const personaName = document.getElementById('add-agent-persona').value;
     const persona = (personasByHat[hatType] ?? []).find(p => p.name === personaName);
     if (persona) {
       document.getElementById('add-agent-name').value = persona.name;
+      document.getElementById('add-agent-visual-desc').value = persona.visualDescription ?? '';
+      document.getElementById('add-agent-backstory').value = persona.backstory ?? '';
       setSpecValue('add-agent-specialisation', 'add-agent-specialisation-custom', persona.specialisation);
     }
   });
@@ -3565,55 +3241,290 @@ function initAddAgent() {
     if (!cust.hidden) cust.focus();
   });
 
+  // Voice select — repopulate speakers when voice changes
+  document.getElementById('add-agent-voice').addEventListener('change', () => {
+    const voiceName  = document.getElementById('add-agent-voice').value;
+    const speakerSel = document.getElementById('add-agent-speaker');
+    getVoices().then(voices => {
+      const voice = voices.find(v => v.name === voiceName);
+      speakerSel.innerHTML = '<option value="">(default)</option>';
+      if (voice?.speakers?.length) {
+        const speakerNames = voice.speakers.map(s => typeof s === 'string' ? s : s.name)
+          .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+        for (const sName of speakerNames) {
+          const opt = document.createElement('option');
+          opt.value = sName; opt.textContent = sName; speakerSel.appendChild(opt);
+        }
+        speakerSel.hidden = false;
+      } else {
+        speakerSel.hidden = true;
+      }
+    });
+  });
+
+  // Voice preview button
+  document.getElementById('add-agent-preview-voice').addEventListener('click', async () => {
+    const voiceName   = document.getElementById('add-agent-voice').value || undefined;
+    const speakerName = document.getElementById('add-agent-speaker').value || undefined;
+    const btn = document.getElementById('add-agent-preview-voice');
+    btn.disabled = true; btn.textContent = '…';
+    try {
+      const res = await fetch('/api/speech/preview', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ voice: voiceName, speakerName }),
+      });
+      if (res.ok) {
+        const buf = await res.arrayBuffer();
+        if (!audioCtx) audioCtx = new AudioContext();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const audio = await audioCtx.decodeAudioData(buf);
+        const src = audioCtx.createBufferSource();
+        src.buffer = audio; src.connect(audioCtx.destination); src.start();
+      }
+    } catch { /* ignore */ }
+    btn.innerHTML = '<img src="/assets/play.svg" class="svg-icon" alt="Play">'; btn.disabled = false;
+  });
+
+  // Avatar select — live preview
+  document.getElementById('add-agent-avatar').addEventListener('change', () => {
+    const file  = document.getElementById('add-agent-avatar').value;
+    const bg    = document.getElementById('add-agent-background').value || null;
+    const panel = document.getElementById('lib-avatar-panel');
+    if (file) {
+      panel.hidden = false;
+      getAvatars().then(avatars => {
+        const av = avatars.find(a => a.file === file);
+        if (av && window.avatarAPI) {
+          window.avatarAPI.show(av.file, av.camera, av.rotate, av.fov, av.scale, bg, 'lib-avatar-panel', 'lib-avatar-canvas');
+        }
+      });
+    } else {
+      panel.hidden = true;
+      window.avatarAPI?.hide('lib-avatar-panel');
+    }
+  });
+
+  // Background select — live preview
+  document.getElementById('add-agent-background').addEventListener('change', () => {
+    const bg    = document.getElementById('add-agent-background').value || null;
+    const panel = document.getElementById('lib-avatar-panel');
+    if (panel) {
+      panel.style.backgroundImage = bg ? `url('/backgrounds/${encodeURIComponent(bg)}')` : '';
+    }
+    // Also update avatar if one is shown
+    const avatarFile = document.getElementById('add-agent-avatar').value;
+    if (avatarFile && window.avatarAPI) {
+      getAvatars().then(avatars => {
+        const av = avatars.find(a => a.file === avatarFile);
+        if (av) window.avatarAPI.show(av.file, av.camera, av.rotate, av.fov, av.scale, bg, 'lib-avatar-panel', 'lib-avatar-canvas');
+      });
+    }
+  });
+
+  // Generate background button
+  document.getElementById('add-agent-gen-bg').addEventListener('click', () => {
+    document.getElementById('gen-bg-prompt').value = '';
+    document.getElementById('gen-bg-error').textContent = '';
+    document.getElementById('gen-bg-preview').hidden = true;
+    document.getElementById('gen-bg-spinner').hidden = true;
+    document.getElementById('gen-bg-submit').disabled = false;
+    document.getElementById('gen-bg-modal').hidden = false;
+    document.getElementById('gen-bg-prompt').focus();
+  });
+
   // Close on overlay click
   document.getElementById('add-agent-modal').addEventListener('click', e => {
     if (e.target === e.currentTarget) closeAddAgent();
   });
 }
 
+let _agentEditorMode = 'new'; // 'new' | 'edit'
+let _libEditAgentId = null;
+
 function openAddAgent() {
+  _agentEditorMode = 'new';
+  _libEditAgentId = null;
+  document.getElementById('add-agent-modal-title').textContent = 'Add Agent';
+  document.getElementById('add-agent-save').textContent = 'Add Agent';
   document.getElementById('add-agent-name').value = '';
+  document.getElementById('add-agent-visual-desc').value = '';
+  document.getElementById('add-agent-backstory').value = '';
+  document.getElementById('add-agent-avatar').innerHTML = '<option value="">(no avatar)</option>';
+  document.getElementById('add-agent-background').innerHTML = '<option value="">(no background)</option>';
+  document.getElementById('add-agent-voice').innerHTML = '<option value="">(no voice)</option>';
+  document.getElementById('add-agent-speaker').innerHTML = '<option value="">(default)</option>';
+  document.getElementById('add-agent-speaker').hidden = true;
   setSpecValue('add-agent-specialisation', 'add-agent-specialisation-custom', '');
   document.getElementById('add-agent-error').textContent = '';
+  document.getElementById('add-agent-schedules-section').hidden = true;
+  document.getElementById('add-agent-persona-group').hidden = false;
+  document.getElementById('lib-avatar-panel').hidden = false;
   const hatType = getSelectedHats('add-agent-hat-group').filter(h => h !== 'none')[0] ?? 'none';
   populatePersonaSelect('add-agent-persona', hatType, '');
   document.getElementById('add-agent-modal').hidden = false;
   document.getElementById('add-agent-name').focus();
 }
 
+async function openLibraryEdit(agent) {
+  _agentEditorMode = 'edit';
+  _libEditAgentId = agent.id;
+  document.getElementById('add-agent-modal-title').textContent = 'Edit Agent';
+  document.getElementById('add-agent-save').textContent = 'Save';
+  document.getElementById('add-agent-error').textContent = '';
+  document.getElementById('add-agent-persona-group').hidden = true;
+
+  document.getElementById('add-agent-name').value = agent.identity?.name ?? '';
+  document.getElementById('add-agent-visual-desc').value = agent.identity?.visualDescription ?? '';
+  document.getElementById('add-agent-backstory').value = agent.identity?.backstory ?? '';
+  populateHatGroup('add-agent-hat-group', agent.hatType ?? ['none']);
+  setSpecValue('add-agent-specialisation', 'add-agent-specialisation-custom', agent.identity?.specialisation ?? '');
+
+  const provSel  = document.getElementById('add-agent-provider');
+  const modelSel = document.getElementById('add-agent-model');
+  const providers = await loadProviders();
+  populateProviderSelect(provSel, providers, agent.providerName ?? 'anthropic');
+  populateModelSelect(modelSel, providers, agent.providerName ?? 'anthropic', agent.model ?? '');
+
+  // Avatar — populate then show preview if one is set
+  const avatarSel  = document.getElementById('add-agent-avatar');
+  const currentAvatar = agent.identity?.avatar ?? '';
+  const currentBg     = agent.identity?.background ?? '';
+  document.getElementById('lib-avatar-panel').hidden = true;
+  getAvatars().then(avatars => {
+    avatarSel.innerHTML = '<option value="">(no avatar)</option>';
+    for (const av of avatars) {
+      const opt = document.createElement('option');
+      opt.value = av.file; opt.textContent = av.name;
+      avatarSel.appendChild(opt);
+    }
+    avatarSel.value = currentAvatar;
+    if (currentAvatar && window.avatarAPI) {
+      const av = avatars.find(a => a.file === currentAvatar);
+      if (av) {
+        document.getElementById('lib-avatar-panel').hidden = false;
+        window.avatarAPI.show(av.file, av.camera, av.rotate, av.fov, av.scale, currentBg || null, 'lib-avatar-panel', 'lib-avatar-canvas');
+      }
+    }
+  });
+
+  // Background
+  populateBackgroundSelect(currentBg, 'add-agent-background');
+
+  // Voice
+  const voiceSel   = document.getElementById('add-agent-voice');
+  const speakerSel = document.getElementById('add-agent-speaker');
+  getVoices().then(voices => {
+    voiceSel.innerHTML = '<option value="">(no voice)</option>';
+    for (const v of voices) {
+      const opt = document.createElement('option');
+      opt.value = v.name; opt.textContent = v.name + (v.speakers?.length ? ` [${v.speakers.length} spk]` : '');
+      voiceSel.appendChild(opt);
+    }
+    const currentVoice = agent.identity?.voice ?? '';
+    voiceSel.value = currentVoice;
+    // Populate speakers for the current voice
+    const voice = voices.find(v => v.name === currentVoice);
+    speakerSel.innerHTML = '<option value="">(default)</option>';
+    if (voice?.speakers?.length) {
+      const speakerNames = voice.speakers.map(s => typeof s === 'string' ? s : s.name)
+        .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+      for (const sName of speakerNames) {
+        const opt = document.createElement('option');
+        opt.value = sName; opt.textContent = sName; speakerSel.appendChild(opt);
+      }
+      speakerSel.value = agent.identity?.speakerName ?? '';
+      speakerSel.hidden = false;
+    } else {
+      speakerSel.hidden = true;
+    }
+  });
+
+  // Populate scheduled actions checklist
+  const schedSection = document.getElementById('add-agent-schedules-section');
+  const schedList    = document.getElementById('add-agent-schedules-list');
+  try {
+    const actions = await fetch('/api/scheduled-actions').then(r => r.json());
+    const assigned = new Set(agent.scheduledActionIds ?? []);
+    if (actions.length === 0) {
+      schedList.innerHTML = '<span style="color:var(--text-muted);font-size:12px">No global scheduled actions defined yet.</span>';
+    } else {
+      schedList.innerHTML = actions.map(a => `
+        <label class="add-agent-sched-label">
+          <input type="checkbox" class="add-agent-sched-cb" value="${escHtml(a.id)}"${assigned.has(a.id) ? ' checked' : ''}>
+          <span>${escHtml(a.label)}</span>
+        </label>`).join('');
+    }
+    schedSection.hidden = false;
+  } catch {
+    schedSection.hidden = true;
+  }
+
+  document.getElementById('add-agent-modal').hidden = false;
+  document.getElementById('add-agent-name').focus();
+}
+
 function closeAddAgent() {
+  window.avatarAPI?.hide('lib-avatar-panel');
+  document.getElementById('lib-avatar-panel').hidden = true;
   document.getElementById('add-agent-modal').hidden = true;
 }
 
 async function saveAddAgent() {
-  const name = document.getElementById('add-agent-name').value.trim();
-  const hatTypes = getSelectedHats('add-agent-hat-group');
-  const hatType = hatTypes.filter(h => h !== 'none')[0] ?? 'none';
-  const specialisation = getSpecValue('add-agent-specialisation', 'add-agent-specialisation-custom');
-  const provider = document.getElementById('add-agent-provider').value;
-  const model = document.getElementById('add-agent-model').value;
-  const personaName = document.getElementById('add-agent-persona').value;
-  const persona = (personasByHat[hatType] ?? []).find(p => p.name === personaName);
-  const errEl = document.getElementById('add-agent-error');
-  errEl.textContent = '';
+  const name              = document.getElementById('add-agent-name').value.trim();
+  const hatTypes          = getSelectedHats('add-agent-hat-group');
+  const hatType           = hatTypes.filter(h => h !== 'none')[0] ?? 'none';
+  const specialisation    = getSpecValue('add-agent-specialisation', 'add-agent-specialisation-custom');
+  const provider          = document.getElementById('add-agent-provider').value;
+  const model             = document.getElementById('add-agent-model').value;
+  const visualDescription = document.getElementById('add-agent-visual-desc').value.trim();
+  const backstory         = document.getElementById('add-agent-backstory').value.trim();
+  const avatar            = document.getElementById('add-agent-avatar').value || null;
+  const voice             = document.getElementById('add-agent-voice').value || null;
+  const speakerName       = document.getElementById('add-agent-speaker').value || null;
+  const background        = document.getElementById('add-agent-background').value || null;
+  const errEl             = document.getElementById('add-agent-error');
+  errEl.textContent       = '';
   if (!name) { errEl.textContent = 'Name is required.'; return; }
   const btn = document.getElementById('add-agent-save');
-  btn.disabled = true; btn.textContent = 'Adding…';
+  btn.disabled = true; btn.textContent = '…';
+
   try {
-    const res = await fetch('/api/agents', {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({
-        name, hatTypes,
-        visualDescription: persona?.visualDescription || undefined,
-        backstory: persona?.backstory || undefined,
-        specialisation: specialisation || persona?.specialisation || undefined,
-        provider, model,
-      }),
-    }).then(r => r.json());
-    if (res.error) { errEl.textContent = res.error; }
-    else { closeAddAgent(); }
-  } catch { errEl.textContent = 'Failed to add agent.'; }
-  btn.disabled = false; btn.textContent = 'Add Agent';
+    if (_agentEditorMode === 'edit' && _libEditAgentId) {
+      const body = { name, hatTypes, visualDescription, backstory, specialisation, provider, model, avatar, voice, speakerName, background };
+      const r = await fetch(`/api/global-agents/${encodeURIComponent(_libEditAgentId)}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+      });
+      if (!r.ok) { const e = await r.json(); errEl.textContent = e.error ?? 'Save failed'; btn.disabled = false; btn.textContent = 'Save'; return; }
+
+      // Sync scheduled action assignments
+      const checkboxes = document.querySelectorAll('#add-agent-schedules-list .add-agent-sched-cb:checked');
+      const scheduledActionIds = Array.from(checkboxes).map(cb => cb.value);
+      await fetch(`/api/global-agents/${encodeURIComponent(_libEditAgentId)}/scheduled-actions`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scheduledActionIds }),
+      });
+
+      closeAddAgent();
+      fetchGlobalAgents();
+    } else {
+      const personaName = document.getElementById('add-agent-persona').value;
+      const persona = (personasByHat[hatType] ?? []).find(p => p.name === personaName);
+      const res = await fetch('/api/agents', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name, hatTypes,
+          visualDescription: visualDescription || persona?.visualDescription || undefined,
+          backstory:         backstory || persona?.backstory || undefined,
+          specialisation:    specialisation || persona?.specialisation || undefined,
+          provider, model,
+        }),
+      }).then(r => r.json());
+      if (res.error) { errEl.textContent = res.error; }
+      else { closeAddAgent(); }
+    }
+  } catch { errEl.textContent = 'Failed to save agent.'; }
+
+  btn.disabled = false;
+  btn.textContent = _agentEditorMode === 'edit' ? 'Save' : 'Add Agent';
 }
 
 // ── Backlog / Calendar panel tabs ─────────────────────────────────────────────
@@ -4249,7 +4160,6 @@ initGoalBar();
 initSettings();
 initAddAgent();
 initAgentChat();
-initAgendaAdd();
 loadSpecialisations();
 loadPersonas();
 initMCPEditor();
@@ -4264,7 +4174,6 @@ initFileUpload();
 initFileViewer();
 initGenBgModal();
 initLibraryTab();
-initLibraryEditModal();
 initSchedulesTab();
 connect();
 
@@ -4552,18 +4461,9 @@ function initGenBgModal() {
       img.src = `/backgrounds/${encodeURIComponent(data.filename)}`;
       preview.hidden = false;
 
-      // Refresh background list and select the new file for the active agent
+      // Refresh background list and select the new file in the library modal
       await getBackgrounds(true);
-      populateBackgroundSelect(data.filename);
-      applyAvatarBackground(data.filename);
-      if (activeDetailAgent) {
-        const cfg = agentConfigs.get(activeDetailAgent);
-        if (cfg) cfg.background = data.filename;
-        fetch(`/api/agents/${encodeURIComponent(activeDetailAgent)}/background`, {
-          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ background: data.filename }),
-        }).catch(() => {});
-      }
+      populateBackgroundSelect(data.filename, 'add-agent-background');
       close();
     } catch (err) {
       errorEl.textContent = err.message || 'Generation failed';
@@ -4574,8 +4474,8 @@ function initGenBgModal() {
   });
 }
 
-async function populateBackgroundSelect(selectedFile) {
-  const sel = document.getElementById('agent-config-background');
+async function populateBackgroundSelect(selectedFile, selId = 'add-agent-background') {
+  const sel = document.getElementById(selId);
   if (!sel) return;
   const backgrounds = await getBackgrounds();
   sel.innerHTML = '<option value="">(no background)</option>';
@@ -4799,29 +4699,6 @@ function renderGlobalAgents(agents, projectIds) {
   });
 }
 
-let _libEditAgentId = null;
-
-function openLibraryEdit(agent) {
-  _libEditAgentId = agent.id;
-  document.getElementById('lib-edit-name').value          = agent.identity?.name ?? '';
-  document.getElementById('lib-edit-visual-desc').value   = agent.identity?.visualDescription ?? '';
-  document.getElementById('lib-edit-backstory').value     = agent.identity?.backstory ?? '';
-  document.getElementById('lib-edit-email').value         = agent.identity?.email ?? '';
-  document.getElementById('lib-edit-error').textContent   = '';
-  populateHatGroup('lib-edit-hat-group', agent.hatType ?? ['none']);
-  setSpecValue('lib-edit-specialisation', 'lib-edit-specialisation-custom', agent.identity?.specialisation ?? '');
-
-  const provSel  = document.getElementById('lib-edit-provider');
-  const modelSel = document.getElementById('lib-edit-model');
-  if (_providersCache) {
-    provSel.innerHTML = _providersCache.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
-    provSel.value     = agent.providerName ?? 'anthropic';
-    populateModelSelect(modelSel, _providersCache, provSel.value, agent.model ?? '');
-  }
-
-  document.getElementById('library-edit-modal').hidden = false;
-  document.getElementById('lib-edit-name').focus();
-}
 
 function initLibraryTab() {
   document.getElementById('library-new-agent-btn')?.addEventListener('click', () => {
@@ -4829,53 +4706,6 @@ function initLibraryTab() {
   });
 }
 
-function initLibraryEditModal() {
-  const modal   = document.getElementById('library-edit-modal');
-  const close   = document.getElementById('library-edit-close');
-  const cancel  = document.getElementById('lib-edit-cancel');
-  const save    = document.getElementById('lib-edit-save');
-  const provSel = document.getElementById('lib-edit-provider');
-  const modSel  = document.getElementById('lib-edit-model');
-
-  const closeModal = () => { modal.hidden = true; _libEditAgentId = null; };
-  close.addEventListener('click', closeModal);
-  cancel.addEventListener('click', closeModal);
-  modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
-
-  provSel?.addEventListener('change', () => {
-    if (_providersCache) populateModelSelect(modSel, _providersCache, provSel.value, '');
-  });
-
-  document.getElementById('lib-edit-specialisation')?.addEventListener('change', function () {
-    const custom = document.getElementById('lib-edit-specialisation-custom');
-    if (custom) custom.hidden = this.value !== '__custom__';
-  });
-
-  save.addEventListener('click', async () => {
-    if (!_libEditAgentId) return;
-    const name     = document.getElementById('lib-edit-name').value.trim();
-    const hatTypes = getSelectedHats('lib-edit-hat-group');
-    if (!name) { document.getElementById('lib-edit-error').textContent = 'Name is required'; return; }
-    const body = {
-      name,
-      hatTypes,
-      visualDescription: document.getElementById('lib-edit-visual-desc').value.trim(),
-      backstory:         document.getElementById('lib-edit-backstory').value.trim(),
-      specialisation:    getSpecValue('lib-edit-specialisation', 'lib-edit-specialisation-custom'),
-      email:             document.getElementById('lib-edit-email').value.trim(),
-      provider:          provSel?.value ?? 'anthropic',
-      model:             modSel?.value ?? '',
-    };
-    try {
-      const r = await fetch(`/api/global-agents/${encodeURIComponent(_libEditAgentId)}`, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
-      });
-      if (!r.ok) { const e = await r.json(); document.getElementById('lib-edit-error').textContent = e.error ?? 'Save failed'; return; }
-      closeModal();
-      fetchGlobalAgents();
-    } catch { document.getElementById('lib-edit-error').textContent = 'Network error'; }
-  });
-}
 
 // ── Scheduled Actions tab ─────────────────────────────────────────────────────
 
@@ -4886,40 +4716,141 @@ async function fetchScheduledActions() {
   } catch { /* ignore */ }
 }
 
+function buildScheduleRow(action) {
+  const intervalMins = action.intervalSeconds ? Math.round(action.intervalSeconds / 60) : null;
+  const intervalText = intervalMins ? `Every ${intervalMins} min` : 'Once';
+
+  const row = document.createElement('div');
+  row.className = 'schedules-row';
+  row.dataset.actionId = action.id;
+
+  // ── View mode ────────────────────────────────────────────────────────────
+
+  const viewBody = document.createElement('div');
+  viewBody.className = 'schedules-row-body';
+  viewBody.title = 'Click to edit';
+  viewBody.innerHTML = `
+    <div class="schedules-row-label">${escHtml(action.label)}</div>
+    <div class="schedules-row-desc">${escHtml(action.description)}</div>`;
+
+  const intervalBadge = document.createElement('span');
+  intervalBadge.className = 'schedules-row-interval';
+  intervalBadge.textContent = intervalText;
+
+  const delBtn = document.createElement('button');
+  delBtn.className = 'library-btn library-btn--del';
+  delBtn.title = 'Delete';
+  delBtn.textContent = '✕';
+
+  const rowActions = document.createElement('div');
+  rowActions.className = 'schedules-row-actions';
+  rowActions.appendChild(delBtn);
+
+  row.appendChild(viewBody);
+  row.appendChild(intervalBadge);
+  row.appendChild(rowActions);
+
+  // ── Edit mode ────────────────────────────────────────────────────────────
+
+  function openEdit() {
+    row.classList.add('schedules-row--editing');
+    viewBody.hidden = true;
+    intervalBadge.hidden = true;
+    rowActions.hidden = true;
+
+    const form = document.createElement('div');
+    form.className = 'schedules-edit-form';
+
+    const labelInp = document.createElement('input');
+    labelInp.type = 'text';
+    labelInp.className = 'schedules-input';
+    labelInp.value = action.label;
+    labelInp.placeholder = 'Label';
+
+    const descTA = document.createElement('textarea');
+    descTA.className = 'schedules-textarea schedules-edit-desc';
+    descTA.value = action.description;
+    descTA.placeholder = 'Description';
+
+    const footer = document.createElement('div');
+    footer.className = 'schedules-add-footer';
+
+    const intervalInp = document.createElement('input');
+    intervalInp.type = 'number';
+    intervalInp.className = 'schedules-input schedules-interval';
+    intervalInp.placeholder = 'Interval (mins, blank=once)';
+    intervalInp.min = '1';
+    intervalInp.step = '1';
+    if (intervalMins) intervalInp.value = String(intervalMins);
+
+    const saveBtn = document.createElement('button');
+    saveBtn.className = 'schedules-add-btn';
+    saveBtn.textContent = 'Save';
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'schedules-cancel-btn';
+    cancelBtn.textContent = 'Cancel';
+
+    footer.appendChild(intervalInp);
+    footer.appendChild(saveBtn);
+    footer.appendChild(cancelBtn);
+    form.appendChild(labelInp);
+    form.appendChild(descTA);
+    form.appendChild(footer);
+    row.appendChild(form);
+    labelInp.focus();
+
+    cancelBtn.addEventListener('click', () => {
+      form.remove();
+      row.classList.remove('schedules-row--editing');
+      viewBody.hidden = false;
+      intervalBadge.hidden = false;
+      rowActions.hidden = false;
+    });
+
+    saveBtn.addEventListener('click', async () => {
+      const label       = labelInp.value.trim();
+      const description = descTA.value.trim();
+      if (!label || !description) { alert('Label and description are required'); return; }
+      const mins = intervalInp.value ? parseInt(intervalInp.value, 10) : null;
+      saveBtn.disabled = true; saveBtn.textContent = '…';
+      try {
+        const r = await fetch(`/api/scheduled-actions/${encodeURIComponent(action.id)}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ label, description, intervalMinutes: mins }),
+        });
+        if (!r.ok) { const e = await r.json(); alert(e.error ?? 'Save failed'); saveBtn.disabled = false; saveBtn.textContent = 'Save'; return; }
+        fetchScheduledActions();
+      } catch { alert('Network error'); saveBtn.disabled = false; saveBtn.textContent = 'Save'; }
+    });
+  }
+
+  viewBody.addEventListener('click', openEdit);
+
+  delBtn.addEventListener('click', async () => {
+    if (!confirm('Delete this scheduled action?')) return;
+    try {
+      await fetch(`/api/scheduled-actions/${encodeURIComponent(action.id)}`, { method: 'DELETE' });
+      fetchScheduledActions();
+    } catch { alert('Network error'); }
+  });
+
+  return row;
+}
+
 function renderScheduledActions(actions) {
   const list = document.getElementById('schedules-list');
   if (!list) return;
+  list.innerHTML = '';
   if (!actions.length) {
-    list.innerHTML = '<div style="padding:16px 12px;color:var(--text-muted);font-size:13px">No global scheduled actions yet. Add one below.</div>';
+    const empty = document.createElement('div');
+    empty.style.cssText = 'padding:16px 12px;color:var(--text-muted);font-size:13px';
+    empty.textContent = 'No global scheduled actions yet. Add one below.';
+    list.appendChild(empty);
     return;
   }
-  list.innerHTML = actions.map(action => {
-    const interval = action.intervalSeconds
-      ? `Every ${Math.round(action.intervalSeconds / 60)} min`
-      : 'Once';
-    return `
-      <div class="schedules-row" data-action-id="${action.id}">
-        <div class="schedules-row-body">
-          <div class="schedules-row-label">${escHtml(action.label)}</div>
-          <div class="schedules-row-desc" title="${escHtml(action.description)}">${escHtml(action.description)}</div>
-        </div>
-        <span class="schedules-row-interval">${interval}</span>
-        <div class="schedules-row-actions">
-          <button class="library-btn library-btn--del" data-action="delete" data-action-id="${action.id}" title="Delete">✕</button>
-        </div>
-      </div>`;
-  }).join('');
-
-  list.querySelectorAll('[data-action="delete"]').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const actionId = btn.dataset.actionId;
-      if (!confirm('Delete this scheduled action?')) return;
-      try {
-        await fetch(`/api/scheduled-actions/${encodeURIComponent(actionId)}`, { method: 'DELETE' });
-        fetchScheduledActions();
-      } catch { alert('Network error'); }
-    });
-  });
+  for (const action of actions) list.appendChild(buildScheduleRow(action));
 }
 
 function initSchedulesTab() {

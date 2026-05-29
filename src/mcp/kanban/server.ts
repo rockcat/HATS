@@ -183,7 +183,7 @@ export async function startKanbanServer(boardPath: string): Promise<void> {
 async function handleTool(name: string, args: Record<string, unknown>, store: KanbanStore): Promise<unknown> {
   switch (name) {
     case 'get_board':
-      return store.getBoardSummary();
+      return await store.getBoardSummary();
 
     case 'create_ticket': {
       const title = (args['title'] as string | undefined)?.trim();
@@ -204,13 +204,13 @@ async function handleTool(name: string, args: Record<string, unknown>, store: Ka
     }
 
     case 'get_ticket': {
-      const ticket = store.getTicket(args['id'] as string);
+      const ticket = await store.getTicket(args['id'] as string);
       if (!ticket) throw new Error(`Ticket "${args['id']}" not found`);
       return ticket;
     }
 
     case 'list_tickets':
-      return store.listTickets({
+      return await store.listTickets({
         column:   args['column'] as Column | undefined,
         assignee: args['assignee'] as string | undefined,
         tag:      args['tag'] as string | undefined,

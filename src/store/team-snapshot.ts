@@ -24,6 +24,7 @@ export interface AgentDefinition {
   teamContext?: string;
   enabledMcpServers?: string[];
   personalMcpCredentials?: Record<string, Record<string, string>>;
+  disabledPersonalMcpServers?: string[];
   scheduledActionIds: string[];
 }
 

@@ -1403,6 +1403,10 @@ main {
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
   gap: 10px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--surface);
 }
 
 .agent-detail-identity {
@@ -1507,7 +1511,7 @@ main {
   flex-direction: column;
   gap: 4px;
   overflow-y: auto;
-  max-height: 440px;
+  max-height: 360px;
 }
 
 /* Agent compose area */
@@ -1579,170 +1583,6 @@ main {
 .agent-detail-send-btn:hover { opacity: 0.85; }
 .agent-detail-send-btn:disabled { opacity: 0.4; cursor: default; }
 
-/* ── Agent scheduled actions (agenda) ───────────────── */
-.agent-agenda {
-  flex-shrink: 0;
-  border-top: 1px solid var(--border);
-  font-size: 12px;
-}
-
-.agent-agenda-summary {
-  cursor: pointer;
-  padding: 7px 14px;
-  color: var(--text-muted);
-  user-select: none;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  list-style: none;
-}
-.agent-agenda-summary::-webkit-details-marker { display: none; }
-.agent-agenda-summary::before { content: '▸'; font-size: 10px; transition: transform 0.15s; }
-.agent-agenda[open] .agent-agenda-summary::before { transform: rotate(90deg); }
-
-.agent-agenda-count {
-  background: var(--surface-3);
-  color: var(--text-muted);
-  border-radius: 8px;
-  padding: 1px 6px;
-  font-size: 10px;
-}
-
-.agent-agenda-list {
-  padding: 4px 14px 6px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  overflow-y: auto;
-}
-
-.agenda-entry {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  overflow: hidden;
-}
-
-.agenda-entry-summary {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 5px 8px;
-}
-
-.agenda-entry-editing { border-color: var(--hat-blue); }
-
-.agenda-entry-form {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 6px 8px 8px;
-  border-top: 1px solid var(--border);
-}
-
-.agenda-entry-edit {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--text-muted);
-  padding: 2px 4px;
-  border-radius: 3px;
-  font-size: 13px;
-  line-height: 1;
-  transition: background 0.15s, color 0.15s;
-  flex-shrink: 0;
-}
-.agenda-entry-edit:hover { background: var(--surface-3); color: var(--text); }
-
-.agenda-entry-label {
-  flex: 1;
-  font-weight: 600;
-  color: var(--text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.agenda-entry-meta {
-  color: var(--text-muted);
-  font-size: 11px;
-  white-space: nowrap;
-}
-
-.agenda-entry-delete {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--text-muted);
-  padding: 2px 4px;
-  border-radius: 3px;
-  font-size: 11px;
-  line-height: 1;
-  transition: background 0.15s, color 0.15s;
-  flex-shrink: 0;
-}
-.agenda-entry-delete:hover { background: rgba(248,81,73,0.15); color: #f85149; }
-
-.agent-agenda-add {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 0 14px 8px;
-}
-
-.agent-agenda-add-footer {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-}
-
-.agent-agenda-input {
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  color: var(--text);
-  font-size: 12px;
-  padding: 4px 7px;
-  outline: none;
-  transition: border-color 0.15s;
-}
-.agent-agenda-input:focus { border-color: var(--hat-blue); }
-.agent-agenda-input { flex: 1; }
-.agent-agenda-interval { width: 90px; flex: none; }
-
-.agent-agenda-add-btn {
-  background: var(--surface-3);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  color: var(--text);
-  font-size: 12px;
-  padding: 4px 10px;
-  cursor: pointer;
-  transition: background 0.15s;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-.agent-agenda-add-btn:hover { background: var(--border); }
-
-.agent-agenda-desc-input {
-  width: 100%;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  color: var(--text);
-  font-size: 12px;
-  padding: 5px 8px;
-  resize: vertical;
-  height: 130px;
-  min-height: 38px;
-  outline: none;
-  transition: border-color 0.15s;
-  box-sizing: border-box;
-}
-.agent-agenda-desc-input:focus { border-color: var(--hat-blue); }
 
 /* Chat button on agent cards */
 .agent-card-chat-btn {
@@ -2358,6 +2198,29 @@ main {
 .personal-mcp-field-input:focus {
   outline: none;
   border-color: var(--accent);
+}
+.personal-mcp-features-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.personal-mcp-features-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px 8px;
+}
+.personal-mcp-feature-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--text);
+  cursor: pointer;
+  user-select: none;
+}
+.personal-mcp-feature-item input[type="checkbox"] {
+  accent-color: var(--accent);
+  cursor: pointer;
 }
 .personal-mcp-actions {
   display: flex;
@@ -4139,6 +4002,34 @@ body.has-expanded-panel main > section:not(.panel--expanded) {
 .library-btn--del { border-color: transparent; color: var(--text-muted); }
 .library-btn--del:hover { color: #e55; border-color: #e55; background: transparent; }
 
+/* Scheduled actions checklist inside add/edit agent modal */
+.add-agent-schedules-list { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
+.add-agent-sched-label { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; cursor: pointer; }
+.add-agent-sched-label input[type="checkbox"] { margin-top: 2px; flex-shrink: 0; }
+
+/* Library editor modal — vertical layout with top-section preview */
+.lib-editor-modal { max-width: 680px; width: 90vw; }
+.lib-editor-body { display: flex; flex-direction: column; gap: 12px; }
+.lib-editor-top { display: flex; gap: 14px; align-items: flex-start; }
+.lib-editor-top-fields { flex: 1; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.lib-avatar-panel {
+  width: 200px;
+  flex-shrink: 0;
+  aspect-ratio: 1 / 1;
+  position: relative;
+  background: var(--surface-2);
+  background-size: cover;
+  background-position: center;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.lib-avatar-canvas { display: block; width: 100%; height: 100%; position: absolute; inset: 0; }
+.lib-avatar-hint { color: var(--text-muted); font-size: 12px; pointer-events: none; }
+
 /* ── Schedules tab ──────────────────────────────────────────────────────────── */
 
 .schedules-pane { flex-direction: column; gap: 0; overflow-y: auto; }
@@ -4172,7 +4063,7 @@ body.has-expanded-panel main > section:not(.panel--expanded) {
 .schedules-add-summary::before { content: '▶'; font-size: 9px; transition: transform .15s; }
 details.schedules-add-section[open] .schedules-add-summary::before { transform: rotate(90deg); }
 
-#schedules-add-description { color: var(--text-muted); font-size: 11px; margin-top: 2px; height: 100px;}
+#schedules-add-description { min-height: 120px; }
 
 .schedules-add-form { padding: 8px 12px; display: flex; flex-direction: column; gap: 6px; }
 
@@ -4193,3 +4084,13 @@ details.schedules-add-section[open] .schedules-add-summary::before { transform: 
   background: transparent; color: var(--accent); font-size: 12px; cursor: pointer; white-space: nowrap;
 }
 .schedules-add-btn:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+
+.schedules-row-body { cursor: pointer; }
+.schedules-row--editing { align-items: stretch; flex-direction: column; }
+.schedules-edit-form { display: flex; flex-direction: column; gap: 6px; padding: 4px 0; width: 100%; }
+.schedules-edit-desc { min-height: 120px; }
+.schedules-cancel-btn {
+  padding: 5px 12px; border-radius: 4px; border: 1px solid var(--border);
+  background: transparent; color: var(--text-muted); font-size: 12px; cursor: pointer; white-space: nowrap;
+}
+.schedules-cancel-btn:hover { background: var(--surface-2); color: var(--text); }

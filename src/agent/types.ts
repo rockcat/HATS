@@ -42,6 +42,8 @@ export interface AgentConfig {
   enabledMcpServers?: string[]; // MCP server IDs this agent can use; undefined = all enabled servers
   /** Per-agent credentials for personal MCP servers. Maps catalogueId → envVar → value. */
   personalMcpCredentials?: Record<string, Record<string, string>>;
+  /** IDs of personal MCP servers that have credentials saved but are currently stopped. */
+  disabledPersonalMcpServers?: string[];
 }
 
 export interface AgentMessage {

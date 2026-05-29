@@ -6,7 +6,7 @@ import { HumanRequest } from '../orchestrator/types.js';
 import { HumanRequestStore } from './human-request-store.js';
 import { StoredEvent } from '../store/event-store.js';
 import { Board } from '../mcp/kanban/types.js';
-import { MCPCatalogueEntry } from '../mcp/mcp-catalogue.js';
+import { MCPCatalogueEntry, isAgentMcp } from '../mcp/mcp-catalogue.js';
 import { getCatalogue } from '../mcp/catalogue-store.js';
 import { debugState } from '../providers/debug-state.js';
 import { HatType } from '../hats/types.js';
@@ -281,7 +281,7 @@ export class AgentRouter {
       const catalogue = getCatalogue().map(entry => ({
         ...entry,
         enabled: orch.hasMCPServer(entry.id),
-        envStatus: (entry.envVars ?? []).map(v => ({ name: v, present: !!process.env[v] })),
+        envStatus: (entry.envVars ?? []).map(v => { const n = typeof v === 'string' ? v : v.name; return { name: n, present: !!process.env[n] }; }),
       }));
       json(res, 200, catalogue);
       return true;
@@ -428,8 +428,9 @@ export class AgentRouter {
       const resolved  = resolveAgentName(agentName);
       const agent     = orch.getAgent(resolved);
       if (!agent) { json(res, 404, { error: `Agent "${agentName}" not found` }); return true; }
-      const savedCreds   = orch.getPersonalMcpCredentials(resolved);
-      const personalEntries: MCPCatalogueEntry[] = getCatalogue().filter(e => e.personal);
+      const savedCreds = orch.getPersonalMcpCredentials(resolved);
+      const disabled   = orch.getDisabledPersonalMcpServers(resolved);
+      const personalEntries: MCPCatalogueEntry[] = getCatalogue().filter(isAgentMcp);
       const result = personalEntries.map(e => ({
         id:          e.id,
         name:        e.name,
@@ -438,6 +439,7 @@ export class AgentRouter {
         envVars:     e.envVars ?? [],
         notes:       e.notes,
         configured:  !!savedCreds[e.id],
+        active:      !!savedCreds[e.id] && !disabled.has(e.id),
         credentials: savedCreds[e.id] ?? {},
       }));
       json(res, 200, result);
@@ -589,8 +591,9 @@ export class AgentRouter {
       const body = await readBody(req);
       const patch = JSON.parse(body) as {
         name?: string; hatTypes?: string[]; visualDescription?: string;
-        backstory?: string; specialisation?: string; email?: string;
+        backstory?: string; specialisation?: string;
         provider?: string; model?: string;
+        avatar?: string | null; voice?: string | null; speakerName?: string | null; background?: string | null;
       };
       const validHats = new Set(['none', 'white', 'red', 'black', 'yellow', 'green', 'blue']);
       if (patch.hatTypes && patch.hatTypes.some(h => !validHats.has(h))) {
@@ -604,23 +607,35 @@ export class AgentRouter {
           ...(patch.visualDescription !== undefined && { visualDescription: patch.visualDescription.trim() || undefined }),
           ...(patch.backstory         !== undefined && { backstory: patch.backstory.trim() || undefined }),
           ...(patch.specialisation    !== undefined && { specialisation: patch.specialisation.trim() || undefined }),
-          ...(patch.email             !== undefined && { email: patch.email.trim() || undefined }),
+          ...(patch.avatar            !== undefined && { avatar: patch.avatar ?? undefined }),
+          ...(patch.voice             !== undefined && { voice: patch.voice ?? undefined }),
+          ...(patch.speakerName       !== undefined && { speakerName: patch.speakerName ?? undefined }),
+          ...(patch.background        !== undefined && { background: patch.background ?? undefined }),
         },
         ...(patch.hatTypes  !== undefined && { hatType: patch.hatTypes as import('../hats/types.js').HatType[] }),
         ...(patch.provider  !== undefined && { providerName: patch.provider }),
         ...(patch.model     !== undefined && { model: patch.model.trim() }),
       };
       await store.addOrUpdate(updated);
-      // Sync name change to running agent if in current project
-      if (patch.name) {
-        const runningAgent = orch.listAgents().find(a => a.id === agentId);
-        if (runningAgent && patch.name.trim() !== runningAgent.name) {
-          try { orch.renameAgent(runningAgent.name, patch.name.trim()); } catch { /* non-fatal */ }
+      // Sync all changed fields to the running agent if it's in the current project
+      const runningAgent = orch.listAgents().find(a => a.id === agentId);
+      if (runningAgent) {
+        const rn = runningAgent.name;
+        if (patch.name && patch.name.trim() !== rn) {
+          try { orch.renameAgent(rn, patch.name.trim()); } catch { /* non-fatal */ }
         }
-      }
-      if (patch.hatTypes) {
-        const runningAgent = orch.listAgents().find(a => a.id === agentId);
-        if (runningAgent) orch.changeAgentHat(runningAgent.name, updated.hatType);
+        if (patch.hatTypes)                         orch.changeAgentHat(rn, updated.hatType);
+        if (patch.visualDescription !== undefined || patch.backstory !== undefined)
+          orch.updateAgentIdentity(rn, updated.identity.visualDescription, updated.identity.backstory);
+        if (patch.specialisation !== undefined)     orch.updateAgentSpecialisation(rn, updated.identity.specialisation);
+        if (patch.avatar !== undefined)             orch.updateAgentAvatar(rn, updated.identity.avatar);
+        if (patch.background !== undefined)         orch.updateAgentBackground(rn, updated.identity.background);
+        if (patch.voice !== undefined || patch.speakerName !== undefined)
+          orch.updateAgentVoice(rn, updated.identity.voice, updated.identity.speakerName);
+        if (patch.provider !== undefined || patch.model !== undefined) {
+          const provider = makeProvider(updated.providerName) ?? runningAgent.config.provider;
+          orch.updateAgentConfig(rn, provider, updated.model);
+        }
       }
       saveCurrentState().catch(() => {});
       sseBroadcast({ type: 'agent_update', agents: this.deps.buildAgentStatuses() });

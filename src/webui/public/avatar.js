@@ -144,9 +144,9 @@ window.avatarAPI = {
    * @param {[number,number,number]} cameraPos - [x, y, z] camera position
    * @param {[number,number,number]} [rotate]  - [x, y, z] rotation in degrees (from avatars.json)
    */
-  show(avatarFile, cameraPos, rotate, fov, scale, bgFile) {
-    const panel  = document.getElementById('avatar-panel');
-    const canvas = document.getElementById('avatar-canvas');
+  show(avatarFile, cameraPos, rotate, fov, scale, bgFile, panelId = 'avatar-panel', canvasId = 'avatar-canvas') {
+    const panel  = document.getElementById(panelId);
+    const canvas = document.getElementById(canvasId);
     if (!panel || !canvas) return;
 
     panel.hidden = false;
@@ -154,7 +154,7 @@ window.avatarAPI = {
       ? `url('/backgrounds/${encodeURIComponent(bgFile)}')`
       : '';
 
-    if (!renderer) initRenderer(canvas);
+    if (!renderer || currentCanvas !== canvas) initRenderer(canvas);
     resizeRenderer(canvas);
     loadGLB(avatarFile, cameraPos, rotate, fov, scale);
 

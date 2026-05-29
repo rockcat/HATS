@@ -109,16 +109,19 @@ export class KanbanManager {
     }
     if (changed) await this.writeKanban(board);
 
-    const orch = this.deps.getOrchestrator();
     for (const ticket of unblocked) {
       if (!ticket.assignee) continue;
-      const agentName = this.deps.resolveAgentName(ticket.assignee);
-      const isKnown = orch.listAgents().some(a => a.name.toLowerCase() === agentName.toLowerCase());
-      if (!isKnown) continue;
-      orch.humanMessage(agentName,
+      this.notifyAgent(ticket.assignee,
         `Good news! ${completedId} has been completed, which unblocks your ticket ${ticket.id}: "${ticket.title}". It's now ready to start.`,
-      ).catch(() => {});
+      );
     }
+  }
+
+  private notifyAgent(assignee: string, message: string): void {
+    const orch      = this.deps.getOrchestrator();
+    const agentName = this.deps.resolveAgentName(assignee);
+    const isKnown   = orch.listAgents().some(a => a.name.toLowerCase() === agentName.toLowerCase());
+    if (isKnown) orch.humanMessage(agentName, message).catch(() => {});
   }
 
   async nudgeStaleTickets(): Promise<void> {
@@ -294,6 +297,11 @@ export class KanbanManager {
       ticket.updatedAt = comment.ts;
       await this.writeKanban(board);
       json(res, 201, comment);
+      if (ticket.assignee) {
+        this.notifyAgent(ticket.assignee,
+          `New comment on your ticket ${ticket.id}: "${ticket.title}" from ${comment.author}: "${comment.text}"`,
+        );
+      }
       return true;
     }
 
@@ -327,6 +335,10 @@ export class KanbanManager {
       }
       if (ticket.column === 'in_progress' && ticket.assignee && (columnChanged || assigneeChanged)) {
         this.dispatchTicket(ticket).catch(() => {});
+      } else if (columnChanged && ticket.assignee) {
+        this.notifyAgent(ticket.assignee,
+          `Your ticket ${ticket.id}: "${ticket.title}" has been moved to ${ticket.column}.`,
+        );
       }
       return true;
     }

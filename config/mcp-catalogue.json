@@ -4,6 +4,9 @@
     "name": "Kanban Board",
     "description": "Built-in kanban board for ticket and task tracking",
     "category": "productivity",
+    "users": [
+      "human"
+    ],
     "config": {
       "transport": "stdio",
       "command": "node",
@@ -17,6 +20,9 @@
     "name": "Filesystem",
     "description": "Read, write, and list files in the project folder — sources/ for inputs, outputs/ for deliverables",
     "category": "files",
+    "users": [
+      "human"
+    ],
     "config": {
       "transport": "stdio",
       "command": "npx",
@@ -32,6 +38,9 @@
     "name": "Excel / Spreadsheets",
     "description": "Read and write Microsoft Excel (.xlsx) files — create sheets, edit cells, formulas, and charts",
     "category": "files",
+    "users": [
+      "human"
+    ],
     "config": {
       "transport": "stdio",
       "command": "npx",
@@ -47,6 +56,9 @@
     "name": "Word / DOCX",
     "description": "Create and edit Microsoft Word (.docx) documents using structured JSON",
     "category": "files",
+    "users": [
+      "human"
+    ],
     "config": {
       "transport": "stdio",
       "command": "npx",
@@ -62,6 +74,9 @@
     "name": "PDF",
     "description": "Generate PDF files from content — supports text, layout, tables, and Unicode. Save to outputs/ for deliverables",
     "category": "files",
+    "users": [
+      "human"
+    ],
     "config": {
       "transport": "stdio",
       "command": "npx",
@@ -77,6 +92,9 @@
     "name": "PowerPoint / PPTX",
     "description": "Create PowerPoint presentations — add slides, text, tables, shapes, and charts. Save .pptx to outputs/",
     "category": "files",
+    "users": [
+      "human"
+    ],
     "config": {
       "transport": "stdio",
       "command": "npx",
@@ -92,6 +110,9 @@
     "name": "Brave Search",
     "description": "Web search via Brave Search API — returns titles, URLs, and snippets",
     "category": "web",
+    "users": [
+      "human"
+    ],
     "config": {
       "transport": "stdio",
       "command": "npx",
@@ -113,6 +134,9 @@
     "name": "Memory",
     "description": "Persistent knowledge graph — agents can store and retrieve facts across sessions",
     "category": "productivity",
+    "users": [
+      "human"
+    ],
     "config": {
       "transport": "stdio",
       "command": "npx",
@@ -128,6 +152,9 @@
     "name": "GitHub",
     "description": "Search repos, read files, manage issues and pull requests",
     "category": "dev",
+    "users": [
+      "human"
+    ],
     "config": {
       "transport": "stdio",
       "command": "npx",
@@ -149,6 +176,9 @@
     "name": "SQLite",
     "description": "Run queries against a local SQLite database file",
     "category": "data",
+    "users": [
+      "human"
+    ],
     "config": {
       "transport": "stdio",
       "command": "npx",
@@ -165,6 +195,9 @@
     "name": "PostgreSQL",
     "description": "Query and inspect a PostgreSQL database",
     "category": "data",
+    "users": [
+      "human"
+    ],
     "config": {
       "transport": "stdio",
       "command": "npx",
@@ -186,6 +219,9 @@
     "name": "Puppeteer / Browser",
     "description": "Control a headless Chrome browser — navigate pages, take screenshots, fill forms",
     "category": "web",
+    "users": [
+      "human"
+    ],
     "config": {
       "transport": "stdio",
       "command": "npx",
@@ -201,6 +237,9 @@
     "name": "Slack",
     "description": "Post messages and read channels in a Slack workspace",
     "category": "productivity",
+    "users": [
+      "human"
+    ],
     "config": {
       "transport": "stdio",
       "command": "npx",
@@ -224,6 +263,9 @@
     "name": "LinkedIn",
     "description": "Search LinkedIn profiles and jobs, retrieve profile details, and message connections",
     "category": "web",
+    "users": [
+      "human"
+    ],
     "config": {
       "transport": "stdio",
       "command": "node",
@@ -247,7 +289,9 @@
     "name": "Email (IMAP / SMTP)",
     "description": "Read, search, compose, send, and manage email via IMAP and SMTP — works with Gmail, Outlook, and any standard mail server",
     "category": "productivity",
-    "personal": true,
+    "users": [
+      "agent"
+    ],
     "config": {
       "transport": "stdio",
       "command": "npx",
@@ -263,10 +307,74 @@
       }
     },
     "envVars": [
-      "MCP_EMAIL_ADDRESS",
-      "MCP_EMAIL_PASSWORD",
-      "MCP_EMAIL_IMAP_HOST",
-      "MCP_EMAIL_SMTP_HOST"
+      {
+        "name": "MCP_EMAIL_ADDRESS",
+        "placeholder": "required — email address"
+      },
+      {
+        "name": "MCP_EMAIL_PASSWORD",
+        "placeholder": "required — password or app password"
+      },
+      {
+        "name": "MCP_EMAIL_IMAP_HOST",
+        "placeholder": "required — IMAP server hostname"
+      },
+      {
+        "name": "MCP_EMAIL_SMTP_HOST",
+        "placeholder": "required — SMTP server hostname"
+      },
+      {
+        "name": "MCP_EMAIL_ACCOUNT_NAME",
+        "placeholder": "default — account name"
+      },
+      {
+        "name": "MCP_EMAIL_FULL_NAME",
+        "placeholder": "display name"
+      },
+      {
+        "name": "MCP_EMAIL_USERNAME",
+        "placeholder": "default: email address"
+      },
+      {
+        "name": "MCP_EMAIL_IMAP_PORT",
+        "placeholder": "993"
+      },
+      {
+        "name": "MCP_EMAIL_IMAP_TLS",
+        "placeholder": "true"
+      },
+      {
+        "name": "MCP_EMAIL_SMTP_PORT",
+        "placeholder": "465"
+      },
+      {
+        "name": "MCP_EMAIL_SMTP_TLS",
+        "placeholder": "true"
+      },
+      {
+        "name": "MCP_EMAIL_SMTP_STARTTLS",
+        "placeholder": "false"
+      },
+      {
+        "name": "MCP_EMAIL_SMTP_VERIFY_SSL",
+        "placeholder": "true"
+      },
+      {
+        "name": "MCP_EMAIL_SMTP_POOL_ENABLED",
+        "placeholder": "true"
+      },
+      {
+        "name": "MCP_EMAIL_SMTP_POOL_MAX_CONNECTIONS",
+        "placeholder": "1"
+      },
+      {
+        "name": "MCP_EMAIL_SMTP_POOL_MAX_MESSAGES",
+        "placeholder": "100"
+      },
+      {
+        "name": "MCP_EMAIL_RATE_LIMIT",
+        "placeholder": "10"
+      }
     ],
     "notes": "Run \"npx @codefuturist/email-mcp setup\" for a guided wizard that auto-detects server settings. For Gmail use an App Password (not your main password) and set IMAP host to imap.gmail.com, SMTP host to smtp.gmail.com.",
     "url": "https://www.npmjs.com/package/@codefuturist/email-mcp"
@@ -276,7 +384,7 @@
     "name": "Email (POP3 / SMTP)",
     "description": "Read and delete email via POP3, send via SMTP — use this when your mail provider supports POP3 but not IMAP",
     "category": "productivity",
-    "personal": true,
+    "users": [],
     "config": {
       "transport": "stdio",
       "command": "uvx",
@@ -308,23 +416,224 @@
   {
     "id": "google-workspace",
     "name": "Google Workspace",
-    "description": "Access Gmail, Google Docs, Drive, Calendar, Sheets, Slides, and Chat — official Gemini CLI extension",
+    "description": "Access Gmail, Drive, Calendar, Chat, Contacts, Docs, Sheets, Slides, and Tasks via the Gemini CLI extension",
     "category": "productivity",
+    "users": [
+      "human",
+      "agent"
+    ],
     "config": {
       "transport": "stdio",
       "command": "node",
       "args": [
         "~/.gemini/extensions/google-workspace/dist/index.js"
-      ]
+      ],
+      "env": {
+        "WORKSPACE_FEATURE_OVERRIDES": ""
+      }
     },
-    "notes": "Requires Gemini CLI with the Google Workspace extension installed. Run: gemini extensions install https://github.com/gemini-cli-extensions/workspace — then authenticate with your Google account on first use.",
+    "envVars": [
+      "WORKSPACE_FEATURE_OVERRIDES"
+    ],
+    "notes": "Requires the Gemini CLI with the workspace extension. Install with: gemini extensions install https://github.com/gemini-cli-extensions/workspace — then authenticate by running: gemini",
     "url": "https://github.com/gemini-cli-extensions/workspace"
+  },
+  {
+    "id": "google-gmail",
+    "name": "Google Gmail",
+    "description": "Read, search, send, and manage Gmail messages and threads — uses the shared team account",
+    "category": "productivity",
+    "users": [],
+    "config": {
+      "transport": "http",
+      "url": "https://gmailmcp.googleapis.com/mcp/v1",
+      "headers": {
+        "Authorization": "Bearer ${GOOGLE_GMAIL_ACCESS_TOKEN}"
+      }
+    },
+    "envVars": [
+      "WORKSPACE_FEATURE_OVERRIDES"
+    ],
+    "notes": "Set GOOGLE_GMAIL_ACCESS_TOKEN in your environment. OAuth scope: gmail.modify. Get a token via \"gcloud auth print-access-token\" or the Google OAuth 2.0 Playground. Tokens expire after 1 hour.",
+    "url": "https://developers.google.com/workspace/guides/configure-mcp-servers"
+  },
+  {
+    "id": "google-calendar",
+    "name": "Google Calendar",
+    "description": "Read, create, update, and delete Google Calendar events and schedules — uses the shared team account",
+    "category": "productivity",
+    "users": [],
+    "config": {
+      "transport": "http",
+      "url": "https://calendarmcp.googleapis.com/mcp/v1",
+      "headers": {
+        "Authorization": "Bearer ${GOOGLE_CALENDAR_ACCESS_TOKEN}"
+      }
+    },
+    "envVars": [
+      "WORKSPACE_FEATURE_OVERRIDES"
+    ],
+    "notes": "Set GOOGLE_CALENDAR_ACCESS_TOKEN in your environment. OAuth scope: calendar. Get a token via \"gcloud auth print-access-token\" or the Google OAuth 2.0 Playground.",
+    "url": "https://developers.google.com/workspace/guides/configure-mcp-servers"
+  },
+  {
+    "id": "google-drive",
+    "name": "Google Drive",
+    "description": "Browse, upload, download, and manage files and folders in Google Drive — uses the shared team account",
+    "category": "productivity",
+    "users": [],
+    "config": {
+      "transport": "http",
+      "url": "https://drivemcp.googleapis.com/mcp/v1",
+      "headers": {
+        "Authorization": "Bearer ${GOOGLE_DRIVE_ACCESS_TOKEN}"
+      }
+    },
+    "envVars": [
+      "WORKSPACE_FEATURE_OVERRIDES"
+    ],
+    "notes": "Set GOOGLE_DRIVE_ACCESS_TOKEN in your environment. OAuth scope: drive. Get a token via \"gcloud auth print-access-token\" or the Google OAuth 2.0 Playground.",
+    "url": "https://developers.google.com/workspace/guides/configure-mcp-servers"
+  },
+  {
+    "id": "google-chat",
+    "name": "Google Chat",
+    "description": "Send messages and manage spaces and threads in Google Chat — uses the shared team account",
+    "category": "productivity",
+    "users": [],
+    "config": {
+      "transport": "http",
+      "url": "https://chatmcp.googleapis.com/mcp/v1",
+      "headers": {
+        "Authorization": "Bearer ${GOOGLE_CHAT_ACCESS_TOKEN}"
+      }
+    },
+    "envVars": [
+      "WORKSPACE_FEATURE_OVERRIDES"
+    ],
+    "notes": "Set GOOGLE_CHAT_ACCESS_TOKEN in your environment. OAuth scope: chat.messages. Get a token via \"gcloud auth print-access-token\" or the Google OAuth 2.0 Playground.",
+    "url": "https://developers.google.com/workspace/guides/configure-mcp-servers"
+  },
+  {
+    "id": "google-contacts",
+    "name": "Google Contacts",
+    "description": "Look up and manage contacts and directory information via the Google People API — uses the shared team account",
+    "category": "productivity",
+    "users": [],
+    "config": {
+      "transport": "http",
+      "url": "https://people.googleapis.com/mcp/v1",
+      "headers": {
+        "Authorization": "Bearer ${GOOGLE_CONTACTS_ACCESS_TOKEN}"
+      }
+    },
+    "envVars": [
+      "WORKSPACE_FEATURE_OVERRIDES"
+    ],
+    "notes": "Set GOOGLE_CONTACTS_ACCESS_TOKEN in your environment. OAuth scope: contacts. Get a token via \"gcloud auth print-access-token\" or the Google OAuth 2.0 Playground.",
+    "url": "https://developers.google.com/workspace/guides/configure-mcp-servers"
+  },
+  {
+    "id": "google-gmail-personal",
+    "name": "Google Gmail (mine)",
+    "description": "Read, search, send, and manage Gmail messages — uses this agent's own Google account",
+    "category": "productivity",
+    "users": [],
+    "config": {
+      "transport": "http",
+      "url": "https://gmailmcp.googleapis.com/mcp/v1",
+      "headers": {
+        "Authorization": "Bearer ${GOOGLE_GMAIL_ACCESS_TOKEN}"
+      }
+    },
+    "envVars": [
+      "WORKSPACE_FEATURE_OVERRIDES"
+    ],
+    "notes": "Each agent stores their own token. OAuth scope: gmail.modify. Get a token via \"gcloud auth print-access-token\" or the Google OAuth 2.0 Playground. Tokens expire after 1 hour.",
+    "url": "https://developers.google.com/workspace/guides/configure-mcp-servers"
+  },
+  {
+    "id": "google-calendar-personal",
+    "name": "Google Calendar (mine)",
+    "description": "Read, create, update, and delete Google Calendar events — uses this agent's own Google account",
+    "category": "productivity",
+    "users": [],
+    "config": {
+      "transport": "http",
+      "url": "https://calendarmcp.googleapis.com/mcp/v1",
+      "headers": {
+        "Authorization": "Bearer ${GOOGLE_CALENDAR_ACCESS_TOKEN}"
+      }
+    },
+    "envVars": [
+      "WORKSPACE_FEATURE_OVERRIDES"
+    ],
+    "notes": "Each agent stores their own token. OAuth scope: calendar. Get a token via \"gcloud auth print-access-token\" or the Google OAuth 2.0 Playground.",
+    "url": "https://developers.google.com/workspace/guides/configure-mcp-servers"
+  },
+  {
+    "id": "google-drive-personal",
+    "name": "Google Drive (mine)",
+    "description": "Browse, upload, download, and manage files in Google Drive — uses this agent's own Google account",
+    "category": "productivity",
+    "users": [],
+    "config": {
+      "transport": "http",
+      "url": "https://drivemcp.googleapis.com/mcp/v1",
+      "headers": {
+        "Authorization": "Bearer ${GOOGLE_DRIVE_ACCESS_TOKEN}"
+      }
+    },
+    "envVars": [
+      "WORKSPACE_FEATURE_OVERRIDES"
+    ],
+    "notes": "Each agent stores their own token. OAuth scope: drive. Get a token via \"gcloud auth print-access-token\" or the Google OAuth 2.0 Playground.",
+    "url": "https://developers.google.com/workspace/guides/configure-mcp-servers"
+  },
+  {
+    "id": "google-chat-personal",
+    "name": "Google Chat (mine)",
+    "description": "Send messages and manage spaces in Google Chat — uses this agent's own Google account",
+    "category": "productivity",
+    "users": [],
+    "config": {
+      "transport": "http",
+      "url": "https://chatmcp.googleapis.com/mcp/v1",
+      "headers": {
+        "Authorization": "Bearer ${GOOGLE_CHAT_ACCESS_TOKEN}"
+      }
+    },
+    "envVars": [
+      "WORKSPACE_FEATURE_OVERRIDES"
+    ],
+    "notes": "Each agent stores their own token. OAuth scope: chat.messages. Get a token via \"gcloud auth print-access-token\" or the Google OAuth 2.0 Playground.",
+    "url": "https://developers.google.com/workspace/guides/configure-mcp-servers"
+  },
+  {
+    "id": "google-contacts-personal",
+    "name": "Google Contacts (mine)",
+    "description": "Look up and manage contacts via the Google People API — uses this agent's own Google account",
+    "category": "productivity",
+    "users": [],
+    "config": {
+      "transport": "http",
+      "url": "https://people.googleapis.com/mcp/v1",
+      "headers": {
+        "Authorization": "Bearer ${GOOGLE_CONTACTS_ACCESS_TOKEN}"
+      }
+    },
+    "envVars": [
+      "WORKSPACE_FEATURE_OVERRIDES"
+    ],
+    "notes": "Each agent stores their own token. OAuth scope: contacts. Get a token via \"gcloud auth print-access-token\" or the Google OAuth 2.0 Playground.",
+    "url": "https://developers.google.com/workspace/guides/configure-mcp-servers"
   },
   {
     "id": "microsoft-365",
     "name": "Microsoft 365",
     "description": "Access Outlook calendar, email, OneDrive, Teams, Contacts, and more via the Microsoft Graph API — works with personal, work, and school Microsoft accounts",
     "category": "productivity",
+    "users": [],
     "config": {
       "transport": "stdio",
       "command": "npx",
@@ -341,6 +650,7 @@
     "name": "WhatsApp (Periskope)",
     "description": "Send and receive WhatsApp messages, manage chats and contacts — uses the Periskope managed API (requires a Periskope account)",
     "category": "productivity",
+    "users": [],
     "config": {
       "transport": "stdio",
       "command": "npx",
@@ -365,6 +675,7 @@
     "name": "WhatsApp Web (personal)",
     "description": "Send and receive WhatsApp messages using your personal account via WhatsApp Web automation — scan a QR code once to authenticate",
     "category": "productivity",
+    "users": [],
     "config": {
       "transport": "stdio",
       "command": "npx",
@@ -385,6 +696,9 @@
     "name": "Twitter / X",
     "description": "Post tweets and search Twitter/X — requires a Twitter Developer account and OAuth credentials",
     "category": "web",
+    "users": [
+      "human"
+    ],
     "config": {
       "transport": "stdio",
       "command": "npx",
@@ -413,6 +727,9 @@
     "name": "Threads",
     "description": "Publish posts, read your timeline, search Threads, and view analytics — uses the official Meta Threads API",
     "category": "web",
+    "users": [
+      "human"
+    ],
     "config": {
       "transport": "stdio",
       "command": "npx",
