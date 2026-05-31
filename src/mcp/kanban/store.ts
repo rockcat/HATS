@@ -40,28 +40,22 @@ export class KanbanStore {
 
   // ── Queries ────────────────────────────────────────────────────────────────
 
-  getTicket(id: string): Ticket | undefined {
+  async getTicket(id: string): Promise<Ticket | undefined> {
+    await this.reload();
     return this.board.tickets[id];
   }
 
-  listTickets(opts: { column?: Column; assignee?: string; tag?: string } = {}): Ticket[] {
-    return Object.values(this.board.tickets).filter((t) => {
-      if (opts.column && t.column !== opts.column) return false;
-      if (opts.assignee && t.assignee !== opts.assignee) return false;
-      if (opts.tag && !t.tags.includes(opts.tag)) return false;
-      return true;
-    }).sort((a, b) => {
-      // Sort by priority then creation date
-      const pri: Record<Priority, number> = { critical: 0, high: 1, medium: 2, low: 3 };
-      return (pri[a.priority] - pri[b.priority]) || a.createdAt.localeCompare(b.createdAt);
-    });
+  async listTickets(opts: { column?: Column; assignee?: string; tag?: string } = {}): Promise<Ticket[]> {
+    await this.reload();
+    return this._filterTickets(opts);
   }
 
-  getBoardSummary(): Record<Column, { count: number; tickets: Array<{ id: string; title: string; priority: Priority; assignee?: string }> }> {
+  async getBoardSummary(): Promise<Record<Column, { count: number; tickets: Array<{ id: string; title: string; priority: Priority; assignee?: string }> }>> {
+    await this.reload();
     const columns: Column[] = ['backlog', 'ready', 'in_progress', 'blocked', 'review', 'completed', 'cancelled'];
-    const result = {} as ReturnType<typeof this.getBoardSummary>;
+    const result = {} as Awaited<ReturnType<typeof this.getBoardSummary>>;
     for (const col of columns) {
-      const tickets = this.listTickets({ column: col });
+      const tickets = this._filterTickets({ column: col });
       result[col] = {
         count: tickets.length,
         tickets: tickets.map((t) => ({ id: t.id, title: t.title, priority: t.priority, assignee: t.assignee })),
@@ -73,6 +67,18 @@ export class KanbanStore {
   findByTitle(title: string): Ticket | undefined {
     const norm = title.trim().toLowerCase();
     return Object.values(this.board.tickets).find(t => t.title.toLowerCase() === norm);
+  }
+
+  private _filterTickets(opts: { column?: Column; assignee?: string; tag?: string } = {}): Ticket[] {
+    return Object.values(this.board.tickets).filter((t) => {
+      if (opts.column && t.column !== opts.column) return false;
+      if (opts.assignee && t.assignee !== opts.assignee) return false;
+      if (opts.tag && !t.tags.includes(opts.tag)) return false;
+      return true;
+    }).sort((a, b) => {
+      const pri: Record<Priority, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+      return (pri[a.priority] - pri[b.priority]) || a.createdAt.localeCompare(b.createdAt);
+    });
   }
 
   // ── Mutations ──────────────────────────────────────────────────────────────

@@ -11,6 +11,14 @@ import { MeetingStore } from './meeting-store.js';
 import { buildMessage } from './orchestrator-utils.js';
 import { EmailAllowlistStore } from '../api/email-allowlist-store.js';
 
+// Brave search: max 1 request/second — serialise behind a queued delay chain
+let _braveQueue = Promise.resolve();
+function braveThrottle(): Promise<void> {
+  const slot = _braveQueue.then(() => new Promise<void>(res => setTimeout(res, 1000)));
+  _braveQueue = slot;
+  return slot;
+}
+
 export interface ToolCallContext {
   store: EventStore;
   projectDir: string | null;
@@ -269,6 +277,7 @@ export async function executeToolCall(ctx: ToolCallContext, agentName: string, c
         return 'web_search requires the BRAVE_API_KEY environment variable to be set. Get a free key at https://brave.com/search/api/';
       }
       try {
+        await braveThrottle();
         const url = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=${Math.min(count, 10)}`;
         const resp = await fetch(url, {
           headers: { Accept: 'application/json', 'X-Subscription-Token': apiKey },

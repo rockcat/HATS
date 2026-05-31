@@ -72,9 +72,9 @@ export function buildAgentStatuses(
   agentActivity: Map<string, { activity: string; talkingTo?: string }>,
 ): AgentStatus[] {
   return orchestrator.listAgents().map((a) => {
-    const extra = agentActivity.get(a.name);
+    const extra = agentActivity.get(a.id);
     return {
-      name: a.name, hatType: a.hatType, state: a.state,
+      id: a.id, name: a.name, hatType: a.hatType, state: a.state,
       activity: extra?.activity ?? stateLabel(a.state),
       talkingTo: extra?.talkingTo,
       model: a.config.model, provider: a.config.provider.name,

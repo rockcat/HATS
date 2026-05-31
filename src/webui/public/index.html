@@ -86,6 +86,8 @@
         <button class="panel-tab" data-tab="requests">Requests <span id="requests-badge" class="tab-badge" hidden></span></button>
         <button class="panel-tab" data-tab="allowlist">Email Permissions <span id="allowlist-badge" class="tab-badge" hidden></span></button>
         <button class="panel-tab" data-tab="files">Project Files</button>
+        <button class="panel-tab" data-tab="library">Agent Library</button>
+        <button class="panel-tab" data-tab="schedules">Schedules</button>
         <button id="mcp-catalogue-edit-btn" class="panel-header-action-btn" title="Edit MCP catalogue" hidden><img src="/assets/settings.svg" class="svg-icon" alt="Edit catalogue"></button>
         <button class="panel-expand-btn" data-panel="tools-panel" title="Expand"><img src="/assets/expand.svg" class="svg-icon" alt="Expand"></button>
       </div>
@@ -107,6 +109,26 @@
           <input type="text" id="cli-input" placeholder="Type a command or message…" autocomplete="off" spellcheck="false">
           <button id="cli-mic-btn" class="mic-btn" title="Hold to speak (Whisper)"><img src="/assets/mic.svg" class="svg-icon" alt="Mic"></button>
         </div>
+      </div>
+      <div id="library-content" class="tab-pane library-pane">
+        <div class="library-toolbar">
+          <button id="library-new-agent-btn" class="panel-add-btn">+ New Agent</button>
+        </div>
+        <div id="library-agent-list" class="library-agent-list"></div>
+      </div>
+      <div id="schedules-content" class="tab-pane schedules-pane">
+        <div id="schedules-list" class="schedules-list"></div>
+        <details class="schedules-add-section" open>
+          <summary class="schedules-add-summary">New Scheduled Action</summary>
+          <div class="schedules-add-form">
+            <input type="text" id="schedules-add-label" class="schedules-input" placeholder="Label (e.g. Check inbox)">
+            <textarea id="schedules-add-description" class="schedules-textarea" placeholder="What should the agent do when this fires?" rows="2"></textarea>
+            <div class="schedules-add-footer">
+              <input type="number" id="schedules-add-interval" class="schedules-input schedules-interval" placeholder="Interval (mins, blank=once)" min="1" step="1">
+              <button id="schedules-add-btn" type="button" class="schedules-add-btn">+ Add</button>
+            </div>
+          </div>
+        </details>
       </div>
       <div id="files-content" class="tab-pane files-pane">
         <div class="files-toolbar files-toolbar--top">
@@ -275,75 +297,20 @@
         <button id="agent-detail-close" class="modal-close" title="Close"><img src="/assets/close.svg" class="svg-icon" alt="Close"></button>
       </div>
       <div class="agent-config-row">
-        <details class="agent-config-section" open>
-          <summary class="agent-config-section-summary">Configuration</summary>
-        <div class="agent-config-line">
-          <label class="agent-config-label">Hats</label>
-          <div id="agent-config-hat-group" class="hat-check-group"></div>
-        </div>
-        <div class="agent-config-line">
-          <label class="agent-config-label">Persona</label>
-          <select id="agent-config-persona" class="agent-config-select" title="Pick a built-in persona to auto-fill name, description and backstory">
-            <option value="">— custom —</option>
-          </select>
-        </div>
-        <div class="agent-config-line">
-          <label class="agent-config-label">Visual desc.</label>
-          <input type="text" id="agent-config-visual-desc" class="agent-config-input" placeholder="e.g. calm, precise, thoughtful pauses" autocomplete="off">
-        </div>
-        <div class="agent-config-line">
-          <label class="agent-config-label">Backstory</label>
-          <textarea id="agent-config-backstory" class="agent-config-input agent-config-textarea" placeholder="A sentence or two about the agent's background…" rows="2" autocomplete="off"></textarea>
-        </div>
-        <div class="agent-config-line">
-          <label class="agent-config-label">Avatar</label>
-          <select id="agent-config-avatar" class="agent-config-select agent-config-avatar-select" title="Avatar"></select>
-        </div>
-        <div class="agent-config-line">
-          <label class="agent-config-label">Background</label>
-          <select id="agent-config-background" class="agent-config-select agent-config-background-select" title="Background"></select>
-          <button id="agent-config-gen-bg" class="agent-config-btn" title="Generate a new background with DALL-E 3">Generate…</button>
-        </div>
-        <div class="agent-config-line">
-          <label class="agent-config-label">Voice</label>
-          <select id="agent-config-voice"  class="agent-config-select agent-config-voice-select"  title="Voice"></select>
-          <select id="agent-config-speaker" class="agent-config-select agent-config-speaker-select" title="Speaker" hidden></select>
-          <button id="agent-config-preview-voice" class="agent-config-btn agent-config-preview-btn" title="Play a short voice sample"><img src="/assets/play.svg" class="svg-icon" alt="Play"></button>
-        </div>
-        <div class="agent-config-line">
-          <label class="agent-config-label">Specialisation</label>
-          <select id="agent-config-specialisation" class="agent-config-select">
-            <option value="">— none —</option>
-            <option value="__custom__">Custom…</option>
-          </select>
-          <input type="text" id="agent-config-specialisation-custom" class="agent-config-input" placeholder="Type your specialisation…" autocomplete="off" hidden>
-        </div>
         <div class="agent-config-line">
           <label class="agent-config-label">Email</label>
           <input type="email" id="agent-config-email" class="agent-config-input" placeholder="agent@example.com" autocomplete="off">
-        </div>
-        <div class="agent-config-line">
-          <label class="agent-config-label">Model</label>
-          <select id="agent-config-provider" class="agent-config-select agent-config-provider-select"></select>
-          <select id="agent-config-model"    class="agent-config-select agent-config-model-select"></select>
-          <input  id="agent-config-model-custom" type="text" class="agent-config-input agent-config-model-input" placeholder="e.g. llama3.2" autocomplete="off" hidden>
-        </div>
-        <div class="agent-config-line agent-config-pricing-line" id="agent-config-pricing-line" hidden>
-          <label class="agent-config-label"></label>
-          <span id="agent-config-pricing-hint" class="agent-config-pricing-hint"></span>
         </div>
         <div class="agent-config-line agent-config-mcp-line" id="agent-config-mcp-line" hidden>
           <label class="agent-config-label">Shared MCPs</label>
           <div id="agent-config-mcp-list" class="agent-config-mcp-list"></div>
         </div>
-        </details>
         <details class="agent-config-details" id="agent-config-personal-mcp-line" hidden>
           <summary class="agent-config-details-summary">Personal MCPs</summary>
           <div id="agent-config-personal-mcp-list" class="agent-config-personal-mcp-list"></div>
         </details>
         <div class="agent-config-line agent-config-line--btns">
           <label class="agent-config-label"></label>
-          <button id="agent-config-stop-voice" class="agent-config-btn agent-config-stop-btn" title="Stop voice playback">Stop talking</button>
           <button id="agent-config-preview-prompt" class="agent-config-btn" title="Preview the system prompt this agent will use">Prompt…</button>
           <button id="agent-config-apply" class="agent-config-btn">Apply</button>
         </div>
@@ -359,18 +326,6 @@
           <button id="agent-detail-send" class="agent-detail-send-btn">Send</button>
         </div>
       </div>
-      <details id="agent-detail-agenda" class="agent-agenda">
-        <summary class="agent-agenda-summary">Scheduled Actions <span id="agent-agenda-count" class="agent-agenda-count"></span></summary>
-        <div id="agent-agenda-list" class="agent-agenda-list"></div>
-        <div class="agent-agenda-add">
-          <input type="text"   id="agenda-add-label"    class="agent-agenda-input" placeholder="Label (e.g. Check inbox)">
-          <textarea id="agenda-add-description" class="agent-agenda-desc-input" placeholder="What should the agent do when this fires?" rows="2"></textarea>
-          <div class="agent-agenda-add-footer">
-            <input type="number" id="agenda-add-interval" class="agent-agenda-input agent-agenda-interval" placeholder="Mins (blank=once)" min="1" step="1">
-            <button id="agenda-add-btn" type="button" class="agent-agenda-add-btn">+ Add</button>
-          </div>
-        </div>
-      </details>
     </div>
     <!-- Right: system prompt panel (shown alongside when Prompt… is clicked) -->
     <div id="agent-prompt-preview" class="agent-prompt-preview" hidden>
@@ -536,12 +491,20 @@
                 <label class="mcp-ef-label">URL</label>
                 <input type="text" id="mcp-ef-url-endpoint" class="mcp-ef-input mcp-ef-mono" placeholder="https://..." autocomplete="off" spellcheck="false">
               </div>
+              <div class="mcp-ef-group" id="mcp-ef-headers-group" hidden>
+                <label class="mcp-ef-label">Headers <span class="mcp-ef-hint">(Key: Value, one per line — use ${VAR} for env/credentials)</span></label>
+                <textarea id="mcp-ef-headers" class="mcp-ef-input mcp-ef-textarea mcp-ef-mono" rows="3" placeholder="Authorization: Bearer ${MY_TOKEN}" spellcheck="false"></textarea>
+              </div>
             </div>
             <div class="mcp-ef-row">
               <label class="mcp-ef-checkbox-label">
-                <input type="checkbox" id="mcp-ef-personal"> Per-agent (personal)
+                <input type="checkbox" id="mcp-ef-users-human"> Human (shared account)
+              </label>
+              <label class="mcp-ef-checkbox-label">
+                <input type="checkbox" id="mcp-ef-users-agent"> Agent (per-agent credentials)
               </label>
             </div>
+            <div id="mcp-ef-features-container" hidden></div>
             <div class="mcp-ef-group">
               <label class="mcp-ef-label">Notes <span class="mcp-ef-hint">(setup instructions)</span></label>
               <textarea id="mcp-ef-notes" class="mcp-ef-input mcp-ef-textarea" rows="2" placeholder="Optional setup notes shown to users…"></textarea>
@@ -561,29 +524,58 @@
     </div>
   </div>
 
-  <!-- Add Agent Modal -->
+  <!-- Add / Edit Agent Modal -->
   <div id="add-agent-modal" class="modal-overlay" hidden>
-    <div class="modal" role="dialog" aria-modal="true">
+    <div class="modal lib-editor-modal" role="dialog" aria-modal="true">
       <div class="modal-header">
-        <span class="modal-ticket-id">Add Agent</span>
+        <span id="add-agent-modal-title" class="modal-ticket-id">Add Agent</span>
         <button class="modal-close" id="add-agent-close" title="Close"><img src="/assets/close.svg" class="svg-icon" alt="Close"></button>
       </div>
-      <div class="modal-body">
-        <div class="field-row">
-          <div class="field-group">
-            <label class="field-label">Hat</label>
-            <div id="add-agent-hat-group" class="hat-check-group hat-check-group--modal"></div>
+      <div class="modal-body lib-editor-body">
+
+        <!-- Top section: key fields left, square preview right -->
+        <div class="lib-editor-top">
+          <div class="lib-editor-top-fields">
+            <div class="field-group" id="add-agent-persona-group">
+              <label class="field-label">Persona <span class="field-hint">(optional)</span></label>
+              <select id="add-agent-persona" class="modal-select" title="Pick a built-in persona to auto-fill name and backstory">
+                <option value="">— custom —</option>
+              </select>
+            </div>
+            <div class="field-group">
+              <label class="field-label">Hat</label>
+              <div id="add-agent-hat-group" class="hat-check-group hat-check-group--modal"></div>
+            </div>
+            <div class="field-group">
+              <label class="field-label">Name</label>
+              <input type="text" id="add-agent-name" class="modal-input" placeholder="e.g. Amara, Kenji, Priya…">
+            </div>
+            <div class="field-group">
+              <label class="field-label">Avatar</label>
+              <select id="add-agent-avatar" class="modal-select"></select>
+            </div>
+            <div class="field-group">
+              <label class="field-label">Background</label>
+              <div style="display:flex;gap:6px">
+                <select id="add-agent-background" class="modal-select" style="flex:1"></select>
+                <button id="add-agent-gen-bg" type="button" class="modal-btn secondary" style="flex:none;font-size:11px;padding:4px 8px">Gen…</button>
+              </div>
+            </div>
           </div>
-          <div class="field-group">
-            <label class="field-label">Persona <span class="field-hint">(optional)</span></label>
-            <select id="add-agent-persona" class="modal-select" title="Pick a built-in persona to auto-fill name and backstory">
-              <option value="">— custom —</option>
-            </select>
+          <div id="lib-avatar-panel" class="lib-avatar-panel" hidden>
+            <canvas id="lib-avatar-canvas" class="lib-avatar-canvas"></canvas>
+            <span class="lib-avatar-hint">No avatar</span>
           </div>
         </div>
+
+        <!-- Remaining fields -->
         <div class="field-group">
-          <label class="field-label">Name</label>
-          <input type="text" id="add-agent-name" class="modal-input" placeholder="e.g. Amara, Kenji, Priya…">
+          <label class="field-label">Visual description <span class="field-hint">(optional)</span></label>
+          <input type="text" id="add-agent-visual-desc" class="modal-input" placeholder="e.g. calm, precise, thoughtful pauses" autocomplete="off">
+        </div>
+        <div class="field-group">
+          <label class="field-label">Backstory <span class="field-hint">(optional)</span></label>
+          <textarea id="add-agent-backstory" class="modal-textarea" rows="2" placeholder="A sentence or two about the agent's background…"></textarea>
         </div>
         <div class="field-group">
           <label class="field-label">Specialisation <span class="field-hint">(optional)</span></label>
@@ -603,6 +595,19 @@
             <select id="add-agent-model" class="modal-select"></select>
           </div>
         </div>
+        <div class="field-group">
+          <label class="field-label">Voice <span class="field-hint">(optional)</span></label>
+          <div style="display:flex;gap:6px">
+            <select id="add-agent-voice" class="modal-select" style="flex:1"></select>
+            <select id="add-agent-speaker" class="modal-select" style="flex:1" hidden></select>
+            <button id="add-agent-preview-voice" type="button" class="modal-btn secondary" style="flex:none;padding:4px 8px" title="Preview voice"><img src="/assets/play.svg" class="svg-icon" alt="Play"></button>
+          </div>
+        </div>
+        <div class="field-group" id="add-agent-schedules-section" hidden>
+          <label class="field-label">Scheduled actions</label>
+          <div id="add-agent-schedules-list" class="add-agent-schedules-list"></div>
+        </div>
+
       </div>
       <div class="modal-footer">
         <span id="add-agent-error" class="modal-error"></span>
@@ -840,6 +845,7 @@
       </div>
     </div>
   </div>
+
 
 <script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
   <script src="app.js"></script>

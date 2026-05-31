@@ -29,6 +29,8 @@ import { GeminiProvider } from './src/providers/gemini.js';
 import { HatType } from './src/hats/types.js';
 import { getRandomPersona } from './src/hats/personas.js';
 import { initCatalogue } from './src/mcp/catalogue-store.js';
+import { AgentStore } from './src/api/agent-store.js';
+import { ScheduledActionStore } from './src/api/scheduled-action-store.js';
 
 // ── Project layout ────────────────────────────────────────────────────────────
 
@@ -73,7 +75,7 @@ function providerFactory(name: string) {
 // ── Project loader factory ────────────────────────────────────────────────────
 // This is passed to APIServer so it can hot-switch projects without restarting.
 
-function makeProjectLoader(): ProjectLoader {
+function makeProjectLoader(agentStore: AgentStore, _actionStore: ScheduledActionStore): ProjectLoader {
   return async (projectDir: string, kanbanFile: string, stateFile: string) => {
     const eventsFile   = path.join(projectDir, 'team-events.jsonl');
     const meetingsFile = path.join(projectDir, 'meetings.json');
@@ -83,6 +85,7 @@ function makeProjectLoader(): ProjectLoader {
       projectsRoot: projectDir,
       humanName:    'Boss',
     });
+    orchestrator.setAgentStore(agentStore);
     const agendaFile = path.join(projectDir, 'agent-agenda.json');
     await orchestrator.init();
     await orchestrator.initMeetingStore(meetingsFile);
@@ -118,16 +121,16 @@ function makeProjectLoader(): ProjectLoader {
       const blueIdentity = getRandomPersona(HatType.Blue);
       orchestrator.registerAgent({
         identity: blueIdentity,
-        hatType: HatType.Blue, provider: claude, model,
+        hatType: [HatType.Blue], provider: claude, model,
       });
 
       // ── Non-blue agent pool — one per hat, three chosen at random ─────────
       const agentPool = [
-        { identity: getRandomPersona(HatType.White),  hatType: HatType.White  },
-        { identity: getRandomPersona(HatType.Black),  hatType: HatType.Black  },
-        { identity: getRandomPersona(HatType.Yellow), hatType: HatType.Yellow },
-        { identity: getRandomPersona(HatType.Green),  hatType: HatType.Green  },
-        { identity: getRandomPersona(HatType.Red),    hatType: HatType.Red    },
+        { identity: getRandomPersona(HatType.White),  hatType: [HatType.White]  },
+        { identity: getRandomPersona(HatType.Black),  hatType: [HatType.Black]  },
+        { identity: getRandomPersona(HatType.Yellow), hatType: [HatType.Yellow] },
+        { identity: getRandomPersona(HatType.Green),  hatType: [HatType.Green]  },
+        { identity: getRandomPersona(HatType.Red),    hatType: [HatType.Red]    },
       ];
 
       // Shuffle and pick 3 — each has a distinct hat type so the team stays diverse
@@ -167,7 +170,12 @@ async function main() {
   console.log(`[Team] Folder  : ${PROJECT_DIR}`);
   writeFileSync(path.join(PROJECTS_ROOT, 'last-project.json'), JSON.stringify({ id: PROJECT_ID }));
 
-  const loader = makeProjectLoader();
+  const agentStore  = new AgentStore(path.join(PROJECTS_ROOT, 'agents.json'));
+  const actionStore = new ScheduledActionStore(path.join(PROJECTS_ROOT, 'scheduled-actions.json'));
+  await agentStore.load();
+  await actionStore.load();
+
+  const loader = makeProjectLoader(agentStore, actionStore);
   const orchestrator = await loader(PROJECT_DIR, KANBAN_FILE, STATE_FILE);
 
   console.log(`[Team] Events → ${EVENTS_FILE}`);
@@ -185,6 +193,8 @@ async function main() {
     projectDir:     PROJECT_DIR,
     projectsRoot:   PROJECTS_ROOT,
     projectLoader:  loader,
+    agentStore,
+    actionStore,
   });
   api.start();
 
@@ -193,7 +203,7 @@ async function main() {
     process.exit(0);
   });
 
-  const blueHat = orchestrator.listAgents().find(a => a.hatType === HatType.Blue);
+  const blueHat = orchestrator.listAgents().find(a => a.hatType.includes(HatType.Blue));
   const cli = new CLIInterface(orchestrator, blueHat?.name ?? 'Amara', STATE_FILE, providerFactory);
 
   // Keep the CLI in sync when the API server switches projects

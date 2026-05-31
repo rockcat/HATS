@@ -6,7 +6,7 @@ import { HumanRequest } from '../orchestrator/types.js';
 import { HumanRequestStore } from './human-request-store.js';
 import { StoredEvent } from '../store/event-store.js';
 import { Board } from '../mcp/kanban/types.js';
-import { MCPCatalogueEntry } from '../mcp/mcp-catalogue.js';
+import { MCPCatalogueEntry, isAgentMcp } from '../mcp/mcp-catalogue.js';
 import { getCatalogue } from '../mcp/catalogue-store.js';
 import { debugState } from '../providers/debug-state.js';
 import { HatType } from '../hats/types.js';
@@ -17,6 +17,8 @@ import { getPricingTable, FREE_PROVIDERS } from '../providers/pricing.js';
 import { AnthropicProvider } from '../providers/anthropic.js';
 import { makeProvider, KNOWN_PROVIDERS, probeLocalLLM, getCachedModels, getModelCacheEntry, clearModelCache } from './providers.js';
 import { AgentStatus } from './project-manager.js';
+import { AgentStore } from './agent-store.js';
+import { ScheduledActionStore } from './scheduled-action-store.js';
 
 export interface AgentRouterDeps {
   getOrchestrator(): TeamOrchestrator;
@@ -37,6 +39,8 @@ export interface AgentRouterDeps {
   resolveMCPConfig(id: string, entry: import('../mcp/mcp-catalogue.js').MCPCatalogueEntry): ReturnType<typeof import('../mcp/mcp-catalogue.js').resolveConfig>;
   saveMCPEnabled(): Promise<void>;
   enabledMCPIds: Set<string>;
+  getAgentStore(): AgentStore | null;
+  getActionStore(): ScheduledActionStore | null;
   sseBroadcast(data: object): void;
   json(res: ServerResponse, status: number, body: unknown): void;
   readBody(req: IncomingMessage): Promise<string>;
@@ -56,7 +60,9 @@ export class AgentRouter {
 
     if (pathname.startsWith('/api/agents/') && pathname.endsWith('/feed')) {
       const name = decodeURIComponent(pathname.slice('/api/agents/'.length, -'/feed'.length));
-      json(res, 200, agentFeeds.get(name.toLowerCase()) ?? []);
+      const id   = this.deps.resolveAgentName(name);
+      const agent = orch.listAgents().find(a => a.name === id) ?? orch.findById(name);
+      json(res, 200, (agent ? agentFeeds.get(agent.id) : null) ?? []);
       return true;
     }
 
@@ -126,10 +132,14 @@ export class AgentRouter {
       try {
         const resolved = resolveAgentName(oldName);
         orch.renameAgent(resolved, newName.trim());
-        const ticket = agentTicketMap.get(resolved.toLowerCase());
-        if (ticket) { agentTicketMap.delete(resolved.toLowerCase()); agentTicketMap.set(newName.trim().toLowerCase(), ticket); }
-        const activity = agentActivity.get(resolved);
-        if (activity) { agentActivity.delete(resolved); agentActivity.set(newName.trim(), activity); }
+        // Maps are keyed by stable agent ID — no migration needed on rename.
+        // Sync new name to global agent store if present.
+        const agentStore = this.deps.getAgentStore();
+        const agent = orch.listAgents().find(a => a.name === newName.trim());
+        if (agentStore && agent) {
+          const def = agentStore.get(agent.id);
+          if (def) agentStore.addOrUpdate({ ...def, identity: { ...def.identity, name: newName.trim() } }).catch(() => {});
+        }
         sseBroadcast({ type: 'agent_update', agents: this.deps.buildAgentStatuses() });
         saveCurrentState().catch(() => {});
         json(res, 200, { ok: true, name: newName.trim() });
@@ -250,6 +260,7 @@ export class AgentRouter {
       const agentName = decodeURIComponent(pathname.slice('/api/agents/'.length));
       try {
         const resolved = resolveAgentName(agentName);
+        const agentId  = orch.agentIdForName(resolved) ?? resolved;
         orch.removeAgent(resolved);
         const kanbanPath = this.deps.getKanbanPath();
         if (kanbanPath) {
@@ -264,10 +275,10 @@ export class AgentRouter {
             if (changed) await this.deps.writeKanban(board);
           } catch { /* non-fatal */ }
         }
-        agentActivity.delete(resolved); agentFeeds.delete(resolved.toLowerCase());
-        const timer = talkingTimers.get(resolved);
-        if (timer) { clearTimeout(timer); talkingTimers.delete(resolved); }
-        agentTicketMap.delete(resolved.toLowerCase());
+        agentActivity.delete(agentId); agentFeeds.delete(agentId);
+        const timer = talkingTimers.get(agentId);
+        if (timer) { clearTimeout(timer); talkingTimers.delete(agentId); }
+        agentTicketMap.delete(agentId);
         sseBroadcast({ type: 'agent_update', agents: this.deps.buildAgentStatuses() }); saveCurrentState().catch(() => {}); json(res, 200, { ok: true });
       } catch (err) { json(res, 404, { error: (err as Error).message }); }
       return true;
@@ -277,7 +288,7 @@ export class AgentRouter {
       const catalogue = getCatalogue().map(entry => ({
         ...entry,
         enabled: orch.hasMCPServer(entry.id),
-        envStatus: (entry.envVars ?? []).map(v => ({ name: v, present: !!process.env[v] })),
+        envStatus: (entry.envVars ?? []).map(v => { const n = typeof v === 'string' ? v : v.name; return { name: n, present: !!process.env[n] }; }),
       }));
       json(res, 200, catalogue);
       return true;
@@ -338,7 +349,7 @@ export class AgentRouter {
       await humanRequestStore.respond(reqId, response.trim());
       const replyContent = `You asked: "${request.message}"\n\nHuman's answer: ${response.trim()}\n\nNow continue your work based on this answer.`;
       await orch.humanReply(request.agentName, replyContent);
-      const ticketId = request.relatedTicketId ?? agentTicketMap.get(request.agentName.toLowerCase());
+      const ticketId = request.relatedTicketId ?? agentTicketMap.get(orch.agentIdForName(request.agentName) ?? request.agentName);
       if (ticketId) this.deps.updateKanbanColumn(ticketId, 'in_progress').catch(() => {});
       sseBroadcast({ type: 'requests_update', requests: this.deps.buildRequestsList() });
       sseBroadcast({ type: 'agent_update',   agents:   this.deps.buildAgentStatuses() });
@@ -424,8 +435,9 @@ export class AgentRouter {
       const resolved  = resolveAgentName(agentName);
       const agent     = orch.getAgent(resolved);
       if (!agent) { json(res, 404, { error: `Agent "${agentName}" not found` }); return true; }
-      const savedCreds   = orch.getPersonalMcpCredentials(resolved);
-      const personalEntries: MCPCatalogueEntry[] = getCatalogue().filter(e => e.personal);
+      const savedCreds = orch.getPersonalMcpCredentials(resolved);
+      const disabled   = orch.getDisabledPersonalMcpServers(resolved);
+      const personalEntries: MCPCatalogueEntry[] = getCatalogue().filter(isAgentMcp);
       const result = personalEntries.map(e => ({
         id:          e.id,
         name:        e.name,
@@ -434,6 +446,7 @@ export class AgentRouter {
         envVars:     e.envVars ?? [],
         notes:       e.notes,
         configured:  !!savedCreds[e.id],
+        active:      !!savedCreds[e.id] && !disabled.has(e.id),
         credentials: savedCreds[e.id] ?? {},
       }));
       json(res, 200, result);
@@ -488,6 +501,209 @@ export class AgentRouter {
         saveCurrentState().catch(() => {});
         json(res, 200, { ok: true });
       } catch (err) { json(res, 404, { error: (err as Error).message }); }
+      return true;
+    }
+
+    // ── Global agent library ───────────────────────────────────────────────
+
+    if (pathname === '/api/global-agents' && method === 'GET') {
+      const store = this.deps.getAgentStore();
+      json(res, 200, store ? store.list() : []);
+      return true;
+    }
+
+    if (pathname === '/api/global-agents' && method === 'POST') {
+      const store = this.deps.getAgentStore();
+      if (!store) { json(res, 503, { error: 'Agent store not ready' }); return true; }
+      const body = await readBody(req);
+      const { name, hatTypes: rawHatTypes, visualDescription, specialisation, backstory, provider: providerName, model } =
+        JSON.parse(body) as { name: string; hatTypes?: string[]; visualDescription?: string; specialisation?: string; backstory?: string; provider?: string; model?: string };
+      if (!name?.trim()) { json(res, 400, { error: 'name is required' }); return true; }
+      const validHats = new Set(['none', 'white', 'red', 'black', 'yellow', 'green', 'blue']);
+      const hatTypes  = rawHatTypes?.length ? rawHatTypes : ['none'];
+      if (hatTypes.some(h => !validHats.has(h))) { json(res, 400, { error: `Invalid hat type` }); return true; }
+      const resolvedProvider = providerName ?? 'anthropic';
+      const resolvedModel    = model?.trim() || (process.env['ANTHROPIC_MODEL'] ?? 'claude-haiku-4-5-20251001');
+      const { v4: uuidv4 } = await import('uuid');
+      const def = await store.addOrUpdate({
+        id: uuidv4(),
+        identity: { name: name.trim(), visualDescription: visualDescription?.trim() || 'a focused, capable team member', specialisation: specialisation?.trim() || undefined, backstory: backstory?.trim() || undefined },
+        hatType: hatTypes as import('../hats/types.js').HatType[],
+        model: resolvedModel, providerName: resolvedProvider,
+        scheduledActionIds: [],
+      });
+      json(res, 201, def);
+      return true;
+    }
+
+    // Add a global agent into the current project's running team
+    if (pathname === '/api/project/add-agent' && method === 'POST') {
+      const agentStore = this.deps.getAgentStore();
+      if (!agentStore) { json(res, 503, { error: 'Agent store not ready' }); return true; }
+      const body    = await readBody(req);
+      const { agentId } = JSON.parse(body) as { agentId: string };
+      const def = agentStore.get(agentId);
+      if (!def) { json(res, 404, { error: 'Agent not found in library' }); return true; }
+      if (orch.listAgents().some(a => a.id === agentId)) {
+        json(res, 409, { error: 'Agent is already in this project' }); return true;
+      }
+      const provider = makeProvider(def.providerName) ?? new AnthropicProvider();
+      orch.registerAgent({ id: def.id, identity: def.identity, hatType: def.hatType, provider, model: def.model, enabledMcpServers: def.enabledMcpServers, personalMcpCredentials: def.personalMcpCredentials });
+      sseBroadcast({ type: 'agent_update', agents: this.deps.buildAgentStatuses() });
+      saveCurrentState().catch(() => {});
+      json(res, 200, { ok: true });
+      return true;
+    }
+
+    if (pathname.match(/^\/api\/global-agents\/[^/]+\/scheduled-actions$/) && method === 'PUT') {
+      const agentId    = decodeURIComponent(pathname.slice('/api/global-agents/'.length, -'/scheduled-actions'.length));
+      const agentStore = this.deps.getAgentStore();
+      const actionStore = this.deps.getActionStore();
+      if (!agentStore) { json(res, 503, { error: 'Agent store not ready' }); return true; }
+      const def = agentStore.get(agentId);
+      if (!def) { json(res, 404, { error: 'Agent not found' }); return true; }
+      const body = await readBody(req);
+      const { scheduledActionIds } = JSON.parse(body) as { scheduledActionIds: string[] };
+      const ids = scheduledActionIds ?? [];
+      await agentStore.addOrUpdate({ ...def, scheduledActionIds: ids });
+      // Seed runtime agenda entries for newly assigned actions
+      if (actionStore) {
+        const agendaStore = orch.getAgendaStore();
+        const agent       = orch.listAgents().find(a => a.id === agentId);
+        if (agendaStore && agent) {
+          const existing = agendaStore.list(agent.name).map(e => (e as { actionId?: string }).actionId).filter(Boolean);
+          for (const actionId of ids) {
+            if (existing.includes(actionId)) continue;
+            const actionDef = actionStore.get(actionId);
+            if (!actionDef) continue;
+            await agendaStore.add({
+              agentName: agent.name,
+              label: actionDef.label,
+              description: actionDef.description,
+              intervalSeconds: actionDef.intervalSeconds,
+            } as Parameters<typeof agendaStore.add>[0]);
+          }
+        }
+      }
+      json(res, 200, { ok: true });
+      return true;
+    }
+
+    if (pathname.match(/^\/api\/global-agents\/[^/]+$/) && method === 'PATCH') {
+      const agentId = decodeURIComponent(pathname.slice('/api/global-agents/'.length));
+      const store   = this.deps.getAgentStore();
+      if (!store) { json(res, 503, { error: 'Agent store not ready' }); return true; }
+      const def = store.get(agentId);
+      if (!def) { json(res, 404, { error: 'Agent not found' }); return true; }
+      const body = await readBody(req);
+      const patch = JSON.parse(body) as {
+        name?: string; hatTypes?: string[]; visualDescription?: string;
+        backstory?: string; specialisation?: string;
+        provider?: string; model?: string;
+        avatar?: string | null; voice?: string | null; speakerName?: string | null; background?: string | null;
+      };
+      const validHats = new Set(['none', 'white', 'red', 'black', 'yellow', 'green', 'blue']);
+      if (patch.hatTypes && patch.hatTypes.some(h => !validHats.has(h))) {
+        json(res, 400, { error: 'Invalid hat type' }); return true;
+      }
+      const updated = {
+        ...def,
+        identity: {
+          ...def.identity,
+          ...(patch.name              !== undefined && { name: patch.name.trim() }),
+          ...(patch.visualDescription !== undefined && { visualDescription: patch.visualDescription.trim() || undefined }),
+          ...(patch.backstory         !== undefined && { backstory: patch.backstory.trim() || undefined }),
+          ...(patch.specialisation    !== undefined && { specialisation: patch.specialisation.trim() || undefined }),
+          ...(patch.avatar            !== undefined && { avatar: patch.avatar ?? undefined }),
+          ...(patch.voice             !== undefined && { voice: patch.voice ?? undefined }),
+          ...(patch.speakerName       !== undefined && { speakerName: patch.speakerName ?? undefined }),
+          ...(patch.background        !== undefined && { background: patch.background ?? undefined }),
+        },
+        ...(patch.hatTypes  !== undefined && { hatType: patch.hatTypes as import('../hats/types.js').HatType[] }),
+        ...(patch.provider  !== undefined && { providerName: patch.provider }),
+        ...(patch.model     !== undefined && { model: patch.model.trim() }),
+      };
+      await store.addOrUpdate(updated);
+      // Sync all changed fields to the running agent if it's in the current project
+      const runningAgent = orch.listAgents().find(a => a.id === agentId);
+      if (runningAgent) {
+        const rn = runningAgent.name;
+        if (patch.name && patch.name.trim() !== rn) {
+          try { orch.renameAgent(rn, patch.name.trim()); } catch { /* non-fatal */ }
+        }
+        if (patch.hatTypes)                         orch.changeAgentHat(rn, updated.hatType);
+        if (patch.visualDescription !== undefined || patch.backstory !== undefined)
+          orch.updateAgentIdentity(rn, updated.identity.visualDescription, updated.identity.backstory);
+        if (patch.specialisation !== undefined)     orch.updateAgentSpecialisation(rn, updated.identity.specialisation);
+        if (patch.avatar !== undefined)             orch.updateAgentAvatar(rn, updated.identity.avatar);
+        if (patch.background !== undefined)         orch.updateAgentBackground(rn, updated.identity.background);
+        if (patch.voice !== undefined || patch.speakerName !== undefined)
+          orch.updateAgentVoice(rn, updated.identity.voice, updated.identity.speakerName);
+        if (patch.provider !== undefined || patch.model !== undefined) {
+          const provider = makeProvider(updated.providerName) ?? runningAgent.config.provider;
+          orch.updateAgentConfig(rn, provider, updated.model);
+        }
+      }
+      saveCurrentState().catch(() => {});
+      sseBroadcast({ type: 'agent_update', agents: this.deps.buildAgentStatuses() });
+      json(res, 200, updated);
+      return true;
+    }
+
+    if (pathname.match(/^\/api\/global-agents\/[^/]+$/) && method === 'DELETE') {
+      const agentId = decodeURIComponent(pathname.slice('/api/global-agents/'.length));
+      const store   = this.deps.getAgentStore();
+      if (!store) { json(res, 503, { error: 'Agent store not ready' }); return true; }
+      const ok = await store.remove(agentId);
+      json(res, ok ? 200 : 404, ok ? { ok: true } : { error: 'Agent not found in library' });
+      return true;
+    }
+
+    // ── Global scheduled actions ───────────────────────────────────────────
+
+    if (pathname === '/api/scheduled-actions' && method === 'GET') {
+      const store = this.deps.getActionStore();
+      json(res, 200, store ? store.list() : []);
+      return true;
+    }
+
+    if (pathname === '/api/scheduled-actions' && method === 'POST') {
+      const store = this.deps.getActionStore();
+      if (!store) { json(res, 503, { error: 'Action store not ready' }); return true; }
+      const body = await readBody(req);
+      const { label, description, intervalMinutes } = JSON.parse(body) as { label: string; description: string; intervalMinutes?: number };
+      if (!label?.trim() || !description?.trim()) {
+        json(res, 400, { error: 'label and description are required' }); return true;
+      }
+      const intervalSeconds = (intervalMinutes && intervalMinutes > 0) ? Math.round(intervalMinutes * 60) : null;
+      const def = await store.add({ label: label.trim(), description: description.trim(), intervalSeconds });
+      json(res, 201, def);
+      return true;
+    }
+
+    if (pathname.match(/^\/api\/scheduled-actions\/[^/]+$/) && method === 'PATCH') {
+      const actionId = decodeURIComponent(pathname.slice('/api/scheduled-actions/'.length));
+      const store    = this.deps.getActionStore();
+      if (!store) { json(res, 503, { error: 'Action store not ready' }); return true; }
+      const body = await readBody(req);
+      const { label, description, intervalMinutes } = JSON.parse(body) as { label?: string; description?: string; intervalMinutes?: number | null };
+      const patch: Record<string, unknown> = {};
+      if (label       !== undefined) patch['label']           = label.trim();
+      if (description !== undefined) patch['description']     = description.trim();
+      if (intervalMinutes !== undefined) {
+        patch['intervalSeconds'] = (intervalMinutes && intervalMinutes > 0) ? Math.round(intervalMinutes * 60) : null;
+      }
+      const updated = await store.update(actionId, patch as never);
+      json(res, updated ? 200 : 404, updated ?? { error: 'Action not found' });
+      return true;
+    }
+
+    if (pathname.match(/^\/api\/scheduled-actions\/[^/]+$/) && method === 'DELETE') {
+      const actionId = decodeURIComponent(pathname.slice('/api/scheduled-actions/'.length));
+      const store    = this.deps.getActionStore();
+      if (!store) { json(res, 503, { error: 'Action store not ready' }); return true; }
+      const ok = await store.remove(actionId);
+      json(res, ok ? 200 : 404, ok ? { ok: true } : { error: 'Action not found' });
       return true;
     }
 

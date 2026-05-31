@@ -1,6 +1,7 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { ToolDefinition } from '../providers/types.js';
 import { log } from '../util/logger.js';
 
@@ -16,7 +17,26 @@ export interface MCPServerConfigSSE {
   url: string;           // e.g. 'http://localhost:3001/sse'
 }
 
-export type MCPServerConfig = MCPServerConfigStdio | MCPServerConfigSSE;
+export interface MCPServerConfigHTTP {
+  transport: 'http';
+  url: string;           // e.g. 'https://service.googleapis.com/mcp/v1'
+  /** Request headers. Values may use ${VAR_NAME} to interpolate env / credentials. */
+  headers?: Record<string, string>;
+}
+
+export type MCPServerConfig = MCPServerConfigStdio | MCPServerConfigSSE | MCPServerConfigHTTP;
+
+/** Replace ${VAR_NAME} placeholders in header values from the supplied variable map. */
+export function interpolateHeaders(
+  headers: Record<string, string>,
+  vars: Record<string, string | undefined>,
+): Record<string, string> {
+  const result: Record<string, string> = {};
+  for (const [k, v] of Object.entries(headers)) {
+    result[k] = v.replace(/\$\{([^}]+)\}/g, (_, name) => vars[name] ?? '');
+  }
+  return result;
+}
 
 export interface MCPServerDef {
   name: string;          // short identifier, used for tool namespacing
@@ -43,13 +63,17 @@ export class MCPClient {
 
   async connect(config: MCPServerConfig): Promise<void> {
     this._def = { name: this.serverName, config };
-    const transport = config.transport === 'stdio'
-      ? new StdioClientTransport({
-          command: config.command,
-          args: config.args ?? [],
-          env: config.env,
-        })
-      : new SSEClientTransport(new URL(config.url));
+    let transport;
+    if (config.transport === 'stdio') {
+      transport = new StdioClientTransport({ command: config.command, args: config.args ?? [], env: config.env });
+    } else if (config.transport === 'http') {
+      const headers = config.headers
+        ? interpolateHeaders(config.headers, process.env as Record<string, string>)
+        : undefined;
+      transport = new StreamableHTTPClientTransport(new URL(config.url), headers ? { requestInit: { headers } } : undefined);
+    } else {
+      transport = new SSEClientTransport(new URL(config.url));
+    }
 
     await this.client.connect(transport);
     this.connected = true;

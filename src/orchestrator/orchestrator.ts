@@ -10,7 +10,8 @@ import { EventStore } from '../store/event-store.js';
 import { MCPRegistry } from '../mcp/mcp-registry.js';
 import { MCPServerDef } from '../mcp/mcp-client.js';
 import { Semaphore } from '../providers/semaphore.js';
-import { TeamSnapshot, AgentSnapshot, SNAPSHOT_VERSION } from '../store/team-snapshot.js';
+import { TeamSnapshot, TeamSnapshotV1, TeamSnapshotV2, AgentSnapshot, AgentDefinition, HistoryEntry } from '../store/team-snapshot.js';
+import { AgentStore } from '../api/agent-store.js';
 import { MeetingRoom } from './meeting-room.js';
 import { TeamMessage, Task, Meeting, MeetingTurn, ScheduledMeeting, MeetingType } from './types.js';
 import { MeetingStore } from './meeting-store.js';
@@ -25,7 +26,7 @@ import { buildToolExecutor, ToolCallContext } from './tool-executor.js';
 import { EmailAllowlistStore } from '../api/email-allowlist-store.js';
 import { AgendaStore } from '../api/agenda-store.js';
 import { AgendaRunner } from './agenda-runner.js';
-import { resolvePersonalConfig } from '../mcp/mcp-catalogue.js';
+import { resolvePersonalConfig, isAgentMcp } from '../mcp/mcp-catalogue.js';
 import { getCatalogue } from '../mcp/catalogue-store.js';
 import {
   startMeeting as startMeetingFn,
@@ -65,6 +66,7 @@ export class TeamOrchestrator {
   private agendaStoreRef: { store: AgendaStore | null } = { store: null };
   private agendaRunner: AgendaRunner | null = null;
   private agendaDefaultsSeeded = new Set<string>();
+  private agentStore: AgentStore | null = null;
   private rebuildTimer: ReturnType<typeof setTimeout> | null = null;
   private mcp = new MCPRegistry();
   private llmSemaphore: Semaphore;
@@ -105,6 +107,9 @@ export class TeamOrchestrator {
 
   stopAgendaRunner(): void { this.agendaRunner?.stop(); }
 
+  setAgentStore(store: AgentStore): void { this.agentStore = store; }
+  getAgentStore(): AgentStore | null { return this.agentStore; }
+
   async addMCPServer(def: MCPServerDef): Promise<void> {
     await this.mcp.add(def);
     await this.store.append('mcp_server_added', { name: def.name });
@@ -139,39 +144,79 @@ export class TeamOrchestrator {
   // ── State persistence ──────────────────────────────────────────────────────
 
   async saveState(filePath: string): Promise<void> {
-    const agentSnapshots: AgentSnapshot[] = Array.from(this.agents.values()).map((agent) => ({
-      id: agent.id,
-      identity: agent.config.identity,
-      hatType: agent.config.hatType,
-      model: agent.config.model,
-      providerName: agent.config.provider.name,
-      teamContext: agent.config.teamContext,
-      enabledMcpServers: agent.config.enabledMcpServers,
-      personalMcpCredentials: agent.config.personalMcpCredentials,
-      history: agent.getHistory().map((m) => ({
+    const history = (agent: Agent): HistoryEntry[] =>
+      agent.getHistory().map((m) => ({
         role: m.role,
         content: m.content,
         timestamp: m.timestamp instanceof Date ? m.timestamp.toISOString() : String(m.timestamp),
         toolCalls: m.toolCalls,
         toolCallId: m.toolCallId,
         toolName: m.toolName,
-      })),
-    }));
+      }));
 
-    const snapshot: TeamSnapshot = {
-      version: SNAPSHOT_VERSION,
-      savedAt: new Date().toISOString(),
-      humanName: this.humanName,
-      agents: agentSnapshots,
-      tasks: Array.from(this.tasks.values()),
-      meetings: Array.from(this.meetings.values()),
-      mcpServers: this.mcp.getServerDefs(),
-    };
-
-    const tmp = filePath + '.tmp';
-    await writeFile(tmp, JSON.stringify(snapshot, null, 2), 'utf-8');
-    await rename(tmp, filePath);
-    await this.store.append('state_saved', { path: filePath, agentCount: agentSnapshots.length });
+    if (this.agentStore) {
+      // V2: persist agent configs to global store; only histories go in the project file
+      const agentIds: string[]                      = [];
+      const agentHistories: Record<string, HistoryEntry[]> = {};
+      for (const agent of this.agents.values()) {
+        agentIds.push(agent.id);
+        agentHistories[agent.id] = history(agent);
+        const existingDef = this.agentStore.get(agent.id);
+        const def: AgentDefinition = {
+          id:                    agent.id,
+          identity:              agent.config.identity,
+          hatType:               agent.config.hatType,
+          model:                 agent.config.model,
+          providerName:          agent.config.provider.name,
+          teamContext:           agent.config.teamContext,
+          enabledMcpServers:          agent.config.enabledMcpServers,
+          personalMcpCredentials:     agent.config.personalMcpCredentials,
+          disabledPersonalMcpServers: agent.config.disabledPersonalMcpServers,
+          scheduledActionIds:         existingDef?.scheduledActionIds ?? [],
+        };
+        await this.agentStore.addOrUpdate(def);
+      }
+      const snapshot: TeamSnapshotV2 = {
+        version: 2,
+        savedAt: new Date().toISOString(),
+        humanName: this.humanName,
+        agentIds,
+        agentHistories,
+        tasks: Array.from(this.tasks.values()),
+        meetings: Array.from(this.meetings.values()),
+        mcpServers: this.mcp.getServerDefs(),
+      };
+      const tmp = filePath + '.tmp';
+      await writeFile(tmp, JSON.stringify(snapshot, null, 2), 'utf-8');
+      await rename(tmp, filePath);
+      await this.store.append('state_saved', { path: filePath, agentCount: agentIds.length });
+    } else {
+      // V1: all data in one file (legacy / no global store wired)
+      const agentSnapshots: AgentSnapshot[] = Array.from(this.agents.values()).map((agent) => ({
+        id: agent.id,
+        identity: agent.config.identity,
+        hatType: agent.config.hatType,
+        model: agent.config.model,
+        providerName: agent.config.provider.name,
+        teamContext: agent.config.teamContext,
+        enabledMcpServers: agent.config.enabledMcpServers,
+        personalMcpCredentials: agent.config.personalMcpCredentials,
+        history: history(agent),
+      }));
+      const snapshot: TeamSnapshotV1 = {
+        version: 1,
+        savedAt: new Date().toISOString(),
+        humanName: this.humanName,
+        agents: agentSnapshots,
+        tasks: Array.from(this.tasks.values()),
+        meetings: Array.from(this.meetings.values()),
+        mcpServers: this.mcp.getServerDefs(),
+      };
+      const tmp = filePath + '.tmp';
+      await writeFile(tmp, JSON.stringify(snapshot, null, 2), 'utf-8');
+      await rename(tmp, filePath);
+      await this.store.append('state_saved', { path: filePath, agentCount: agentSnapshots.length });
+    }
     log.info(`\n[Team] State saved to ${filePath}`);
   }
 
@@ -184,33 +229,85 @@ export class TeamOrchestrator {
       throw new Error(`State file "${filePath}" is corrupt (${(err as Error).message}). Delete it to start fresh.`);
     }
 
-    if (snapshot.version !== SNAPSHOT_VERSION) {
-      throw new Error(`Snapshot version mismatch: expected ${SNAPSHOT_VERSION}, got ${snapshot.version}`);
+    if (snapshot.version !== 1 && snapshot.version !== 2) {
+      throw new Error(`Unsupported snapshot version: ${(snapshot as TeamSnapshot).version}`);
     }
 
-    for (const snap of snapshot.agents) {
-      const provider = providerFactory(snap.providerName);
+    if (snapshot.version === 1) {
+      // V1: load embedded agent configs + histories
+      for (const snap of (snapshot as TeamSnapshotV1).agents) {
+        const provider = providerFactory(snap.providerName);
+        const config: AgentConfig = {
+          id: snap.id,
+          identity: snap.identity,
+          hatType: Array.isArray(snap.hatType) ? snap.hatType : [snap.hatType as HatType],
+          provider,
+          model: snap.model,
+          teamContext: snap.teamContext,
+          enabledMcpServers: snap.enabledMcpServers,
+          personalMcpCredentials: snap.personalMcpCredentials,
+        };
+        const agent = this.registerAgent(config);
+        agent.setHistory(snap.history);
+      }
+      // Migrate to global store if available — save defs without history
+      if (this.agentStore) {
+        for (const snap of (snapshot as TeamSnapshotV1).agents) {
+          if (!this.agentStore.has(snap.id)) {
+            await this.agentStore.addOrUpdate({
+              id:                    snap.id,
+              identity:              snap.identity,
+              hatType:               Array.isArray(snap.hatType) ? snap.hatType : [snap.hatType as HatType],
+              model:                 snap.model,
+              providerName:          snap.providerName,
+              teamContext:           snap.teamContext,
+              enabledMcpServers:     snap.enabledMcpServers,
+              personalMcpCredentials: snap.personalMcpCredentials,
+              scheduledActionIds:    [],
+            });
+          }
+        }
+      }
+      const s = snapshot as TeamSnapshotV1;
+      for (const task of s.tasks) this.tasks.set(task.id, task);
+      for (const meeting of s.meetings) this.meetings.set(meeting.id, meeting);
+      if (s.humanName) this.humanName = s.humanName;
+      await this.store.append('state_loaded', { path: filePath, agentCount: s.agents.length });
+      log.info(`[Team] State restored from ${filePath} (v1, saved ${s.savedAt})`);
+      return s.mcpServers;
+    }
+
+    // V2: load agent configs from global store, histories from snapshot
+    const s = snapshot as TeamSnapshotV2;
+    let loadedCount = 0;
+    for (const agentId of s.agentIds) {
+      const def = this.agentStore?.get(agentId);
+      if (!def) {
+        log.warn(`[Team] Agent "${agentId}" not found in global store — skipping`);
+        continue;
+      }
+      const provider = providerFactory(def.providerName);
       const config: AgentConfig = {
-        id: snap.id,
-        identity: snap.identity,
-        hatType: Array.isArray(snap.hatType) ? snap.hatType : [snap.hatType as HatType],
+        id:                    def.id,
+        identity:              def.identity,
+        hatType:               def.hatType,
         provider,
-        model: snap.model,
-        teamContext: snap.teamContext,
-        enabledMcpServers: snap.enabledMcpServers,
-        personalMcpCredentials: snap.personalMcpCredentials,
+        model:                 def.model,
+        teamContext:           def.teamContext,
+        enabledMcpServers:          def.enabledMcpServers,
+        personalMcpCredentials:     def.personalMcpCredentials,
+        disabledPersonalMcpServers: def.disabledPersonalMcpServers,
       };
       const agent = this.registerAgent(config);
-      agent.setHistory(snap.history);
+      agent.setHistory(s.agentHistories[agentId] ?? []);
+      loadedCount++;
     }
-
-    for (const task of snapshot.tasks) this.tasks.set(task.id, task);
-    for (const meeting of snapshot.meetings) this.meetings.set(meeting.id, meeting);
-    if (snapshot.humanName) this.humanName = snapshot.humanName;
-
-    await this.store.append('state_loaded', { path: filePath, agentCount: snapshot.agents.length });
-    log.info(`[Team] State restored from ${filePath} (saved ${snapshot.savedAt})`);
-    return snapshot.mcpServers;
+    for (const task of s.tasks) this.tasks.set(task.id, task);
+    for (const meeting of s.meetings) this.meetings.set(meeting.id, meeting);
+    if (s.humanName) this.humanName = s.humanName;
+    await this.store.append('state_loaded', { path: filePath, agentCount: loadedCount });
+    log.info(`[Team] State restored from ${filePath} (v2, saved ${s.savedAt})`);
+    return s.mcpServers;
   }
 
   // ── Agent registration ─────────────────────────────────────────────────────
@@ -234,20 +331,22 @@ export class TeamOrchestrator {
 
   async enablePersonalMcp(agentName: string, serverId: string, credentials: Record<string, string>): Promise<void> {
     const agent = this.requireAgent(agentName);
-    const entry = getCatalogue().find(e => e.id === serverId && e.personal);
+    const entry = getCatalogue().find(e => e.id === serverId && isAgentMcp(e));
     if (!entry) throw new Error(`"${serverId}" is not a personal MCP catalogue entry.`);
     if (!agent.config.personalMcpCredentials) agent.config.personalMcpCredentials = {};
     agent.config.personalMcpCredentials[serverId] = credentials;
-    await this.startPersonalMcp(agentName, serverId, credentials);
+    // Remove from disabled list so it (re-)starts
+    agent.config.disabledPersonalMcpServers = (agent.config.disabledPersonalMcpServers ?? []).filter(id => id !== serverId);
+    // Force reconnect — user may have updated credentials
+    await this.startPersonalMcp(agentName, serverId, credentials, true);
   }
 
   async disablePersonalMcp(agentName: string, serverId: string): Promise<void> {
     const agent = this.requireAgent(agentName);
-    if (agent.config.personalMcpCredentials) {
-      delete agent.config.personalMcpCredentials[serverId];
-      if (Object.keys(agent.config.personalMcpCredentials).length === 0) {
-        delete agent.config.personalMcpCredentials;
-      }
+    // Mark as disabled but keep credentials so they can be restored on re-enable
+    if (!agent.config.disabledPersonalMcpServers) agent.config.disabledPersonalMcpServers = [];
+    if (!agent.config.disabledPersonalMcpServers.includes(serverId)) {
+      agent.config.disabledPersonalMcpServers.push(serverId);
     }
     const personalMcp = this.personalMcpByAgent.get(agentName.toLowerCase());
     if (personalMcp?.has(serverId)) await personalMcp.disconnect(serverId);
@@ -257,12 +356,21 @@ export class TeamOrchestrator {
     return this.findByName(agentName)?.config.personalMcpCredentials ?? {};
   }
 
-  private async startPersonalMcp(agentName: string, serverId: string, credentials: Record<string, string>): Promise<void> {
+  getDisabledPersonalMcpServers(agentName: string): Set<string> {
+    return new Set(this.findByName(agentName)?.config.disabledPersonalMcpServers ?? []);
+  }
+
+  private async startPersonalMcp(agentName: string, serverId: string, credentials: Record<string, string>, force = false): Promise<void> {
     const entry = getCatalogue().find(e => e.id === serverId);
     if (!entry) return;
     const key = agentName.toLowerCase();
     if (!this.personalMcpByAgent.has(key)) this.personalMcpByAgent.set(key, new MCPRegistry());
     const personalMcp = this.personalMcpByAgent.get(key)!;
+    // HTTP MCPs have no local process — skip reconnect if already live (unless credentials changed)
+    if (!force && entry.config.transport === 'http' && personalMcp.has(serverId)) {
+      log.info(`[Team] Personal HTTP MCP "${serverId}" already connected for ${agentName} — skipping`);
+      return;
+    }
     if (personalMcp.has(serverId)) await personalMcp.disconnect(serverId);
     const config = resolvePersonalConfig(entry, credentials);
     await personalMcp.add({ name: serverId, config });
@@ -309,9 +417,11 @@ export class TeamOrchestrator {
     if (this.telemetryRecorder) agent.setTelemetryRecorder(this.telemetryRecorder);
     this.agents.set(agent.id, agent);
     this.rebuildTeamContext();
-    // Start personal MCPs from config (fire-and-forget; they connect async)
+    // Start personal MCPs from config, skipping any that are explicitly disabled
     if (config.personalMcpCredentials) {
+      const disabled = new Set(config.disabledPersonalMcpServers ?? []);
       for (const [serverId, creds] of Object.entries(config.personalMcpCredentials)) {
+        if (disabled.has(serverId)) continue;
         this.startPersonalMcp(agent.name, serverId, creds).catch((err: Error) => {
           log.warn(`[Team] Personal MCP "${serverId}" for ${agent.name} failed to start:`, err.message);
         });
@@ -340,6 +450,9 @@ export class TeamOrchestrator {
   }
 
   getAgent(name: string): Agent | undefined { return this.findByName(name); }
+  findById(id: string): Agent | undefined { return this.agents.get(id); }
+  /** Returns the stable UUID for an agent name, or undefined if not found. */
+  agentIdForName(name: string): string | undefined { return this.findByName(name)?.id; }
   listAgents(): Agent[] { return Array.from(this.agents.values()); }
 
   /** Clear tasks and agent histories while keeping agent definitions. */

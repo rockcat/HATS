@@ -9,7 +9,7 @@ import { listFilesRecursive } from './api-utils.js';
 import { log } from '../util/logger.js';
 
 export interface AgentStatus {
-  name: string; hatType: string[]; state: string; activity: string;
+  id?: string; name: string; hatType: string[]; state: string; activity: string;
   talkingTo?: string; model?: string; provider?: string;
   specialisation?: string; visualDescription?: string; backstory?: string;
   email?: string; avatar?: string; voice?: string; speakerName?: string; enabledMcpServers?: string[];

@@ -13,6 +13,7 @@ export interface KanbanManagerDeps {
   agentTicketMap: Map<string, string>;
   agentActivity: Map<string, { activity: string; talkingTo?: string }>;
   resolveAgentName(input: string): string;
+  agentIdForName(name: string): string;
   sseBroadcast(data: object): void;
   json(res: ServerResponse, status: number, body: unknown): void;
   readBody(req: IncomingMessage): Promise<string>;
@@ -109,16 +110,19 @@ export class KanbanManager {
     }
     if (changed) await this.writeKanban(board);
 
-    const orch = this.deps.getOrchestrator();
     for (const ticket of unblocked) {
       if (!ticket.assignee) continue;
-      const agentName = this.deps.resolveAgentName(ticket.assignee);
-      const isKnown = orch.listAgents().some(a => a.name.toLowerCase() === agentName.toLowerCase());
-      if (!isKnown) continue;
-      orch.humanMessage(agentName,
+      this.notifyAgent(ticket.assignee,
         `Good news! ${completedId} has been completed, which unblocks your ticket ${ticket.id}: "${ticket.title}". It's now ready to start.`,
-      ).catch(() => {});
+      );
     }
+  }
+
+  private notifyAgent(assignee: string, message: string): void {
+    const orch      = this.deps.getOrchestrator();
+    const agentName = this.deps.resolveAgentName(assignee);
+    const isKnown   = orch.listAgents().some(a => a.name.toLowerCase() === agentName.toLowerCase());
+    if (isKnown) orch.humanMessage(agentName, message).catch(() => {});
   }
 
   async nudgeStaleTickets(): Promise<void> {
@@ -151,7 +155,7 @@ export class KanbanManager {
     const board = await this.readKanban();
     for (const ticket of Object.values(board.tickets)) {
       if (ticket.column === 'in_progress' && ticket.assignee) {
-        this.deps.agentTicketMap.set(ticket.assignee.toLowerCase(), ticket.id);
+        this.deps.agentTicketMap.set(this.deps.agentIdForName(ticket.assignee), ticket.id);
         await this.dispatchTicket(ticket);
       }
     }
@@ -173,7 +177,7 @@ export class KanbanManager {
     const projectName = ticket.id;
     const description = `Work on ticket ${ticket.id}: ${ticket.title}${ticket.description ? `\n\n${ticket.description}` : ''}`;
     await orch.humanAssignTask(agentName, description, undefined, projectName);
-    this.deps.agentTicketMap.set(agentName.toLowerCase(), ticket.id);
+    this.deps.agentTicketMap.set(this.deps.agentIdForName(agentName), ticket.id);
 
     const stored = (orch.listTasks() as Task[]).find(
       t => t.assignedTo.toLowerCase() === agentName.toLowerCase() && t.description.includes(ticket.id),
@@ -294,6 +298,11 @@ export class KanbanManager {
       ticket.updatedAt = comment.ts;
       await this.writeKanban(board);
       json(res, 201, comment);
+      if (ticket.assignee) {
+        this.notifyAgent(ticket.assignee,
+          `New comment on your ticket ${ticket.id}: "${ticket.title}" from ${comment.author}: "${comment.text}"`,
+        );
+      }
       return true;
     }
 
@@ -327,6 +336,10 @@ export class KanbanManager {
       }
       if (ticket.column === 'in_progress' && ticket.assignee && (columnChanged || assigneeChanged)) {
         this.dispatchTicket(ticket).catch(() => {});
+      } else if (columnChanged && ticket.assignee) {
+        this.notifyAgent(ticket.assignee,
+          `Your ticket ${ticket.id}: "${ticket.title}" has been moved to ${ticket.column}.`,
+        );
       }
       return true;
     }

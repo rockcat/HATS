@@ -24,6 +24,8 @@ import { EmailAllowlistRouter } from './email-allowlist-router.js';
 import { MCPCatalogueRouter } from './mcp-catalogue-router.js';
 import { handleOrchestratorEvent, bufferAgentFeedEvent } from './event-handler.js';
 import { executeProjectSwitch } from './project-switcher.js';
+import { AgentStore } from './agent-store.js';
+import { ScheduledActionStore } from './scheduled-action-store.js';
 
 const __dirname  = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(__dirname, '..', 'webui', 'public');
@@ -66,6 +68,8 @@ export interface APIServerConfig {
   projectDir?:      string;
   projectsRoot?:    string;
   projectLoader?:   ProjectLoader;
+  agentStore?:      AgentStore;
+  actionStore?:     ScheduledActionStore;
 }
 
 export class APIServer {
@@ -79,6 +83,8 @@ export class APIServer {
   private projectDir: string | null;
   private projectsRoot: string | null;
   private projectLoader: ProjectLoader | null;
+  private agentStore: AgentStore | null;
+  private actionStore: ScheduledActionStore | null;
   private projectSwitchCallback: ((orchestrator: TeamOrchestrator) => void) | null = null;
   private enabledMCPIds: Set<string> = new Set();
   private meetingsPath: string | null;
@@ -117,16 +123,19 @@ export class APIServer {
     this.projectDir     = config.projectDir ?? null;
     this.projectsRoot   = config.projectsRoot ?? null;
     this.projectLoader  = config.projectLoader ?? null;
+    this.agentStore     = config.agentStore  ?? null;
+    this.actionStore    = config.actionStore ?? null;
     this.humanRequestStore   = new HumanRequestStore(config.requestsPath ?? null);
     this.emailAllowlistStore = new EmailAllowlistStore(config.allowlistPath ?? null);
 
     // eslint-disable-next-line @typescript-eslint/no-this-alias
     const self = this;
     this.kanbanManager = new KanbanManager(config.kanbanPath ?? null, {
-      getOrchestrator: () => self.orchestrator,
-      agentTicketMap:  self.agentTicketMap,
-      agentActivity:   self.agentActivity,
+      getOrchestrator:  () => self.orchestrator,
+      agentTicketMap:   self.agentTicketMap,
+      agentActivity:    self.agentActivity,
       resolveAgentName: (n) => self.resolveAgentName(n),
+      agentIdForName:   (n) => self.orchestrator.agentIdForName(n) ?? n,
       sseBroadcast: (d) => self.sseBroadcast(d),
       json: (r, s, b) => self.json(r, s, b),
       readBody,
@@ -184,6 +193,8 @@ export class APIServer {
       resolveMCPConfig:   (id, entry) => self.resolveMCPConfig(id, entry),
       saveMCPEnabled:     () => self.saveMCPEnabled(),
       enabledMCPIds:      self.enabledMCPIds,
+      getAgentStore:      () => self.agentStore,
+      getActionStore:     () => self.actionStore,
       sseBroadcast: (d) => self.sseBroadcast(d),
       json: (r, s, b) => self.json(r, s, b),
       readBody,
@@ -358,6 +369,10 @@ export class APIServer {
 
   // ── Orchestrator events ───────────────────────────────────────────────────
 
+  private agentIdForName(name: string): string {
+    return this.orchestrator.agentIdForName(name) ?? name;
+  }
+
   private handleOrchestratorEvent(ev: StoredEvent): void {
     handleOrchestratorEvent(ev, {
       agentActivity:        this.agentActivity,
@@ -369,12 +384,13 @@ export class APIServer {
       agentTicketMap:       this.agentTicketMap,
       kanban:               this.kanbanManager,
       getOrchestrator:      () => this.orchestrator,
+      agentIdForName:       (n) => this.agentIdForName(n),
       speechInterest:       this.speechInterest,
       voiceManager:         this.voiceManager,
       sseBroadcast:         (d) => this.sseBroadcast(d),
       buildAgentStatuses:   () => this.buildAgentStatuses(),
     });
-    bufferAgentFeedEvent(ev, this.agentFeeds, this.FEED_LIMIT, (d) => this.sseBroadcast(d));
+    bufferAgentFeedEvent(ev, this.agentFeeds, this.FEED_LIMIT, (d) => this.sseBroadcast(d), (n) => this.agentIdForName(n));
   }
 
   private buildRequestsList() { return this.humanRequestStore.list(); }
@@ -555,6 +571,7 @@ export class APIServer {
       buildAgentStatuses: () => this.buildAgentStatuses(),
       sseBroadcast:       (d) => this.sseBroadcast(d),
       projectSwitchCallback: this.projectSwitchCallback,
+      agentStore: this.agentStore,
     });
   }
 }
