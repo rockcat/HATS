@@ -131,10 +131,11 @@ export class APIServer {
     // eslint-disable-next-line @typescript-eslint/no-this-alias
     const self = this;
     this.kanbanManager = new KanbanManager(config.kanbanPath ?? null, {
-      getOrchestrator: () => self.orchestrator,
-      agentTicketMap:  self.agentTicketMap,
-      agentActivity:   self.agentActivity,
+      getOrchestrator:  () => self.orchestrator,
+      agentTicketMap:   self.agentTicketMap,
+      agentActivity:    self.agentActivity,
       resolveAgentName: (n) => self.resolveAgentName(n),
+      agentIdForName:   (n) => self.orchestrator.agentIdForName(n) ?? n,
       sseBroadcast: (d) => self.sseBroadcast(d),
       json: (r, s, b) => self.json(r, s, b),
       readBody,
@@ -368,6 +369,10 @@ export class APIServer {
 
   // ── Orchestrator events ───────────────────────────────────────────────────
 
+  private agentIdForName(name: string): string {
+    return this.orchestrator.agentIdForName(name) ?? name;
+  }
+
   private handleOrchestratorEvent(ev: StoredEvent): void {
     handleOrchestratorEvent(ev, {
       agentActivity:        this.agentActivity,
@@ -379,12 +384,13 @@ export class APIServer {
       agentTicketMap:       this.agentTicketMap,
       kanban:               this.kanbanManager,
       getOrchestrator:      () => this.orchestrator,
+      agentIdForName:       (n) => this.agentIdForName(n),
       speechInterest:       this.speechInterest,
       voiceManager:         this.voiceManager,
       sseBroadcast:         (d) => this.sseBroadcast(d),
       buildAgentStatuses:   () => this.buildAgentStatuses(),
     });
-    bufferAgentFeedEvent(ev, this.agentFeeds, this.FEED_LIMIT, (d) => this.sseBroadcast(d));
+    bufferAgentFeedEvent(ev, this.agentFeeds, this.FEED_LIMIT, (d) => this.sseBroadcast(d), (n) => this.agentIdForName(n));
   }
 
   private buildRequestsList() { return this.humanRequestStore.list(); }

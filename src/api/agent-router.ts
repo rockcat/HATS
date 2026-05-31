@@ -60,7 +60,9 @@ export class AgentRouter {
 
     if (pathname.startsWith('/api/agents/') && pathname.endsWith('/feed')) {
       const name = decodeURIComponent(pathname.slice('/api/agents/'.length, -'/feed'.length));
-      json(res, 200, agentFeeds.get(name.toLowerCase()) ?? []);
+      const id   = this.deps.resolveAgentName(name);
+      const agent = orch.listAgents().find(a => a.name === id) ?? orch.findById(name);
+      json(res, 200, (agent ? agentFeeds.get(agent.id) : null) ?? []);
       return true;
     }
 
@@ -130,10 +132,14 @@ export class AgentRouter {
       try {
         const resolved = resolveAgentName(oldName);
         orch.renameAgent(resolved, newName.trim());
-        const ticket = agentTicketMap.get(resolved.toLowerCase());
-        if (ticket) { agentTicketMap.delete(resolved.toLowerCase()); agentTicketMap.set(newName.trim().toLowerCase(), ticket); }
-        const activity = agentActivity.get(resolved);
-        if (activity) { agentActivity.delete(resolved); agentActivity.set(newName.trim(), activity); }
+        // Maps are keyed by stable agent ID — no migration needed on rename.
+        // Sync new name to global agent store if present.
+        const agentStore = this.deps.getAgentStore();
+        const agent = orch.listAgents().find(a => a.name === newName.trim());
+        if (agentStore && agent) {
+          const def = agentStore.get(agent.id);
+          if (def) agentStore.addOrUpdate({ ...def, identity: { ...def.identity, name: newName.trim() } }).catch(() => {});
+        }
         sseBroadcast({ type: 'agent_update', agents: this.deps.buildAgentStatuses() });
         saveCurrentState().catch(() => {});
         json(res, 200, { ok: true, name: newName.trim() });
@@ -254,6 +260,7 @@ export class AgentRouter {
       const agentName = decodeURIComponent(pathname.slice('/api/agents/'.length));
       try {
         const resolved = resolveAgentName(agentName);
+        const agentId  = orch.agentIdForName(resolved) ?? resolved;
         orch.removeAgent(resolved);
         const kanbanPath = this.deps.getKanbanPath();
         if (kanbanPath) {
@@ -268,10 +275,10 @@ export class AgentRouter {
             if (changed) await this.deps.writeKanban(board);
           } catch { /* non-fatal */ }
         }
-        agentActivity.delete(resolved); agentFeeds.delete(resolved.toLowerCase());
-        const timer = talkingTimers.get(resolved);
-        if (timer) { clearTimeout(timer); talkingTimers.delete(resolved); }
-        agentTicketMap.delete(resolved.toLowerCase());
+        agentActivity.delete(agentId); agentFeeds.delete(agentId);
+        const timer = talkingTimers.get(agentId);
+        if (timer) { clearTimeout(timer); talkingTimers.delete(agentId); }
+        agentTicketMap.delete(agentId);
         sseBroadcast({ type: 'agent_update', agents: this.deps.buildAgentStatuses() }); saveCurrentState().catch(() => {}); json(res, 200, { ok: true });
       } catch (err) { json(res, 404, { error: (err as Error).message }); }
       return true;
@@ -342,7 +349,7 @@ export class AgentRouter {
       await humanRequestStore.respond(reqId, response.trim());
       const replyContent = `You asked: "${request.message}"\n\nHuman's answer: ${response.trim()}\n\nNow continue your work based on this answer.`;
       await orch.humanReply(request.agentName, replyContent);
-      const ticketId = request.relatedTicketId ?? agentTicketMap.get(request.agentName.toLowerCase());
+      const ticketId = request.relatedTicketId ?? agentTicketMap.get(orch.agentIdForName(request.agentName) ?? request.agentName);
       if (ticketId) this.deps.updateKanbanColumn(ticketId, 'in_progress').catch(() => {});
       sseBroadcast({ type: 'requests_update', requests: this.deps.buildRequestsList() });
       sseBroadcast({ type: 'agent_update',   agents:   this.deps.buildAgentStatuses() });

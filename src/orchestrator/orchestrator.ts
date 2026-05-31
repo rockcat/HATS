@@ -450,6 +450,9 @@ export class TeamOrchestrator {
   }
 
   getAgent(name: string): Agent | undefined { return this.findByName(name); }
+  findById(id: string): Agent | undefined { return this.agents.get(id); }
+  /** Returns the stable UUID for an agent name, or undefined if not found. */
+  agentIdForName(name: string): string | undefined { return this.findByName(name)?.id; }
   listAgents(): Agent[] { return Array.from(this.agents.values()); }
 
   /** Clear tasks and agent histories while keeping agent definitions. */

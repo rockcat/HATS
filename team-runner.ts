@@ -121,16 +121,16 @@ function makeProjectLoader(agentStore: AgentStore, _actionStore: ScheduledAction
       const blueIdentity = getRandomPersona(HatType.Blue);
       orchestrator.registerAgent({
         identity: blueIdentity,
-        hatType: HatType.Blue, provider: claude, model,
+        hatType: [HatType.Blue], provider: claude, model,
       });
 
       // ── Non-blue agent pool — one per hat, three chosen at random ─────────
       const agentPool = [
-        { identity: getRandomPersona(HatType.White),  hatType: HatType.White  },
-        { identity: getRandomPersona(HatType.Black),  hatType: HatType.Black  },
-        { identity: getRandomPersona(HatType.Yellow), hatType: HatType.Yellow },
-        { identity: getRandomPersona(HatType.Green),  hatType: HatType.Green  },
-        { identity: getRandomPersona(HatType.Red),    hatType: HatType.Red    },
+        { identity: getRandomPersona(HatType.White),  hatType: [HatType.White]  },
+        { identity: getRandomPersona(HatType.Black),  hatType: [HatType.Black]  },
+        { identity: getRandomPersona(HatType.Yellow), hatType: [HatType.Yellow] },
+        { identity: getRandomPersona(HatType.Green),  hatType: [HatType.Green]  },
+        { identity: getRandomPersona(HatType.Red),    hatType: [HatType.Red]    },
       ];
 
       // Shuffle and pick 3 — each has a distinct hat type so the team stays diverse
@@ -203,7 +203,7 @@ async function main() {
     process.exit(0);
   });
 
-  const blueHat = orchestrator.listAgents().find(a => a.hatType === HatType.Blue);
+  const blueHat = orchestrator.listAgents().find(a => a.hatType.includes(HatType.Blue));
   const cli = new CLIInterface(orchestrator, blueHat?.name ?? 'Amara', STATE_FILE, providerFactory);
 
   // Keep the CLI in sync when the API server switches projects

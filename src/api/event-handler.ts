@@ -21,6 +21,8 @@ export interface OrchestratorEventContext {
     addTicketComment(id: string, author: string, text: string): Promise<void>;
   };
   getOrchestrator(): TeamOrchestrator;
+  /** Resolve an agent name to its stable UUID (returns name unchanged if not found). */
+  agentIdForName(name: string): string;
   speechInterest: Map<WebSocket, { agentName: string; voiceUrl: string | null; speakerId: number | null }>;
   voiceManager: VoiceManager;
   sseBroadcast(data: object): void;
@@ -34,18 +36,19 @@ export function handleOrchestratorEvent(ev: StoredEvent, ctx: OrchestratorEventC
     case 'task_assigned': {
       const to   = ev['to']   as string | undefined;
       const task = ev['task'] as string | undefined;
-      if (to) { ctx.agentActivity.set(to, { activity: task ?? 'Working on task' }); changed = true; }
+      if (to) { ctx.agentActivity.set(ctx.agentIdForName(to), { activity: task ?? 'Working on task' }); changed = true; }
       break;
     }
     case 'direct_message': {
       const from = ev['from'] as string | undefined;
       const to   = ev['to']   as string | undefined;
       if (from && to) {
-        ctx.agentActivity.set(from, { activity: `Messaging ${to}…`, talkingTo: to });
-        const prev = ctx.talkingTimers.get(from);
+        const fromId = ctx.agentIdForName(from);
+        ctx.agentActivity.set(fromId, { activity: `Messaging ${to}…`, talkingTo: to });
+        const prev = ctx.talkingTimers.get(fromId);
         if (prev) clearTimeout(prev);
-        ctx.talkingTimers.set(from, setTimeout(() => {
-          const cur = ctx.agentActivity.get(from);
+        ctx.talkingTimers.set(fromId, setTimeout(() => {
+          const cur = ctx.agentActivity.get(fromId);
           if (cur) { cur.talkingTo = undefined; ctx.sseBroadcast({ type: 'agent_update', agents: ctx.buildAgentStatuses() }); }
         }, 5000));
         changed = true;
@@ -56,7 +59,7 @@ export function handleOrchestratorEvent(ev: StoredEvent, ctx: OrchestratorEventC
       const from    = ev['from']    as string | undefined;
       const content = ev['content'] as string | undefined;
       if (from) {
-        ctx.agentActivity.set(from, { activity: (content ?? '').trim() || 'Responded' });
+        ctx.agentActivity.set(ctx.agentIdForName(from), { activity: (content ?? '').trim() || 'Responded' });
         changed = true;
         ctx.sseBroadcast({ type: 'cli_output', kind: 'agent', from, content: content ?? '' });
 
@@ -89,12 +92,13 @@ export function handleOrchestratorEvent(ev: StoredEvent, ctx: OrchestratorEventC
     case 'task_complete': {
       const agent = ev['agent'] as string | undefined;
       if (agent) {
-        ctx.agentActivity.set(agent, { activity: 'Task complete' });
+        const agentId = ctx.agentIdForName(agent);
+        ctx.agentActivity.set(agentId, { activity: 'Task complete' });
         changed = true;
-        const ticketId = ctx.agentTicketMap.get(agent.toLowerCase());
+        const ticketId = ctx.agentTicketMap.get(agentId);
         if (ticketId) {
           ctx.kanban.updateKanbanColumn(ticketId, 'completed').catch(() => {});
-          ctx.agentTicketMap.delete(agent.toLowerCase());
+          ctx.agentTicketMap.delete(agentId);
         }
       }
       break;
@@ -106,7 +110,7 @@ export function handleOrchestratorEvent(ev: StoredEvent, ctx: OrchestratorEventC
       const meetingId    = ev['meetingId']    as string | undefined;
       const label = `Meeting: ${(topic ?? '').slice(0, 50)}`;
       for (const name of [facilitator, ...(participants ?? [])].filter(Boolean) as string[]) {
-        ctx.agentActivity.set(name, { activity: label });
+        ctx.agentActivity.set(ctx.agentIdForName(name), { activity: label });
       }
       const hasHuman = (participants ?? []).includes('human');
       ctx.sseBroadcast({ type: 'meeting_started', meetingId, topic, facilitator, participants, hasHuman });
@@ -135,10 +139,11 @@ export function handleOrchestratorEvent(ev: StoredEvent, ctx: OrchestratorEventC
       const message = ev['message'] as string | undefined;
       const urgency = ev['urgency'] as string | undefined;
       if (from) {
-        ctx.agentActivity.set(from, { activity: 'Waiting for human…' });
+        const fromId = ctx.agentIdForName(from);
+        ctx.agentActivity.set(fromId, { activity: 'Waiting for human…' });
         changed = true;
         ctx.sseBroadcast({ type: 'cli_output', kind: 'escalation', from, content: message ?? '' });
-        const ticketId = ctx.agentTicketMap.get(from.toLowerCase());
+        const ticketId = ctx.agentTicketMap.get(fromId);
         if (ticketId) {
           ctx.kanban.updateKanbanColumn(ticketId, 'blocked').catch(() => {});
           if (message) ctx.kanban.addTicketComment(ticketId, from, `Blocked: ${message}`).catch(() => {});
@@ -177,6 +182,7 @@ export function bufferAgentFeedEvent(
   agentFeeds: Map<string, StoredEvent[]>,
   feedLimit: number,
   sseBroadcast: (data: object) => void,
+  agentIdForName: (name: string) => string,
 ): void {
   const targets: string[] = [];
   switch (ev.type) {
@@ -199,9 +205,9 @@ export function bufferAgentFeedEvent(
       { const t = ev['to'] as string | undefined; if (t) targets.push(t); break; }
   }
   for (const name of [...new Set(targets)]) {
-    const key = name.toLowerCase();
-    if (!agentFeeds.has(key)) agentFeeds.set(key, []);
-    const buf = agentFeeds.get(key)!;
+    const id = agentIdForName(name);
+    if (!agentFeeds.has(id)) agentFeeds.set(id, []);
+    const buf = agentFeeds.get(id)!;
     buf.push(ev);
     if (buf.length > feedLimit) buf.shift();
     sseBroadcast({ type: 'agent_stream', agent: name, event: ev });

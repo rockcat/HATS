@@ -267,6 +267,9 @@ async function handleTool(name: string, args: Record<string, unknown>, store: Ka
   }
 }
 
-// Entry point when run as a subprocess by the MCP client
-const _boardPath = process.env['KANBAN_BOARD_PATH'] ?? process.argv[2] ?? 'kanban-board.json';
-startKanbanServer(_boardPath).catch(e => log.error(e));
+// Entry point when run directly (not when imported by kanban-mcp.ts)
+import { pathToFileURL } from 'url';
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const _boardPath = process.env['KANBAN_BOARD_PATH'] ?? process.argv[2] ?? 'kanban-board.json';
+  startKanbanServer(_boardPath).catch(e => log.error(e));
+}

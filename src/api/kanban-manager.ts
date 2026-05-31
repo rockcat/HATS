@@ -13,6 +13,7 @@ export interface KanbanManagerDeps {
   agentTicketMap: Map<string, string>;
   agentActivity: Map<string, { activity: string; talkingTo?: string }>;
   resolveAgentName(input: string): string;
+  agentIdForName(name: string): string;
   sseBroadcast(data: object): void;
   json(res: ServerResponse, status: number, body: unknown): void;
   readBody(req: IncomingMessage): Promise<string>;
@@ -154,7 +155,7 @@ export class KanbanManager {
     const board = await this.readKanban();
     for (const ticket of Object.values(board.tickets)) {
       if (ticket.column === 'in_progress' && ticket.assignee) {
-        this.deps.agentTicketMap.set(ticket.assignee.toLowerCase(), ticket.id);
+        this.deps.agentTicketMap.set(this.deps.agentIdForName(ticket.assignee), ticket.id);
         await this.dispatchTicket(ticket);
       }
     }
@@ -176,7 +177,7 @@ export class KanbanManager {
     const projectName = ticket.id;
     const description = `Work on ticket ${ticket.id}: ${ticket.title}${ticket.description ? `\n\n${ticket.description}` : ''}`;
     await orch.humanAssignTask(agentName, description, undefined, projectName);
-    this.deps.agentTicketMap.set(agentName.toLowerCase(), ticket.id);
+    this.deps.agentTicketMap.set(this.deps.agentIdForName(agentName), ticket.id);
 
     const stored = (orch.listTasks() as Task[]).find(
       t => t.assignedTo.toLowerCase() === agentName.toLowerCase() && t.description.includes(ticket.id),

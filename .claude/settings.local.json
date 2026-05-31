@@ -43,7 +43,15 @@
       "Bash(npm test *)",
       "Bash(git commit *)",
       "Bash(git stash *)",
-      "Bash(xargs wc -l)"
+      "Bash(xargs wc -l)",
+      "Bash(kill %1)",
+      "Bash(echo \"Exit: $?\")",
+      "Bash(dir \"c:\\\\Users\\\\pauln\\\\workspace\\\\HATS\" /b)",
+      "Bash(git diff *)",
+      "Read(//tmp/**)",
+      "Bash(dir \"c:\\\\Users\\\\pauln\\\\.claude\\\\projects\\\\c--Users-pauln-workspace-HATS\\\\memory\" /b)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d.get\\('scripts',{}\\)\\)\")",
+      "Bash(dir \"c:\\\\Users\\\\pauln\\\\workspace\\\\HATS\\\\projects\" /b)"
     ]
   }
 }
