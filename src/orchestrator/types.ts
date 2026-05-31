@@ -17,6 +17,8 @@ export interface TeamMessage {
   meetingId?: string;
   taskId?: string;
   urgency?: 'low' | 'high';
+  /** True for messages fired by the agenda/scheduler — final text response is suppressed. */
+  isScheduled?: boolean;
 }
 
 export interface HumanRequest {

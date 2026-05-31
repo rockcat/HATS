@@ -17,7 +17,6 @@ piper_voices/
 rhubarb/*
 !rhubarb/install_rhubard_in_here
 
-config/mcp-catalogue.json
 avatars_no_visemes/
 gltf/
 

@@ -26,6 +26,8 @@ import { handleOrchestratorEvent, bufferAgentFeedEvent } from './event-handler.j
 import { executeProjectSwitch } from './project-switcher.js';
 import { AgentStore } from './agent-store.js';
 import { ScheduledActionStore } from './scheduled-action-store.js';
+import { GoogleTokenStore } from './google-token-store.js';
+import { GoogleOAuthRouter } from './google-oauth-router.js';
 
 const __dirname  = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(__dirname, '..', 'webui', 'public');
@@ -70,6 +72,7 @@ export interface APIServerConfig {
   projectLoader?:   ProjectLoader;
   agentStore?:      AgentStore;
   actionStore?:     ScheduledActionStore;
+  googleTokensPath?: string;
 }
 
 export class APIServer {
@@ -112,6 +115,10 @@ export class APIServer {
   private projectManager: ProjectManager;
   private agentRouter: AgentRouter;
   private mcpCatalogueRouter: MCPCatalogueRouter;
+  private googleTokenStore: GoogleTokenStore;
+  private googleOAuthRouter: GoogleOAuthRouter;
+  private googleRefreshTimer: ReturnType<typeof setInterval> | null = null;
+  private readonly GOOGLE_HTTP_MCP_IDS = new Set(['google-gmail', 'google-calendar', 'google-drive', 'google-chat', 'google-contacts']);
 
   constructor(orchestrator: TeamOrchestrator, config: APIServerConfig = {}) {
     this.orchestrator  = orchestrator;
@@ -212,6 +219,14 @@ export class APIServer {
       readBody,
     });
 
+    const tokensPath = config.googleTokensPath ?? path.join(process.cwd(), 'data', 'google-tokens.json');
+    this.googleTokenStore = new GoogleTokenStore(tokensPath);
+    this.googleOAuthRouter = new GoogleOAuthRouter(this.googleTokenStore, this.port);
+    this.googleOAuthRouter.onAuthenticated(async () => {
+      await this.reconnectGoogleMCPs();
+      this.sseBroadcast({ type: 'google_auth_status', authenticated: true });
+    });
+
     this.server = createServer((req, res) => {
       this.handleRequest(req, res).catch((err) => {
         log.error('[API] Request error:', err);
@@ -269,6 +284,13 @@ export class APIServer {
     await this.humanRequestStore.load();
     await this.emailAllowlistStore.load();
     this.orchestrator.setEmailAllowlistStore(this.emailAllowlistStore);
+    await this.googleTokenStore.load();
+    await this.googleTokenStore.syncToEnv();
+    // Refresh Google access token every 45 minutes
+    this.googleRefreshTimer = setInterval(async () => {
+      const ok = await this.googleTokenStore.syncToEnv();
+      if (ok) await this.reconnectGoogleMCPs();
+    }, 45 * 60 * 1000);
     this.loadMCPEnabled().catch(() => {});
     if (this.meetingsPath) this.orchestrator.initMeetingStore(this.meetingsPath).catch(() => {});
 
@@ -297,8 +319,9 @@ export class APIServer {
   stop(): void {
     this.unsubscribeEvents?.();
     this.kanbanManager.closeWatcher();
-    if (this.meetingScheduler) { clearInterval(this.meetingScheduler); this.meetingScheduler = null; }
-    if (this.nudgeScheduler)   { clearInterval(this.nudgeScheduler);   this.nudgeScheduler   = null; }
+    if (this.meetingScheduler)    { clearInterval(this.meetingScheduler);    this.meetingScheduler    = null; }
+    if (this.nudgeScheduler)      { clearInterval(this.nudgeScheduler);      this.nudgeScheduler      = null; }
+    if (this.googleRefreshTimer)  { clearInterval(this.googleRefreshTimer);  this.googleRefreshTimer  = null; }
     this.orchestrator.stopAgendaRunner();
     this.voiceManager.stop();
     this.wss.close();
@@ -439,6 +462,7 @@ export class APIServer {
     if (await this.agentRouter.handleRoutes(pathname, method, url, req, res))         return;
     if (await this.mcpCatalogueRouter.handleRoutes(pathname, method, req, res))       return;
     if (await this.emailAllowlistRouter.handleRoutes(pathname, method, req, res))     return;
+    if (await this.googleOAuthRouter.handleRoutes(pathname, method, req, res))        return;
 
     // ── Agent agenda ────────────────────────────────────────────────────────
     if (pathname === '/api/agenda' && method === 'GET') {
@@ -504,6 +528,22 @@ export class APIServer {
       return { ...config, args: [...(config.args ?? []), this.projectDir] };
     }
     return config;
+  }
+
+  private async reconnectGoogleMCPs(): Promise<void> {
+    for (const id of this.GOOGLE_HTTP_MCP_IDS) {
+      if (!this.enabledMCPIds.has(id)) continue;
+      const entry = getCatalogue().find(e => e.id === id);
+      if (!entry) continue;
+      try {
+        if (this.orchestrator.hasMCPServer(id)) await this.orchestrator.removeMCPServer(id);
+        const config = this.resolveMCPConfig(id, entry);
+        await this.orchestrator.addMCPServer({ name: id, config });
+        log.info(`[MCP] Reconnected "${id}" with fresh Google token`);
+      } catch (err) {
+        log.warn(`[MCP] Failed to reconnect "${id}":`, (err as Error).message);
+      }
+    }
   }
 
   private async loadMCPEnabled(): Promise<void> {

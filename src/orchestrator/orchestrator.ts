@@ -99,7 +99,7 @@ export class TeamOrchestrator {
     await store.load();
     this.agendaStoreRef.store = store;
     this.agendaRunner?.stop();
-    this.agendaRunner = new AgendaRunner(store, (name, content) => this.humanMessage(name, content));
+    this.agendaRunner = new AgendaRunner(store, (name, msg) => { this.deliverToAgent(name, msg); return Promise.resolve(); });
     this.agendaRunner.start();
   }
 

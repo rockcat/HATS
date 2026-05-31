@@ -338,6 +338,22 @@ export class AgentRouter {
 
     if (pathname === '/api/human-requests' && method === 'GET') { json(res, 200, { requests: this.deps.buildRequestsList() }); return true; }
 
+    if (pathname.match(/^\/api\/human-requests\/[^/]+$/) && method === 'DELETE') {
+      const reqId = decodeURIComponent(pathname.slice('/api/human-requests/'.length));
+      const ok = await humanRequestStore.remove(reqId);
+      if (!ok) { json(res, 404, { error: 'Request not found' }); return true; }
+      sseBroadcast({ type: 'requests_update', requests: this.deps.buildRequestsList() });
+      json(res, 200, { ok: true });
+      return true;
+    }
+
+    if (pathname === '/api/human-requests/answered' && method === 'DELETE') {
+      await humanRequestStore.clearAnswered();
+      sseBroadcast({ type: 'requests_update', requests: this.deps.buildRequestsList() });
+      json(res, 200, { ok: true });
+      return true;
+    }
+
     if (pathname.match(/^\/api\/human-requests\/[^/]+\/respond$/) && method === 'POST') {
       const reqId   = decodeURIComponent(pathname.slice('/api/human-requests/'.length, -'/respond'.length));
       const request = humanRequestStore.get(reqId);

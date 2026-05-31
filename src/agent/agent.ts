@@ -274,8 +274,8 @@ export class Agent {
         working.push({ role: 'assistant', content: response.content });
         this.persistHistory(working, userContent);
 
-        // Route the response back via handler
-        if (this.responseHandler && response.content.trim()) {
+        // Route the response back via handler (suppress for scheduled tasks)
+        if (this.responseHandler && response.content.trim() && !message.isScheduled) {
           await this.responseHandler(this.name, message, response.content);
         }
         break;

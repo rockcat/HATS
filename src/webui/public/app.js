@@ -1291,7 +1291,14 @@ function renderRequests(requests) {
     return;
   }
 
-  el.innerHTML = '';
+  const answered = requests.filter(r => r.status === 'answered');
+  el.innerHTML = answered.length > 0
+    ? `<div class="requests-toolbar"><button class="requests-clear-btn" id="requests-clear-answered">Clear answered (${answered.length})</button></div>`
+    : '';
+  document.getElementById('requests-clear-answered')?.addEventListener('click', async () => {
+    await fetch('/api/human-requests/answered', { method: 'DELETE' });
+  });
+
   for (const req of requests) {
     const item = document.createElement('div');
     item.className = `request-item request-item--${req.status}${req.urgency === 'high' ? ' request-item--high' : ''}`;
@@ -1317,6 +1324,7 @@ function renderRequests(requests) {
            <textarea class="request-reply-input" placeholder="Type your response…" rows="3"></textarea>
            <div class="request-reply-footer">
              <span class="request-reply-error"></span>
+             <button class="request-cancel-btn">Cancel</button>
              <button class="request-reply-submit">Send Reply</button>
            </div>
          </div>`;
@@ -1360,6 +1368,12 @@ function renderRequests(requests) {
         } finally {
           btn.disabled = false; btn.textContent = 'Send Reply';
         }
+      });
+
+      item.querySelector('.request-cancel-btn').addEventListener('click', async (e) => {
+        e.stopPropagation();
+        await fetch(`/api/human-requests/${encodeURIComponent(req.id)}`, { method: 'DELETE' });
+        // SSE requests_update will re-render
       });
     }
 
@@ -1475,7 +1489,7 @@ const CATEGORY_COLOR = {
   dev:          { bg: 'rgba(139,148,158,0.12)', text: '#8b949e'  },
 };
 
-function renderMCPCatalogue(catalogue) {
+function renderMCPCatalogue(catalogue, googleStatus = { authenticated: false }) {
   const el = document.getElementById('mcp-content');
   if (!el) return;
 
@@ -1485,7 +1499,25 @@ function renderMCPCatalogue(catalogue) {
   const categories = [...new Set(sharedCatalogue.map(e => e.category))];
   let html = '';
 
-  
+  // Google auth banner — shown if any Google HTTP MCPs are present
+  const hasGoogleHttpMcps = sharedCatalogue.some(e =>
+    ['google-gmail','google-calendar','google-drive','google-chat','google-contacts'].includes(e.id));
+  if (hasGoogleHttpMcps) {
+    if (googleStatus.authenticated) {
+      html += `<div class="mcp-google-auth-banner connected">
+        <span class="mcp-google-auth-icon">✓</span>
+        <span>Google Account connected</span>
+        <button class="mcp-google-auth-btn disconnect" onclick="disconnectGoogle()">Disconnect</button>
+      </div>`;
+    } else {
+      html += `<div class="mcp-google-auth-banner">
+        <span class="mcp-google-auth-icon">⚠</span>
+        <span>Connect your Google Account to use Gmail, Calendar, Drive, Chat, and Contacts MCPs</span>
+        <button class="mcp-google-auth-btn" onclick="openGoogleAuthPopup()">Connect Google</button>
+      </div>`;
+    }
+  }
+
   if (personalCatalogue.length > 0) {
     html += `<div class="mcp-personal-note">
       <span class="mcp-personal-note-icon">👤</span>
@@ -1590,9 +1622,32 @@ function toggleMCP(id, enable, btn) {
 }
 
 function fetchMCPCatalogue() {
-  fetch('/api/mcp/catalogue')
-    .then(r => r.json())
-    .then(catalogue => renderMCPCatalogue(catalogue))
+  Promise.all([
+    fetch('/api/mcp/catalogue').then(r => r.json()),
+    fetch('/api/auth/google/status').then(r => r.json()).catch(() => ({ authenticated: false })),
+  ])
+    .then(([catalogue, googleStatus]) => renderMCPCatalogue(catalogue, googleStatus))
+    .catch(() => {});
+}
+
+function openGoogleAuthPopup() {
+  const popup = window.open('/api/auth/google/start', 'google-auth', 'width=600,height=700,scrollbars=yes');
+  window.addEventListener('message', function onMsg(e) {
+    if (e.data?.type === 'google-auth-success') {
+      window.removeEventListener('message', onMsg);
+      popup?.close();
+      fetchMCPCatalogue();
+    } else if (e.data?.type === 'google-auth-error') {
+      window.removeEventListener('message', onMsg);
+      popup?.close();
+      alert('Google authentication failed: ' + (e.data.error || 'unknown error'));
+    }
+  });
+}
+
+function disconnectGoogle() {
+  fetch('/api/auth/google', { method: 'DELETE' })
+    .then(() => fetchMCPCatalogue())
     .catch(() => {});
 }
 

@@ -286,10 +286,9 @@ export const BUILTIN_CATALOGUE: MCPCatalogueEntry[] = [
     config: {
       transport: 'http',
       url: 'https://gmailmcp.googleapis.com/mcp/v1',
-      headers: { Authorization: 'Bearer ${GOOGLE_GMAIL_ACCESS_TOKEN}' },
+      headers: { Authorization: 'Bearer ${GOOGLE_ACCESS_TOKEN}' },
     },
-    envVars: [{ name: 'GOOGLE_GMAIL_ACCESS_TOKEN', placeholder: 'required — OAuth2 access token' }],
-    notes: 'Set GOOGLE_GMAIL_ACCESS_TOKEN in your environment. OAuth scope: gmail.modify. Get a token via "gcloud auth print-access-token" or the Google OAuth 2.0 Playground. Tokens expire after 1 hour.',
+    notes: 'Authenticate via the Google Connect button in the MCP settings. Requires GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables (Google Cloud OAuth 2.0 credentials).',
     url: 'https://developers.google.com/workspace/guides/configure-mcp-servers',
   },
   {
@@ -301,10 +300,9 @@ export const BUILTIN_CATALOGUE: MCPCatalogueEntry[] = [
     config: {
       transport: 'http',
       url: 'https://calendarmcp.googleapis.com/mcp/v1',
-      headers: { Authorization: 'Bearer ${GOOGLE_CALENDAR_ACCESS_TOKEN}' },
+      headers: { Authorization: 'Bearer ${GOOGLE_ACCESS_TOKEN}' },
     },
-    envVars: [{ name: 'GOOGLE_CALENDAR_ACCESS_TOKEN', placeholder: 'required — OAuth2 access token' }],
-    notes: 'Set GOOGLE_CALENDAR_ACCESS_TOKEN in your environment. OAuth scope: calendar. Get a token via "gcloud auth print-access-token" or the Google OAuth 2.0 Playground.',
+    notes: 'Authenticate via the Google Connect button in the MCP settings. Requires GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables.',
     url: 'https://developers.google.com/workspace/guides/configure-mcp-servers',
   },
   {
@@ -316,10 +314,9 @@ export const BUILTIN_CATALOGUE: MCPCatalogueEntry[] = [
     config: {
       transport: 'http',
       url: 'https://drivemcp.googleapis.com/mcp/v1',
-      headers: { Authorization: 'Bearer ${GOOGLE_DRIVE_ACCESS_TOKEN}' },
+      headers: { Authorization: 'Bearer ${GOOGLE_ACCESS_TOKEN}' },
     },
-    envVars: [{ name: 'GOOGLE_DRIVE_ACCESS_TOKEN', placeholder: 'required — OAuth2 access token' }],
-    notes: 'Set GOOGLE_DRIVE_ACCESS_TOKEN in your environment. OAuth scope: drive. Get a token via "gcloud auth print-access-token" or the Google OAuth 2.0 Playground.',
+    notes: 'Authenticate via the Google Connect button in the MCP settings. Requires GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables.',
     url: 'https://developers.google.com/workspace/guides/configure-mcp-servers',
   },
   {
@@ -331,10 +328,9 @@ export const BUILTIN_CATALOGUE: MCPCatalogueEntry[] = [
     config: {
       transport: 'http',
       url: 'https://chatmcp.googleapis.com/mcp/v1',
-      headers: { Authorization: 'Bearer ${GOOGLE_CHAT_ACCESS_TOKEN}' },
+      headers: { Authorization: 'Bearer ${GOOGLE_ACCESS_TOKEN}' },
     },
-    envVars: [{ name: 'GOOGLE_CHAT_ACCESS_TOKEN', placeholder: 'required — OAuth2 access token' }],
-    notes: 'Set GOOGLE_CHAT_ACCESS_TOKEN in your environment. OAuth scope: chat.messages. Get a token via "gcloud auth print-access-token" or the Google OAuth 2.0 Playground.',
+    notes: 'Authenticate via the Google Connect button in the MCP settings. Requires GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables.',
     url: 'https://developers.google.com/workspace/guides/configure-mcp-servers',
   },
   {
@@ -346,10 +342,9 @@ export const BUILTIN_CATALOGUE: MCPCatalogueEntry[] = [
     config: {
       transport: 'http',
       url: 'https://people.googleapis.com/mcp/v1',
-      headers: { Authorization: 'Bearer ${GOOGLE_CONTACTS_ACCESS_TOKEN}' },
+      headers: { Authorization: 'Bearer ${GOOGLE_ACCESS_TOKEN}' },
     },
-    envVars: [{ name: 'GOOGLE_CONTACTS_ACCESS_TOKEN', placeholder: 'required — OAuth2 access token' }],
-    notes: 'Set GOOGLE_CONTACTS_ACCESS_TOKEN in your environment. OAuth scope: contacts. Get a token via "gcloud auth print-access-token" or the Google OAuth 2.0 Playground.',
+    notes: 'Authenticate via the Google Connect button in the MCP settings. Requires GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables.',
     url: 'https://developers.google.com/workspace/guides/configure-mcp-servers',
   },
 

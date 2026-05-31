@@ -1307,6 +1307,38 @@ main {
   line-height: 1.4;
   word-break: break-word;
 }
+.mcp-google-auth-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  background: color-mix(in srgb, #f59e0b 10%, var(--surface-2));
+  border: 1px solid color-mix(in srgb, #f59e0b 40%, var(--border));
+  border-radius: 6px;
+  font-size: 11px;
+  color: var(--text);
+}
+.mcp-google-auth-banner.connected {
+  background: color-mix(in srgb, #22c55e 10%, var(--surface-2));
+  border-color: color-mix(in srgb, #22c55e 40%, var(--border));
+}
+.mcp-google-auth-icon { flex-shrink: 0; font-size: 13px; }
+.mcp-google-auth-banner > span:nth-child(2) { flex: 1; }
+.mcp-google-auth-btn {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--accent);
+  color: #fff;
+  font-size: 11px;
+  cursor: pointer;
+}
+.mcp-google-auth-btn:hover { opacity: 0.85; }
+.mcp-google-auth-btn.disconnect { background: var(--surface-3); color: var(--text-muted); }
+.mcp-google-auth-btn.disconnect:hover { color: var(--text); }
+
 .mcp-personal-note {
   display: flex;
   align-items: flex-start;
@@ -2748,6 +2780,22 @@ main {
   overflow-y: auto;
 }
 
+.requests-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 2px 8px;
+}
+.requests-clear-btn {
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.requests-clear-btn:hover { color: var(--text); border-color: var(--border-hover); }
+
 .requests-empty {
   font-size: 11px;
   color: var(--text-muted);
@@ -2831,6 +2879,12 @@ main {
 }
 .request-reply-submit:hover { filter: brightness(1.1); }
 .request-reply-submit:disabled { opacity: 0.5; cursor: wait; }
+.request-cancel-btn {
+  font-size: 10px; font-weight: 600; padding: 4px 12px;
+  border-radius: 5px; border: 1px solid var(--border);
+  background: var(--surface-2); color: var(--text-muted); cursor: pointer;
+}
+.request-cancel-btn:hover { color: var(--text); border-color: var(--border-hover); }
 
 .request-response-display {
   margin-top: 8px; padding: 6px 10px; background: var(--bg-2); border-radius: 5px;

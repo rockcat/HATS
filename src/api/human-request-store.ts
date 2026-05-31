@@ -60,6 +60,19 @@ export class HumanRequestStore {
     return request;
   }
 
+  async remove(id: string): Promise<boolean> {
+    const deleted = this.requests.delete(id);
+    if (deleted) await this.save();
+    return deleted;
+  }
+
+  async clearAnswered(): Promise<void> {
+    for (const [id, r] of this.requests) {
+      if (r.status === 'answered') this.requests.delete(id);
+    }
+    await this.save();
+  }
+
   async clear(): Promise<void> {
     this.requests.clear();
     await this.save();
