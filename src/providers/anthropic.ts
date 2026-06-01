@@ -5,7 +5,7 @@ import {
   Message, ToolCall,
 } from './types.js';
 import { withRetry } from './retry.js';
-import { debugState } from './debug-state.js';
+import { debugState, writePromptLog } from './debug-state.js';
 
 export class AnthropicProvider implements AIProvider {
   readonly name = 'anthropic';
@@ -21,19 +21,28 @@ export class AnthropicProvider implements AIProvider {
 
   private async doComplete(req: CompletionRequest): Promise<CompletionResponse> {
     if (debugState.logPrompts) {
-      const label  = req.agentName ? `[${req.agentName}]` : '[agent]';
-      const url    = (this.client as any).baseURL ?? 'https://api.anthropic.com';
-      const bar    = '═'.repeat(60);
-      log.info(`\n${bar}`);
-      log.info(`${label} provider=anthropic  url=${url}`);
-      log.info(`${label} model=${req.model}  msgs=${req.messages.length}  tools=${req.tools?.length ?? 0}`);
-      log.info(`SYSTEM: ${req.systemPrompt.slice(0, 400)}${req.systemPrompt.length > 400 ? '…' : ''}`);
+      const label   = req.agentName ? `[${req.agentName}]` : '[agent]';
+      const url     = (this.client as any).baseURL ?? 'https://api.anthropic.com';
+      const bar     = '═'.repeat(80);
+      const ts      = new Date().toISOString().replace('T', ' ').slice(0, 23);
+      const sysChars = req.systemPrompt.length;
+      const msgChars = req.messages.reduce((n, m) => n + String(m.content ?? '').length, 0);
+      const estTokens = Math.round((sysChars + msgChars) / 4);
+      const lines: string[] = [
+        `\n${bar}`,
+        `${ts} ${label} provider=anthropic  url=${url}`,
+        `${label} model=${req.model}  msgs=${req.messages.length}  tools=${req.tools?.length ?? 0}  ~${estTokens.toLocaleString()} tokens`,
+        `── SYSTEM (${sysChars} chars) ──`,
+        req.systemPrompt,
+        `── MESSAGES ──`,
+      ];
       for (const m of req.messages) {
-        const body = String(m.content ?? '').replace(/\s+/g, ' ').slice(0, 300);
-        const tc   = m.toolCalls ? ` [${m.toolCalls.map(c => c.name).join(',')}]` : '';
-        log.info(`  ${m.role.padEnd(9)} ${body}${tc}`);
+        const tc = m.toolCalls ? ` [tools: ${m.toolCalls.map(c => c.name).join(', ')}]` : '';
+        lines.push(`[${m.role}]${tc}`);
+        lines.push(String(m.content ?? ''));
       }
-      log.info(bar);
+      lines.push(bar);
+      writePromptLog(lines);
     }
 
     try {
@@ -54,6 +63,10 @@ export class AnthropicProvider implements AIProvider {
         ...(req.temperature !== undefined ? { temperature: req.temperature } : {}),
       });
       log.info(`${label} ← anthropic (${response.usage.input_tokens}in/${response.usage.output_tokens}out)`);
+      if (debugState.logPrompts) {
+        const ts = new Date().toISOString().replace('T', ' ').slice(0, 23);
+        writePromptLog([`${ts} ${label} ← anthropic  input=${response.usage.input_tokens} output=${response.usage.output_tokens} total=${response.usage.input_tokens + response.usage.output_tokens}`]);
+      }
 
       // Extract text content
       const content = response.content

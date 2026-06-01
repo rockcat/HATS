@@ -311,7 +311,6 @@
         </details>
         <div class="agent-config-line agent-config-line--btns">
           <label class="agent-config-label"></label>
-          <button id="agent-config-preview-prompt" class="agent-config-btn" title="Preview the system prompt this agent will use">Prompt…</button>
           <button id="agent-config-apply" class="agent-config-btn">Apply</button>
         </div>
       </div>
@@ -326,15 +325,6 @@
           <button id="agent-detail-send" class="agent-detail-send-btn">Send</button>
         </div>
       </div>
-    </div>
-    <!-- Right: system prompt panel (shown alongside when Prompt… is clicked) -->
-    <div id="agent-prompt-preview" class="agent-prompt-preview" hidden>
-      <div class="agent-prompt-preview-header">
-        <span class="agent-prompt-preview-title">System Prompt</span>
-        <button id="agent-prompt-preview-close" class="agent-prompt-preview-close" title="Close"><img src="/assets/close.svg" class="svg-icon" alt="Close"></button>
-      </div>
-      <pre id="agent-prompt-preview-text" class="agent-prompt-preview-text"></pre>
-      <div id="agent-prompt-preview-length" class="agent-prompt-preview-length"></div>
     </div>
   </div>
   </div>
@@ -611,9 +601,19 @@
       </div>
       <div class="modal-footer">
         <span id="add-agent-error" class="modal-error"></span>
+        <button class="modal-btn secondary" id="add-agent-prompt-btn" hidden>Prompt…</button>
         <button class="modal-btn secondary" id="add-agent-cancel">Cancel</button>
         <button class="modal-btn primary" id="add-agent-save">Add Agent</button>
       </div>
+    </div>
+    <!-- Prompt preview panel — expands the modal sideways -->
+    <div id="lib-prompt-preview" class="lib-prompt-panel" hidden>
+      <div class="agent-prompt-preview-header">
+        <span class="agent-prompt-preview-title">System Prompt Preview</span>
+        <button id="lib-prompt-close" class="agent-prompt-preview-close" title="Close"><img src="/assets/close.svg" class="svg-icon" alt="Close"></button>
+      </div>
+      <pre id="lib-prompt-text" class="agent-prompt-preview-text"></pre>
+      <div id="lib-prompt-length" class="agent-prompt-preview-length"></div>
     </div>
   </div>
 

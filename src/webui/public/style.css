@@ -1402,11 +1402,11 @@ main {
   max-width: 90%;
 }
 
-/* Chat-only mode: hide configuration rows and the prompt preview */
-.agent-detail.chat-mode .agent-config-row,
+/* Chat-only mode: hide the prompt preview panel and remove/configure buttons */
 .agent-detail.chat-mode #agent-prompt-preview { display: none; }
 .agent-detail.chat-mode .agent-remove-btn      { display: none; }
 .agent-detail.chat-mode .agent-configure-btn   { display: inline-flex; }
+.agent-detail.chat-mode .agent-config-row      { display: none; }
 .agent-configure-btn {
   display: none;
   align-items: center;
@@ -1420,6 +1420,7 @@ main {
   transition: background 0.15s, color 0.15s;
 }
 .agent-configure-btn:hover { background: var(--border); color: var(--text); }
+
 .agent-detail-main {
   flex: 1;
   min-width: 0;
@@ -1534,6 +1535,21 @@ main {
   padding: 4px 12px;
   border-top: 1px solid var(--border);
 }
+
+/* ── Library edit modal prompt preview panel (sibling inside the overlay) ── */
+.lib-prompt-panel {
+  background: var(--surface-2);
+  border: 1px solid var(--border-hover);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  width: 550px;
+  max-height: 90vh;
+  overflow: hidden;
+  flex-shrink: 0;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.6);
+}
+.lib-prompt-panel[hidden] { display: none; }
 
 .agent-detail-feed {
   flex-shrink: 0;
@@ -1975,13 +1991,10 @@ main {
 .cli-agent-body a { color: var(--hat-blue); }
 
 /* ── Agent config row (inside agent detail drawer) ──── */
+
 .agent-config-row {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  padding: 7px 14px;
+  padding: 8px 14px 4px;
   border-bottom: 1px solid var(--border);
-  background: var(--surface);
   flex-shrink: 0;
 }
 
@@ -4062,6 +4075,7 @@ body.has-expanded-panel main > section:not(.panel--expanded) {
 .add-agent-sched-label input[type="checkbox"] { margin-top: 2px; flex-shrink: 0; }
 
 /* Library editor modal — vertical layout with top-section preview */
+#add-agent-modal { gap: 16px; }
 .lib-editor-modal { max-width: 680px; width: 90vw; }
 .lib-editor-body { display: flex; flex-direction: column; gap: 12px; }
 .lib-editor-top { display: flex; gap: 14px; align-items: flex-start; }

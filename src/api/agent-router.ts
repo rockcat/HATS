@@ -80,6 +80,27 @@ export class AgentRouter {
       return true;
     }
 
+    // Standalone prompt preview — no running agent required; all params from query string
+    if (pathname === '/api/prompt-preview' && method === 'GET') {
+      const hatParams = url.searchParams.getAll('hat') as HatType[];
+      const nameParam = url.searchParams.get('name') ?? 'Agent';
+      const specParam = url.searchParams.get('specialisation') ?? undefined;
+      const backstory = url.searchParams.get('backstory') ?? undefined;
+      const visualDescription = url.searchParams.get('visualDescription') ?? '';
+      try {
+        const hat    = mergeHatDefinitions(hatParams.length > 0 ? hatParams : ['white' as HatType]);
+        const prompt = generateSystemPrompt({
+          name: nameParam, visualDescription, backstory,
+          hatLabel: hat.label, thinkingStyle: hat.thinkingStyle,
+          communicationTone: hat.communicationTone, directives: hat.directives,
+          avoidances: hat.avoidances, teamRole: hat.teamRole,
+          specialisation: specParam,
+        });
+        json(res, 200, { prompt: prompt.text });
+      } catch (err) { json(res, 400, { error: (err as Error).message }); }
+      return true;
+    }
+
     if (pathname.match(/^\/api\/agents\/[^/]+\/prompt-preview$/) && method === 'GET') {
       const agentName = decodeURIComponent(pathname.slice('/api/agents/'.length, -'/prompt-preview'.length));
       const hatParams = url.searchParams.getAll('hat') as HatType[];

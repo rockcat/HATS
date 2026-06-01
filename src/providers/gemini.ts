@@ -1,7 +1,7 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { log } from '../util/logger.js';
 import { AIProvider, CompletionRequest, CompletionResponse, ProviderError } from './types.js';
-import { debugState } from './debug-state.js';
+import { debugState, writePromptLog } from './debug-state.js';
 
 export class GeminiProvider implements AIProvider {
   readonly name = 'gemini';
@@ -13,17 +13,26 @@ export class GeminiProvider implements AIProvider {
 
   async complete(req: CompletionRequest): Promise<CompletionResponse> {
     if (debugState.logPrompts) {
-      const label = req.agentName ? `[${req.agentName}]` : '[agent]';
-      const bar   = '═'.repeat(60);
-      log.info(`\n${bar}`);
-      log.info(`${label} provider=gemini  url=https://generativelanguage.googleapis.com`);
-      log.info(`${label} model=${req.model}  msgs=${req.messages.length}  tools=${req.tools?.length ?? 0}`);
-      log.info(`SYSTEM: ${req.systemPrompt.slice(0, 400)}${req.systemPrompt.length > 400 ? '…' : ''}`);
+      const label     = req.agentName ? `[${req.agentName}]` : '[agent]';
+      const bar       = '═'.repeat(80);
+      const ts        = new Date().toISOString().replace('T', ' ').slice(0, 23);
+      const sysChars  = req.systemPrompt.length;
+      const msgChars  = req.messages.reduce((n, m) => n + String(m.content ?? '').length, 0);
+      const estTokens = Math.round((sysChars + msgChars) / 4);
+      const lines: string[] = [
+        `\n${bar}`,
+        `${ts} ${label} provider=gemini  url=https://generativelanguage.googleapis.com`,
+        `${label} model=${req.model}  msgs=${req.messages.length}  tools=${req.tools?.length ?? 0}  ~${estTokens.toLocaleString()} tokens`,
+        `── SYSTEM (${sysChars} chars) ──`,
+        req.systemPrompt,
+        `── MESSAGES ──`,
+      ];
       for (const m of req.messages) {
-        const body = String(m.content ?? '').replace(/\s+/g, ' ').slice(0, 300);
-        log.info(`  ${m.role.padEnd(9)} ${body}`);
+        lines.push(`[${m.role}]`);
+        lines.push(String(m.content ?? ''));
       }
-      log.info(bar);
+      lines.push(bar);
+      writePromptLog(lines);
     }
 
     try {
@@ -50,6 +59,12 @@ export class GeminiProvider implements AIProvider {
       const result = await chat.sendMessage(lastMessage?.content ?? '');
       const response = result.response;
       log.info(`${label} ← gemini (${response.usageMetadata?.promptTokenCount ?? 0}in/${response.usageMetadata?.candidatesTokenCount ?? 0}out)`);
+      if (debugState.logPrompts) {
+        const ts  = new Date().toISOString().replace('T', ' ').slice(0, 23);
+        const inp = response.usageMetadata?.promptTokenCount ?? 0;
+        const out = response.usageMetadata?.candidatesTokenCount ?? 0;
+        writePromptLog([`${ts} ${label} ← gemini  input=${inp} output=${out} total=${inp + out}`]);
+      }
 
       return {
         content: response.text(),

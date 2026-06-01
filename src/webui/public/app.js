@@ -1945,6 +1945,8 @@ let activeDetailAgent = null;
 let activeChatAgent   = null;
 let filesRefreshTimer = null;
 
+function togglePromptPreview(_show) { /* agent-prompt-preview removed from HTML */ }
+
 // ── Pricing ───────────────────────────────────────────────────────────────────
 
 let _pricingCache = null; // { pricing: Record<model, {input,output}>, freeProviders: string[] }
@@ -2231,7 +2233,7 @@ function initAgentDetail() {
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); doSend(); }
   });
 
-  // Configure button: switch from chat-only to full config mode
+  // Configure button: switch from chat-only to configure mode
   document.getElementById('agent-detail-configure-btn').addEventListener('click', () => {
     document.getElementById('agent-detail').classList.remove('chat-mode');
     activeChatAgent = null;
@@ -2248,18 +2250,6 @@ function initAgentDetail() {
       });
   });
 
-  // Prompt preview button — shows/hides the system prompt panel
-  const togglePromptPreview = async (show) => {
-    const panel  = document.getElementById('agent-prompt-preview');
-    const dialog = document.getElementById('agent-detail');
-    const open   = show !== undefined ? show : panel.hidden;
-    panel.hidden = !open;
-    dialog.classList.toggle('prompt-open', open);
-    if (open) await refreshPromptPreview();
-  };
-
-  document.getElementById('agent-config-preview-prompt').addEventListener('click', () => togglePromptPreview());
-  document.getElementById('agent-prompt-preview-close').addEventListener('click', () => togglePromptPreview(false));
 
   // Apply button — saves email + MCP selection
   document.getElementById('agent-config-apply').addEventListener('click', async () => {
@@ -2295,11 +2285,8 @@ function initAgentDetail() {
 function openAgentDetail(name, chatOnly = false) {
   activeDetailAgent = name;
   activeChatAgent   = chatOnly ? name : null;
-  // Toggle chat-only mode (hides config rows via CSS)
+  // Toggle chat-only mode
   document.getElementById('agent-detail').classList.toggle('chat-mode', chatOnly);
-  // Hide prompt preview panel when switching agents
-  document.getElementById('agent-prompt-preview').hidden = true;
-  document.getElementById('agent-detail').classList.remove('prompt-open');
   // Kick off a background model refresh (respects server-side TTL)
   refreshProviderModels();
   const agent = state.agents.find(a => a.name === name);
@@ -3387,7 +3374,14 @@ function initAddAgent() {
     document.getElementById('gen-bg-prompt').focus();
   });
 
-  // Close on overlay click
+  // Prompt preview button (shown in edit mode only)
+  document.getElementById('add-agent-prompt-btn').addEventListener('click', openLibraryPromptPreview);
+
+  // Close lib prompt preview
+  document.getElementById('lib-prompt-close').addEventListener('click', () => {
+    document.getElementById('lib-prompt-preview').hidden = true;
+  });
+  // Close on overlay click (ignore clicks on the prompt preview panel sibling)
   document.getElementById('add-agent-modal').addEventListener('click', e => {
     if (e.target === e.currentTarget) closeAddAgent();
   });
@@ -3396,11 +3390,45 @@ function initAddAgent() {
 let _agentEditorMode = 'new'; // 'new' | 'edit'
 let _libEditAgentId = null;
 
+async function openLibraryPromptPreview() {
+  const name        = document.getElementById('add-agent-name').value.trim() || 'Agent';
+  const hats        = getSelectedHats('add-agent-hat-group');
+  const specialisation = (() => {
+    const sel = document.getElementById('add-agent-specialisation').value;
+    if (sel === '__custom__') return document.getElementById('add-agent-specialisation-custom').value.trim();
+    return sel;
+  })();
+  const backstory       = document.getElementById('add-agent-backstory').value.trim();
+  const visualDescription = document.getElementById('add-agent-visual-desc').value.trim();
+
+  const params = new URLSearchParams({ name, backstory, specialisation, visualDescription });
+  for (const h of hats) params.append('hat', h);
+
+  const textEl   = document.getElementById('lib-prompt-text');
+  const lengthEl = document.getElementById('lib-prompt-length');
+  textEl.textContent = 'Loading…';
+  lengthEl.textContent = '';
+  document.getElementById('lib-prompt-preview').hidden = false;
+
+  try {
+    const res  = await fetch(`/api/prompt-preview?${params}`);
+    const data = await res.json();
+    const text = data.prompt ?? '';
+    textEl.textContent = text;
+    const chars = text.length;
+    const tokens = Math.round(chars / 4);
+    lengthEl.textContent = `~${tokens.toLocaleString()} tokens (${chars.toLocaleString()} chars)`;
+  } catch (err) {
+    textEl.textContent = `Error: ${err.message}`;
+  }
+}
+
 function openAddAgent() {
   _agentEditorMode = 'new';
   _libEditAgentId = null;
   document.getElementById('add-agent-modal-title').textContent = 'Add Agent';
   document.getElementById('add-agent-save').textContent = 'Add Agent';
+  document.getElementById('add-agent-prompt-btn').hidden = true;
   document.getElementById('add-agent-name').value = '';
   document.getElementById('add-agent-visual-desc').value = '';
   document.getElementById('add-agent-backstory').value = '';
@@ -3426,6 +3454,7 @@ async function openLibraryEdit(agent) {
   document.getElementById('add-agent-modal-title').textContent = 'Edit Agent';
   document.getElementById('add-agent-save').textContent = 'Save';
   document.getElementById('add-agent-error').textContent = '';
+  document.getElementById('add-agent-prompt-btn').hidden = false;
   document.getElementById('add-agent-persona-group').hidden = true;
 
   document.getElementById('add-agent-name').value = agent.identity?.name ?? '';
@@ -3521,6 +3550,7 @@ async function openLibraryEdit(agent) {
 function closeAddAgent() {
   window.avatarAPI?.hide('lib-avatar-panel');
   document.getElementById('lib-avatar-panel').hidden = true;
+  document.getElementById('lib-prompt-preview').hidden = true;
   document.getElementById('add-agent-modal').hidden = true;
 }
 

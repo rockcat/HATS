@@ -3,7 +3,7 @@ import { log } from '../util/logger.js';
 import { HatType } from '../hats/types.js';
 import { mergeHatDefinitions } from '../hats/definitions.js';
 import { generateSystemPrompt } from '../prompt/generator.js';
-import { AIProvider, CompletionRequest, Message, ToolCall } from '../providers/types.js';
+import { AIProvider, CompletionRequest, Message, ProviderError, ToolCall } from '../providers/types.js';
 import { getToolsForHat } from '../tools/definitions.js';
 import { TeamMessage } from '../orchestrator/types.js';
 import { AgentConfig, AgentMessage, AgentState, AgentEvent, ToolExecutor, ResponseHandler } from './types.js';
@@ -26,6 +26,7 @@ export class Agent {
   private _state: AgentState;
   private systemPrompt: string;
   private conversationHistory: AgentMessage[];
+  private activeTaskId: string | null = null;
   private inbox: TeamMessage[] = [];
   private priorityInbox: TeamMessage[] = [];
   private processing = false;
@@ -208,6 +209,8 @@ export class Agent {
     // Update state
     if (message.type === 'task') {
       this.applyEvent('task_assigned');
+      this.conversationHistory = [];
+      this.activeTaskId = message.taskId ?? null;
     } else if (message.type === 'meeting_invite' || message.type === 'meeting_turn') {
       if (this._state !== AgentState.InDiscussion) {
         this.applyEvent('discussion_invited');
@@ -220,11 +223,9 @@ export class Agent {
       ...(this.extraToolsProvider?.() ?? []),
     ];
 
-    // Build working message history for this turn
-    const working: Message[] = [
-      ...this.conversationHistory.map(toProviderMessage),
-      { role: 'user', content: userContent },
-    ];
+    // Scheduled tasks start fresh — no history needed for a cron-style trigger
+    const history = message.isScheduled ? [] : this.conversationHistory.map(toProviderMessage);
+    const working: Message[] = [...history, { role: 'user', content: userContent }];
 
     // Tool loop — run until text response or max rounds
     for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
@@ -236,9 +237,23 @@ export class Agent {
         agentName: this.name,
       };
 
-      const response = await (this.llmSemaphore
-        ? this.llmSemaphore.run(() => this.config.provider.complete(req))
-        : this.config.provider.complete(req));
+      let response;
+      try {
+        response = await (this.llmSemaphore
+          ? this.llmSemaphore.run(() => this.config.provider.complete(req))
+          : this.config.provider.complete(req));
+      } catch (err) {
+        if (err instanceof ProviderError && err.statusCode === 400 && err.message.includes('prompt is too long')) {
+          log.warn(`[${this.name}] context overflow — clearing history and retrying`);
+          this.conversationHistory = [];
+          working.splice(0, working.length - 1); // keep only the current user message
+          response = await (this.llmSemaphore
+            ? this.llmSemaphore.run(() => this.config.provider.complete({ ...req, messages: working }))
+            : this.config.provider.complete({ ...req, messages: working }));
+        } else {
+          throw err;
+        }
+      }
       this.recordTelemetry(req, response.inputTokens, response.outputTokens);
 
       // Human interrupted — stop the tool loop and yield to priority inbox
@@ -341,7 +356,11 @@ export class Agent {
     }
   }
 
-  markTaskComplete(): void { this.applyEvent('task_complete'); }
+  markTaskComplete(): void {
+    this.applyEvent('task_complete');
+    this.conversationHistory = [];
+    this.activeTaskId = null;
+  }
   markBlocked(): void { this.applyEvent('blocked'); }
   markHelpReceived(): void {
     this.applyEvent('help_received');
