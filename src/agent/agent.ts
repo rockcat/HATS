@@ -25,8 +25,20 @@ export class Agent {
   readonly config: AgentConfig;
   private _state: AgentState;
   private systemPrompt: string;
-  private conversationHistory: AgentMessage[];
+  private threads = new Map<string, AgentMessage[]>();
   private activeTaskId: string | null = null;
+
+  private get activeThreadKey(): string { return this.activeTaskId ?? 'general'; }
+
+  private get conversationHistory(): AgentMessage[] {
+    const key = this.activeThreadKey;
+    if (!this.threads.has(key)) this.threads.set(key, []);
+    return this.threads.get(key)!;
+  }
+
+  private set conversationHistory(messages: AgentMessage[]) {
+    this.threads.set(this.activeThreadKey, messages);
+  }
   private inbox: TeamMessage[] = [];
   private priorityInbox: TeamMessage[] = [];
   private processing = false;
@@ -42,7 +54,6 @@ export class Agent {
     this.id = config.id ?? uuidv4();
     this.config = config;
     this._state = AgentState.Idle;
-    this.conversationHistory = [];
     this.systemPrompt = this.buildSystemPrompt();
   }
 
@@ -209,8 +220,12 @@ export class Agent {
     // Update state
     if (message.type === 'task') {
       this.applyEvent('task_assigned');
-      this.conversationHistory = [];
-      this.activeTaskId = message.taskId ?? null;
+      const taskId = message.taskId ?? uuidv4();
+      if (!this.threads.has(taskId) && message.sourceThreadId) {
+        const source = this.threads.get(message.sourceThreadId);
+        if (source?.length) this.threads.set(taskId, [...source]);
+      }
+      this.activeTaskId = taskId;
     } else if (message.type === 'meeting_invite' || message.type === 'meeting_turn') {
       if (this._state !== AgentState.InDiscussion) {
         this.applyEvent('discussion_invited');
@@ -360,9 +375,13 @@ export class Agent {
 
   markTaskComplete(): void {
     this.applyEvent('task_complete');
-    this.conversationHistory = [];
+    this.activeTaskId = null; // switch back to general thread; task thread is preserved
+  }
+  clearAllThreads(): void {
+    this.threads.clear();
     this.activeTaskId = null;
   }
+  getActiveThreadKey(): string { return this.activeThreadKey; }
   markBlocked(): void { this.applyEvent('blocked'); }
   markHelpReceived(): void {
     this.applyEvent('help_received');

@@ -463,7 +463,7 @@ export class TeamOrchestrator {
   clearProject(): void {
     this.tasks.clear();
     this.meetings.clear();
-    for (const agent of this.agents.values()) agent.setHistory([]);
+    for (const agent of this.agents.values()) agent.clearAllThreads();
   }
 
   updateAgentConfig(name: string, provider: AIProvider, model: string): void {
@@ -713,6 +713,7 @@ export class TeamOrchestrator {
       startMeeting: (a, b, c, d) => this.startMeeting(a, b, c, d),
       createScheduledMeeting: (data) => this.createScheduledMeeting(data),
       resolveAgentPath: (agentName, fp) => this.resolveAgentPath(agentName, fp),
+      getAgentThreadKey: (name) => this.findByName(name)?.getActiveThreadKey(),
     };
   }
 

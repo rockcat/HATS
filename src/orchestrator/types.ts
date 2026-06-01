@@ -19,6 +19,8 @@ export interface TeamMessage {
   urgency?: 'low' | 'high';
   /** True for messages fired by the agenda/scheduler — final text response is suppressed. */
   isScheduled?: boolean;
+  /** Thread key to seed this task's conversation from (e.g. the chat that spawned it). */
+  sourceThreadId?: string;
 }
 
 export interface HumanRequest {

@@ -47,6 +47,7 @@ export interface ToolCallContext {
     scheduledFor: string; createdBy: string;
   }): Promise<ScheduledMeeting>;
   resolveAgentPath(agentName: string, filePath: string): string;
+  getAgentThreadKey?(agentName: string): string | undefined;
 }
 
 /** Return the outputs folder for the agent's active task, falling back to projectDir. */
@@ -202,7 +203,11 @@ export async function executeToolCall(ctx: ToolCallContext, agentName: string, c
         ? `\n\nA project workspace has been created for this task. Use read_file, write_file, list_files, and fetch_url to save and retrieve your work.`
         : '';
       const content = (context ? `${task}\n\nContext: ${context}` : task) + folderNote;
-      const msg = buildMessage(agentName, agent, 'task', content, { taskId });
+      const sourceThreadId = ctx.getAgentThreadKey?.(agentName);
+      const msg = buildMessage(agentName, agent, 'task', content, {
+        taskId,
+        ...(sourceThreadId ? { sourceThreadId } : {}),
+      });
       await ctx.store.append('task_assigned', { taskId, from: agentName, to: agent, task, context, projectName: storedTask.projectName });
       ctx.deliverToAgent(agent, msg);
       return `Task assigned to ${agent}. Project: ${storedTask.projectName ?? 'none'}`;
