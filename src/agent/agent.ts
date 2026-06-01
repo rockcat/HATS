@@ -246,7 +246,9 @@ export class Agent {
         if (err instanceof ProviderError && err.statusCode === 400 && err.message.includes('prompt is too long')) {
           log.warn(`[${this.name}] context overflow — clearing history and retrying`);
           this.conversationHistory = [];
-          working.splice(0, working.length - 1); // keep only the current user message
+          // Rebuild with only the triggering user message — safe regardless of where in the tool loop we are
+          working.splice(0);
+          working.push({ role: 'user', content: userContent });
           response = await (this.llmSemaphore
             ? this.llmSemaphore.run(() => this.config.provider.complete({ ...req, messages: working }))
             : this.config.provider.complete({ ...req, messages: working }));

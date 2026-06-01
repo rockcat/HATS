@@ -1944,6 +1944,7 @@ function initMCPEditor() {
 let activeDetailAgent = null;
 let activeChatAgent   = null;
 let filesRefreshTimer = null;
+let toolCallDetail    = localStorage.getItem('toolCallDetail') ?? 'simple'; // 'simple' | 'detailed'
 
 function togglePromptPreview(_show) { /* agent-prompt-preview removed from HTML */ }
 
@@ -2143,7 +2144,7 @@ function loadAgentFeedInto(name, feedEl) {
     .then(events => {
       feedEl.innerHTML = '';
       if (!events.length) { feedEl.innerHTML = '<p class="feed-empty">No activity yet.</p>'; return; }
-      for (const ev of events) feedEl.appendChild(buildFeedItem(ev, name));
+      for (const ev of events) { const el = buildFeedItem(ev, name); if (el) feedEl.appendChild(el); }
       feedEl.scrollTop = feedEl.scrollHeight;
     })
     .catch(() => { feedEl.innerHTML = '<p class="feed-empty">Failed to load.</p>'; });
@@ -2565,11 +2566,13 @@ function appendAgentFeedEvent(agentName, ev) {
   if (!feed) return;
   const empty = feed.querySelector('.feed-empty');
   if (empty) empty.remove();
-  feed.appendChild(buildFeedItem(ev, agentName));
+  const el = buildFeedItem(ev, agentName);
+  if (el) feed.appendChild(el);
   feed.scrollTop = feed.scrollHeight;
 }
 
 function buildFeedItem(ev, selfName) {
+  if (ev.type === 'tool_result' && toolCallDetail !== 'detailed') return null;
   const el = document.createElement('div');
   const meta = FEED_META[ev.type] || { icon: '·', cls: 'feed-default', label: ev.type };
   el.className = 'feed-item feed-' + meta.cls;
@@ -2609,6 +2612,9 @@ function feedLabel(ev, selfName, defaultLabel) {
   if (ev.type === 'task_assigned') {
     return ev.from === selfName ? `Delegated to ${ev.to}` : `Task from ${ev.from}`;
   }
+  if (ev.type === 'tool_call') {
+    return `Tool called: ${ev.tool}`;
+  }
   return defaultLabel;
 }
 
@@ -2619,11 +2625,12 @@ function feedBody(ev) {
     case 'task_complete':
       return mdSafe(ev.summary || '');
     case 'tool_call': {
+      if (toolCallDetail !== 'detailed') return '';
       const args = ev.args ? JSON.stringify(ev.args, null, 2) : '';
-      return `<span class="feed-tool-name">${esc(ev.tool)}</span>`
-        + (args ? `<pre class="feed-pre">${esc(truncate(args, 300))}</pre>` : '');
+      return args ? `<pre class="feed-pre">${esc(truncate(args, 300))}</pre>` : '';
     }
     case 'tool_result':
+      if (toolCallDetail !== 'detailed') return '';
       return `<pre class="feed-pre">${esc(truncate(String(ev.result ?? ''), 400))}</pre>`;
     case 'tool_error':
       return `<span class="feed-err">${esc(ev.error || '')}</span>`;
@@ -2656,7 +2663,30 @@ function truncate(s, n) {
 
 // ── CLI tab ───────────────────────────────────────────────────────────────────
 
-let cliInited = false;
+let cliInited    = false;
+let cliReplyTarget = null; // agent name we're replying to, or null
+
+function setCliReply(agentName) {
+  cliReplyTarget = agentName;
+  const bar   = document.getElementById('cli-reply-bar');
+  const label = document.getElementById('cli-reply-label');
+  if (!bar || !label) return;
+  if (agentName) {
+    label.textContent = `Replying to ${agentName}`;
+    bar.hidden = false;
+  } else {
+    bar.hidden = true;
+    label.textContent = '';
+  }
+  const input = document.getElementById('cli-input');
+  if (input) {
+    if (agentName && !input.value.startsWith(`@${agentName} `)) {
+      input.value = `@${agentName} `;
+    }
+    input.focus();
+    input.selectionStart = input.selectionEnd = input.value.length;
+  }
+}
 
 function initCLI() {
   if (cliInited) return;
@@ -2664,6 +2694,12 @@ function initCLI() {
 
   const input = document.getElementById('cli-input');
   if (!input) return;
+
+  document.getElementById('cli-reply-cancel')?.addEventListener('click', () => {
+    setCliReply(null);
+    input.value = '';
+    input.focus();
+  });
 
   appendCLILine('Team Chat — type "help" for commands', 'cli-system');
 
@@ -2767,6 +2803,7 @@ function initCLI() {
       const line = input.value.trim();
       if (!line) return;
       input.value = '';
+      setCliReply(null);
       appendCLILine('> ' + line, 'cli-input-echo');
 
       fetch('/api/cli', {
@@ -2805,7 +2842,18 @@ function appendCLIAgent(from, content, kind) {
 
   const header = document.createElement('div');
   header.className = 'cli-agent-header';
-  header.textContent = (kind === 'escalation' ? '⚠ ESCALATION — ' : '') + from;
+
+  const nameSpan = document.createElement('span');
+  nameSpan.textContent = (kind === 'escalation' ? '⚠ ESCALATION — ' : '') + from;
+
+  const replyBtn = document.createElement('button');
+  replyBtn.className = 'cli-reply-btn';
+  replyBtn.title = `Reply to ${from}`;
+  replyBtn.textContent = 'Reply';
+  replyBtn.addEventListener('click', () => setCliReply(from));
+
+  header.appendChild(nameSpan);
+  header.appendChild(replyBtn);
 
   const body = document.createElement('div');
   body.className = 'cli-agent-body';
@@ -2866,6 +2914,13 @@ function initSettings() {
   document.getElementById('settings-save').addEventListener('click', saveSettings);
   document.getElementById('settings-modal').addEventListener('click', e => {
     if (e.target === document.getElementById('settings-modal')) closeSettings();
+    // Toggle slider buttons
+    const opt = e.target.closest('.toggle-slider-opt');
+    if (opt) {
+      const slider = opt.closest('.toggle-slider');
+      slider.querySelectorAll('.toggle-slider-opt').forEach(b => b.classList.remove('active'));
+      opt.classList.add('active');
+    }
   });
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape' && !document.getElementById('settings-modal').hidden) closeSettings();
@@ -2925,6 +2980,13 @@ function renderSettingsBody(entries, providers, humanName, logPrompts) {
       <div class="env-field env-field--toggle">
         <label class="env-label" for="setting-debug-logging">Prompt debug logging</label>
         <input type="checkbox" id="setting-debug-logging" data-setting="debugLogging"${logPrompts ? ' checked' : ''}>
+      </div>
+      <div class="env-field env-field--toggle">
+        <label class="env-label" for="setting-tool-detail">Tool call detail</label>
+        <div class="toggle-slider" id="setting-tool-detail" data-setting="toolCallDetail">
+          <button class="toggle-slider-opt${toolCallDetail === 'simple'   ? ' active' : ''}" data-val="simple">Simple</button>
+          <button class="toggle-slider-opt${toolCallDetail === 'detailed' ? ' active' : ''}" data-val="detailed">Detailed</button>
+        </div>
       </div>
     </div>`;
   for (const group of GROUP_ORDER) {
@@ -3036,6 +3098,14 @@ function saveSettings() {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ enabled: debugEnabled }),
   }).catch(() => {});
+
+  // Tool call detail is client-side only — persist to localStorage
+  const toolDetailEl = document.getElementById('setting-tool-detail');
+  if (toolDetailEl) {
+    const chosen = toolDetailEl.querySelector('.toggle-slider-opt.active')?.dataset.val ?? 'simple';
+    toolCallDetail = chosen;
+    localStorage.setItem('toolCallDetail', chosen);
+  }
 
   Promise.all([envSave, profileSave])
     .then(([res]) => {
@@ -4436,6 +4506,40 @@ function fileExt(name) {
   return name.split('.').pop()?.toLowerCase() ?? '';
 }
 
+function buildFileTree(files) {
+  const nodeMap = new Map();
+  const roots   = [];
+  for (const f of files) nodeMap.set(f.relativePath, { ...f, children: [] });
+  for (const f of files) {
+    const node   = nodeMap.get(f.relativePath);
+    const parts  = f.relativePath.split('/');
+    parts.pop();
+    const parent = nodeMap.get(parts.join('/'));
+    if (parent) parent.children.push(node);
+    else roots.push(node);
+  }
+  return roots;
+}
+
+function renderFileNode(node) {
+  if (node.isDir) {
+    const inner = node.children.map(renderFileNode).join('') || '<div class="files-list-empty">Empty</div>';
+    return `<details class="file-tree-dir" open>
+      <summary class="file-row file-row--dir">
+        <span class="file-icon">${fileIcon(node.name, true)}</span>
+        <span class="file-name" title="${esc(node.relativePath)}">${esc(node.name)}</span>
+      </summary>
+      ${inner}
+    </details>`;
+  }
+  return `<div class="file-row">
+    <span class="file-icon">${fileIcon(node.name, false)}</span>
+    <span class="file-name" title="${esc(node.relativePath)}">${esc(node.name)}</span>
+    <span class="file-size">${fmtSize(node.size)}</span>
+    ${buildFileActions(node)}
+  </div>`;
+}
+
 function renderFilesSection(elId, files) {
   const el = document.getElementById(elId);
   if (!el) return;
@@ -4443,19 +4547,7 @@ function renderFilesSection(elId, files) {
     el.innerHTML = `<div class="files-list-empty">No files yet</div>`;
     return;
   }
-  el.innerHTML = files.map(f => {
-    // relativePath includes the section prefix (sources/ or outputs/) — subtract 1 for visual depth
-    const depth = Math.max(0, (f.relativePath.match(/\//g) || []).length - 1);
-    const indent = depth > 0 ? ` file-row--indent-${Math.min(depth, 3)}` : '';
-    const dirClass = f.isDir ? ' file-row--dir' : '';
-    const actions = f.isDir ? '' : buildFileActions(f);
-    return `<div class="file-row${dirClass}${indent}">
-      <span class="file-icon">${fileIcon(f.name, f.isDir)}</span>
-      <span class="file-name" title="${esc(f.relativePath)}">${esc(f.name)}</span>
-      ${!f.isDir ? `<span class="file-size">${fmtSize(f.size)}</span>` : ''}
-      ${actions}
-    </div>`;
-  }).join('');
+  el.innerHTML = buildFileTree(files).map(renderFileNode).join('');
 }
 
 function buildFileActions(f) {
@@ -4624,20 +4716,10 @@ function renderFilesList(sources, outputs, tickets) {
   }
   section.hidden = false;
   list.innerHTML = tickets.map(t => {
-    const rows = t.files.map(f => {
-      const depth  = Math.max(0, (f.relativePath.match(/\//g) || []).length - 1);
-      const indent = depth > 0 ? ` file-row--indent-${Math.min(depth, 3)}` : '';
-      const actions = f.isDir ? '' : buildFileActions(f);
-      return `<div class="file-row${f.isDir ? ' file-row--dir' : ''}${indent}">
-        <span class="file-icon">${fileIcon(f.name, f.isDir)}</span>
-        <span class="file-name" title="${esc(f.relativePath)}">${esc(f.name)}</span>
-        ${!f.isDir ? `<span class="file-size">${fmtSize(f.size)}</span>` : ''}
-        ${actions}
-      </div>`;
-    }).join('');
+    const inner = buildFileTree(t.files).map(renderFileNode).join('') || '<div class="files-list-empty">Empty</div>';
     return `<details class="files-ticket-group" open>
       <summary class="files-ticket-header">${esc(t.id)}</summary>
-      ${rows || '<div class="files-list-empty">Empty</div>'}
+      ${inner}
     </details>`;
   }).join('');
 }

@@ -374,6 +374,10 @@
       {
         "name": "MCP_EMAIL_RATE_LIMIT",
         "placeholder": "10"
+      },
+      {
+        "name": "MCP_EMAIL_SAVE_TO_SENT",
+        "placeholder": "true"
       }
     ],
     "notes": "Run \"npx @codefuturist/email-mcp setup\" for a guided wizard that auto-detects server settings. For Gmail use an App Password (not your main password) and set IMAP host to imap.gmail.com, SMTP host to smtp.gmail.com.",
