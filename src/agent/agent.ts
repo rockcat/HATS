@@ -232,6 +232,12 @@ export class Agent {
       }
     }
 
+    // Direct messages from the human always use the general thread so the
+    // human's chat context is consistent regardless of what task is active.
+    const historyKey = (message.from === 'human' && (message.type === 'direct' || message.type === 'human_reply'))
+      ? 'general'
+      : this.activeThreadKey;
+
     const userContent = formatIncomingMessage(message);
     const tools = [
       ...getToolsForHat(this.config.hatType),
@@ -239,7 +245,7 @@ export class Agent {
     ];
 
     // Scheduled tasks start fresh — no history needed for a cron-style trigger
-    const history = message.isScheduled ? [] : this.conversationHistory.map(toProviderMessage);
+    const history = message.isScheduled ? [] : (this.threads.get(historyKey) ?? []).map(toProviderMessage);
     const working: Message[] = [...history, { role: 'user', content: userContent }];
 
     // Tool loop — run until text response or max rounds
@@ -260,7 +266,7 @@ export class Agent {
       } catch (err) {
         if (err instanceof ProviderError && err.statusCode === 400 && err.message.includes('prompt is too long')) {
           log.warn(`[${this.name}] context overflow — clearing history and retrying`);
-          this.conversationHistory = [];
+          this.threads.set(historyKey, []);
           // Rebuild with only the triggering user message — safe regardless of where in the tool loop we are
           working.splice(0);
           working.push({ role: 'user', content: userContent });
@@ -304,7 +310,7 @@ export class Agent {
       } else {
         // Final text response
         working.push({ role: 'assistant', content: response.content });
-        this.persistHistory(working, userContent);
+        this.persistHistory(working, historyKey);
 
         // Route the response back via handler (suppress for scheduled tasks)
         if (this.responseHandler && response.content.trim() && !message.isScheduled) {
@@ -352,7 +358,7 @@ export class Agent {
         }
       } else {
         working.push({ role: 'assistant', content: response.content });
-        this.persistHistory(working, transcript);
+        this.persistHistory(working, this.activeThreadKey);
         return response.content;
       }
     }
@@ -429,20 +435,19 @@ export class Agent {
     }).text;
   }
 
-  private persistHistory(working: Message[], userContent: string): void {
-    void userContent;
+  private persistHistory(working: Message[], historyKey: string): void {
     const sliced = working.slice(-MAX_HISTORY_MESSAGES);
-    this.conversationHistory = sanitizeHistory(sliced).map((m): AgentMessage => ({
+    this.threads.set(historyKey, sanitizeHistory(sliced).map((m): AgentMessage => ({
       role: m.role,
       content: m.content,
       timestamp: new Date(),
       toolCalls: m.toolCalls,
       toolCallId: m.toolCallId,
       toolName: m.toolName,
-    }));
+    })));
   }
 
-  getHistory(): AgentMessage[] { return [...this.conversationHistory]; }
+  getHistory(): AgentMessage[] { return [...(this.threads.get('general') ?? [])]; }
 
   /** Restore conversation history from a snapshot or live copy.
    *  Accepts the snapshot shape where timestamp is an ISO string

@@ -79,9 +79,10 @@ function buildDirectives(ctx: PromptContext): string {
     items.push(
       `Your email address is ${ctx.email}. ` +
       `When sending a new email, always use tools that send from this address. ` +
-      `You should check for and read emails from your personal email and the human's email. ` +
+      `You should check for and read emails from your personal email and also the human's email. ` +
       `When replying, use the email at which the message was received. ` +
       `Only use the human's email when replying to messages where it is appropriate.`,
+      `Always be clear that you are an AI agent acting/communicating on behalf of the human.`
     );
   }
   return `## Your directives\n\n${items.map((d) => `- ${d}`).join('\n')}`;

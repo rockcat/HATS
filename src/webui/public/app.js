@@ -3502,9 +3502,25 @@ function openAddAgent() {
   document.getElementById('add-agent-name').value = '';
   document.getElementById('add-agent-visual-desc').value = '';
   document.getElementById('add-agent-backstory').value = '';
-  document.getElementById('add-agent-avatar').innerHTML = '<option value="">(no avatar)</option>';
-  document.getElementById('add-agent-background').innerHTML = '<option value="">(no background)</option>';
-  document.getElementById('add-agent-voice').innerHTML = '<option value="">(no voice)</option>';
+  getAvatars().then(avatars => {
+    const sel = document.getElementById('add-agent-avatar');
+    sel.innerHTML = '<option value="">(no avatar)</option>';
+    for (const av of avatars) {
+      const opt = document.createElement('option');
+      opt.value = av.file; opt.textContent = av.name;
+      sel.appendChild(opt);
+    }
+  });
+  populateBackgroundSelect('', 'add-agent-background');
+  getVoices().then(voices => {
+    const voiceSel = document.getElementById('add-agent-voice');
+    voiceSel.innerHTML = '<option value="">(no voice)</option>';
+    for (const v of voices) {
+      const opt = document.createElement('option');
+      opt.value = v.name; opt.textContent = v.name + (v.speakers?.length ? ` [${v.speakers.length} spk]` : '');
+      voiceSel.appendChild(opt);
+    }
+  });
   document.getElementById('add-agent-speaker').innerHTML = '<option value="">(default)</option>';
   document.getElementById('add-agent-speaker').hidden = true;
   setSpecValue('add-agent-specialisation', 'add-agent-specialisation-custom', '');
