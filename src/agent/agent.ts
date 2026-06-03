@@ -474,6 +474,20 @@ export class Agent {
     this.conversationHistory = sanitizeHistory(restored);
   }
 
+  /** Returns { threadKey -> messageCount } for all non-empty threads. */
+  getThreadSummary(): Record<string, number> {
+    const out: Record<string, number> = {};
+    for (const [key, msgs] of this.threads) {
+      if (msgs.length > 0) out[key] = msgs.length;
+    }
+    return out;
+  }
+
+  /** Returns messages for a specific thread (default: 'general'). */
+  getThreadHistory(key = 'general'): AgentMessage[] {
+    return [...(this.threads.get(key) ?? [])];
+  }
+
   toJSON(): object {
     return {
       id: this.id,
@@ -482,7 +496,7 @@ export class Agent {
       state: this._state,
       model: this.config.model,
       provider: this.config.provider.name,
-      historyLength: this.conversationHistory.length,
+      threads: this.getThreadSummary(),
       inboxSize: this.inbox.length,
     };
   }

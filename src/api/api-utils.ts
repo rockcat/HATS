@@ -87,6 +87,7 @@ export function buildAgentStatuses(
       voice: a.config.identity.voice,
       speakerName: a.config.identity.speakerName,
       enabledMcpServers: a.config.enabledMcpServers,
+      threads: a.getThreadSummary(),
     };
   });
 }

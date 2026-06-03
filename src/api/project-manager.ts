@@ -13,6 +13,7 @@ export interface AgentStatus {
   talkingTo?: string; model?: string; provider?: string;
   specialisation?: string; visualDescription?: string; backstory?: string;
   email?: string; avatar?: string; voice?: string; speakerName?: string; enabledMcpServers?: string[];
+  threads?: Record<string, number>;
 }
 
 export interface ProjectManagerDeps {

@@ -66,6 +66,29 @@ export class AgentRouter {
       return true;
     }
 
+    if (pathname.startsWith('/api/agents/') && pathname.endsWith('/threads')) {
+      const name  = decodeURIComponent(pathname.slice('/api/agents/'.length, -'/threads'.length));
+      const agent = orch.listAgents().find(a => a.name === resolveAgentName(name)) ?? orch.findById(name);
+      if (!agent) { json(res, 404, { error: 'Agent not found' }); return true; }
+      json(res, 200, agent.getThreadSummary());
+      return true;
+    }
+
+    if (pathname.startsWith('/api/agents/') && pathname.endsWith('/history')) {
+      const name    = decodeURIComponent(pathname.slice('/api/agents/'.length, -'/history'.length));
+      const agent   = orch.listAgents().find(a => a.name === resolveAgentName(name)) ?? orch.findById(name);
+      if (!agent) { json(res, 404, { error: 'Agent not found' }); return true; }
+      const thread  = url.searchParams.get('thread') ?? 'general';
+      const history = agent.getThreadHistory(thread);
+      json(res, 200, history.map(m => ({
+        role:      m.role,
+        content:   m.content,
+        timestamp: m.timestamp instanceof Date ? m.timestamp.toISOString() : m.timestamp,
+        toolName:  m.toolName,
+      })));
+      return true;
+    }
+
     if (pathname === '/api/team') { json(res, 200, { agents: this.deps.buildAgentStatuses(), tasks: orch.listTasks(), meetings: orch.listMeetings() }); return true; }
     if (pathname === '/api/agents' && method !== 'POST' && method !== 'DELETE') { json(res, 200, this.deps.buildAgentStatuses()); return true; }
     if (pathname === '/api/tasks')   { json(res, 200, orch.listTasks()); return true; }
