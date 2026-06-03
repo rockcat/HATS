@@ -802,8 +802,7 @@ main {
 .col-ready       { background: rgba(63,185,80,0.2);    color: #3fb950; }
 .col-backlog     { background: rgba(139,148,158,0.15); color: var(--text-muted); }
 .col-review      { background: rgba(210,153,34,0.2);   color: #d4a017; }
-.col-completed   { background: rgba(63,185,80,0.12);   color: #3fb950; opacity: 0.7; }
-.col-cancelled   { background: rgba(139,148,158,0.1);  color: #8b949e; opacity: 0.6; }
+.col-closed      { background: rgba(139,148,158,0.1);  color: #8b949e; opacity: 0.6; }
 
 .ticket-title {
   font-size: 12px;
