@@ -57,6 +57,23 @@ export class AgendaStore {
     intervalSeconds: number | null;
     delaySeconds?: number;
   }): Promise<AgendaEntry> {
+    // Deduplicate: if an entry with the same agent+label already exists, update it
+    const labelKey = data.label.trim().toLowerCase();
+    const existing = [...this.entries.values()].find(
+      e => e.agentName === data.agentName && e.label.trim().toLowerCase() === labelKey,
+    );
+    if (existing) {
+      const delay = data.delaySeconds ?? (data.intervalSeconds ?? 60);
+      Object.assign(existing, {
+        description:     data.description,
+        intervalSeconds: data.intervalSeconds,
+        nextRunAt:       Date.now() + delay * 1000,
+        enabled:         true,
+      });
+      await this.save();
+      return existing;
+    }
+
     const delay = data.delaySeconds ?? (data.intervalSeconds ?? 60);
     const entry: AgendaEntry = {
       id:              uuidv4(),
