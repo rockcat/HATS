@@ -529,9 +529,9 @@ export class TeamOrchestrator {
     this.onHumanEscalation = handler;
   }
 
-  async humanMessage(toAgentName: string, content: string): Promise<void> {
-    const msg = buildMessage('human', toAgentName, 'direct', content);
-    await this.store.append('human_message', { to: toAgentName, content });
+  async humanMessage(toAgentName: string, content: string, threadId?: string): Promise<void> {
+    const msg = buildMessage('human', toAgentName, 'direct', content, { threadId });
+    await this.store.append('human_message', { to: toAgentName, content, threadId });
     this.findByName(toAgentName)?.markHelpReceived();
     this.deliverToAgent(toAgentName, msg);
   }
@@ -548,9 +548,9 @@ export class TeamOrchestrator {
     this.deliverToAgent(toAgentName, msg);
   }
 
-  async humanReply(toAgentName: string, content: string): Promise<void> {
-    const msg = buildMessage('human', toAgentName, 'human_reply', content);
-    await this.store.append('human_reply', { to: toAgentName, content });
+  async humanReply(toAgentName: string, content: string, threadId?: string): Promise<void> {
+    const msg = buildMessage('human', toAgentName, 'human_reply', content, { threadId });
+    await this.store.append('human_reply', { to: toAgentName, content, threadId });
     const agent = this.findByName(toAgentName);
     if (agent) {
       agent.markHelpReceived();

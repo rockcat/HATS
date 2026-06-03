@@ -453,13 +453,14 @@ export class APIServer {
 
     if (pathname === '/api/cli' && method === 'POST') {
       const body = await readBody(req);
-      const { line } = JSON.parse(body) as { line: string };
+      const { line, threadId } = JSON.parse(body) as { line: string; threadId?: string };
       const output = await handleCLICommand(line?.trim() ?? '', {
         orchestrator: this.orchestrator,
         agentTicketMap: this.agentTicketMap,
         updateKanbanColumn: (id, col) => this.kanbanManager.updateKanbanColumn(id, col),
         dispatchUnstartedTickets: () => this.kanbanManager.dispatchUnstartedTickets(),
         resolveAgentName: (n) => this.resolveAgentName(n),
+        threadId,
       });
       this.json(res, 200, { output });
       return;

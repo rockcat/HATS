@@ -232,11 +232,12 @@ export class Agent {
       }
     }
 
-    // Direct messages from the human always use the general thread so the
-    // human's chat context is consistent regardless of what task is active.
-    const historyKey = (message.from === 'human' && (message.type === 'direct' || message.type === 'human_reply'))
-      ? 'general'
-      : this.activeThreadKey;
+    // Explicit threadId on the message always wins.
+    // Human direct/reply messages default to 'general'; everything else uses the active task thread.
+    const historyKey = message.threadId
+      ?? ((message.from === 'human' && (message.type === 'direct' || message.type === 'human_reply'))
+        ? 'general'
+        : this.activeThreadKey);
 
     const userContent = formatIncomingMessage(message);
     const tools = [

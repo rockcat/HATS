@@ -7,6 +7,7 @@ export interface CLIContext {
   updateKanbanColumn(ticketId: string, column: string): Promise<void>;
   dispatchUnstartedTickets(): Promise<void>;
   resolveAgentName(input: string): string;
+  threadId?: string;
 }
 
 export async function handleCLICommand(line: string, ctx: CLIContext): Promise<string> {
@@ -17,7 +18,7 @@ export async function handleCLICommand(line: string, ctx: CLIContext): Promise<s
     if (spaceIdx === -1) return 'Usage: @AgentName message';
     const name    = ctx.resolveAgentName(line.slice(1, spaceIdx));
     const message = line.slice(spaceIdx + 1);
-    await ctx.orchestrator.humanMessage(name, message);
+    await ctx.orchestrator.humanMessage(name, message, ctx.threadId);
     const ticketId = ctx.agentTicketMap.get(name.toLowerCase());
     if (ticketId) ctx.updateKanbanColumn(ticketId, 'in_progress').catch(() => {});
     return `→ Sent to ${name}`;

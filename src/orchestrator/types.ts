@@ -21,6 +21,8 @@ export interface TeamMessage {
   isScheduled?: boolean;
   /** Thread key to seed this task's conversation from (e.g. the chat that spawned it). */
   sourceThreadId?: string;
+  /** Target an explicit thread by ID instead of the default routing logic. */
+  threadId?: string;
 }
 
 export interface HumanRequest {
