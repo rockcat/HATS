@@ -65,7 +65,10 @@ export interface TeamSnapshotV2 {
   savedAt: string;
   humanName: string;
   agentIds: string[];
+  /** @deprecated single 'general' thread only — use agentThreads when present */
   agentHistories: Record<string, HistoryEntry[]>;
+  /** All threads keyed by agentId → threadKey → messages */
+  agentThreads?: Record<string, Record<string, HistoryEntry[]>>;
   tasks: Task[];
   meetings: Meeting[];
   mcpServers: MCPServerDef[];

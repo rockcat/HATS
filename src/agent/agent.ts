@@ -453,6 +453,15 @@ export class Agent {
 
   getHistory(): AgentMessage[] { return [...(this.threads.get('general') ?? [])]; }
 
+  /** Returns all threads as a plain object: { threadKey → messages[] }. */
+  getAllThreadHistories(): Record<string, AgentMessage[]> {
+    const out: Record<string, AgentMessage[]> = {};
+    for (const [key, msgs] of this.threads) {
+      if (msgs.length > 0) out[key] = [...msgs];
+    }
+    return out;
+  }
+
   /** Restore conversation history from a snapshot or live copy.
    *  Accepts the snapshot shape where timestamp is an ISO string
    *  and toolCalls may be untyped JSON. */
@@ -473,6 +482,29 @@ export class Agent {
       toolName:    m.toolName,
     }));
     this.conversationHistory = sanitizeHistory(restored);
+  }
+
+  /** Restore all threads from a snapshot { threadKey → messages[] }. */
+  setAllThreadHistories(allThreads: Record<string, Array<{
+    role: 'user' | 'assistant' | 'tool';
+    content: string;
+    timestamp: Date | string;
+    toolCalls?: ToolCall[] | unknown;
+    toolCallId?: string;
+    toolName?: string;
+  }>>): void {
+    this.threads.clear();
+    for (const [key, messages] of Object.entries(allThreads)) {
+      const restored: AgentMessage[] = messages.map((m) => ({
+        role:        m.role,
+        content:     m.content,
+        timestamp:   m.timestamp instanceof Date ? m.timestamp : new Date(m.timestamp as string),
+        toolCalls:   m.toolCalls as ToolCall[] | undefined,
+        toolCallId:  m.toolCallId,
+        toolName:    m.toolName,
+      }));
+      this.threads.set(key, sanitizeHistory(restored));
+    }
   }
 
   /** Returns { threadKey -> messageCount } for all non-empty threads. */

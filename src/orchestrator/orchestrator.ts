@@ -144,8 +144,8 @@ export class TeamOrchestrator {
   // ── State persistence ──────────────────────────────────────────────────────
 
   async saveState(filePath: string): Promise<void> {
-    const history = (agent: Agent): HistoryEntry[] =>
-      agent.getHistory().map((m) => ({
+    const serializeMessages = (msgs: import('../agent/types.js').AgentMessage[]): HistoryEntry[] =>
+      msgs.map((m) => ({
         role: m.role,
         content: m.content,
         timestamp: m.timestamp instanceof Date ? m.timestamp.toISOString() : String(m.timestamp),
@@ -154,13 +154,24 @@ export class TeamOrchestrator {
         toolName: m.toolName,
       }));
 
+    const serializeAllThreads = (agent: Agent): Record<string, HistoryEntry[]> => {
+      const out: Record<string, HistoryEntry[]> = {};
+      for (const [key, msgs] of Object.entries(agent.getAllThreadHistories())) {
+        out[key] = serializeMessages(msgs);
+      }
+      return out;
+    };
+
     if (this.agentStore) {
       // V2: persist agent configs to global store; only histories go in the project file
       const agentIds: string[]                      = [];
       const agentHistories: Record<string, HistoryEntry[]> = {};
+      const agentThreads: Record<string, Record<string, HistoryEntry[]>> = {};
       for (const agent of this.agents.values()) {
         agentIds.push(agent.id);
-        agentHistories[agent.id] = history(agent);
+        const threads = serializeAllThreads(agent);
+        agentHistories[agent.id] = threads['general'] ?? [];
+        agentThreads[agent.id]   = threads;
         const existingDef = this.agentStore.get(agent.id);
         const def: AgentDefinition = {
           id:                    agent.id,
@@ -182,6 +193,7 @@ export class TeamOrchestrator {
         humanName: this.humanName,
         agentIds,
         agentHistories,
+        agentThreads,
         tasks: Array.from(this.tasks.values()),
         meetings: Array.from(this.meetings.values()),
         mcpServers: this.mcp.getServerDefs(),
@@ -201,7 +213,7 @@ export class TeamOrchestrator {
         teamContext: agent.config.teamContext,
         enabledMcpServers: agent.config.enabledMcpServers,
         personalMcpCredentials: agent.config.personalMcpCredentials,
-        history: history(agent),
+        history: serializeMessages(agent.getHistory()),
       }));
       const snapshot: TeamSnapshotV1 = {
         version: 1,
@@ -299,7 +311,11 @@ export class TeamOrchestrator {
         disabledPersonalMcpServers: def.disabledPersonalMcpServers,
       };
       const agent = this.registerAgent(config);
-      agent.setHistory(s.agentHistories[agentId] ?? []);
+      if (s.agentThreads?.[agentId]) {
+        agent.setAllThreadHistories(s.agentThreads[agentId]);
+      } else {
+        agent.setHistory(s.agentHistories[agentId] ?? []);
+      }
       loadedCount++;
     }
     for (const task of s.tasks) this.tasks.set(task.id, task);
