@@ -513,7 +513,7 @@ const PRIORITY_COLOR = {
 };
 
 // Active kanban columns (top-right)
-const ACTIVE_COLUMNS = ['ready', 'in_progress', 'blocked', 'review', 'completed', 'cancelled'];
+const ACTIVE_COLUMNS = ['ready', 'in_progress', 'blocked', 'review', 'closed'];
 
 let kanbanFilterUser = '';
 let kanbanFilterTag  = '';
@@ -712,12 +712,16 @@ function initKanbanDrag() {
 
       // Optimistic update
       ticket.column = column;
+      if (column === 'closed') ticket.closedReason = ticket.closedReason ?? 'completed';
+      else delete ticket.closedReason;
       renderKanban(state.tickets);
 
+      const dragBody = { column };
+      if (column === 'closed') dragBody.closedReason = ticket.closedReason;
       fetch(`/api/kanban/tickets/${encodeURIComponent(draggedTicketId)}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ column }),
+        body: JSON.stringify(dragBody),
       })
         .then(r => r.json())
         .then(result => { if (result.error) console.warn('Drag failed:', result.error); })
@@ -755,6 +759,10 @@ function initTicketEditing() {
   document.getElementById('modal-cancel').addEventListener('click', closeTicketModal);
   document.getElementById('modal-save').addEventListener('click', saveTicket);
   document.getElementById('modal-comment-submit').addEventListener('click', postComment);
+  document.getElementById('edit-column').addEventListener('change', e => {
+    document.getElementById('edit-closed-reason-group').style.display =
+      e.target.value === 'closed' ? '' : 'none';
+  });
   document.getElementById('modal-comment-text').addEventListener('keydown', e => {
     if (e.key === 'Enter') postComment();
   });
@@ -786,6 +794,7 @@ function openNewTicketModal() {
   document.getElementById('edit-description').value = '';
   document.getElementById('edit-priority').value    = 'medium';
   document.getElementById('edit-column').value      = 'backlog';
+  document.getElementById('edit-closed-reason-group').style.display = 'none';
   populateAssigneeDropdown('');
   document.getElementById('edit-tags').value        = '';
   document.getElementById('edit-blocked-by').value  = '';
@@ -806,7 +815,12 @@ function openTicketModal(id) {
   document.getElementById('edit-title').value       = ticket.title ?? '';
   document.getElementById('edit-description').value = ticket.description ?? '';
   document.getElementById('edit-priority').value    = ticket.priority ?? 'medium';
-  document.getElementById('edit-column').value      = ticket.column ?? 'backlog';
+  const col = ticket.column ?? 'backlog';
+  document.getElementById('edit-column').value      = col;
+  document.getElementById('edit-closed-reason-group').style.display = col === 'closed' ? '' : 'none';
+  if (col === 'closed') {
+    document.getElementById('edit-closed-reason').value = ticket.closedReason ?? 'completed';
+  }
   populateAssigneeDropdown(ticket.assignee ?? '');
   document.getElementById('edit-tags').value        = (ticket.tags ?? []).join(', ');
   document.getElementById('edit-blocked-by').value  = (ticket.blockedBy ?? []).join(', ');
@@ -854,16 +868,20 @@ function saveTicket() {
   const originalLabel = saveBtn.textContent;
   saveBtn.textContent = 'Saving…';
 
+  const editColumn = document.getElementById('edit-column').value;
   const body = {
-    title:       document.getElementById('edit-title').value.trim(),
-    description: document.getElementById('edit-description').value.trim(),
-    priority:    document.getElementById('edit-priority').value,
-    column:      document.getElementById('edit-column').value,
-    assignee:    document.getElementById('edit-assignee').value.trim() || null,
-    tags:        document.getElementById('edit-tags').value
-                   .split(',').map(t => t.trim()).filter(Boolean),
-    blockedBy:   document.getElementById('edit-blocked-by').value
-                   .split(',').map(t => t.trim().toUpperCase()).filter(Boolean),
+    title:        document.getElementById('edit-title').value.trim(),
+    description:  document.getElementById('edit-description').value.trim(),
+    priority:     document.getElementById('edit-priority').value,
+    column:       editColumn,
+    closedReason: editColumn === 'closed'
+                    ? document.getElementById('edit-closed-reason').value
+                    : undefined,
+    assignee:     document.getElementById('edit-assignee').value.trim() || null,
+    tags:         document.getElementById('edit-tags').value
+                    .split(',').map(t => t.trim()).filter(Boolean),
+    blockedBy:    document.getElementById('edit-blocked-by').value
+                    .split(',').map(t => t.trim().toUpperCase()).filter(Boolean),
   };
 
   const isCreate = currentEditId === null;
@@ -2305,7 +2323,7 @@ function openAgentDetail(name, chatOnly = false) {
   const ticketsEl = document.getElementById('agent-detail-tickets');
   ticketsEl.innerHTML = '';
   const agentTickets = (state.tickets ?? []).filter(t =>
-    t.assignee === name && t.column !== 'completed'
+    t.assignee === name && t.column !== 'closed'
   );
   for (const t of agentTickets) {
     const chip = document.createElement('span');
@@ -3132,7 +3150,7 @@ function updateGoalBar(goal, tickets) {
   if (text) text.textContent = goal ?? '';
 
   const all    = (tickets ?? []).length;
-  const done   = (tickets ?? []).filter(t => t.column === 'completed').length;
+  const done   = (tickets ?? []).filter(t => t.column === 'closed').length;
   const active = (tickets ?? []).filter(t => ['ready','in_progress','blocked','review'].includes(t.column)).length;
   const todo   = all - done - active;
 

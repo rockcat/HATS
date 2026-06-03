@@ -310,7 +310,10 @@ export class Agent {
       } else {
         // Final text response
         working.push({ role: 'assistant', content: response.content });
-        this.persistHistory(working, historyKey);
+        // Scheduled messages are fire-and-forget — don't overwrite the active thread
+        if (!message.isScheduled) {
+          this.persistHistory(working, historyKey);
+        }
 
         // Route the response back via handler (suppress for scheduled tasks)
         if (this.responseHandler && response.content.trim() && !message.isScheduled) {

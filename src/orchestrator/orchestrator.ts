@@ -65,7 +65,7 @@ export class TeamOrchestrator {
   private personalMcpByAgent = new Map<string, MCPRegistry>();
   private agendaStoreRef: { store: AgendaStore | null } = { store: null };
   private agendaRunner: AgendaRunner | null = null;
-  private agendaDefaultsSeeded = new Set<string>();
+
   private agentStore: AgentStore | null = null;
   private rebuildTimer: ReturnType<typeof setTimeout> | null = null;
   private mcp = new MCPRegistry();
@@ -427,27 +427,9 @@ export class TeamOrchestrator {
         });
       }
     }
-    this.ensureDefaultAgenda(agent.name).catch(() => {});
     return agent;
   }
 
-  private async ensureDefaultAgenda(agentName: string): Promise<void> {
-    if (this.agendaDefaultsSeeded.has(agentName)) return;
-    const store = this.agendaStoreRef.store;
-    if (!store) return;
-    this.agendaDefaultsSeeded.add(agentName);
-    const existing = store.list(agentName);
-    const hasPermissionCheck = existing.some(e =>
-      e.label.toLowerCase().includes('permission') || e.label.toLowerCase().includes('approval'),
-    );
-    if (hasPermissionCheck) return;
-    await store.add({
-      agentName,
-      label: 'Check email permissions',
-      description: 'Call check_email_permissions to see if the human has approved any new email addresses since your last check. For each newly approved address, proceed with any email you were waiting to send to that address.',
-      intervalSeconds: 600,
-    });
-  }
 
   getAgent(name: string): Agent | undefined { return this.findByName(name); }
   findById(id: string): Agent | undefined { return this.agents.get(id); }

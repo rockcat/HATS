@@ -16,12 +16,12 @@ export function stateLabel(state: string): string {
 }
 
 type Priority = 'low' | 'medium' | 'high' | 'critical';
-type Column   = 'backlog' | 'ready' | 'in_progress' | 'blocked' | 'completed';
+type Column   = 'backlog' | 'ready' | 'in_progress' | 'blocked' | 'review' | 'closed';
 
 export function buildBoardSummary(board: Board, includeBacklog: boolean) {
   const columns: Column[] = includeBacklog
-    ? ['backlog', 'ready', 'in_progress', 'blocked', 'completed']
-    : ['ready', 'in_progress', 'blocked', 'completed'];
+    ? ['backlog', 'ready', 'in_progress', 'blocked', 'review', 'closed']
+    : ['ready', 'in_progress', 'blocked', 'review', 'closed'];
 
   const pri: Record<Priority, number> = { critical: 0, high: 1, medium: 2, low: 3 };
   const result: Record<string, { count: number; tickets: unknown[] }> = {};

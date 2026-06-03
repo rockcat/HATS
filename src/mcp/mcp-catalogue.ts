@@ -57,9 +57,19 @@ export function isHumanMcp(e: MCPCatalogueEntry): boolean {
   return !!e.users?.includes('human');
 }
 
+/** Returns true if a config references {PROJECT_DIR} and needs reconnecting on project switch. */
+export function isProjectScoped(config: MCPServerConfig): boolean {
+  const check = (v: string) => v.includes('{PROJECT_DIR}');
+  if (config.transport === 'stdio') {
+    if (config.args?.some(check)) return true;
+    if (config.env && Object.values(config.env).some((v) => check(String(v)))) return true;
+  }
+  return false;
+}
+
 /** Resolves env vars and platform-specific command names at connect time.
- *  Also expands ~/ prefix in args to the user's home directory. */
-export function resolveConfig(config: MCPServerConfig): MCPServerConfig {
+ *  Expands {CWD}, {HOME}, and {PROJECT_DIR} placeholders in args and env values. */
+export function resolveConfig(config: MCPServerConfig, projectDir?: string | null): MCPServerConfig {
   if (config.transport === 'http') {
     return config.headers
       ? { ...config, headers: interpolateHeaders(config.headers, process.env as Record<string, string>) }
@@ -67,9 +77,16 @@ export function resolveConfig(config: MCPServerConfig): MCPServerConfig {
   }
   if (config.transport !== 'stdio') return config;
 
+  const expandPlaceholders = (v: string) =>
+    v
+      .replace(/\{CWD\}/g, process.cwd())
+      .replace(/\{HOME\}/g, os.homedir())
+      .replace(/\{PROJECT_DIR\}/g, projectDir ?? process.cwd());
+
   const resolved: Record<string, string> = {};
   for (const [k, configVal] of Object.entries(config.env ?? {})) {
-    resolved[k] = process.env[k] ?? (configVal as string) ?? '';
+    const raw = process.env[k] ?? (configVal as string) ?? '';
+    resolved[k] = expandPlaceholders(raw);
   }
 
   let command = config.command;
@@ -80,7 +97,7 @@ export function resolveConfig(config: MCPServerConfig): MCPServerConfig {
   return {
     ...config,
     command,
-    args: config.args?.map(expandTilde),
+    args: config.args?.map(a => expandPlaceholders(expandTilde(a))),
     ...(Object.keys(resolved).length > 0 ? { env: resolved } : {}),
   };
 }

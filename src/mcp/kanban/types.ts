@@ -4,8 +4,9 @@ export type Column =
   | 'in_progress'
   | 'blocked'
   | 'review'      // awaiting review before completion
-  | 'completed'
-  | 'cancelled';
+  | 'closed';
+
+export type ClosedReason = 'completed' | 'cancelled';
 
 export type Priority = 'low' | 'medium' | 'high' | 'critical';
 
@@ -29,6 +30,7 @@ export interface Ticket {
   createdAt: string;
   updatedAt: string;
   blockedBy?: string[];    // ticket IDs that must complete before this one
+  closedReason?: ClosedReason;  // set when column === 'closed'
   projectName?: string;    // human-readable project name
   projectFolder?: string;  // absolute path to the project working folder
 }

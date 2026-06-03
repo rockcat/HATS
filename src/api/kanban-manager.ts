@@ -68,16 +68,21 @@ export class KanbanManager {
     this.kanbanWatcher = null;
   }
 
-  async updateKanbanColumn(ticketId: string, column: string): Promise<void> {
+  async updateKanbanColumn(ticketId: string, column: string, closedReason?: 'completed' | 'cancelled'): Promise<void> {
     if (!this.kanbanPath) return;
     const board  = await this.readKanban();
     const ticket = board.tickets[ticketId];
     if (!ticket || ticket.column === column) return;
     ticket.column    = column as never;
+    if (column === 'closed') {
+      ticket.closedReason = closedReason ?? 'completed';
+    } else {
+      delete ticket.closedReason;
+    }
     ticket.updatedAt = new Date().toISOString();
     await this.writeKanban(board);
-    log.info(`[API] Ticket ${ticketId} → ${column}`);
-    if (column === 'completed') {
+    log.info(`[API] Ticket ${ticketId} → ${column}${closedReason ? ` (${closedReason})` : ''}`);
+    if (column === 'closed') {
       this.unblockDependents(ticketId).catch(() => {});
     }
   }
@@ -144,7 +149,7 @@ export class KanbanManager {
       const blockers = (ticket.blockedBy ?? []).join(', ');
       const msg = ticket.column === 'blocked' && blockers
         ? `Checking in on ${ticket.id}: "${ticket.title}". It's blocked on [${blockers}]. Are those blockers resolved? If so, update the ticket status.`
-        : `Checking in on ${ticket.id}: "${ticket.title}". It's been in progress for a while. Any updates? Please move it to completed if done, or add a comment on current status.`;
+        : `Checking in on ${ticket.id}: "${ticket.title}". It's been in progress for a while. Any updates? Please close it if done, or add a comment on current status.`;
       orch.humanMessage(agentName, msg).catch(() => {});
       log.info(`[API] Nudged ${agentName} about stale ticket ${ticket.id}`);
     }
@@ -312,7 +317,8 @@ export class KanbanManager {
       const body   = await readBody(req);
       const fields = JSON.parse(body) as Partial<{
         title: string; description: string; priority: string;
-        column: string; assignee: string | null; tags: string[]; blockedBy: string[];
+        column: string; closedReason: 'completed' | 'cancelled';
+        assignee: string | null; tags: string[]; blockedBy: string[];
       }>;
       const board  = await this.readKanban();
       const ticket = board.tickets[id];
@@ -322,7 +328,14 @@ export class KanbanManager {
       if (fields.title       !== undefined) ticket.title       = fields.title;
       if (fields.description !== undefined) ticket.description = fields.description;
       if (fields.priority    !== undefined) ticket.priority    = fields.priority as never;
-      if (fields.column      !== undefined) ticket.column      = fields.column   as never;
+      if (fields.column      !== undefined) {
+        ticket.column = fields.column as never;
+        if (fields.column === 'closed') {
+          ticket.closedReason = fields.closedReason ?? 'completed';
+        } else {
+          delete ticket.closedReason;
+        }
+      }
       if (fields.assignee    !== undefined) ticket.assignee    = fields.assignee ?? undefined;
       if (fields.tags        !== undefined) ticket.tags        = fields.tags;
       if (fields.blockedBy   !== undefined) ticket.blockedBy   = fields.blockedBy;
@@ -331,7 +344,7 @@ export class KanbanManager {
       json(res, 200, ticket);
       const columnChanged   = fields.column   !== undefined && prevColumn   !== ticket.column;
       const assigneeChanged = fields.assignee !== undefined && prevAssignee !== ticket.assignee;
-      if (columnChanged && ticket.column === 'completed') {
+      if (columnChanged && ticket.column === 'closed') {
         this.unblockDependents(id).catch(() => {});
       }
       if (ticket.column === 'in_progress' && ticket.assignee && (columnChanged || assigneeChanged)) {

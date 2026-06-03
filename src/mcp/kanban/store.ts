@@ -1,7 +1,7 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
-import { Board, Column, Comment, Priority, Ticket } from './types.js';
+import { Board, ClosedReason, Column, Comment, Priority, Ticket } from './types.js';
 
 const EMPTY_BOARD: Board = { tickets: {}, nextSeq: 1 };
 
@@ -52,7 +52,7 @@ export class KanbanStore {
 
   async getBoardSummary(): Promise<Record<Column, { count: number; tickets: Array<{ id: string; title: string; priority: Priority; assignee?: string }> }>> {
     await this.reload();
-    const columns: Column[] = ['backlog', 'ready', 'in_progress', 'blocked', 'review', 'completed', 'cancelled'];
+    const columns: Column[] = ['backlog', 'ready', 'in_progress', 'blocked', 'review', 'closed'];
     const result = {} as Awaited<ReturnType<typeof this.getBoardSummary>>;
     for (const col of columns) {
       const tickets = this._filterTickets({ column: col });
@@ -123,11 +123,16 @@ export class KanbanStore {
     });
   }
 
-  moveTicket(id: string, column: Column): Promise<Ticket> {
+  moveTicket(id: string, column: Column, closedReason?: ClosedReason): Promise<Ticket> {
     return this.serialise(async () => {
       await this.reload();
       const ticket = this.requireTicket(id);
       ticket.column = column;
+      if (column === 'closed') {
+        ticket.closedReason = closedReason ?? 'completed';
+      } else {
+        delete ticket.closedReason;
+      }
       ticket.updatedAt = new Date().toISOString();
       await this.save();
       return ticket;

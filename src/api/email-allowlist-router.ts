@@ -6,6 +6,8 @@ export interface EmailAllowlistRouterDeps {
   sseBroadcast(data: object): void;
   json(res: ServerResponse, status: number, body: unknown): void;
   readBody(req: IncomingMessage): Promise<string>;
+  /** Called when an entry transitions to approved or rejected so the agent can be notified. */
+  onStatusChange?(entry: EmailAllowlistEntry): void;
 }
 
 export class EmailAllowlistRouter {
@@ -55,6 +57,10 @@ export class EmailAllowlistRouter {
       else { json(res, 400, { error: 'action must be "approve" or "reject"' }); return true; }
       if (!entry) { json(res, 404, { error: 'Email not found' }); return true; }
       sseBroadcast({ type: 'email_allowlist_update', allowlist: this.deps.store.list() });
+      if (this.deps.onStatusChange && entry.requestedBy && entry.requestedBy !== 'human') {
+        this.deps.onStatusChange(entry);
+        await this.deps.store.markNotified([entry.email]);
+      }
       json(res, 200, entry);
       return true;
     }

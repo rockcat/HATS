@@ -217,6 +217,16 @@ export class APIServer {
       sseBroadcast: (d) => self.sseBroadcast(d),
       json:         (r, s, b) => self.json(r, s, b),
       readBody,
+      onStatusChange: (entry) => {
+        const verb = entry.status === 'approved' ? 'approved' : 'rejected';
+        const detail = entry.status === 'approved'
+          ? `You may now send emails to ${entry.email}.`
+          : `Do not contact ${entry.email}.`;
+        self.orchestrator.humanMessage(
+          entry.requestedBy,
+          `Your email permission request for ${entry.email} has been ${verb}. ${detail}`,
+        ).catch(() => {});
+      },
     });
 
     const tokensPath = config.googleTokensPath ?? path.join(process.cwd(), 'data', 'google-tokens.json');
@@ -520,7 +530,7 @@ export class APIServer {
   }
 
   private resolveMCPConfig(id: string, entry: MCPCatalogueEntry) {
-    const config = resolveConfig(entry.config);
+    const config = resolveConfig(entry.config, this.projectDir);
     if (id === 'kanban' && this.kanbanManager.kanbanPath && config.transport === 'stdio') {
       return { ...config, args: [...(config.args ?? []), this.kanbanManager.kanbanPath] };
     }

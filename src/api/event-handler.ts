@@ -17,7 +17,7 @@ export interface OrchestratorEventContext {
   emailAllowlistStore: EmailAllowlistStore | null;
   agentTicketMap: Map<string, string>;
   kanban: {
-    updateKanbanColumn(id: string, col: string): Promise<void>;
+    updateKanbanColumn(id: string, col: string, closedReason?: string): Promise<void>;
     addTicketComment(id: string, author: string, text: string): Promise<void>;
   };
   getOrchestrator(): TeamOrchestrator;
@@ -97,7 +97,7 @@ export function handleOrchestratorEvent(ev: StoredEvent, ctx: OrchestratorEventC
         changed = true;
         const ticketId = ctx.agentTicketMap.get(agentId);
         if (ticketId) {
-          ctx.kanban.updateKanbanColumn(ticketId, 'completed').catch(() => {});
+          ctx.kanban.updateKanbanColumn(ticketId, 'closed', 'completed').catch(() => {});
           ctx.agentTicketMap.delete(agentId);
         }
       }

@@ -6,9 +6,10 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { KanbanStore } from './store.js';
 import { log } from '../../util/logger.js';
-import { Column, Priority } from './types.js';
+import { ClosedReason, Column, Priority } from './types.js';
 
-const COLUMNS: Column[] = ['backlog', 'ready', 'in_progress', 'blocked', 'review', 'completed', 'cancelled'];
+const COLUMNS: Column[] = ['backlog', 'ready', 'in_progress', 'blocked', 'review', 'closed'];
+const CLOSED_REASONS: ClosedReason[] = ['completed', 'cancelled'];
 const PRIORITIES: Priority[] = ['low', 'medium', 'high', 'critical'];
 
 export async function startKanbanServer(boardPath: string): Promise<void> {
@@ -70,12 +71,13 @@ export async function startKanbanServer(boardPath: string): Promise<void> {
       },
       {
         name: 'move_ticket',
-        description: 'Move a ticket to a different column. Use "review" before marking complete; move back to "in_progress" if review fails.',
+        description: 'Move a ticket to a different column. Use "review" before closing; move back to "in_progress" if review fails. When moving to "closed", set closed_reason to "completed" or "cancelled".',
         inputSchema: {
           type: 'object',
           properties: {
-            id:     { type: 'string', description: 'Ticket ID.' },
-            column: { type: 'string', enum: COLUMNS, description: 'Destination column.' },
+            id:            { type: 'string', description: 'Ticket ID.' },
+            column:        { type: 'string', enum: COLUMNS, description: 'Destination column.' },
+            closed_reason: { type: 'string', enum: CLOSED_REASONS, description: 'Required when moving to "closed". Use "completed" for finished work or "cancelled" to abandon.' },
           },
           required: ['id', 'column'],
         },
@@ -217,8 +219,11 @@ async function handleTool(name: string, args: Record<string, unknown>, store: Ka
       });
 
     case 'move_ticket': {
-      const ticket = await store.moveTicket(args['id'] as string, args['column'] as Column);
-      return `Moved ${ticket.id} to "${ticket.column}".`;
+      const col = args['column'] as Column;
+      const reason = args['closed_reason'] as ClosedReason | undefined;
+      const ticket = await store.moveTicket(args['id'] as string, col, reason);
+      const suffix = ticket.closedReason ? ` (${ticket.closedReason})` : '';
+      return `Moved ${ticket.id} to "${ticket.column}"${suffix}.`;
     }
 
     case 'assign_ticket': {

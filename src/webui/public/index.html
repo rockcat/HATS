@@ -206,16 +206,9 @@
         </div>
         <div class="task-list"></div>
       </div>
-      <div class="kanban-col" id="col-completed">
+      <div class="kanban-col" id="col-closed">
         <div class="kanban-col-header">
-          <span class="kanban-col-label col-completed">Done</span>
-          <span class="kanban-col-count"></span>
-        </div>
-        <div class="task-list"></div>
-      </div>
-      <div class="kanban-col" id="col-cancelled">
-        <div class="kanban-col-header">
-          <span class="kanban-col-label col-cancelled">Cancelled</span>
+          <span class="kanban-col-label col-closed">Closed</span>
           <span class="kanban-col-count"></span>
         </div>
         <div class="task-list"></div>
@@ -367,6 +360,12 @@
               <option value="in_progress">In Progress</option>
               <option value="blocked">Blocked</option>
               <option value="review">Review</option>
+              <option value="closed">Closed</option>
+            </select>
+          </div>
+          <div class="field-group" id="edit-closed-reason-group" style="display:none">
+            <label class="field-label">Closed reason</label>
+            <select id="edit-closed-reason" class="modal-select">
               <option value="completed">Completed</option>
               <option value="cancelled">Cancelled</option>
             </select>
