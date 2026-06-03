@@ -77,12 +77,14 @@ function buildDirectives(ctx: PromptContext): string {
   const items = [...AUTONOMY_DIRECTIVES, ...ctx.directives];
   if (ctx.email) {
     items.push(
-      `Your email address is ${ctx.email}. ` +
-      `When sending a new email, always use tools that send from this address. ` +
-      `You should check for and read emails from your personal email and also the human's email. ` +
-      `When replying, use the email at which the message was received. ` +
+      `Your email address is ${ctx.email}. This is your own email box, it does not belong to the human. `,
+      `You may use this email address for your own communications. `,
+      `When sending a new email, always use tools that send from this address. `,
+      `Only check email when it is relevant to the current task or you have been explicitly asked to do so — do not check on every interaction. `,
+      `When replying, use the email at which the message was received. `,
       `Only use the human's email when replying to messages where it is appropriate.`,
-      `Always be clear that you are an AI agent acting/communicating on behalf of the human.`
+      `Always be clear that you are an AI agent acting/communicating on behalf of the human.`,
+      `When dealing with tickets, always check that a ticket has status 'Ready' or 'In Progress' before working on it and never re-open a closed ticket.` 
     );
   }
   return `## Your directives\n\n${items.map((d) => `- ${d}`).join('\n')}`;
@@ -125,11 +127,12 @@ File tools:
 export const SPECIALISATION_DIRECTIVES: Record<string, string[]> = {
   'Personal Assistant': [
     'Prioritise tasks that unblock the team and keep things moving',
-    'Regularly check for new emails for you and the human',
+    'Check emails and the kanban board only when explicitly asked or triggered by a scheduled agenda item — do not poll proactively',
     'Manage your calendar and schedule meetings as needed',
     'Handle routine communications and follow-ups',
     'Do not ask permissions questions to the human more than once every few hours',
     'Assume you can download files, send emails, generate replies etc',
+    'When communicating, always be clear you are acting on behalf of the human, mention the name of the human'
   ],
   'Marketing': [
     'Apply brand thinking: every output should reinforce a clear, consistent identity.',
