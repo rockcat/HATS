@@ -8,6 +8,7 @@ export class AgendaRunner {
   private store: AgendaStore;
   private deliverMessage: (agentName: string, msg: TeamMessage) => Promise<void>;
   private mcp: MCPRegistry | null;
+  private getPersonalMcp: (agentName: string) => MCPRegistry | null;
   private timer: ReturnType<typeof setInterval> | null = null;
   private readonly checkIntervalMs: number;
 
@@ -15,11 +16,13 @@ export class AgendaRunner {
     store: AgendaStore,
     deliverMessage: (agentName: string, msg: TeamMessage) => Promise<void>,
     mcp: MCPRegistry | null = null,
+    getPersonalMcp: (agentName: string) => MCPRegistry | null = () => null,
     checkIntervalMs = 60_000,
   ) {
     this.store = store;
     this.deliverMessage = deliverMessage;
     this.mcp = mcp;
+    this.getPersonalMcp = getPersonalMcp;
     this.checkIntervalMs = checkIntervalMs;
   }
 
@@ -67,9 +70,17 @@ export class AgendaRunner {
 
   private async fireMcpToolCall(entry: AgendaEntry): Promise<void> {
     const spec = entry.mcpToolCall!;
+    // Resolve registry: personal MCP takes priority if specified, else shared
+    const registry = spec.personalMcpAgentName
+      ? (this.getPersonalMcp(spec.personalMcpAgentName) ?? this.mcp)
+      : this.mcp;
+    if (!registry) {
+      log.error(`[Agenda] No MCP registry available for "${entry.label}"`);
+      return;
+    }
     let result: string;
     try {
-      result = await this.mcp!.callTool(spec.toolName, spec.args);
+      result = await registry.callTool(spec.toolName, spec.args);
     } catch (err) {
       log.error(`[Agenda] MCP tool call failed for "${entry.label}":`, (err as Error).message);
       return;

@@ -11,6 +11,7 @@ export interface McpToolCallSpec {
   args: Record<string, unknown>;
   condition: string;                   // JS expression; `result` (string) is in scope
   messageTemplate: string;            // sent to agent when condition passes; ${result} interpolated
+  personalMcpAgentName?: string;      // if set, use this agent's personal MCP registry
 }
 
 export interface HistoryEntry {

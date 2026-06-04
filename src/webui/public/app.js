@@ -4930,7 +4930,7 @@ function buildScheduleRow(action) {
 
   const isMcp = action.type === 'mcp_tool_call';
   const descText = isMcp && action.mcpToolCall
-    ? `${action.mcpToolCall.toolName.replace(/^mcp__[^_]+__/, '')} → ${action.mcpToolCall.condition || 'always notify'}`
+    ? `${action.mcpToolCall.serverName}${action.mcpToolCall.personalMcpAgentName ? ` (${action.mcpToolCall.personalMcpAgentName})` : ''}: ${action.mcpToolCall.toolName.replace(/^mcp__[^_]+__/, '')} → ${action.mcpToolCall.condition || 'always notify'}`
     : action.description;
 
   const viewBody = document.createElement('div');
@@ -5127,25 +5127,34 @@ async function populateMcpServerSelect(sel) {
   sel.innerHTML = '<option value="">Loading…</option>';
   const schemas = await loadMcpToolSchemas();
   sel.innerHTML = '<option value="">Select a server…</option>';
-  for (const { server } of schemas) {
+  for (const entry of schemas) {
     const opt = document.createElement('option');
-    opt.value = server;
-    opt.textContent = server;
+    // encode agent name in the value as "server||agentName" (|| not valid in server names)
+    opt.value = entry.agentName ? `${entry.server}||${entry.agentName}` : entry.server;
+    opt.textContent = entry.agentName ? `${entry.server} (${entry.agentName})` : entry.server;
     sel.appendChild(opt);
   }
 }
 
-function populateMcpToolSelect(toolSel, serverName) {
+/** Parse the compound server-select value → { server, agentName } */
+function parseMcpServerValue(val) {
+  const idx = val.indexOf('||');
+  if (idx === -1) return { server: val, agentName: null };
+  return { server: val.slice(0, idx), agentName: val.slice(idx + 2) };
+}
+
+function populateMcpToolSelect(toolSel, serverSelectValue) {
   toolSel.innerHTML = '';
-  toolSel.disabled = !serverName;
-  if (!serverName || !_mcpToolSchemas) { toolSel.innerHTML = '<option value="">Select server first</option>'; return; }
-  const entry = _mcpToolSchemas.find(s => s.server === serverName);
+  toolSel.disabled = !serverSelectValue;
+  if (!serverSelectValue || !_mcpToolSchemas) { toolSel.innerHTML = '<option value="">Select server first</option>'; return; }
+  const { server, agentName } = parseMcpServerValue(serverSelectValue);
+  const entry = _mcpToolSchemas.find(s => s.server === server && (s.agentName ?? null) === agentName);
   toolSel.innerHTML = '<option value="">Select a tool…</option>';
   if (!entry) return;
   for (const tool of entry.tools) {
     const opt = document.createElement('option');
     opt.value = tool.name;
-    opt.textContent = tool.name.replace(`mcp__${serverName}__`, '');
+    opt.textContent = tool.name.replace(`mcp__${server}__`, '');
     toolSel.appendChild(opt);
   }
 }
@@ -5153,8 +5162,9 @@ function populateMcpToolSelect(toolSel, serverName) {
 function buildMcpParamFields(container, toolName) {
   container.innerHTML = '';
   if (!toolName || !_mcpToolSchemas) return;
-  const serverName = toolName.match(/^mcp__([^_]+(?:_[^_]+)*)__/)?.[1];
-  const serverEntry = _mcpToolSchemas.find(s => s.server === serverName);
+  const serverSelectValue = document.getElementById('schedules-mcp-server')?.value ?? '';
+  const { server: serverName, agentName } = parseMcpServerValue(serverSelectValue);
+  const serverEntry = _mcpToolSchemas.find(s => s.server === serverName && (s.agentName ?? null) === agentName);
   const tool = serverEntry?.tools.find(t => t.name === toolName);
   if (!tool) return;
   const props = tool.parameters?.properties ?? {};
@@ -5237,9 +5247,9 @@ function initSchedulesTab() {
 
   // Server → tool cascade
   document.getElementById('schedules-mcp-server')?.addEventListener('change', () => {
-    const serverName = document.getElementById('schedules-mcp-server').value;
+    const serverSelectValue = document.getElementById('schedules-mcp-server').value;
     const toolSel = document.getElementById('schedules-mcp-tool');
-    populateMcpToolSelect(toolSel, serverName);
+    populateMcpToolSelect(toolSel, serverSelectValue);
     buildMcpParamFields(document.getElementById('schedules-mcp-params'), '');
   });
 
@@ -5258,14 +5268,17 @@ function initSchedulesTab() {
 
     let body;
     if (type === 'mcp_tool_call') {
-      const serverName = document.getElementById('schedules-mcp-server').value;
-      const toolName   = document.getElementById('schedules-mcp-tool').value;
-      const condition  = document.getElementById('schedules-mcp-condition').value.trim();
-      const messageTemplate = document.getElementById('schedules-mcp-message').value.trim();
-      if (!serverName || !toolName) { alert('Please select a server and tool'); return; }
+      const serverSelectValue = document.getElementById('schedules-mcp-server').value;
+      const toolName          = document.getElementById('schedules-mcp-tool').value;
+      const condition         = document.getElementById('schedules-mcp-condition').value.trim();
+      const messageTemplate   = document.getElementById('schedules-mcp-message').value.trim();
+      if (!serverSelectValue || !toolName) { alert('Please select a server and tool'); return; }
       if (!messageTemplate) { alert('Message template is required'); return; }
+      const { server: serverName, agentName } = parseMcpServerValue(serverSelectValue);
       const args = collectMcpArgs(document.getElementById('schedules-mcp-params'));
-      body = { label, type: 'mcp_tool_call', mcpToolCall: { serverName, toolName, args, condition, messageTemplate }, intervalMinutes };
+      const mcpToolCall = { serverName, toolName, args, condition, messageTemplate };
+      if (agentName) mcpToolCall.personalMcpAgentName = agentName;
+      body = { label, type: 'mcp_tool_call', mcpToolCall, intervalMinutes };
     } else {
       const description = document.getElementById('schedules-add-description').value.trim();
       if (!description) { alert('Description is required'); return; }

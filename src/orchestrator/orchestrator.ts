@@ -99,7 +99,12 @@ export class TeamOrchestrator {
     await store.load();
     this.agendaStoreRef.store = store;
     this.agendaRunner?.stop();
-    this.agendaRunner = new AgendaRunner(store, (name, msg) => { this.deliverToAgent(name, msg); return Promise.resolve(); }, this.mcp);
+    this.agendaRunner = new AgendaRunner(
+      store,
+      (name, msg) => { this.deliverToAgent(name, msg); return Promise.resolve(); },
+      this.mcp,
+      (agentName) => this.personalMcpByAgent.get(agentName.toLowerCase()) ?? null,
+    );
     this.agendaRunner.start();
   }
 
@@ -537,8 +542,18 @@ export class TeamOrchestrator {
     };
   }
 
-  getMCPToolSchemas() {
-    return this.mcp.getToolSchemasForScheduler();
+  getMCPToolSchemas(): Array<{ server: string; agentName: string | null; tools: import('../providers/types.js').ToolDefinition[] }> {
+    const shared = this.mcp.getToolSchemasForScheduler().map(e => ({ ...e, agentName: null as string | null }));
+    const personal: typeof shared = [];
+    for (const [key, registry] of this.personalMcpByAgent.entries()) {
+      // Recover the display name from the running agents map
+      const agent = Array.from(this.agents.values()).find(a => a.name.toLowerCase() === key);
+      const agentName = agent?.name ?? key;
+      for (const entry of registry.getToolSchemasForScheduler()) {
+        personal.push({ ...entry, agentName });
+      }
+    }
+    return [...shared, ...personal];
   }
 
   async readEvents(since?: string): Promise<import('../store/event-store.js').StoredEvent[]> {
