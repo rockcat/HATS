@@ -361,7 +361,7 @@ export class ProjectManager {
         const response = await fetch('https://api.openai.com/v1/images/generations', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-          body: JSON.stringify({ model: 'dall-e-3', prompt: prompt.trim(), n: 1, size: '1792x1024', response_format: 'b64_json' }),
+          body: JSON.stringify({ model: 'gpt-image-1', prompt: prompt.trim(), n: 1, size: '1536x1024' }),
         });
         if (!response.ok) { const err = await response.text(); json(res, 502, { error: `OpenAI error: ${err}` }); return true; }
         const data = await response.json() as { data: Array<{ b64_json: string }> };

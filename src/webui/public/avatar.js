@@ -48,8 +48,9 @@ function initRenderer(canvas) {
 }
 
 function resizeRenderer(canvas) {
-  const w = canvas.clientWidth  || 320;
-  const h = canvas.clientHeight || 240;
+  const parent = canvas.parentElement;
+  const w = canvas.clientWidth  || parent?.clientWidth  || 320;
+  const h = canvas.clientHeight || parent?.clientHeight || 320;
   renderer.setPixelRatio(window.devicePixelRatio);
   renderer.setSize(w, h, false);
   camera.aspect = w / h;
@@ -155,6 +156,7 @@ window.avatarAPI = {
       : '';
 
     if (!renderer || currentCanvas !== canvas) initRenderer(canvas);
+    void panel.offsetWidth; // flush layout so canvas dimensions are correct
     resizeRenderer(canvas);
     loadGLB(avatarFile, cameraPos, rotate, fov, scale);
 

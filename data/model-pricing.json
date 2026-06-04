@@ -1,0 +1,330 @@
+{
+  "updatedAt": "2026-06-04T07:23:29.051Z",
+  "models": {
+    "claude-opus-4-6": {
+      "provider": "anthropic",
+      "input": 5,
+      "output": 25
+    },
+    "claude-opus-4-5": {
+      "provider": "anthropic",
+      "input": 5,
+      "output": 25
+    },
+    "claude-sonnet-4-6": {
+      "provider": "anthropic",
+      "input": 3,
+      "output": 15
+    },
+    "claude-sonnet-4-5": {
+      "provider": "anthropic",
+      "input": 3,
+      "output": 15
+    },
+    "claude-haiku-4-5": {
+      "provider": "anthropic",
+      "input": 1,
+      "output": 5
+    },
+    "claude-haiku-4-5-20251001": {
+      "provider": "anthropic",
+      "input": 0.8,
+      "output": 4
+    },
+    "claude-3-5-sonnet-20241022": {
+      "provider": "anthropic",
+      "input": 3,
+      "output": 15
+    },
+    "claude-3-5-sonnet-20240620": {
+      "provider": "anthropic",
+      "input": 3,
+      "output": 15
+    },
+    "claude-3-5-haiku-20241022": {
+      "provider": "anthropic",
+      "input": 0.8,
+      "output": 4
+    },
+    "claude-3-opus-20240229": {
+      "provider": "anthropic",
+      "input": 15,
+      "output": 75
+    },
+    "claude-3-sonnet-20240229": {
+      "provider": "anthropic",
+      "input": 3,
+      "output": 15
+    },
+    "claude-3-haiku-20240307": {
+      "provider": "anthropic",
+      "input": 0.25,
+      "output": 1.25
+    },
+    "gpt-4.1": {
+      "provider": "openai",
+      "input": 2,
+      "output": 8
+    },
+    "gpt-4.1-mini": {
+      "provider": "openai",
+      "input": 0.4,
+      "output": 1.6
+    },
+    "gpt-4.1-nano": {
+      "provider": "openai",
+      "input": 0.1,
+      "output": 0.4
+    },
+    "gpt-4o": {
+      "provider": "openai",
+      "input": 2.5,
+      "output": 10
+    },
+    "gpt-4o-mini": {
+      "provider": "openai",
+      "input": 0.15,
+      "output": 0.6
+    },
+    "gpt-4-turbo": {
+      "provider": "openai",
+      "input": 10,
+      "output": 30
+    },
+    "gpt-4": {
+      "provider": "openai",
+      "input": 30,
+      "output": 60
+    },
+    "gpt-3.5-turbo": {
+      "provider": "openai",
+      "input": 0.5,
+      "output": 1.5
+    },
+    "o1": {
+      "provider": "openai",
+      "input": 15,
+      "output": 60
+    },
+    "o1-mini": {
+      "provider": "openai",
+      "input": 3,
+      "output": 12
+    },
+    "o1-preview": {
+      "provider": "openai",
+      "input": 15,
+      "output": 60
+    },
+    "o3": {
+      "provider": "openai",
+      "input": 10,
+      "output": 40
+    },
+    "o3-mini": {
+      "provider": "openai",
+      "input": 1.1,
+      "output": 4.4
+    },
+    "o4-mini": {
+      "provider": "openai",
+      "input": 1.1,
+      "output": 4.4
+    },
+    "gemini-2.5-pro": {
+      "provider": "gemini",
+      "input": 1.25,
+      "output": 10
+    },
+    "gemini-2.5-pro-preview": {
+      "provider": "gemini",
+      "input": 1.25,
+      "output": 10
+    },
+    "gemini-2.5-pro-preview-05-06": {
+      "provider": "gemini",
+      "input": 1.25,
+      "output": 10
+    },
+    "gemini-2.5-flash": {
+      "provider": "gemini",
+      "input": 0.3,
+      "output": 2.5
+    },
+    "gemini-2.5-flash-preview": {
+      "provider": "gemini",
+      "input": 0.075,
+      "output": 0.3
+    },
+    "gemini-2.5-flash-preview-04-17": {
+      "provider": "gemini",
+      "input": 0.075,
+      "output": 0.3
+    },
+    "gemini-2.0-flash": {
+      "provider": "gemini",
+      "input": 0.1,
+      "output": 0.4
+    },
+    "gemini-2.0-flash-lite": {
+      "provider": "gemini",
+      "input": 0.075,
+      "output": 0.3
+    },
+    "gemini-2.0-flash-exp": {
+      "provider": "gemini",
+      "input": 0,
+      "output": 0
+    },
+    "gemini-1.5-pro": {
+      "provider": "gemini",
+      "input": 1.25,
+      "output": 5
+    },
+    "gemini-1.5-pro-002": {
+      "provider": "gemini",
+      "input": 1.25,
+      "output": 5
+    },
+    "gemini-1.5-flash": {
+      "provider": "gemini",
+      "input": 0.075,
+      "output": 0.3
+    },
+    "gemini-1.5-flash-002": {
+      "provider": "gemini",
+      "input": 0.075,
+      "output": 0.3
+    },
+    "gemini-1.5-flash-8b": {
+      "provider": "gemini",
+      "input": 0.0375,
+      "output": 0.15
+    },
+    "claude-opus-4-8": {
+      "provider": "anthropic",
+      "input": 5,
+      "output": 25
+    },
+    "claude-opus-4-7": {
+      "provider": "anthropic",
+      "input": 5,
+      "output": 25
+    },
+    "claude-opus-4-1": {
+      "provider": "anthropic",
+      "input": 15,
+      "output": 75
+    },
+    "gpt-5.5": {
+      "provider": "openai",
+      "input": 5,
+      "output": 30
+    },
+    "gpt-5.5-pro": {
+      "provider": "openai",
+      "input": 30,
+      "output": 180
+    },
+    "gpt-5.4": {
+      "provider": "openai",
+      "input": 2.5,
+      "output": 15
+    },
+    "gpt-5.4-mini": {
+      "provider": "openai",
+      "input": 0.75,
+      "output": 4.5
+    },
+    "gpt-5.4-nano": {
+      "provider": "openai",
+      "input": 0.2,
+      "output": 1.25
+    },
+    "gpt-5.4-pro": {
+      "provider": "openai",
+      "input": 30,
+      "output": 180
+    },
+    "gpt-realtime-2": {
+      "provider": "openai",
+      "input": 4,
+      "output": 24
+    },
+    "gpt-5.3-codex": {
+      "provider": "openai",
+      "input": 1.75,
+      "output": 14
+    },
+    "o3-deep-research": {
+      "provider": "openai",
+      "input": 5,
+      "output": 20
+    },
+    "o4-mini-deep-research": {
+      "provider": "openai",
+      "input": 1,
+      "output": 4
+    },
+    "computer-use-preview": {
+      "provider": "openai",
+      "input": 1.5,
+      "output": 6
+    },
+    "chat-latest": {
+      "provider": "openai",
+      "input": 5,
+      "output": 30
+    },
+    "o4-mini-2025-04-16": {
+      "provider": "openai",
+      "input": 4,
+      "output": 16
+    },
+    "gemini-3.5-flash": {
+      "provider": "gemini",
+      "input": 1.5,
+      "output": 9
+    },
+    "gemini-3.1-flash-lite": {
+      "provider": "gemini",
+      "input": 0.25,
+      "output": 1.5
+    },
+    "gemini-3.1-pro-preview": {
+      "provider": "gemini",
+      "input": 2,
+      "output": 12
+    },
+    "gemini-3-flash-preview": {
+      "provider": "gemini",
+      "input": 0.5,
+      "output": 3
+    },
+    "gemini-2.5-flash-lite": {
+      "provider": "gemini",
+      "input": 0.1,
+      "output": 0.4
+    },
+    "gemini-2.5-flash-lite-preview-09-2025": {
+      "provider": "gemini",
+      "input": 0.1,
+      "output": 0.4
+    },
+    "gemini-2.5-flash-native-audio-preview-12-2025": {
+      "provider": "gemini",
+      "input": 0.5,
+      "output": 2
+    },
+    "gemini-robotics-er-1.6-preview": {
+      "provider": "gemini",
+      "input": 1,
+      "output": 5
+    },
+    "gemini-2.5-computer-use-preview-10-2025": {
+      "provider": "gemini",
+      "input": 1.25,
+      "output": 10
+    }
+  }
+}

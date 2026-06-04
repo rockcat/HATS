@@ -1391,7 +1391,7 @@ main {
   border: 1px solid var(--border-hover);
   border-radius: 10px;
   width: 100%;
-  max-width: 720px;
+  max-width: 70%;
   max-height: 90vh;
   display: flex;
   flex-direction: row;
@@ -1521,7 +1521,7 @@ main {
   overflow-y: auto;
   margin: 0;
   padding: 10px 12px;
-  font-size: 9px;
+  font-size: 11px;
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
@@ -1543,8 +1543,8 @@ main {
   border-radius: 10px;
   display: flex;
   flex-direction: column;
-  width: 550px;
-  max-height: 90vh;
+  width: 40vw;
+  height: 90vh;
   overflow: hidden;
   flex-shrink: 0;
   box-shadow: 0 24px 64px rgba(0,0,0,0.6);
@@ -1557,22 +1557,17 @@ main {
   overflow: hidden;
 }
 
-/* Agent compose area */
-.agent-detail-compose {
-  flex-shrink: 0;
-  border-top: 1px solid var(--border);
-  padding: 10px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
+/* Agent ticket chips (below thread viewer) */
 .agent-detail-tickets {
+  flex-shrink: 0;
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
+  padding: 6px 10px;
+  border-top: 1px solid var(--border);
   min-height: 0;
 }
+.agent-detail-tickets:empty { display: none; }
 
 .agent-ticket-chip {
   font-size: 10px;
@@ -1587,44 +1582,6 @@ main {
   max-width: 160px;
   text-overflow: ellipsis;
 }
-
-.agent-detail-compose-row {
-  display: flex;
-  gap: 8px;
-  align-items: flex-end;
-}
-
-.agent-detail-textarea {
-  flex: 1;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  color: var(--text);
-  font-family: inherit;
-  font-size: 12px;
-  padding: 7px 10px;
-  resize: none;
-  outline: none;
-  line-height: 1.4;
-  transition: border-color 0.15s;
-}
-.agent-detail-textarea:focus { border-color: var(--hat-blue); }
-.agent-detail-textarea::placeholder { color: var(--text-muted); }
-
-.agent-detail-send-btn {
-  flex-shrink: 0;
-  padding: 7px 14px;
-  background: var(--hat-blue);
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  font-size: 12px;
-  cursor: pointer;
-  font-family: inherit;
-  transition: opacity 0.15s;
-}
-.agent-detail-send-btn:hover { opacity: 0.85; }
-.agent-detail-send-btn:disabled { opacity: 0.4; cursor: default; }
 
 
 /* Chat button on agent cards */
@@ -4111,12 +4068,22 @@ body.has-expanded-panel main > section:not(.panel--expanded) {
 .library-agent-list { flex: 1; overflow-y: auto; }
 
 .library-agent-row {
-  display: flex; align-items: center; gap: 10px;
-  padding: 8px 12px; border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
   font-size: 13px;
+  margin: 2px;
+  border-radius: 3px;
+  background: #202030;
 }
 
+.library-agent-row--active { 
+  background: #203020; 
+}
 .library-agent-row:hover { background: var(--surface-2); }
+.library-agent-row--active:hover { background: color-mix(in srgb, var(--accent) 12%, var(--surface-2)); }
 
 .library-agent-name { font-weight: 600; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
@@ -4146,7 +4113,7 @@ body.has-expanded-panel main > section:not(.panel--expanded) {
 
 /* Library editor modal — vertical layout with top-section preview */
 #add-agent-modal { gap: 16px; }
-.lib-editor-modal { max-width: 680px; width: 90vw; }
+.lib-editor-modal { max-width: 40vw; width: 90vw; height: 90vh;}
 .lib-editor-body { display: flex; flex-direction: column; gap: 12px; }
 .lib-editor-top { display: flex; gap: 14px; align-items: flex-start; }
 .lib-editor-top-fields { flex: 1; display: flex; flex-direction: column; gap: 10px; min-width: 0; }

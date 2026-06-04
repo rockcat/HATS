@@ -5,6 +5,7 @@ import { debugState, writePromptLog } from './debug-state.js';
 
 export class GeminiProvider implements AIProvider {
   readonly name = 'gemini';
+  readonly pricingPageUrl = 'https://ai.google.dev/gemini-api/docs/pricing';
   private client: GoogleGenerativeAI;
 
   constructor(apiKey?: string) {

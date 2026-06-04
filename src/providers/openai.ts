@@ -9,6 +9,7 @@ import { debugState, writePromptLog } from './debug-state.js';
 
 export class OpenAIProvider implements AIProvider {
   readonly name: string;
+  readonly pricingPageUrl: string = 'https://developers.openai.com/api/docs/pricing';
   private client: OpenAI;
 
   constructor(apiKey?: string, baseURL?: string, name = 'openai') {

@@ -2228,32 +2228,6 @@ function initAgentDetail() {
     if (e.key === 'Escape') { nameInput.value = activeDetailAgent; nameInput.blur(); }
   });
 
-  // Remove button
-  // Send message to agent
-  const sendBtn     = document.getElementById('agent-detail-send');
-  const messageArea = document.getElementById('agent-detail-message');
-  const doSend = async () => {
-    if (!activeDetailAgent) return;
-    const text = messageArea.value.trim();
-    if (!text) return;
-    sendBtn.disabled = true;
-    sendBtn.textContent = '…';
-    try {
-      await fetch('/api/cli', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ line: `@${activeDetailAgent} ${text}` }),
-      });
-      messageArea.value = '';
-    } catch { /* ignore */ }
-    sendBtn.disabled = false;
-    sendBtn.textContent = 'Send';
-  };
-  sendBtn.addEventListener('click', doSend);
-  messageArea.addEventListener('keydown', e => {
-    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); doSend(); }
-  });
-
   // Configure button: switch from chat-only to configure mode
   document.getElementById('agent-detail-configure-btn').addEventListener('click', () => {
     document.getElementById('agent-detail').classList.remove('chat-mode');
@@ -2334,9 +2308,6 @@ function openAgentDetail(name, chatOnly = false) {
     chip.textContent = `${t.id} ${t.title}`;
     ticketsEl.appendChild(chip);
   }
-
-  // Clear any previous message
-  document.getElementById('agent-detail-message').value = '';
 
   document.getElementById('agent-detail-modal').hidden = false;
 
@@ -3042,7 +3013,7 @@ function renderSettingsBody(entries, providers, humanName, logPrompts) {
 
   // Provider status
   if (providers && providers.length) {
-    html += `<div class="settings-section"><div class="settings-section-title">Provider Status <button id="refresh-models-btn" class="modal-btn secondary" style="font-size:11px;padding:2px 8px;margin-left:8px">Refresh models</button></div>`;
+    html += `<div class="settings-section"><div class="settings-section-title">Provider Status <button id="refresh-models-btn" class="modal-btn secondary" style="font-size:11px;padding:2px 8px;margin-left:8px">Refresh models</button><button id="update-pricing-btn" class="modal-btn secondary" style="font-size:11px;padding:2px 8px;margin-left:6px" title="Fetch current pricing from provider websites using Claude Haiku">Update pricing</button></div>`;
     for (const p of providers) {
       const dot = p.available ? '🟢' : '🔴';
       const modelCount = p.models?.length ? ` · ${p.models.length} model${p.models.length !== 1 ? 's' : ''}` : '';
@@ -3065,6 +3036,29 @@ function renderSettingsBody(entries, providers, humanName, logPrompts) {
       await refreshProviderModels(true);
       // Re-render the settings body with updated provider data
       openSettings();
+    });
+  }
+
+  // Wire "Update pricing" button
+  const updatePricingBtn = document.getElementById('update-pricing-btn');
+  if (updatePricingBtn) {
+    updatePricingBtn.addEventListener('click', async () => {
+      updatePricingBtn.disabled = true;
+      updatePricingBtn.textContent = 'Fetching…';
+      try {
+        const r = await fetch('/api/pricing/refresh', { method: 'POST' }).then(res => res.json());
+        if (r.error) throw new Error(r.error);
+        _pricingCache = null; // invalidate frontend pricing cache
+        const summary = `+${r.added} added, ${r.updated} updated, ${r.unchanged} unchanged`;
+        updatePricingBtn.textContent = `✓ ${summary}`;
+        const msgEl = document.getElementById('settings-msg');
+        if (msgEl) { msgEl.textContent = `Pricing updated: ${summary}`; msgEl.className = 'settings-msg settings-msg--ok'; }
+      } catch (err) {
+        updatePricingBtn.textContent = `✗ ${err.message}`;
+      }
+      setTimeout(() => {
+        if (updatePricingBtn) { updatePricingBtn.disabled = false; updatePricingBtn.textContent = 'Update pricing'; }
+      }, 6000);
     });
   }
 
@@ -4847,18 +4841,22 @@ function renderGlobalAgents(agents, projectIds) {
     list.innerHTML = '<div style="padding:16px 12px;color:var(--text-muted);font-size:13px">No agents in the library yet. Create one with the button above.</div>';
     return;
   }
-  list.innerHTML = agents.map(agent => {
-    const hats   = (agent.hatType ?? []).filter(h => h !== 'none').map(h => h.charAt(0).toUpperCase() + h.slice(1)).join('+') || 'No Hat';
-    const inProj = projectIds.has(agent.id);
+  const byName = (a, b) => (a.identity?.name ?? '').localeCompare(b.identity?.name ?? '');
+  const inProj  = agents.filter(a => projectIds.has(a.id)).sort(byName);
+  const notProj = agents.filter(a => !projectIds.has(a.id)).sort(byName);
+  const sorted  = [...inProj, ...notProj];
+  list.innerHTML = sorted.map(agent => {
+    const hats    = (agent.hatType ?? []).filter(h => h !== 'none').map(h => h.charAt(0).toUpperCase() + h.slice(1)).join('+') || 'No Hat';
+    const active  = projectIds.has(agent.id);
     return `
-      <div class="library-agent-row" data-agent-id="${agent.id}" style="cursor:pointer" title="Click to edit">
+      <div class="library-agent-row${active ? ' library-agent-row--active' : ''}" data-agent-id="${agent.id}" style="cursor:pointer" title="Click to edit">
         <div class="library-agent-body" style="flex:1;min-width:0">
           <div class="library-agent-name">${escHtml(agent.identity?.name ?? 'Unnamed')}</div>
           <div class="library-agent-meta">${escHtml(hats)} · ${escHtml(agent.model ?? '')}</div>
         </div>
-        ${inProj ? '<span class="library-agent-in-project">In project</span>' : ''}
+        ${active ? '<span class="library-agent-in-project">In project</span>' : ''}
         <div class="library-agent-actions">
-          ${inProj ? '' : `<button class="library-btn library-btn--add" data-action="add" data-agent-id="${agent.id}">+ Add to project</button>`}
+          ${active ? '' : `<button class="library-btn library-btn--add" data-action="add" data-agent-id="${agent.id}">+ Add to project</button>`}
           <button class="library-btn library-btn--del" data-action="delete" data-agent-id="${agent.id}" title="Remove from library">✕</button>
         </div>
       </div>`;

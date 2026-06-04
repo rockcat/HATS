@@ -13,7 +13,7 @@ import { HatType } from '../hats/types.js';
 import { SPECIALISATION_DIRECTIVES, generateSystemPrompt } from '../prompt/generator.js';
 import { mergeHatDefinitions } from '../hats/definitions.js';
 import { personasByHat } from '../hats/personas.js';
-import { getPricingTable, FREE_PROVIDERS } from '../providers/pricing.js';
+import { getPricingTable, FREE_PROVIDERS, reloadPricingFromFile } from '../providers/pricing.js';
 import { AnthropicProvider } from '../providers/anthropic.js';
 import { makeProvider, KNOWN_PROVIDERS, probeLocalLLM, getCachedModels, getModelCacheEntry, clearModelCache } from './providers.js';
 import { AgentStatus } from './project-manager.js';
@@ -385,6 +385,19 @@ export class AgentRouter {
 
     if (pathname === '/api/pricing' && method === 'GET') { json(res, 200, { pricing: getPricingTable(), freeProviders: [...FREE_PROVIDERS] }); return true; }
 
+    if (pathname === '/api/pricing/refresh' && method === 'POST') {
+      try {
+        const { updatePricing } = await import('../tools/pricing-updater.js');
+        const logs: string[] = [];
+        const result = await updatePricing(msg => logs.push(msg));
+        reloadPricingFromFile();
+        json(res, 200, { ...result, log: logs });
+      } catch (err) {
+        json(res, 500, { error: (err as Error).message });
+      }
+      return true;
+    }
+
     if (pathname === '/api/human-requests' && method === 'GET') { json(res, 200, { requests: this.deps.buildRequestsList() }); return true; }
 
     if (pathname.match(/^\/api\/human-requests\/[^/]+$/) && method === 'DELETE') {
@@ -691,24 +704,25 @@ export class AgentRouter {
         ...(patch.model     !== undefined && { model: patch.model.trim() }),
       };
       await store.addOrUpdate(updated);
-      // Sync all changed fields to the running agent if it's in the current project
+      // Sync all changed fields to the running agent if it's in the current project.
+      // Look up by stable UUID so duplicate names can't cause a mismatch.
       const runningAgent = orch.listAgents().find(a => a.id === agentId);
       if (runningAgent) {
-        const rn = runningAgent.name;
-        if (patch.name && patch.name.trim() !== rn) {
-          try { orch.renameAgent(rn, patch.name.trim()); } catch { /* non-fatal */ }
+        if (patch.name && patch.name.trim() !== runningAgent.name) {
+          try { orch.renameAgent(runningAgent.name, patch.name.trim()); } catch { /* non-fatal */ }
+          // runningAgent.name now reflects the new name (live reference)
         }
-        if (patch.hatTypes)                         orch.changeAgentHat(rn, updated.hatType);
+        if (patch.hatTypes)                         orch.changeAgentHat(runningAgent.name, updated.hatType);
         if (patch.visualDescription !== undefined || patch.backstory !== undefined)
-          orch.updateAgentIdentity(rn, updated.identity.visualDescription, updated.identity.backstory);
-        if (patch.specialisation !== undefined)     orch.updateAgentSpecialisation(rn, updated.identity.specialisation);
-        if (patch.avatar !== undefined)             orch.updateAgentAvatar(rn, updated.identity.avatar);
-        if (patch.background !== undefined)         orch.updateAgentBackground(rn, updated.identity.background);
+          orch.updateAgentIdentity(runningAgent.name, updated.identity.visualDescription, updated.identity.backstory);
+        if (patch.specialisation !== undefined)     orch.updateAgentSpecialisation(runningAgent.name, updated.identity.specialisation);
+        if (patch.avatar !== undefined)             orch.updateAgentAvatar(runningAgent.name, updated.identity.avatar);
+        if (patch.background !== undefined)         orch.updateAgentBackground(runningAgent.name, updated.identity.background);
         if (patch.voice !== undefined || patch.speakerName !== undefined)
-          orch.updateAgentVoice(rn, updated.identity.voice, updated.identity.speakerName);
+          orch.updateAgentVoice(runningAgent.name, updated.identity.voice, updated.identity.speakerName);
         if (patch.provider !== undefined || patch.model !== undefined) {
           const provider = makeProvider(updated.providerName) ?? runningAgent.config.provider;
-          orch.updateAgentConfig(rn, provider, updated.model);
+          orch.updateAgentConfig(runningAgent.name, provider, updated.model);
         }
       }
       saveCurrentState().catch(() => {});

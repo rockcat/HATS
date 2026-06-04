@@ -48,6 +48,7 @@ export interface CompletionResponse {
 
 export interface AIProvider {
   name: string;
+  pricingPageUrl: string;
   complete(req: CompletionRequest): Promise<CompletionResponse>;
 }
 

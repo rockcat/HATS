@@ -1,5 +1,5 @@
 // thread-viewer.js — <conversation-threads agent="Name"> web component
-// Slack-style two-column threaded conversation viewer
+// Slack-style two-column threaded conversation viewer with compose support
 
 class ConversationThreads extends HTMLElement {
   static get observedAttributes() { return ['agent']; }
@@ -13,6 +13,8 @@ class ConversationThreads extends HTMLElement {
     this._activeThread = null;
     this._activeMessages = [];
     this._pollTimer = null;
+    this._newThreadMode = false;
+    this._sending = false;
     this._shadow.innerHTML = this._template();
   }
 
@@ -33,19 +35,27 @@ class ConversationThreads extends HTMLElement {
     if (name === 'agent') {
       this._agentName = value;
       this._activeThread = null;
+      this._newThreadMode = false;
       this._refresh();
     }
   }
 
   // ── Polling ──────────────────────────────────────────────────────────────
 
-  _startPolling() {
+  _startPolling(intervalMs = 5000) {
     this._stopPolling();
-    this._pollTimer = setInterval(() => this._refresh(), 15000);
+    this._pollTimer = setInterval(() => this._refresh(), intervalMs);
   }
 
   _stopPolling() {
     if (this._pollTimer) { clearInterval(this._pollTimer); this._pollTimer = null; }
+  }
+
+  _bumpPolling() {
+    // Poll every 2s for 30s after a send to catch agent responses quickly, then settle back
+    this._startPolling(2000);
+    clearTimeout(this._pollSettleTimer);
+    this._pollSettleTimer = setTimeout(() => this._startPolling(5000), 30000);
   }
 
   // ── Data fetching ────────────────────────────────────────────────────────
@@ -58,20 +68,73 @@ class ConversationThreads extends HTMLElement {
       this._threads = await threadsRes.json();
       await this._loadGeneral();
       if (this._activeThread) await this._loadThread(this._activeThread);
-      this._render();
+      this._renderAndRestoreDrafts();
     } catch {
       this._renderPlaceholder('Failed to load conversation');
     }
   }
 
+  _renderAndRestoreDrafts() {
+    const active       = this._shadow.activeElement;
+    const inGeneral    = !!active?.closest?.('#general-compose');
+    const inThread     = !!active?.closest?.('#thread-compose');
+    const inName       = active?.id === 'new-thread-name';
+    const selStart     = active?.selectionStart ?? null;
+    const selEnd       = active?.selectionEnd   ?? null;
+    const genInputH    = this._shadow.querySelector('#general-compose .compose-input')?.style.height ?? '';
+    const threadInputH = this._shadow.querySelector('#thread-compose .compose-input')?.style.height ?? '';
+
+    const genDraft    = this._shadow.querySelector('#general-compose .compose-input')?.value ?? '';
+    const threadDraft = this._shadow.querySelector('#thread-compose .compose-input')?.value ?? '';
+    const threadName  = this._shadow.querySelector('#new-thread-name')?.value ?? '';
+
+    // Smart scroll: stay at bottom if already there, else preserve position
+    const gmEl = this._shadow.getElementById('general-messages');
+    const tmEl = this._shadow.getElementById('thread-messages');
+    const gmAtBottom = !gmEl || (gmEl.scrollHeight - gmEl.scrollTop - gmEl.clientHeight < 80);
+    const tmAtBottom = !tmEl || (tmEl.scrollHeight - tmEl.scrollTop - tmEl.clientHeight < 80);
+    const gmScroll   = gmEl?.scrollTop ?? 0;
+    const tmScroll   = tmEl?.scrollTop ?? 0;
+
+    this._render();
+
+    // Restore draft text and textarea heights
+    const gi = this._shadow.querySelector('#general-compose .compose-input');
+    if (gi) { if (genDraft) gi.value = genDraft; if (genInputH) gi.style.height = genInputH; }
+    const ti = this._shadow.querySelector('#thread-compose .compose-input');
+    if (ti) { if (threadDraft) ti.value = threadDraft; if (threadInputH) ti.style.height = threadInputH; }
+    const ni = this._shadow.querySelector('#new-thread-name');
+    if (ni && threadName) ni.value = threadName;
+
+    // Restore focus and cursor position
+    if (inGeneral && gi) { gi.focus(); if (selStart !== null) gi.setSelectionRange(selStart, selEnd); }
+    else if (inThread && ti) { ti.focus(); if (selStart !== null) ti.setSelectionRange(selStart, selEnd); }
+    else if (inName   && ni) { ni.focus(); if (selStart !== null) ni.setSelectionRange(selStart, selEnd); }
+
+    // Apply scroll after layout settles (rAF overrides _render's eager scrollTop)
+    requestAnimationFrame(() => {
+      const gm = this._shadow.getElementById('general-messages');
+      if (gm) gm.scrollTop = gmAtBottom ? gm.scrollHeight : gmScroll;
+      const tm = this._shadow.getElementById('thread-messages');
+      if (tm) tm.scrollTop = tmAtBottom ? tm.scrollHeight : tmScroll;
+    });
+  }
+
   async _loadGeneral() {
     const res = await fetch(`/api/agents/${encodeURIComponent(this._agentName)}/history?thread=general`);
-    this._generalMessages = res.ok ? await res.json() : [];
+    if (res.ok) {
+      const msgs = await res.json();
+      // Only replace if server has caught up — preserves optimistic messages while agent is processing
+      if (msgs.length >= this._generalMessages.length) this._generalMessages = msgs;
+    }
   }
 
   async _loadThread(key) {
     const res = await fetch(`/api/agents/${encodeURIComponent(this._agentName)}/history?thread=${encodeURIComponent(key)}`);
-    this._activeMessages = res.ok ? await res.json() : [];
+    if (res.ok) {
+      const msgs = await res.json();
+      if (msgs.length >= this._activeMessages.length) this._activeMessages = msgs;
+    }
   }
 
   // ── Event binding ─────────────────────────────────────────────────────────
@@ -81,7 +144,32 @@ class ConversationThreads extends HTMLElement {
       const item = e.target.closest('.thread-item');
       if (item) { this._openThread(item.dataset.key); return; }
       const close = e.target.closest('.panel-close');
-      if (close) { this._closeThread(); }
+      if (close) { this._closeThread(); return; }
+      const sendBtn = e.target.closest('.compose-send-btn');
+      if (sendBtn) { this._handleComposeSend(sendBtn.dataset.panel); return; }
+      const newThread = e.target.closest('.new-thread-btn');
+      if (newThread) { this._toggleNewThreadMode(); return; }
+      const replyBtn = e.target.closest('.reply-in-thread-btn');
+      if (replyBtn) { this._replyInThread(replyBtn.dataset.key); return; }
+    });
+
+    this._shadow.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        const input = e.target.closest('.compose-input');
+        if (input) {
+          e.preventDefault();
+          const panel = input.closest('[data-panel]')?.dataset.panel;
+          if (panel) this._handleComposeSend(panel);
+        }
+      }
+    });
+
+    this._shadow.addEventListener('input', e => {
+      const input = e.target.closest('.compose-input');
+      if (input) {
+        input.style.height = 'auto';
+        input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+      }
     });
   }
 
@@ -97,6 +185,85 @@ class ConversationThreads extends HTMLElement {
     this._render();
   }
 
+  _toggleNewThreadMode() {
+    this._newThreadMode = !this._newThreadMode;
+    this._render();
+    if (this._newThreadMode) {
+      const ni = this._shadow.querySelector('#new-thread-name');
+      if (ni) ni.focus();
+    } else {
+      const gi = this._shadow.querySelector('#general-compose .compose-input');
+      if (gi) gi.focus();
+    }
+  }
+
+  async _replyInThread(key) {
+    if (!key) return;
+    if (this._threads[key]) {
+      await this._openThread(key);
+    } else {
+      this._activeThread = key;
+      this._activeMessages = [];
+      this._render();
+    }
+    const ti = this._shadow.querySelector('#thread-compose .compose-input');
+    if (ti) ti.focus();
+  }
+
+  // ── Compose / send ────────────────────────────────────────────────────────
+
+  async _handleComposeSend(panel) {
+    if (this._sending || !this._agentName) return;
+
+    if (panel === 'general') {
+      if (this._newThreadMode) {
+        const ni  = this._shadow.querySelector('#new-thread-name');
+        const ci  = this._shadow.querySelector('#general-compose .compose-input');
+        const key = ni?.value.trim();
+        const msg = ci?.value.trim();
+        if (!key || !msg) return;
+        if (ni) ni.value = '';
+        if (ci) { ci.value = ''; ci.style.height = 'auto'; }
+        this._newThreadMode = false;
+        this._activeThread = key;
+        this._activeMessages = [{ role: 'user', content: msg, timestamp: new Date().toISOString() }];
+        this._render();
+        this._doSend(msg, key).then(() => this._bumpPolling());
+      } else {
+        const ci  = this._shadow.querySelector('#general-compose .compose-input');
+        const msg = ci?.value.trim();
+        if (!msg) return;
+        this._generalMessages = [...this._generalMessages, { role: 'user', content: msg, timestamp: new Date().toISOString() }];
+        if (ci) { ci.value = ''; ci.style.height = 'auto'; }
+        this._render();
+        this._shadow.getElementById('general-messages').scrollTop = this._shadow.getElementById('general-messages').scrollHeight;
+        this._doSend(msg, 'general').then(() => this._bumpPolling());
+      }
+    } else if (panel === 'thread') {
+      const ci  = this._shadow.querySelector('#thread-compose .compose-input');
+      const msg = ci?.value.trim();
+      if (!msg || !this._activeThread) return;
+      this._activeMessages = [...this._activeMessages, { role: 'user', content: msg, timestamp: new Date().toISOString() }];
+      if (ci) { ci.value = ''; ci.style.height = 'auto'; }
+      this._render();
+      this._shadow.getElementById('thread-messages').scrollTop = this._shadow.getElementById('thread-messages').scrollHeight;
+      this._doSend(msg, this._activeThread).then(() => this._bumpPolling());
+    }
+  }
+
+  async _doSend(text, threadId) {
+    this._sending = true;
+    try {
+      await fetch('/api/cli', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ line: `@${this._agentName} ${text}`, threadId }),
+      });
+    } finally {
+      this._sending = false;
+    }
+  }
+
   // ── Rendering ─────────────────────────────────────────────────────────────
 
   _render() {
@@ -104,7 +271,7 @@ class ConversationThreads extends HTMLElement {
     if (!root) return;
 
     const nonGeneral = Object.entries(this._threads).filter(([k]) => k !== 'general');
-    const rightOpen = !!this._activeThread;
+    const rightOpen  = !!this._activeThread;
 
     root.innerHTML = `
       <div class="layout${rightOpen ? ' layout--split' : ''}">
@@ -113,9 +280,11 @@ class ConversationThreads extends HTMLElement {
           <div class="messages-area" id="general-messages">
             ${this._renderMessages(this._generalMessages, 'general')}
           </div>
-          ${nonGeneral.length ? `
           <div class="threads-section">
-            <div class="threads-divider">Threads</div>
+            <div class="threads-divider">
+              <span>Threads</span>
+              <button class="new-thread-btn${this._newThreadMode ? ' new-thread-btn--active' : ''}">${this._newThreadMode ? '✕ Cancel' : '+ New'}</button>
+            </div>
             ${nonGeneral.map(([k, count]) => `
               <div class="thread-item${this._activeThread === k ? ' thread-item--active' : ''}" data-key="${this._esc(k)}">
                 <span class="thread-icon">&#x1f9f5;</span>
@@ -124,7 +293,17 @@ class ConversationThreads extends HTMLElement {
                 <span class="thread-arrow">&#8594;</span>
               </div>
             `).join('')}
-          </div>` : ''}
+          </div>
+          <div class="compose-bar" id="general-compose" data-panel="general">
+            ${this._newThreadMode ? `
+              <input id="new-thread-name" class="thread-name-input" placeholder="Thread name…" autocomplete="off" />
+            ` : ''}
+            <textarea class="compose-input" rows="1" placeholder="${this._newThreadMode ? 'First message…' : 'Message #general… (Enter to send)'}"></textarea>
+            <div class="compose-footer">
+              ${!this._newThreadMode ? `<button class="new-thread-btn" title="Start a new thread">+ Thread</button>` : '<span></span>'}
+              <button class="compose-send-btn${this._sending ? ' compose-send-btn--busy' : ''}" data-panel="general"${this._sending ? ' disabled' : ''}>Send</button>
+            </div>
+          </div>
         </div>
         ${rightOpen ? `
         <div class="right-panel">
@@ -135,11 +314,17 @@ class ConversationThreads extends HTMLElement {
           <div class="messages-area" id="thread-messages">
             ${this._renderMessages(this._activeMessages, this._activeThread)}
           </div>
+          <div class="compose-bar" id="thread-compose" data-panel="thread">
+            <textarea class="compose-input" rows="1" placeholder="Reply in thread… (Enter to send)"></textarea>
+            <div class="compose-footer">
+              <span></span>
+              <button class="compose-send-btn${this._sending ? ' compose-send-btn--busy' : ''}" data-panel="thread"${this._sending ? ' disabled' : ''}>Reply</button>
+            </div>
+          </div>
         </div>` : ''}
       </div>
     `;
 
-    // Scroll both panels to bottom
     const gm = this._shadow.getElementById('general-messages');
     if (gm) gm.scrollTop = gm.scrollHeight;
     const tm = this._shadow.getElementById('thread-messages');
@@ -151,17 +336,18 @@ class ConversationThreads extends HTMLElement {
     if (root) root.innerHTML = `<div class="placeholder">${this._esc(msg)}</div>`;
   }
 
-  _renderMessages(messages, _thread) {
+  _renderMessages(messages, thread) {
     if (!messages || messages.length === 0) {
       return '<div class="empty-msg">No messages yet</div>';
     }
 
+    const isGeneral = thread === 'general';
     const parts = [];
     let prevRole = null;
 
     for (const msg of messages) {
       const { role, content, timestamp, toolName } = msg;
-      const time = timestamp ? this._formatTime(timestamp) : '';
+      const time  = timestamp ? this._formatTime(timestamp) : '';
       const isFirst = role !== prevRole;
       prevRole = role;
 
@@ -180,10 +366,14 @@ class ConversationThreads extends HTMLElement {
         continue;
       }
 
-      const isUser = role === 'user';
-      const label = isUser ? 'You' : (this._agentName || 'Assistant');
+      const isUser   = role === 'user';
+      const label    = isUser ? 'You' : (this._agentName || 'Assistant');
       const roleClass = isUser ? 'msg--user' : 'msg--assistant';
-      const text = this._renderContent(content, role);
+      const text     = this._renderContent(content, role);
+      const threadKey = isGeneral ? this._esc(this._threadKey(content)) : '';
+      const replyBtn = isGeneral && threadKey
+        ? `<button class="reply-in-thread-btn" data-key="${threadKey}" title="Reply in thread">↩ Thread</button>`
+        : '';
 
       if (isFirst) {
         parts.push(`
@@ -191,13 +381,12 @@ class ConversationThreads extends HTMLElement {
             <div class="msg-meta">
               <span class="msg-label ${isUser ? 'label--user' : 'label--agent'}">${this._esc(label)}</span>
               ${time ? `<span class="msg-time">${time}</span>` : ''}
+              ${replyBtn}
             </div>
             <div class="msg ${roleClass}">${text}</div>
           </div>
         `);
       } else {
-        // Append continuation to last group — close last group div, add new content, reopen
-        // Simpler: just use a continuation div
         parts.push(`<div class="msg ${roleClass} msg--cont">${text}</div>`);
       }
     }
@@ -230,11 +419,22 @@ class ConversationThreads extends HTMLElement {
   _shortKey(key) {
     if (!key) return '';
     if (key === 'general') return '# general';
-    // UUID pattern: xxxxxxxx-xxxx-... → show first 8 chars + ellipsis
     const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}/i;
     if (uuidRe.test(key)) return key.slice(0, 8) + '…';
-    // Otherwise truncate at 16
     return key.length > 16 ? key.slice(0, 16) + '…' : key;
+  }
+
+  _threadKey(content) {
+    let text = '';
+    if (Array.isArray(content)) {
+      text = content.map(c => typeof c === 'string' ? c : (c.text || c.content || '')).join(' ');
+    } else {
+      text = String(content ?? '');
+    }
+    const words = text.trim().split(/\s+/).slice(0, 4)
+      .map(w => w.toLowerCase().replace(/[^a-z0-9]/g, ''))
+      .filter(Boolean);
+    return words.length >= 2 ? words.join('-') : `thread-${Date.now()}`;
   }
 
   _esc(str) {
@@ -274,7 +474,7 @@ class ConversationThreads extends HTMLElement {
 
         /* ── Right panel ── */
         .right-panel {
-          width: 380px;
+          width: 40%;
           flex-shrink: 0;
           display: flex;
           flex-direction: column;
@@ -332,6 +532,23 @@ class ConversationThreads extends HTMLElement {
         .msg-group:hover .msg-time,
         .msg--cont:hover .msg-time { opacity: 1; }
 
+        /* ── Reply in thread button ── */
+        .reply-in-thread-btn {
+          background: none;
+          border: none;
+          color: #72767d;
+          font-size: 11px;
+          padding: 1px 6px;
+          border-radius: 3px;
+          cursor: pointer;
+          opacity: 0;
+          transition: opacity 0.15s;
+          margin-left: auto;
+          flex-shrink: 0;
+        }
+        .msg-group:hover .reply-in-thread-btn { opacity: 1; }
+        .reply-in-thread-btn:hover { background: #2e3338; color: #d1d2d3; }
+
         /* ── Bubbles ── */
         .msg {
           font-size: 13px;
@@ -366,14 +583,19 @@ class ConversationThreads extends HTMLElement {
         /* ── Threads section ── */
         .threads-section {
           border-top: 1px solid #2e3338;
-          padding: 8px 0 6px;
+          padding: 8px 0 4px;
           flex-shrink: 0;
         }
         .threads-divider {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 0 14px 4px;
+        }
+        .threads-divider span {
           font-size: 11px;
           font-weight: 600;
           color: #72767d;
-          padding: 0 14px 4px;
           text-transform: uppercase;
           letter-spacing: 0.04em;
         }
@@ -385,7 +607,6 @@ class ConversationThreads extends HTMLElement {
           cursor: pointer;
           font-size: 13px;
           color: #b9bbbe;
-          border-radius: 0;
           transition: background 0.1s;
         }
         .thread-item:hover { background: #222529; color: #d1d2d3; }
@@ -397,6 +618,80 @@ class ConversationThreads extends HTMLElement {
         .thread-item--active .thread-count { color: rgba(255,255,255,0.65); }
         .thread-arrow { font-size: 12px; color: #72767d; }
         .thread-item--active .thread-arrow { color: rgba(255,255,255,0.65); }
+
+        /* ── Compose bar ── */
+        .compose-bar {
+          flex-shrink: 0;
+          padding: 8px 12px 10px;
+          border-top: 1px solid #2e3338;
+          background: #1a1d21;
+        }
+        .thread-name-input {
+          width: 100%;
+          background: #222529;
+          border: 1px solid #3e4146;
+          border-radius: 4px;
+          color: #d1d2d3;
+          font-size: 12px;
+          font-family: inherit;
+          padding: 5px 8px;
+          margin-bottom: 6px;
+          outline: none;
+        }
+        .thread-name-input:focus { border-color: #1164a3; }
+        .thread-name-input::placeholder { color: #72767d; }
+        .compose-input {
+          width: 100%;
+          min-height: 32px;
+          max-height: 120px;
+          background: #222529;
+          border: 1px solid #3e4146;
+          border-radius: 4px;
+          color: #d1d2d3;
+          font-size: 13px;
+          font-family: inherit;
+          padding: 6px 8px;
+          resize: none;
+          outline: none;
+          overflow-y: auto;
+          line-height: 1.4;
+          display: block;
+        }
+        .compose-input:focus { border-color: #1164a3; }
+        .compose-input::placeholder { color: #72767d; }
+        .compose-footer {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-top: 6px;
+        }
+        .compose-send-btn {
+          background: #1164a3;
+          border: none;
+          color: #fff;
+          font-size: 12px;
+          font-weight: 600;
+          padding: 4px 14px;
+          border-radius: 4px;
+          cursor: pointer;
+          line-height: 1.6;
+        }
+        .compose-send-btn:hover { background: #1472b7; }
+        .compose-send-btn--busy,
+        .compose-send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .new-thread-btn {
+          background: none;
+          border: 1px solid #3e4146;
+          color: #9a9d9f;
+          font-size: 11px;
+          padding: 3px 8px;
+          border-radius: 4px;
+          cursor: pointer;
+          line-height: 1.5;
+        }
+        .new-thread-btn:hover { border-color: #72767d; color: #d1d2d3; }
+        .new-thread-btn--active { border-color: #b84444; color: #b84444; }
+        .new-thread-btn--active:hover { border-color: #d15555; color: #d15555; }
 
         /* ── Misc ── */
         .placeholder {

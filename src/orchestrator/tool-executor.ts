@@ -50,12 +50,13 @@ export interface ToolCallContext {
   getAgentThreadKey?(agentName: string): string | undefined;
 }
 
-/** Return the outputs folder for the agent's active task, falling back to projectDir. */
-function agentOutputsDir(ctx: ToolCallContext, agentName: string, ticket?: string): string {
+/** Return the outputs folder for the agent's active task, or null if no project is loaded. */
+function agentOutputsDir(ctx: ToolCallContext, agentName: string, ticket?: string): string | null {
   const activeTask = Array.from(ctx.tasks.values()).find(
     t => t.status === 'active' && t.assignedTo.toLowerCase() === agentName.toLowerCase(),
   );
-  const base = activeTask?.projectFolder ?? ctx.projectDir ?? process.cwd();
+  const base = activeTask?.projectFolder ?? ctx.projectDir;
+  if (!base) return null;
   return ticket ? path.join(base, 'outputs', ticket) : path.join(base, 'outputs');
 }
 
@@ -243,9 +244,10 @@ export async function executeToolCall(ctx: ToolCallContext, agentName: string, c
 
     case 'read_file': {
       const { filename, ticket } = call.arguments as { filename: string; ticket?: string };
+      const dir = agentOutputsDir(ctx, agentName, ticket);
+      if (!dir) return 'Error: no project is open. Open or create a project first.';
       try {
-        const resolved = path.join(agentOutputsDir(ctx, agentName, ticket), filename);
-        return await readFile(resolved, 'utf-8');
+        return await readFile(path.join(dir, filename), 'utf-8');
       } catch (err) {
         return `Error reading file: ${(err as Error).message}`;
       }
@@ -253,8 +255,10 @@ export async function executeToolCall(ctx: ToolCallContext, agentName: string, c
 
     case 'write_file': {
       const { filename, content, ticket } = call.arguments as { filename: string; content: string; ticket?: string };
+      const dir = agentOutputsDir(ctx, agentName, ticket);
+      if (!dir) return 'Error: no project is open. Open or create a project first.';
       try {
-        const resolved = path.join(agentOutputsDir(ctx, agentName, ticket), filename);
+        const resolved = path.join(dir, filename);
         await mkdir(path.dirname(resolved), { recursive: true });
         await writeFile(resolved, content, 'utf-8');
         return `File written: ${resolved}`;
@@ -265,8 +269,9 @@ export async function executeToolCall(ctx: ToolCallContext, agentName: string, c
 
     case 'list_files': {
       const { ticket } = call.arguments as { ticket?: string };
+      const dir = agentOutputsDir(ctx, agentName, ticket);
+      if (!dir) return 'Error: no project is open. Open or create a project first.';
       try {
-        const dir = agentOutputsDir(ctx, agentName, ticket);
         const entries = await readdir(dir, { withFileTypes: true });
         const lines = entries.map((e) => `${e.isDirectory() ? '[dir] ' : '      '}${e.name}`);
         return lines.length ? lines.join('\n') : '(empty directory)';
@@ -314,7 +319,9 @@ export async function executeToolCall(ctx: ToolCallContext, agentName: string, c
           return base.includes('.') ? base : `${base}.html`;
         } catch { return 'fetched-content.html'; }
       })();
-      const dest = path.join(agentOutputsDir(ctx, agentName, ticket), filename);
+      const outputDir = agentOutputsDir(ctx, agentName, ticket);
+      if (!outputDir) return 'Error: no project is open. Open or create a project first.';
+      const dest = path.join(outputDir, filename);
 
       try {
         const resp = await fetch(url);

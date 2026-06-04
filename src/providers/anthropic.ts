@@ -9,6 +9,7 @@ import { debugState, writePromptLog } from './debug-state.js';
 
 export class AnthropicProvider implements AIProvider {
   readonly name = 'anthropic';
+  readonly pricingPageUrl = 'https://platform.claude.com/docs/en/about-claude/pricing';
   private client: Anthropic;
 
   constructor(apiKey?: string) {
