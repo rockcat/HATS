@@ -69,6 +69,14 @@ export class MCPRegistry {
       .filter((d): d is MCPServerDef => d !== null);
   }
 
+  /** Tool definitions with full namespaced names (for scheduler use). */
+  getToolSchemasForScheduler(): Array<{ server: string; tools: ToolDefinition[] }> {
+    return Array.from(this.clients.entries()).map(([name, client]) => ({
+      server: name,
+      tools: client.getToolDefinitions(),
+    }));
+  }
+
   /** Route a namespaced tool call to the correct MCP server. */
   async callTool(toolName: string, args: Record<string, unknown>): Promise<string> {
     const client = Array.from(this.clients.values()).find((c) => c.isMCPTool(toolName));

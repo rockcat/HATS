@@ -5,6 +5,14 @@ import { Task, Meeting } from '../orchestrator/types.js';
 
 export const SNAPSHOT_VERSION = 2;
 
+export interface McpToolCallSpec {
+  serverName: string;
+  toolName: string;                    // full namespaced: mcp__<server>__<tool>
+  args: Record<string, unknown>;
+  condition: string;                   // JS expression; `result` (string) is in scope
+  messageTemplate: string;            // sent to agent when condition passes; ${result} interpolated
+}
+
 export interface HistoryEntry {
   role: 'user' | 'assistant' | 'tool';
   content: string;
@@ -29,12 +37,16 @@ export interface AgentDefinition {
 }
 
 // Global scheduled action definition
+export type ScheduledActionType = 'prompt' | 'mcp_tool_call';
+
 export interface ScheduledActionDef {
   id: string;
   label: string;
   description: string;
   intervalSeconds: number | null;
   createdAt: string;
+  type?: ScheduledActionType;
+  mcpToolCall?: McpToolCallSpec;
 }
 
 // V1 format kept for migration only

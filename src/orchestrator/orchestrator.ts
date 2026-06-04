@@ -99,7 +99,7 @@ export class TeamOrchestrator {
     await store.load();
     this.agendaStoreRef.store = store;
     this.agendaRunner?.stop();
-    this.agendaRunner = new AgendaRunner(store, (name, msg) => { this.deliverToAgent(name, msg); return Promise.resolve(); });
+    this.agendaRunner = new AgendaRunner(store, (name, msg) => { this.deliverToAgent(name, msg); return Promise.resolve(); }, this.mcp);
     this.agendaRunner.start();
   }
 
@@ -535,6 +535,10 @@ export class TeamOrchestrator {
       })),
       mcp: this.mcp.getToolsByServer(),
     };
+  }
+
+  getMCPToolSchemas() {
+    return this.mcp.getToolSchemasForScheduler();
   }
 
   async readEvents(since?: string): Promise<import('../store/event-store.js').StoredEvent[]> {

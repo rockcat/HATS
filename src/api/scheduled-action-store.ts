@@ -27,13 +27,21 @@ export class ScheduledActionStore {
     return this.actions.get(id);
   }
 
-  async add(data: { label: string; description: string; intervalSeconds: number | null }): Promise<ScheduledActionDef> {
+  async add(data: {
+    label: string;
+    description: string;
+    intervalSeconds: number | null;
+    type?: import('../store/team-snapshot.js').ScheduledActionType;
+    mcpToolCall?: import('../store/team-snapshot.js').McpToolCallSpec;
+  }): Promise<ScheduledActionDef> {
     const def: ScheduledActionDef = {
       id:              uuidv4(),
       label:           data.label,
       description:     data.description,
       intervalSeconds: data.intervalSeconds,
       createdAt:       new Date().toISOString(),
+      ...(data.type        && { type: data.type }),
+      ...(data.mcpToolCall && { mcpToolCall: data.mcpToolCall }),
     };
     this.actions.set(def.id, def);
     await this.save();

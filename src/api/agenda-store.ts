@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import { readFile, writeFile } from 'fs/promises';
+import { McpToolCallSpec, ScheduledActionType } from '../store/team-snapshot.js';
 
 export interface AgendaEntry {
   id: string;
@@ -10,6 +11,8 @@ export interface AgendaEntry {
   nextRunAt: number;
   enabled: boolean;
   createdAt: string;
+  type?: ScheduledActionType;
+  mcpToolCall?: McpToolCallSpec;
 }
 
 export class AgendaStore {
@@ -56,6 +59,8 @@ export class AgendaStore {
     description: string;
     intervalSeconds: number | null;
     delaySeconds?: number;
+    type?: ScheduledActionType;
+    mcpToolCall?: McpToolCallSpec;
   }): Promise<AgendaEntry> {
     // Deduplicate: if an entry with the same agent+label already exists, update it
     const labelKey = data.label.trim().toLowerCase();
@@ -69,6 +74,8 @@ export class AgendaStore {
         intervalSeconds: data.intervalSeconds,
         nextRunAt:       Date.now() + delay * 1000,
         enabled:         true,
+        type:            data.type,
+        mcpToolCall:     data.mcpToolCall,
       });
       await this.save();
       return existing;
@@ -84,6 +91,8 @@ export class AgendaStore {
       nextRunAt:       Date.now() + delay * 1000,
       enabled:         true,
       createdAt:       new Date().toISOString(),
+      ...(data.type        && { type: data.type }),
+      ...(data.mcpToolCall && { mcpToolCall: data.mcpToolCall }),
     };
     this.entries.set(entry.id, entry);
     await this.save();

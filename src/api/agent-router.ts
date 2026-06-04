@@ -328,6 +328,11 @@ export class AgentRouter {
       return true;
     }
 
+    if (pathname === '/api/mcp/tools' && method === 'GET') {
+      json(res, 200, orch.getMCPToolSchemas());
+      return true;
+    }
+
     if (pathname === '/api/mcp/catalogue' && method === 'GET') {
       const catalogue = getCatalogue().map(entry => ({
         ...entry,
@@ -641,7 +646,9 @@ export class AgentRouter {
               label: actionDef.label,
               description: actionDef.description,
               intervalSeconds: actionDef.intervalSeconds,
-            } as Parameters<typeof agendaStore.add>[0]);
+              type: actionDef.type,
+              mcpToolCall: actionDef.mcpToolCall,
+            });
           }
         }
       }
@@ -731,12 +738,29 @@ export class AgentRouter {
       const store = this.deps.getActionStore();
       if (!store) { json(res, 503, { error: 'Action store not ready' }); return true; }
       const body = await readBody(req);
-      const { label, description, intervalMinutes } = JSON.parse(body) as { label: string; description: string; intervalMinutes?: number };
-      if (!label?.trim() || !description?.trim()) {
-        json(res, 400, { error: 'label and description are required' }); return true;
+      const parsed = JSON.parse(body) as {
+        label: string;
+        description?: string;
+        intervalMinutes?: number;
+        type?: import('../store/team-snapshot.js').ScheduledActionType;
+        mcpToolCall?: import('../store/team-snapshot.js').McpToolCallSpec;
+      };
+      if (!parsed.label?.trim()) { json(res, 400, { error: 'label is required' }); return true; }
+      if (parsed.type === 'mcp_tool_call') {
+        if (!parsed.mcpToolCall?.toolName) { json(res, 400, { error: 'mcpToolCall.toolName is required' }); return true; }
+        if (!parsed.mcpToolCall?.messageTemplate) { json(res, 400, { error: 'mcpToolCall.messageTemplate is required' }); return true; }
+      } else if (!parsed.description?.trim()) {
+        json(res, 400, { error: 'description is required for prompt type' }); return true;
       }
-      const intervalSeconds = (intervalMinutes && intervalMinutes > 0) ? Math.round(intervalMinutes * 60) : null;
-      const def = await store.add({ label: label.trim(), description: description.trim(), intervalSeconds });
+      const intervalSeconds = (parsed.intervalMinutes && parsed.intervalMinutes > 0) ? Math.round(parsed.intervalMinutes * 60) : null;
+      const description = parsed.description?.trim() ?? `MCP: ${parsed.mcpToolCall?.toolName ?? ''}`;
+      const def = await store.add({
+        label: parsed.label.trim(),
+        description,
+        intervalSeconds,
+        type: parsed.type,
+        mcpToolCall: parsed.mcpToolCall,
+      });
       json(res, 201, def);
       return true;
     }
@@ -746,12 +770,18 @@ export class AgentRouter {
       const store    = this.deps.getActionStore();
       if (!store) { json(res, 503, { error: 'Action store not ready' }); return true; }
       const body = await readBody(req);
-      const { label, description, intervalMinutes } = JSON.parse(body) as { label?: string; description?: string; intervalMinutes?: number | null };
+      const parsed = JSON.parse(body) as {
+        label?: string;
+        description?: string;
+        intervalMinutes?: number | null;
+        mcpToolCall?: import('../store/team-snapshot.js').McpToolCallSpec;
+      };
       const patch: Record<string, unknown> = {};
-      if (label       !== undefined) patch['label']           = label.trim();
-      if (description !== undefined) patch['description']     = description.trim();
-      if (intervalMinutes !== undefined) {
-        patch['intervalSeconds'] = (intervalMinutes && intervalMinutes > 0) ? Math.round(intervalMinutes * 60) : null;
+      if (parsed.label       !== undefined) patch['label']       = parsed.label.trim();
+      if (parsed.description !== undefined) patch['description'] = parsed.description.trim();
+      if (parsed.mcpToolCall !== undefined) patch['mcpToolCall'] = parsed.mcpToolCall;
+      if (parsed.intervalMinutes !== undefined) {
+        patch['intervalSeconds'] = (parsed.intervalMinutes && parsed.intervalMinutes > 0) ? Math.round(parsed.intervalMinutes * 60) : null;
       }
       const updated = await store.update(actionId, patch as never);
       json(res, updated ? 200 : 404, updated ?? { error: 'Action not found' });

@@ -4232,3 +4232,23 @@ details.schedules-add-section[open] .schedules-add-summary::before { transform: 
   background: transparent; color: var(--text-muted); font-size: 12px; cursor: pointer; white-space: nowrap;
 }
 .schedules-cancel-btn:hover { background: var(--surface-2); color: var(--text); }
+
+.schedules-type-row { display: flex; gap: 16px; align-items: center; }
+.schedules-type-option { display: flex; align-items: center; gap: 5px; font-size: 12px; cursor: pointer; color: var(--text-muted); }
+.schedules-type-option:has(input:checked) { color: var(--text); font-weight: 600; }
+
+.schedules-select { appearance: auto; }
+
+.schedules-mcp-section { display: flex; flex-direction: column; gap: 3px; }
+.schedules-mcp-params { display: flex; flex-direction: column; gap: 6px; }
+.schedules-mcp-param-row { display: flex; flex-direction: column; gap: 2px; }
+.schedules-mcp-label { font-size: 11px; color: var(--text-muted); font-weight: 600; }
+.schedules-mcp-hint { font-weight: 400; color: var(--text-muted); font-size: 11px; }
+.schedules-mcp-hint code { background: var(--surface-2); padding: 0 3px; border-radius: 3px; font-size: 10px; }
+
+.schedules-mcp-badge {
+  display: inline-block; font-size: 9px; font-weight: 700; letter-spacing: .04em;
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+  color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  border-radius: 3px; padding: 1px 4px; vertical-align: middle; margin-left: 4px;
+}
