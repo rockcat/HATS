@@ -1552,14 +1552,9 @@ main {
 .lib-prompt-panel[hidden] { display: none; }
 
 .agent-detail-feed {
-  flex-shrink: 0;
-  min-height: 100px;
-  padding: 8px 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  overflow-y: auto;
-  max-height: 360px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
 /* Agent compose area */
@@ -1775,13 +1770,31 @@ main {
   overflow: hidden; /* output area scrolls, not the pane */
 }
 
-#cli-output {
-  flex: 1;
-  overflow-y: auto;
-  padding: 8px 10px 4px;
+.chat-agent-bar {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.chat-agent-select {
+  flex: 1;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text);
+  font-size: 12px;
+  padding: 4px 8px;
+  outline: none;
+  cursor: pointer;
+}
+
+.chat-threads {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
 #cli-input-row {

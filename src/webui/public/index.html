@@ -103,7 +103,12 @@
         <div id="allowlist-list"></div>
       </div>
       <div id="cli-content" class="tab-pane active">
-        <div id="cli-output"></div>
+        <div class="chat-agent-bar">
+          <select id="chat-agent-select" class="chat-agent-select">
+            <option value="">— select agent —</option>
+          </select>
+        </div>
+        <conversation-threads id="chat-threads" class="chat-threads"></conversation-threads>
         <div id="cli-reply-bar" class="cli-reply-bar" hidden>
           <span id="cli-reply-label" class="cli-reply-label"></span>
           <button id="cli-reply-cancel" class="cli-reply-cancel" title="Cancel reply">×</button>
@@ -314,7 +319,7 @@
       <div id="avatar-panel" class="avatar-panel" hidden>
         <canvas id="avatar-canvas" class="avatar-canvas"></canvas>
       </div>
-      <div id="agent-detail-feed" class="agent-detail-feed"></div>
+      <conversation-threads id="agent-detail-threads" class="agent-detail-feed"></conversation-threads>
       <div class="agent-detail-compose">
         <div class="agent-detail-tickets" id="agent-detail-tickets"></div>
         <div class="agent-detail-compose-row">
@@ -851,6 +856,7 @@
 
 
 <script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
+  <script src="/thread-viewer.js"></script>
   <script src="app.js"></script>
   <script type="module" src="avatar.js"></script>
   <script type="module" src="meeting.js"></script>

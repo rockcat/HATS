@@ -1004,6 +1004,7 @@ function applyState(newState) {
   syncAgentConfigs();
   renderAgents(state.agents);
   renderKanban(state.tickets);
+  updateChatAgentSelect();
 }
 
 // ── Voice management ──────────────────────────────────────────────────────────
@@ -1235,6 +1236,7 @@ function connect() {
       state.agents = msg.agents;
       syncAgentConfigs();
       renderAgents(state.agents);
+      updateChatAgentSelect();
     } else if (msg.type === 'scheduled_meetings_update') {
       renderCalendar(msg.meetings);
     } else if (msg.type === 'kanban_update') {
@@ -2336,14 +2338,14 @@ function openAgentDetail(name, chatOnly = false) {
   // Clear any previous message
   document.getElementById('agent-detail-message').value = '';
 
-  const feed = document.getElementById('agent-detail-feed');
   document.getElementById('agent-detail-modal').hidden = false;
+
+  const threadsEl = document.getElementById('agent-detail-threads');
+  if (threadsEl) threadsEl.setAttribute('agent', name);
 
   // Unlock AudioContext inside the user gesture (click) so it can play later
   if (!audioCtx) audioCtx = new AudioContext();
   if (audioCtx.state === 'suspended') audioCtx.resume();
-
-  loadAgentFeedInto(name, feed);
 
   // Register speech interest for this agent
   getVoices().then(voices => {
@@ -2574,19 +2576,14 @@ function closeAgentDetail() {
   activeChatAgent   = null;
   document.getElementById('agent-detail').classList.remove('chat-mode');
   document.getElementById('agent-detail-modal').hidden = true;
+  document.getElementById('agent-detail-threads')?.removeAttribute('agent');
   applyAvatarBackground(null);
   if (window.avatarAPI) window.avatarAPI.hide();
 }
 
-function appendAgentFeedEvent(agentName, ev) {
+function appendAgentFeedEvent(agentName, _ev) {
   if (activeDetailAgent !== agentName) return;
-  const feed = document.getElementById('agent-detail-feed');
-  if (!feed) return;
-  const empty = feed.querySelector('.feed-empty');
-  if (empty) empty.remove();
-  const el = buildFeedItem(ev, agentName);
-  if (el) feed.appendChild(el);
-  feed.scrollTop = feed.scrollHeight;
+  document.getElementById('agent-detail-threads')?._refresh();
 }
 
 function buildFeedItem(ev, selfName) {
@@ -2719,7 +2716,8 @@ function initCLI() {
     input.focus();
   });
 
-  appendCLILine('Team Chat — type "help" for commands', 'cli-system');
+  document.getElementById('chat-agent-select')?.addEventListener('change', updateChatThreads);
+  updateChatAgentSelect();
 
   // ── @ mention menu ──────────────────────────────────────────────────
   let menuEl    = null;
@@ -2841,6 +2839,35 @@ function initCLI() {
   });
 }
 
+function updateChatAgentSelect() {
+  const sel = document.getElementById('chat-agent-select');
+  if (!sel) return;
+  const prev = sel.value;
+  const agents = state.agents ?? [];
+  sel.innerHTML = '<option value="">— select agent —</option>';
+  for (const a of agents) {
+    const opt = document.createElement('option');
+    opt.value = a.name;
+    opt.textContent = a.name;
+    sel.appendChild(opt);
+  }
+  if (prev && sel.querySelector(`option[value="${CSS.escape(prev)}"]`)) {
+    sel.value = prev;
+  } else if (agents.length) {
+    sel.value = agents[0].name;
+  }
+  updateChatThreads();
+}
+
+function updateChatThreads() {
+  const sel = document.getElementById('chat-agent-select');
+  const el = document.getElementById('chat-threads');
+  if (!sel || !el) return;
+  const name = sel.value;
+  if (name) el.setAttribute('agent', name);
+  else el.removeAttribute('agent');
+}
+
 function appendCLILine(text, cls) {
   const out = document.getElementById('cli-output');
   if (!out) return;
@@ -2851,40 +2878,14 @@ function appendCLILine(text, cls) {
   out.scrollTop = out.scrollHeight;
 }
 
-function appendCLIAgent(from, content, kind) {
-  const out = document.getElementById('cli-output');
-  if (!out) return;
-
-  const wrap = document.createElement('div');
-  wrap.className = 'cli-agent-block' + (kind === 'escalation' ? ' cli-agent-block--escalation' : '');
-
-  const header = document.createElement('div');
-  header.className = 'cli-agent-header';
-
-  const nameSpan = document.createElement('span');
-  nameSpan.textContent = (kind === 'escalation' ? '⚠ ESCALATION — ' : '') + from;
-
-  const replyBtn = document.createElement('button');
-  replyBtn.className = 'cli-reply-btn';
-  replyBtn.title = `Reply to ${from}`;
-  replyBtn.textContent = 'Reply';
-  replyBtn.addEventListener('click', () => setCliReply(from));
-
-  header.appendChild(nameSpan);
-  header.appendChild(replyBtn);
-
-  const body = document.createElement('div');
-  body.className = 'cli-agent-body';
-  if (window.marked) {
-    body.innerHTML = window.marked.parse(content ?? '');
-  } else {
-    body.textContent = content ?? '';
+function appendCLIAgent(from, _content, _kind) {
+  // Sync the chat threads selector to the speaking agent and trigger a refresh
+  const sel = document.getElementById('chat-agent-select');
+  if (sel && from && sel.value !== from) {
+    const opt = sel.querySelector(`option[value="${CSS.escape(from)}"]`);
+    if (opt) { sel.value = from; updateChatThreads(); }
   }
-
-  wrap.appendChild(header);
-  wrap.appendChild(body);
-  out.appendChild(wrap);
-  out.scrollTop = out.scrollHeight;
+  document.getElementById('chat-threads')?._refresh();
 }
 
 // ── Tab switching ─────────────────────────────────────────────────────────────
