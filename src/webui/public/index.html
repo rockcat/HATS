@@ -126,51 +126,10 @@
         <div id="library-agent-list" class="library-agent-list"></div>
       </div>
       <div id="schedules-content" class="tab-pane schedules-pane">
+        <div class="schedules-toolbar">
+          <button id="schedules-new-btn" class="panel-add-btn">+ New Action</button>
+        </div>
         <div id="schedules-list" class="schedules-list"></div>
-        <details class="schedules-add-section" open>
-          <summary class="schedules-add-summary">New Scheduled Action</summary>
-          <div class="schedules-add-form">
-            <div class="schedules-type-row">
-              <label class="schedules-type-option">
-                <input type="radio" name="schedules-type" value="prompt" checked> Prompt agent
-              </label>
-              <label class="schedules-type-option">
-                <input type="radio" name="schedules-type" value="mcp_tool_call"> MCP Tool Call
-              </label>
-            </div>
-            <input type="text" id="schedules-add-label" class="schedules-input" placeholder="Label (e.g. Check inbox)">
-            <!-- Prompt fields -->
-            <div id="schedules-prompt-fields">
-              <textarea id="schedules-add-description" class="schedules-textarea" placeholder="What should the agent do when this fires?" rows="2"></textarea>
-            </div>
-            <!-- MCP tool call fields -->
-            <div id="schedules-mcp-fields" hidden>
-              <select id="schedules-mcp-server" class="schedules-input schedules-select">
-                <option value="">Select a server…</option>
-              </select>
-              <select id="schedules-mcp-tool" class="schedules-input schedules-select" disabled>
-                <option value="">Select server first</option>
-              </select>
-              <div id="schedules-mcp-params" class="schedules-mcp-params"></div>
-              <div class="schedules-mcp-test-row">
-                <button id="schedules-mcp-test-btn" type="button" class="schedules-mcp-test-btn">Test</button>
-                <pre id="schedules-mcp-test-result" class="schedules-mcp-test-result" hidden></pre>
-              </div>
-              <div class="schedules-mcp-section">
-                <label class="schedules-mcp-label">Condition <span class="schedules-mcp-hint">(JS using <code>result</code> — blank = always notify)</span></label>
-                <input type="text" id="schedules-mcp-condition" class="schedules-input" placeholder='e.g. result !== "" or JSON.parse(result).count > 0' autocomplete="off">
-              </div>
-              <div class="schedules-mcp-section">
-                <label class="schedules-mcp-label">Message to agent <span class="schedules-mcp-hint">(use <code>${result}</code> to include tool output)</span></label>
-                <textarea id="schedules-mcp-message" class="schedules-textarea" rows="2" placeholder="New data: ${result}"></textarea>
-              </div>
-            </div>
-            <div class="schedules-add-footer">
-              <input type="number" id="schedules-add-interval" class="schedules-input schedules-interval" placeholder="Interval (mins, blank=once)" min="1" step="1">
-              <button id="schedules-add-btn" type="button" class="schedules-add-btn">+ Add</button>
-            </div>
-          </div>
-        </details>
       </div>
       <div id="files-content" class="tab-pane files-pane">
         <div class="files-toolbar files-toolbar--top">
@@ -881,6 +840,57 @@
     </div>
   </div>
 
+
+  <!-- Scheduled Action Modal -->
+  <div id="schedule-modal" class="modal-overlay" hidden>
+    <div class="modal schedule-modal" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <span id="schedule-modal-title" class="modal-ticket-id">New Scheduled Action</span>
+        <button class="modal-close" id="schedule-modal-close" title="Close"><img src="/assets/close.svg" class="svg-icon" alt="Close"></button>
+      </div>
+      <div class="modal-body schedule-modal-body">
+        <div class="schedules-type-row">
+          <label class="schedules-type-option">
+            <input type="radio" name="schedules-type" value="prompt" checked> Prompt agent
+          </label>
+          <label class="schedules-type-option">
+            <input type="radio" name="schedules-type" value="mcp_tool_call"> MCP Tool Call
+          </label>
+        </div>
+        <input type="text" id="schedules-add-label" class="schedules-input" placeholder="Label (e.g. Check inbox)">
+        <!-- Prompt fields -->
+        <div id="schedules-prompt-fields">
+          <textarea id="schedules-add-description" class="schedules-textarea" placeholder="What should the agent do when this fires?" rows="3"></textarea>
+        </div>
+        <!-- MCP tool call fields -->
+        <div id="schedules-mcp-fields" hidden>
+          <select id="schedules-mcp-server" class="schedules-input schedules-select">
+            <option value="">Select a server…</option>
+          </select>
+          <select id="schedules-mcp-tool" class="schedules-input schedules-select" disabled>
+            <option value="">Select server first</option>
+          </select>
+          <div id="schedules-mcp-params" class="schedules-mcp-params"></div>
+          <div class="schedules-mcp-test-row">
+            <button id="schedules-mcp-test-btn" type="button" class="schedules-mcp-test-btn">Test</button>
+            <pre id="schedules-mcp-test-result" class="schedules-mcp-test-result" hidden></pre>
+          </div>
+          <div class="schedules-mcp-section">
+            <label class="schedules-mcp-label">Condition <span class="schedules-mcp-hint">(JS using <code>result</code> — blank = always notify)</span></label>
+            <input type="text" id="schedules-mcp-condition" class="schedules-input" placeholder='e.g. result !== "" or JSON.parse(result).count > 0' autocomplete="off">
+          </div>
+          <div class="schedules-mcp-section">
+            <label class="schedules-mcp-label">Message to agent <span class="schedules-mcp-hint">(use <code>${result}</code> to include tool output)</span></label>
+            <textarea id="schedules-mcp-message" class="schedules-textarea" rows="2" placeholder="New data: ${result}"></textarea>
+          </div>
+        </div>
+        <div class="schedules-add-footer">
+          <input type="number" id="schedules-add-interval" class="schedules-input schedules-interval" placeholder="Interval (mins, blank=once)" min="1" step="1">
+          <button id="schedules-add-btn" type="button" class="schedules-add-btn">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
 <script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
   <script src="/thread-viewer.js"></script>

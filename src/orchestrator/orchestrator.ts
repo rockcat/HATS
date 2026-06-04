@@ -394,6 +394,8 @@ export class TeamOrchestrator {
     }
     if (personalMcp.has(serverId)) await personalMcp.disconnect(serverId);
     const config = resolvePersonalConfig(entry, credentials);
+    const credKeys = Object.keys(credentials);
+    log.info(`[Team] Personal MCP "${serverId}" starting for ${agentName} — credential keys: [${credKeys.join(', ')}]`);
     await personalMcp.add({ name: serverId, config });
     log.info(`[Team] Personal MCP "${serverId}" started for ${agentName}`);
   }
@@ -658,7 +660,15 @@ export class TeamOrchestrator {
       ? (this.personalMcpByAgent.get(agentName.toLowerCase()) ?? this.mcp)
       : this.mcp;
     if (!registry) throw new Error('No MCP registry available');
-    return registry.callTool(toolName, args);
+    log.info(`[MCP test-call] tool="${toolName}" agentName=${agentName ?? 'shared'}`);
+    try {
+      const result = await registry.callTool(toolName, args);
+      log.info(`[MCP test-call] "${toolName}" succeeded, result length=${result.length}`);
+      return result;
+    } catch (err) {
+      log.error(`[MCP test-call] "${toolName}" failed:`, (err as Error).message);
+      throw err;
+    }
   }
   cancelActiveMeeting(meetingId: string): boolean {
     const room = this.activeMeetingRooms.get(meetingId);

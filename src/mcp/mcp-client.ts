@@ -95,9 +95,21 @@ export class MCPClient {
   /** Call a tool by its namespaced name. Returns result as string. */
   async callTool(namespacedName: string, args: Record<string, unknown>): Promise<string> {
     const toolName = this.stripNamespace(namespacedName);
-    const result = await this.client.callTool({ name: toolName, arguments: args });
+    log.info(`[MCP] callTool "${toolName}" on server "${this.serverName}" args=${JSON.stringify(args)}`);
+    let result: Awaited<ReturnType<typeof this.client.callTool>>;
+    try {
+      result = await this.client.callTool({ name: toolName, arguments: args });
+    } catch (err) {
+      log.error(`[MCP] callTool "${toolName}" threw:`, (err as Error).message, (err as Error).stack ?? '');
+      throw err;
+    }
 
     // MCP tool results are arrays of content blocks
+    if (result.isError) {
+      const errText = (result.content as Array<{ type: string; text?: string }>)
+        .filter(b => b.type === 'text').map(b => b.text ?? '').join('\n') || JSON.stringify(result.content);
+      log.error(`[MCP] callTool "${toolName}" returned error:`, errText);
+    }
     const content = (result.content as Array<{ type: string; text?: string }>) ?? [];
     return content
       .filter((b) => b.type === 'text')

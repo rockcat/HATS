@@ -4924,8 +4924,6 @@ function buildScheduleRow(action) {
   row.className = 'schedules-row';
   row.dataset.actionId = action.id;
 
-  // ── View mode ────────────────────────────────────────────────────────────
-
   const isMcp = action.type === 'mcp_tool_call';
   const descText = isMcp && action.mcpToolCall
     ? `${action.mcpToolCall.serverName}${action.mcpToolCall.personalMcpAgentName ? ` (${action.mcpToolCall.personalMcpAgentName})` : ''}: ${action.mcpToolCall.toolName.replace(/^mcp__[^_]+__/, '')} → ${action.mcpToolCall.condition || 'always notify'}`
@@ -4955,137 +4953,7 @@ function buildScheduleRow(action) {
   row.appendChild(intervalBadge);
   row.appendChild(rowActions);
 
-  // ── Edit mode ────────────────────────────────────────────────────────────
-
-  function openEdit() {
-    row.classList.add('schedules-row--editing');
-    viewBody.hidden = true;
-    intervalBadge.hidden = true;
-    rowActions.hidden = true;
-
-    const form = document.createElement('div');
-    form.className = 'schedules-edit-form';
-
-    const labelInp = document.createElement('input');
-    labelInp.type = 'text';
-    labelInp.className = 'schedules-input';
-    labelInp.value = action.label;
-    labelInp.placeholder = 'Label';
-    form.appendChild(labelInp);
-
-    if (isMcp && action.mcpToolCall) {
-      const toolInfo = document.createElement('div');
-      toolInfo.className = 'schedules-mcp-hint';
-      toolInfo.style.cssText = 'padding:4px 0 6px;font-size:11px';
-      toolInfo.textContent = `Tool: ${action.mcpToolCall.toolName} (to change tool, delete and recreate)`;
-      form.appendChild(toolInfo);
-
-      const condLbl = document.createElement('label');
-      condLbl.className = 'schedules-mcp-label';
-      condLbl.textContent = 'Condition';
-      const condInp = document.createElement('input');
-      condInp.type = 'text'; condInp.className = 'schedules-input';
-      condInp.value = action.mcpToolCall.condition ?? '';
-      condInp.placeholder = 'e.g. result !== ""';
-      condInp.autocomplete = 'off';
-      form.appendChild(condLbl); form.appendChild(condInp);
-
-      const msgLbl = document.createElement('label');
-      msgLbl.className = 'schedules-mcp-label';
-      msgLbl.textContent = 'Message to agent';
-      const msgTA = document.createElement('textarea');
-      msgTA.className = 'schedules-textarea'; msgTA.rows = 2;
-      msgTA.value = action.mcpToolCall.messageTemplate ?? '';
-      form.appendChild(msgLbl); form.appendChild(msgTA);
-
-      const footer = document.createElement('div');
-      footer.className = 'schedules-add-footer';
-      const intervalInp = document.createElement('input');
-      intervalInp.type = 'number'; intervalInp.className = 'schedules-input schedules-interval';
-      intervalInp.placeholder = 'Interval (mins, blank=once)';
-      intervalInp.min = '1'; intervalInp.step = '1';
-      if (intervalMins) intervalInp.value = String(intervalMins);
-
-      const saveBtn = document.createElement('button');
-      saveBtn.className = 'schedules-add-btn'; saveBtn.textContent = 'Save';
-      const cancelBtn = document.createElement('button');
-      cancelBtn.className = 'schedules-cancel-btn'; cancelBtn.textContent = 'Cancel';
-
-      footer.appendChild(intervalInp); footer.appendChild(saveBtn); footer.appendChild(cancelBtn);
-      form.appendChild(footer);
-      row.appendChild(form);
-      labelInp.focus();
-
-      cancelBtn.addEventListener('click', () => {
-        form.remove(); row.classList.remove('schedules-row--editing');
-        viewBody.hidden = false; intervalBadge.hidden = false; rowActions.hidden = false;
-      });
-      saveBtn.addEventListener('click', async () => {
-        const label = labelInp.value.trim();
-        const messageTemplate = msgTA.value.trim();
-        if (!label || !messageTemplate) { alert('Label and message are required'); return; }
-        const mins = intervalInp.value ? parseInt(intervalInp.value, 10) : null;
-        saveBtn.disabled = true; saveBtn.textContent = '…';
-        try {
-          const updated = { ...action.mcpToolCall, condition: condInp.value.trim(), messageTemplate };
-          const r = await fetch(`/api/scheduled-actions/${encodeURIComponent(action.id)}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ label, mcpToolCall: updated, intervalMinutes: mins }),
-          });
-          if (!r.ok) { const e = await r.json(); alert(e.error ?? 'Save failed'); saveBtn.disabled = false; saveBtn.textContent = 'Save'; return; }
-          fetchScheduledActions();
-        } catch { alert('Network error'); saveBtn.disabled = false; saveBtn.textContent = 'Save'; }
-      });
-    } else {
-      const descTA = document.createElement('textarea');
-      descTA.className = 'schedules-textarea schedules-edit-desc';
-      descTA.value = action.description;
-      descTA.placeholder = 'Description';
-      form.appendChild(descTA);
-
-      const footer = document.createElement('div');
-      footer.className = 'schedules-add-footer';
-      const intervalInp = document.createElement('input');
-      intervalInp.type = 'number'; intervalInp.className = 'schedules-input schedules-interval';
-      intervalInp.placeholder = 'Interval (mins, blank=once)';
-      intervalInp.min = '1'; intervalInp.step = '1';
-      if (intervalMins) intervalInp.value = String(intervalMins);
-
-      const saveBtn = document.createElement('button');
-      saveBtn.className = 'schedules-add-btn'; saveBtn.textContent = 'Save';
-      const cancelBtn = document.createElement('button');
-      cancelBtn.className = 'schedules-cancel-btn'; cancelBtn.textContent = 'Cancel';
-
-      footer.appendChild(intervalInp); footer.appendChild(saveBtn); footer.appendChild(cancelBtn);
-      form.appendChild(footer);
-      row.appendChild(form);
-      labelInp.focus();
-
-      cancelBtn.addEventListener('click', () => {
-        form.remove(); row.classList.remove('schedules-row--editing');
-        viewBody.hidden = false; intervalBadge.hidden = false; rowActions.hidden = false;
-      });
-      saveBtn.addEventListener('click', async () => {
-        const label       = labelInp.value.trim();
-        const description = descTA.value.trim();
-        if (!label || !description) { alert('Label and description are required'); return; }
-        const mins = intervalInp.value ? parseInt(intervalInp.value, 10) : null;
-        saveBtn.disabled = true; saveBtn.textContent = '…';
-        try {
-          const r = await fetch(`/api/scheduled-actions/${encodeURIComponent(action.id)}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ label, description, intervalMinutes: mins }),
-          });
-          if (!r.ok) { const e = await r.json(); alert(e.error ?? 'Save failed'); saveBtn.disabled = false; saveBtn.textContent = 'Save'; return; }
-          fetchScheduledActions();
-        } catch { alert('Network error'); saveBtn.disabled = false; saveBtn.textContent = 'Save'; }
-      });
-    }
-  }
-
-  viewBody.addEventListener('click', openEdit);
+  viewBody.addEventListener('click', () => openScheduleModal(action));
 
   delBtn.addEventListener('click', async () => {
     if (!confirm('Delete this scheduled action?')) return;
@@ -5222,22 +5090,98 @@ function collectMcpArgs(container) {
   const args = {};
   for (const inp of container.querySelectorAll('[data-param-key]')) {
     const val = inp.value;
-    if (val === '' && inp.tagName === 'SELECT') continue;
+    if (val === '') continue;
     const type = inp.dataset.paramType;
-    args[inp.dataset.paramKey] = (type === 'number' || type === 'integer') ? Number(val) : type === 'boolean' ? val === 'true' : val;
+    const coerced = (type === 'number' || type === 'integer') ? Number(val) : type === 'boolean' ? val === 'true' : val;
+    if (coerced === false || (typeof coerced === 'number' && isNaN(coerced))) continue;
+    args[inp.dataset.paramKey] = coerced;
   }
   return args;
 }
 
+function closeScheduleModal() {
+  document.getElementById('schedule-modal').hidden = true;
+}
+
+async function openScheduleModal(action) {
+  const modal   = document.getElementById('schedule-modal');
+  const titleEl = document.getElementById('schedule-modal-title');
+  const saveBtn = document.getElementById('schedules-add-btn');
+
+  // Reset all fields
+  document.getElementById('schedules-add-label').value       = '';
+  document.getElementById('schedules-add-description').value = '';
+  document.getElementById('schedules-add-interval').value    = '';
+  document.getElementById('schedules-mcp-condition').value   = '';
+  document.getElementById('schedules-mcp-message').value     = '';
+  document.getElementById('schedules-mcp-params').innerHTML  = '';
+  document.getElementById('schedules-mcp-test-result').hidden = true;
+  document.querySelector('input[name="schedules-type"][value="prompt"]').checked = true;
+  document.getElementById('schedules-prompt-fields').hidden = false;
+  document.getElementById('schedules-mcp-fields').hidden    = true;
+  const serverSel = document.getElementById('schedules-mcp-server');
+  const toolSel   = document.getElementById('schedules-mcp-tool');
+  serverSel.innerHTML = '<option value="">Select a server…</option>';
+  toolSel.innerHTML   = '<option value="">Select server first</option>';
+  toolSel.disabled    = true;
+
+  if (action) {
+    titleEl.textContent  = 'Edit Scheduled Action';
+    saveBtn.textContent  = 'Save';
+    modal.dataset.editId = action.id;
+    document.getElementById('schedules-add-label').value = action.label;
+    const intervalMins = action.intervalSeconds ? Math.round(action.intervalSeconds / 60) : '';
+    document.getElementById('schedules-add-interval').value = String(intervalMins);
+
+    if (action.type === 'mcp_tool_call' && action.mcpToolCall) {
+      document.querySelector('input[name="schedules-type"][value="mcp_tool_call"]').checked = true;
+      document.getElementById('schedules-prompt-fields').hidden = true;
+      document.getElementById('schedules-mcp-fields').hidden    = false;
+      document.getElementById('schedules-mcp-condition').value  = action.mcpToolCall.condition ?? '';
+      document.getElementById('schedules-mcp-message').value    = action.mcpToolCall.messageTemplate ?? '';
+
+      // Populate server/tool/params asynchronously
+      _mcpToolSchemas = null;
+      await populateMcpServerSelect(serverSel);
+      const mcp = action.mcpToolCall;
+      const targetVal = mcp.personalMcpAgentName
+        ? `${mcp.serverName}||${mcp.personalMcpAgentName}`
+        : mcp.serverName;
+      serverSel.value = targetVal;
+      populateMcpToolSelect(toolSel, serverSel.value);
+      toolSel.value = mcp.toolName;
+      buildMcpParamFields(document.getElementById('schedules-mcp-params'), mcp.toolName);
+      for (const [key, val] of Object.entries(mcp.args ?? {})) {
+        const inp = document.querySelector(`#schedules-mcp-params [data-param-key="${key}"]`);
+        if (inp) inp.value = val;
+      }
+    } else {
+      document.getElementById('schedules-add-description').value = action.description ?? '';
+    }
+  } else {
+    titleEl.textContent  = 'New Scheduled Action';
+    saveBtn.textContent  = 'Add';
+    modal.dataset.editId = '';
+  }
+
+  modal.hidden = false;
+}
+
 function initSchedulesTab() {
+  document.getElementById('schedules-new-btn')?.addEventListener('click', () => openScheduleModal(null));
+  document.getElementById('schedule-modal-close')?.addEventListener('click', closeScheduleModal);
+  document.getElementById('schedule-modal')?.addEventListener('click', e => {
+    if (e.target === document.getElementById('schedule-modal')) closeScheduleModal();
+  });
+
   // Type switching
   document.querySelectorAll('input[name="schedules-type"]').forEach(radio => {
     radio.addEventListener('change', () => {
       const isMcp = document.querySelector('input[name="schedules-type"]:checked')?.value === 'mcp_tool_call';
       document.getElementById('schedules-prompt-fields').hidden = isMcp;
-      document.getElementById('schedules-mcp-fields').hidden = !isMcp;
+      document.getElementById('schedules-mcp-fields').hidden    = !isMcp;
       if (isMcp) {
-        _mcpToolSchemas = null; // refresh on each open
+        _mcpToolSchemas = null;
         populateMcpServerSelect(document.getElementById('schedules-mcp-server'));
       }
     });
@@ -5246,19 +5190,17 @@ function initSchedulesTab() {
   // Server → tool cascade
   document.getElementById('schedules-mcp-server')?.addEventListener('change', () => {
     const serverSelectValue = document.getElementById('schedules-mcp-server').value;
-    const toolSel = document.getElementById('schedules-mcp-tool');
-    populateMcpToolSelect(toolSel, serverSelectValue);
-    buildMcpParamFields(document.getElementById('schedules-mcp-params'), '');
+    populateMcpToolSelect(document.getElementById('schedules-mcp-tool'), serverSelectValue);
+    document.getElementById('schedules-mcp-params').innerHTML = '';
   });
 
   // Tool → param fields
   document.getElementById('schedules-mcp-tool')?.addEventListener('change', () => {
-    const toolName = document.getElementById('schedules-mcp-tool').value;
-    buildMcpParamFields(document.getElementById('schedules-mcp-params'), toolName);
-    const resultEl = document.getElementById('schedules-mcp-test-result');
-    if (resultEl) resultEl.hidden = true;
+    buildMcpParamFields(document.getElementById('schedules-mcp-params'), document.getElementById('schedules-mcp-tool').value);
+    document.getElementById('schedules-mcp-test-result').hidden = true;
   });
 
+  // Test button
   document.getElementById('schedules-mcp-test-btn')?.addEventListener('click', async () => {
     const serverSelectValue = document.getElementById('schedules-mcp-server')?.value ?? '';
     const toolName          = document.getElementById('schedules-mcp-tool')?.value ?? '';
@@ -5277,7 +5219,10 @@ function initSchedulesTab() {
       });
       const data = await r.json();
       if (r.ok) {
-        resultEl.textContent = data.result ?? '(empty result)';
+        const raw = data.result ?? '';
+        let display = raw || '(empty result)';
+        try { display = JSON.stringify(JSON.parse(raw), null, 2); } catch { /* not JSON */ }
+        resultEl.textContent = display;
         resultEl.className = 'schedules-mcp-test-result schedules-mcp-test-result--ok';
       } else {
         resultEl.textContent = `Error: ${data.error ?? 'Unknown error'}`;
@@ -5289,10 +5234,13 @@ function initSchedulesTab() {
     }
   });
 
+  // Save (create or update)
   document.getElementById('schedules-add-btn')?.addEventListener('click', async () => {
-    const type = document.querySelector('input[name="schedules-type"]:checked')?.value ?? 'prompt';
-    const label = document.getElementById('schedules-add-label').value.trim();
-    const intervalRaw = document.getElementById('schedules-add-interval').value;
+    const modal    = document.getElementById('schedule-modal');
+    const editId   = modal.dataset.editId ?? '';
+    const type     = document.querySelector('input[name="schedules-type"]:checked')?.value ?? 'prompt';
+    const label    = document.getElementById('schedules-add-label').value.trim();
+    const intervalRaw     = document.getElementById('schedules-add-interval').value;
     const intervalMinutes = intervalRaw ? parseInt(intervalRaw, 10) : null;
     if (!label) { alert('Label is required'); return; }
 
@@ -5315,20 +5263,15 @@ function initSchedulesTab() {
       body = { label, description, intervalMinutes };
     }
 
+    const saveBtn = document.getElementById('schedules-add-btn');
+    saveBtn.disabled = true; saveBtn.textContent = '…';
     try {
-      const r = await fetch('/api/scheduled-actions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      if (!r.ok) { const e = await r.json(); alert(e.error ?? 'Failed to create action'); return; }
-      document.getElementById('schedules-add-label').value = '';
-      document.getElementById('schedules-add-description').value = '';
-      document.getElementById('schedules-add-interval').value = '';
-      document.getElementById('schedules-mcp-condition').value = '';
-      document.getElementById('schedules-mcp-message').value = '';
-      document.getElementById('schedules-mcp-params').innerHTML = '';
+      const url    = editId ? `/api/scheduled-actions/${encodeURIComponent(editId)}` : '/api/scheduled-actions';
+      const method = editId ? 'PATCH' : 'POST';
+      const r = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (!r.ok) { const e = await r.json(); alert(e.error ?? 'Failed'); saveBtn.disabled = false; saveBtn.textContent = editId ? 'Save' : 'Add'; return; }
+      closeScheduleModal();
       fetchScheduledActions();
-    } catch { alert('Network error'); }
+    } catch { alert('Network error'); saveBtn.disabled = false; saveBtn.textContent = editId ? 'Save' : 'Add'; }
   });
 }

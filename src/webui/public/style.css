@@ -4157,20 +4157,18 @@ body.has-expanded-panel main > section:not(.panel--expanded) {
 
 .schedules-row-actions { display: flex; gap: 4px; flex-shrink: 0; align-self: center; }
 
-.schedules-add-section {
-  flex-shrink: 0; border-top: 1px solid var(--border);
+.schedules-toolbar {
+  flex-shrink: 0; padding: 8px 10px; border-bottom: 1px solid var(--border);
 }
-.schedules-add-summary {
-  padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer;
-  color: var(--text-muted); user-select: none;
-  list-style: none; display: flex; align-items: center; gap: 6px;
+
+.schedule-modal { width: 520px; max-width: 96vw; }
+.schedule-modal-body {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 14px 16px; overflow-y: auto; max-height: 75vh;
 }
-.schedules-add-summary::before { content: '▶'; font-size: 9px; transition: transform .15s; }
-details.schedules-add-section[open] .schedules-add-summary::before { transform: rotate(90deg); }
 
-#schedules-add-description { min-height: 120px; }
+#schedules-add-description { min-height: 80px; }
 
-.schedules-add-form { padding: 8px 12px; display: flex; flex-direction: column; gap: 6px; }
 
 .schedules-input {
   width: 100%; padding: 5px 8px; border: 1px solid var(--border);
@@ -4191,14 +4189,7 @@ details.schedules-add-section[open] .schedules-add-summary::before { transform: 
 .schedules-add-btn:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
 
 .schedules-row-body { cursor: pointer; }
-.schedules-row--editing { align-items: stretch; flex-direction: column; }
-.schedules-edit-form { display: flex; flex-direction: column; gap: 6px; padding: 4px 0; width: 100%; }
-.schedules-edit-desc { min-height: 120px; }
-.schedules-cancel-btn {
-  padding: 5px 12px; border-radius: 4px; border: 1px solid var(--border);
-  background: transparent; color: var(--text-muted); font-size: 12px; cursor: pointer; white-space: nowrap;
-}
-.schedules-cancel-btn:hover { background: var(--surface-2); color: var(--text); }
+
 
 .schedules-type-row { display: flex; gap: 16px; align-items: center; }
 .schedules-type-option { display: flex; align-items: center; gap: 5px; font-size: 12px; cursor: pointer; color: var(--text-muted); }
