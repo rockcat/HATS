@@ -152,6 +152,10 @@
                 <option value="">Select server first</option>
               </select>
               <div id="schedules-mcp-params" class="schedules-mcp-params"></div>
+              <div class="schedules-mcp-test-row">
+                <button id="schedules-mcp-test-btn" type="button" class="schedules-mcp-test-btn">Test</button>
+                <pre id="schedules-mcp-test-result" class="schedules-mcp-test-result" hidden></pre>
+              </div>
               <div class="schedules-mcp-section">
                 <label class="schedules-mcp-label">Condition <span class="schedules-mcp-hint">(JS using <code>result</code> — blank = always notify)</span></label>
                 <input type="text" id="schedules-mcp-condition" class="schedules-input" placeholder='e.g. result !== "" or JSON.parse(result).count > 0' autocomplete="off">

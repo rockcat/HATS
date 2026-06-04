@@ -652,6 +652,14 @@ export class TeamOrchestrator {
   }
 
   getMCPTools() { return this.mcp.getAllTools(); }
+
+  async callMcpTool(toolName: string, args: Record<string, unknown>, agentName?: string): Promise<string> {
+    const registry = agentName
+      ? (this.personalMcpByAgent.get(agentName.toLowerCase()) ?? this.mcp)
+      : this.mcp;
+    if (!registry) throw new Error('No MCP registry available');
+    return registry.callTool(toolName, args);
+  }
   cancelActiveMeeting(meetingId: string): boolean {
     const room = this.activeMeetingRooms.get(meetingId);
     if (!room) return false;

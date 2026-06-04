@@ -5205,7 +5205,7 @@ function buildMcpParamFields(container, toolName) {
       }
     } else {
       inp = document.createElement('input');
-      inp.type = schema.type === 'number' ? 'number' : 'text';
+      inp.type = (schema.type === 'number' || schema.type === 'integer') ? 'number' : 'text';
       inp.className = 'schedules-input';
       inp.placeholder = schema.description ?? key;
       inp.autocomplete = 'off';
@@ -5224,7 +5224,7 @@ function collectMcpArgs(container) {
     const val = inp.value;
     if (val === '' && inp.tagName === 'SELECT') continue;
     const type = inp.dataset.paramType;
-    args[inp.dataset.paramKey] = type === 'number' ? Number(val) : type === 'boolean' ? val === 'true' : val;
+    args[inp.dataset.paramKey] = (type === 'number' || type === 'integer') ? Number(val) : type === 'boolean' ? val === 'true' : val;
   }
   return args;
 }
@@ -5255,6 +5255,38 @@ function initSchedulesTab() {
   document.getElementById('schedules-mcp-tool')?.addEventListener('change', () => {
     const toolName = document.getElementById('schedules-mcp-tool').value;
     buildMcpParamFields(document.getElementById('schedules-mcp-params'), toolName);
+    const resultEl = document.getElementById('schedules-mcp-test-result');
+    if (resultEl) resultEl.hidden = true;
+  });
+
+  document.getElementById('schedules-mcp-test-btn')?.addEventListener('click', async () => {
+    const serverSelectValue = document.getElementById('schedules-mcp-server')?.value ?? '';
+    const toolName          = document.getElementById('schedules-mcp-tool')?.value ?? '';
+    const resultEl          = document.getElementById('schedules-mcp-test-result');
+    if (!serverSelectValue || !toolName) { alert('Please select a server and tool first'); return; }
+    const { server: serverName, agentName } = parseMcpServerValue(serverSelectValue);
+    const args = collectMcpArgs(document.getElementById('schedules-mcp-params'));
+    resultEl.hidden = false;
+    resultEl.textContent = 'Running…';
+    resultEl.className = 'schedules-mcp-test-result schedules-mcp-test-result--pending';
+    try {
+      const r = await fetch('/api/mcp/test-call', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ serverName, toolName, args, agentName: agentName || undefined }),
+      });
+      const data = await r.json();
+      if (r.ok) {
+        resultEl.textContent = data.result ?? '(empty result)';
+        resultEl.className = 'schedules-mcp-test-result schedules-mcp-test-result--ok';
+      } else {
+        resultEl.textContent = `Error: ${data.error ?? 'Unknown error'}`;
+        resultEl.className = 'schedules-mcp-test-result schedules-mcp-test-result--error';
+      }
+    } catch (err) {
+      resultEl.textContent = `Network error: ${err.message}`;
+      resultEl.className = 'schedules-mcp-test-result schedules-mcp-test-result--error';
+    }
   });
 
   document.getElementById('schedules-add-btn')?.addEventListener('click', async () => {

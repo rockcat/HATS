@@ -4213,6 +4213,22 @@ details.schedules-add-section[open] .schedules-add-summary::before { transform: 
 .schedules-mcp-hint { font-weight: 400; color: var(--text-muted); font-size: 11px; }
 .schedules-mcp-hint code { background: var(--surface-2); padding: 0 3px; border-radius: 3px; font-size: 10px; }
 
+.schedules-mcp-test-row { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+.schedules-mcp-test-btn {
+  align-self: flex-start; padding: 4px 12px; border-radius: 4px;
+  border: 1px solid var(--border); background: var(--surface-2);
+  color: var(--text); font-size: 12px; cursor: pointer;
+}
+.schedules-mcp-test-btn:hover { background: var(--surface-3); }
+.schedules-mcp-test-result {
+  font-size: 11px; font-family: monospace; white-space: pre-wrap; word-break: break-all;
+  padding: 6px 8px; border-radius: 4px; margin: 0; max-height: 160px; overflow-y: auto;
+  border: 1px solid var(--border); background: var(--surface-2);
+}
+.schedules-mcp-test-result--pending { color: var(--text-muted); }
+.schedules-mcp-test-result--ok { border-color: color-mix(in srgb, #4caf50 40%, var(--border)); }
+.schedules-mcp-test-result--error { border-color: color-mix(in srgb, #f44336 40%, var(--border)); color: #f44336; }
+
 .schedules-mcp-badge {
   display: inline-block; font-size: 9px; font-weight: 700; letter-spacing: .04em;
   background: color-mix(in srgb, var(--accent) 20%, transparent);
