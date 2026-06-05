@@ -94,6 +94,16 @@ export class MCPClient {
 
   /** Call a tool by its namespaced name. Returns result as string. */
   async callTool(namespacedName: string, args: Record<string, unknown>): Promise<string> {
+    const raw = await this.callToolRaw(namespacedName, args);
+    const content = (raw.content as Array<{ type: string; text?: string }>) ?? [];
+    return content
+      .filter((b) => b.type === 'text')
+      .map((b) => b.text ?? '')
+      .join('\n') || JSON.stringify(raw.content);
+  }
+
+  /** Call a tool and return the full MCP result object (content + isError). */
+  async callToolRaw(namespacedName: string, args: Record<string, unknown>): Promise<Awaited<ReturnType<typeof this.client.callTool>>> {
     const toolName = this.stripNamespace(namespacedName);
     log.info(`[MCP] callTool "${toolName}" on server "${this.serverName}" args=${JSON.stringify(args)}`);
     let result: Awaited<ReturnType<typeof this.client.callTool>>;
@@ -103,18 +113,12 @@ export class MCPClient {
       log.error(`[MCP] callTool "${toolName}" threw:`, (err as Error).message, (err as Error).stack ?? '');
       throw err;
     }
-
-    // MCP tool results are arrays of content blocks
     if (result.isError) {
       const errText = (result.content as Array<{ type: string; text?: string }>)
         .filter(b => b.type === 'text').map(b => b.text ?? '').join('\n') || JSON.stringify(result.content);
       log.error(`[MCP] callTool "${toolName}" returned error:`, errText);
     }
-    const content = (result.content as Array<{ type: string; text?: string }>) ?? [];
-    return content
-      .filter((b) => b.type === 'text')
-      .map((b) => b.text ?? '')
-      .join('\n') || JSON.stringify(result.content);
+    return result;
   }
 
   isMCPTool(namespacedName: string): boolean {

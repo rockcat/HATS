@@ -339,7 +339,7 @@ export class AgentRouter {
         JSON.parse(body) as { serverName?: string; toolName: string; args?: Record<string, unknown>; agentName?: string };
       if (!toolName?.trim()) { json(res, 400, { error: 'toolName is required' }); return true; }
       try {
-        const result = await orch.callMcpTool(toolName, args ?? {}, agentName || undefined);
+        const result = await orch.callMcpToolRaw(toolName, args ?? {}, agentName || undefined);
         json(res, 200, { result });
       } catch (err) {
         json(res, 500, { error: (err as Error).message });

@@ -83,4 +83,10 @@ export class MCPRegistry {
     if (!client) throw new Error(`No MCP server handles tool "${toolName}"`);
     return client.callTool(toolName, args);
   }
+
+  async callToolRaw(toolName: string, args: Record<string, unknown>): Promise<unknown> {
+    const client = Array.from(this.clients.values()).find((c) => c.isMCPTool(toolName));
+    if (!client) throw new Error(`No MCP server handles tool "${toolName}"`);
+    return client.callToolRaw(toolName, args);
+  }
 }

@@ -5219,9 +5219,28 @@ function initSchedulesTab() {
       });
       const data = await r.json();
       if (r.ok) {
-        const raw = data.result ?? '';
-        let display = raw || '(empty result)';
-        try { display = JSON.stringify(JSON.parse(raw), null, 2); } catch { /* not JSON */ }
+        // Pretty-print raw MCP result object
+        let display = data.result != null ? JSON.stringify(data.result, null, 2) : '(empty result)';
+
+        // Derive the text `result` string the same way the server does (joined text blocks)
+        const blocks = Array.isArray(data.result?.content) ? data.result.content : [];
+        const resultStr = blocks.filter(b => b.type === 'text').map(b => b.text ?? '').join('\n')
+          || JSON.stringify(data.result?.content ?? '');
+
+        // Evaluate condition if filled in
+        const condVal = document.getElementById('schedules-mcp-condition')?.value?.trim() ?? '';
+        if (condVal) {
+          let condLine;
+          try {
+            // eslint-disable-next-line no-new-func
+            const passes = !!(new Function('result', `return !!(${condVal})`))(resultStr);
+            condLine = `\n\n─ Condition: "${condVal}"\n  result string: ${JSON.stringify(resultStr.slice(0, 120))}${resultStr.length > 120 ? '…' : ''}\n  → ${passes ? '✓ TRUE — agent would be notified' : '✗ FALSE — agent would NOT be notified'}`;
+          } catch (e) {
+            condLine = `\n\n─ Condition: "${condVal}"\n  → Invalid JS: ${e.message}`;
+          }
+          display += condLine;
+        }
+
         resultEl.textContent = display;
         resultEl.className = 'schedules-mcp-test-result schedules-mcp-test-result--ok';
       } else {

@@ -670,6 +670,15 @@ export class TeamOrchestrator {
       throw err;
     }
   }
+
+  async callMcpToolRaw(toolName: string, args: Record<string, unknown>, agentName?: string): Promise<unknown> {
+    const registry = agentName
+      ? (this.personalMcpByAgent.get(agentName.toLowerCase()) ?? this.mcp)
+      : this.mcp;
+    if (!registry) throw new Error('No MCP registry available');
+    log.info(`[MCP test-call] tool="${toolName}" agentName=${agentName ?? 'shared'} (raw)`);
+    return registry.callToolRaw(toolName, args);
+  }
   cancelActiveMeeting(meetingId: string): boolean {
     const room = this.activeMeetingRooms.get(meetingId);
     if (!room) return false;
