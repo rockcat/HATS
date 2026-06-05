@@ -124,8 +124,12 @@ class ConversationThreads extends HTMLElement {
     const res = await fetch(`/api/agents/${encodeURIComponent(this._agentName)}/history?thread=general`);
     if (res.ok) {
       const msgs = await res.json();
-      // Only replace if server has caught up — preserves optimistic messages while agent is processing
-      if (msgs.length >= this._generalMessages.length) this._generalMessages = msgs;
+      // Accept server data if agent has responded (last msg is assistant) or server has more/equal messages.
+      // Pure length comparison breaks when persistHistory truncates history below the optimistic count.
+      const lastMsg = msgs[msgs.length - 1];
+      if (msgs.length >= this._generalMessages.length || lastMsg?.role === 'assistant') {
+        this._generalMessages = msgs;
+      }
     }
   }
 
@@ -133,7 +137,10 @@ class ConversationThreads extends HTMLElement {
     const res = await fetch(`/api/agents/${encodeURIComponent(this._agentName)}/history?thread=${encodeURIComponent(key)}`);
     if (res.ok) {
       const msgs = await res.json();
-      if (msgs.length >= this._activeMessages.length) this._activeMessages = msgs;
+      const lastThreadMsg = msgs[msgs.length - 1];
+      if (msgs.length >= this._activeMessages.length || lastThreadMsg?.role === 'assistant') {
+        this._activeMessages = msgs;
+      }
     }
   }
 
@@ -400,6 +407,11 @@ class ConversationThreads extends HTMLElement {
       text = content.map(c => (typeof c === 'string' ? c : (c.text || c.content || JSON.stringify(c)))).join('\n');
     } else {
       text = String(content ?? '');
+    }
+
+    // Strip internal routing prefixes added by formatIncomingMessage before display
+    if (role === 'user') {
+      text = text.replace(/^\[(TASK|MESSAGE|MEETING INVITE|ESCALATION|HUMAN REPLY|TASK COMPLETE)(?:\s+from\s+[^\]]+)?\]\s*/, '');
     }
 
     if (role === 'assistant' && window.marked) {
