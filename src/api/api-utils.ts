@@ -88,6 +88,10 @@ export function buildAgentStatuses(
       speakerName: a.config.identity.speakerName,
       enabledMcpServers: a.config.enabledMcpServers,
       threads: a.getThreadSummary(),
+      maxContextTokens: a.config.maxContextTokens,
+      maxCostPerHour: a.config.maxCostPerHour,
+      hourlyCost: a.getHourlyCost(),
+      costIdled: a.isCostIdled(),
     };
   });
 }

@@ -390,6 +390,27 @@ function applyCardData(el, agent) {
     if (talkEl) talkEl.remove();
     el.classList.remove('communicating');
   }
+
+  // Cost-idle badge
+  let costEl = el.querySelector('.agent-cost-idle');
+  if (agent.costIdled) {
+    if (!costEl) {
+      costEl = document.createElement('div');
+      costEl.className = 'agent-cost-idle';
+      el.querySelector('.agent-activity').appendChild(costEl);
+    }
+    const spent = agent.hourlyCost != null ? `$${agent.hourlyCost.toFixed(3)}/hr` : '';
+    costEl.textContent = `Cost limit reached (${spent}) — waiting for next hour`;
+  } else if (agent.maxCostPerHour && agent.hourlyCost != null && agent.hourlyCost > 0) {
+    if (!costEl) {
+      costEl = document.createElement('div');
+      costEl.className = 'agent-cost-idle';
+      el.querySelector('.agent-activity').appendChild(costEl);
+    }
+    costEl.textContent = `$${agent.hourlyCost.toFixed(3)} / $${agent.maxCostPerHour}/hr`;
+  } else {
+    if (costEl) costEl.remove();
+  }
 }
 
 // ── Card reordering (FLIP) ────────────────────────────────────────────────────
@@ -2006,31 +2027,38 @@ async function refreshPromptPreview() {
 }
 
 /** Show a price hint or unknown-model warning below the model select. */
-async function updatePricingHint(providerId, modelId) {
-  const line = document.getElementById('agent-config-pricing-line');
-  const hint = document.getElementById('agent-config-pricing-hint');
-  if (!line || !hint) return;
-  if (!modelId) { line.hidden = true; return; }
+async function updatePricingHint(providerId, modelId, lineEl, hintEl) {
+  if (!lineEl || !hintEl) return;
+  if (!modelId) { lineEl.hidden = true; return; }
 
   const { pricing, freeProviders } = await loadPricing();
 
   if (freeProviders.includes(providerId)) {
-    hint.className = 'agent-config-pricing-hint agent-config-pricing-free';
-    hint.textContent = 'Free — local inference, no API cost';
-    line.hidden = false;
+    hintEl.className = 'agent-config-pricing-hint agent-config-pricing-free';
+    hintEl.textContent = 'Free — local inference, no API cost';
+    lineEl.hidden = false;
     return;
   }
 
   const p = pricing[modelId];
   if (p) {
-    hint.className = 'agent-config-pricing-hint agent-config-pricing-known';
-    hint.textContent = `$${p.input}/M input · $${p.output}/M output tokens`;
-    line.hidden = false;
+    hintEl.className = 'agent-config-pricing-hint agent-config-pricing-known';
+    hintEl.textContent = `$${p.input}/M input · $${p.output}/M output tokens`;
+    lineEl.hidden = false;
   } else {
-    hint.className = 'agent-config-pricing-hint agent-config-pricing-unknown';
-    hint.textContent = 'Pricing unknown for this model — costs may be incorrect in telemetry';
-    line.hidden = false;
+    hintEl.className = 'agent-config-pricing-hint agent-config-pricing-unknown';
+    hintEl.textContent = 'Pricing unknown for this model — costs may be incorrect in telemetry';
+    lineEl.hidden = false;
   }
+}
+
+/** Update the max-context placeholder to match the selected model's context window. */
+async function updateContextWindowPlaceholder(modelId) {
+  const input = document.getElementById('add-agent-max-context');
+  if (!input) return;
+  const { contextWindows } = await loadPricing();
+  const cw = contextWindows?.[modelId];
+  input.placeholder = cw ? `${cw.toLocaleString()} (model max)` : 'Model default';
 }
 
 // ── Provider / model catalogue ────────────────────────────────────────────────
@@ -3324,7 +3352,12 @@ function initAddAgent() {
   loadProviders().then(providers => {
     populateProviderSelect(document.getElementById('add-agent-provider'), providers, 'anthropic');
     const p = providers.find(p => p.id === 'anthropic');
-    populateModelSelect(document.getElementById('add-agent-model'), providers, 'anthropic', p?.defaultModel ?? '');
+    const defaultModel = p?.defaultModel ?? '';
+    populateModelSelect(document.getElementById('add-agent-model'), providers, 'anthropic', defaultModel);
+    const lineEl = document.getElementById('lib-editor-pricing-line');
+    const hintEl = document.getElementById('lib-editor-pricing-hint');
+    updatePricingHint('anthropic', defaultModel, lineEl, hintEl);
+    updateContextWindowPlaceholder(defaultModel);
   });
   document.getElementById('add-agent-provider').addEventListener('change', async () => {
     const pid = document.getElementById('add-agent-provider').value;
@@ -3335,6 +3368,19 @@ function initAddAgent() {
     }
     const p = providers.find(p => p.id === pid);
     populateModelSelect(document.getElementById('add-agent-model'), providers, pid, p?.defaultModel ?? '');
+    const model = document.getElementById('add-agent-model').value;
+    const lineEl = document.getElementById('lib-editor-pricing-line');
+    const hintEl = document.getElementById('lib-editor-pricing-hint');
+    updatePricingHint(pid, model, lineEl, hintEl);
+    updateContextWindowPlaceholder(model);
+  });
+  document.getElementById('add-agent-model').addEventListener('change', () => {
+    const pid   = document.getElementById('add-agent-provider').value;
+    const model = document.getElementById('add-agent-model').value;
+    const lineEl = document.getElementById('lib-editor-pricing-line');
+    const hintEl = document.getElementById('lib-editor-pricing-hint');
+    updatePricingHint(pid, model, lineEl, hintEl);
+    updateContextWindowPlaceholder(model);
   });
 
   // Populate hat checkboxes
@@ -3540,6 +3586,11 @@ function openAddAgent() {
   document.getElementById('add-agent-error').textContent = '';
   document.getElementById('add-agent-schedules-section').hidden = true;
   document.getElementById('add-agent-persona-group').hidden = false;
+  const maxCtxOpenEl  = document.getElementById('add-agent-max-context');
+  const maxCostOpenEl = document.getElementById('add-agent-max-cost');
+  if (maxCtxOpenEl)  maxCtxOpenEl.value  = '';
+  if (maxCostOpenEl) maxCostOpenEl.value = '';
+  document.getElementById('lib-editor-pricing-line').hidden = true;
   document.getElementById('lib-avatar-panel').hidden = false;
   const hatType = getSelectedHats('add-agent-hat-group').filter(h => h !== 'none')[0] ?? 'none';
   populatePersonaSelect('add-agent-persona', hatType, '');
@@ -3565,8 +3616,21 @@ async function openLibraryEdit(agent) {
   const provSel  = document.getElementById('add-agent-provider');
   const modelSel = document.getElementById('add-agent-model');
   const providers = await loadProviders();
-  populateProviderSelect(provSel, providers, agent.providerName ?? 'anthropic');
-  populateModelSelect(modelSel, providers, agent.providerName ?? 'anthropic', agent.model ?? '');
+  const providerName = agent.providerName ?? 'anthropic';
+  populateProviderSelect(provSel, providers, providerName);
+  populateModelSelect(modelSel, providers, providerName, agent.model ?? '');
+
+  // Update pricing hint and context window placeholder for the current model
+  const pricingLineEl = document.getElementById('lib-editor-pricing-line');
+  const pricingHintEl = document.getElementById('lib-editor-pricing-hint');
+  updatePricingHint(providerName, agent.model ?? '', pricingLineEl, pricingHintEl);
+  updateContextWindowPlaceholder(agent.model ?? '');
+
+  // Populate new config fields
+  const maxCtxEl  = document.getElementById('add-agent-max-context');
+  const maxCostEl = document.getElementById('add-agent-max-cost');
+  if (maxCtxEl)  maxCtxEl.value  = agent.maxContextTokens != null ? String(agent.maxContextTokens) : '';
+  if (maxCostEl) maxCostEl.value = agent.maxCostPerHour   != null ? String(agent.maxCostPerHour)   : '';
 
   // Avatar — populate then show preview if one is set
   const avatarSel  = document.getElementById('add-agent-avatar');
@@ -3666,6 +3730,10 @@ async function saveAddAgent() {
   const voice             = document.getElementById('add-agent-voice').value || null;
   const speakerName       = document.getElementById('add-agent-speaker').value || null;
   const background        = document.getElementById('add-agent-background').value || null;
+  const maxContextRaw     = document.getElementById('add-agent-max-context')?.value?.trim();
+  const maxCostRaw        = document.getElementById('add-agent-max-cost')?.value?.trim();
+  const maxContextTokens  = maxContextRaw ? (parseInt(maxContextRaw, 10) || null) : null;
+  const maxCostPerHour    = maxCostRaw    ? (parseFloat(maxCostRaw)      || null) : null;
   const errEl             = document.getElementById('add-agent-error');
   errEl.textContent       = '';
   if (!name) { errEl.textContent = 'Name is required.'; return; }
@@ -3674,7 +3742,7 @@ async function saveAddAgent() {
 
   try {
     if (_agentEditorMode === 'edit' && _libEditAgentId) {
-      const body = { name, hatTypes, visualDescription, backstory, specialisation, provider, model, avatar, voice, speakerName, background };
+      const body = { name, hatTypes, visualDescription, backstory, specialisation, provider, model, avatar, voice, speakerName, background, maxContextTokens, maxCostPerHour };
       const r = await fetch(`/api/global-agents/${encodeURIComponent(_libEditAgentId)}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
       });

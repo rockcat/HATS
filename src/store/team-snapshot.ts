@@ -35,6 +35,8 @@ export interface AgentDefinition {
   personalMcpCredentials?: Record<string, Record<string, string>>;
   disabledPersonalMcpServers?: string[];
   scheduledActionIds: string[];
+  maxContextTokens?: number;
+  maxCostPerHour?: number;
 }
 
 // Global scheduled action definition

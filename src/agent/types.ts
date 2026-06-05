@@ -44,6 +44,10 @@ export interface AgentConfig {
   personalMcpCredentials?: Record<string, Record<string, string>>;
   /** IDs of personal MCP servers that have credentials saved but are currently stopped. */
   disabledPersonalMcpServers?: string[];
+  /** Max conversation history size in tokens (estimated). Defaults to model context window. */
+  maxContextTokens?: number;
+  /** If set, agent idles until the next hour when hourly spend exceeds this value (USD). */
+  maxCostPerHour?: number;
 }
 
 export interface AgentMessage {

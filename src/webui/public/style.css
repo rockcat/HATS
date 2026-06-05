@@ -584,6 +584,16 @@ main {
   font-weight: 500;
 }
 
+.agent-cost-idle {
+  margin-top: 4px;
+  font-size: 10px;
+  color: var(--text-muted);
+  font-weight: 500;
+  padding: 2px 5px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--text-muted) 12%, transparent);
+}
+
 /* ── Active Kanban (top-right) ───────────────────────── */
 #kanban-active {
   grid-column: 2;

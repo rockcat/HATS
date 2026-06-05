@@ -314,6 +314,8 @@ export class TeamOrchestrator {
         enabledMcpServers:          def.enabledMcpServers,
         personalMcpCredentials:     def.personalMcpCredentials,
         disabledPersonalMcpServers: def.disabledPersonalMcpServers,
+        maxContextTokens:      def.maxContextTokens,
+        maxCostPerHour:        def.maxCostPerHour,
       };
       const agent = this.registerAgent(config);
       if (s.agentThreads?.[agentId]) {
@@ -473,6 +475,14 @@ export class TeamOrchestrator {
 
   updateAgentConfig(name: string, provider: AIProvider, model: string): void {
     this.requireAgent(name).setProvider(provider, model);
+  }
+
+  updateAgentMaxContextTokens(name: string, maxContextTokens: number | undefined): void {
+    this.requireAgent(name).setMaxContextTokens(maxContextTokens);
+  }
+
+  updateAgentMaxCostPerHour(name: string, maxCostPerHour: number | undefined): void {
+    this.requireAgent(name).setMaxCostPerHour(maxCostPerHour);
   }
 
   changeAgentHat(name: string, hatTypes: HatType[]): void {

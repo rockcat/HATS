@@ -14,6 +14,10 @@ export interface AgentStatus {
   specialisation?: string; visualDescription?: string; backstory?: string;
   email?: string; avatar?: string; voice?: string; speakerName?: string; enabledMcpServers?: string[];
   threads?: Record<string, number>;
+  maxContextTokens?: number;
+  maxCostPerHour?: number;
+  hourlyCost?: number;
+  costIdled?: boolean;
 }
 
 export interface ProjectManagerDeps {

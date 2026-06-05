@@ -38,6 +38,8 @@ const CATALOGUE_FILE = path.join(process.cwd(), 'config', 'mcp-catalogue.json');
 const PROJECTS_ROOT = path.resolve(process.env['PROJECTS_ROOT'] ?? './projects');
 const PROJECT_ID    = (() => {
   if (process.argv[2]) return process.argv[2];
+  // npm run start --project=<name> sets npm_config_project
+  if (process.env['npm_config_project']) return process.env['npm_config_project'];
   // Only honour TEAM_PROJECT if it's explicitly non-default; otherwise let last-project.json win
   const envProject = process.env['TEAM_PROJECT'];
   if (envProject && envProject !== 'default') return envProject;

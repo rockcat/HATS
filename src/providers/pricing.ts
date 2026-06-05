@@ -102,3 +102,53 @@ export function calcCost(model: string, inputTokens: number, outputTokens: numbe
 export function getPricingTable(): Record<string, ModelPricing> {
   return { ...PRICING };
 }
+
+/** Context window sizes in tokens per model. */
+const CONTEXT_WINDOWS: Record<string, number> = {
+  'claude-opus-4-7':            200_000,
+  'claude-opus-4-6':            200_000,
+  'claude-opus-4-5':            200_000,
+  'claude-sonnet-4-6':          200_000,
+  'claude-sonnet-4-5':          200_000,
+  'claude-haiku-4-5':           200_000,
+  'claude-haiku-4-5-20251001':  200_000,
+  'claude-3-5-sonnet-20241022': 200_000,
+  'claude-3-5-sonnet-20240620': 200_000,
+  'claude-3-5-haiku-20241022':  200_000,
+  'claude-3-opus-20240229':     200_000,
+  'claude-3-sonnet-20240229':   200_000,
+  'claude-3-haiku-20240307':    200_000,
+  'gpt-4.1':                    1_047_576,
+  'gpt-4.1-mini':               1_047_576,
+  'gpt-4.1-nano':               1_047_576,
+  'gpt-4o':                     128_000,
+  'gpt-4o-mini':                128_000,
+  'gpt-4-turbo':                128_000,
+  'gpt-4':                      8_192,
+  'gpt-3.5-turbo':              16_385,
+  'o1':                         200_000,
+  'o1-mini':                    128_000,
+  'o1-preview':                 128_000,
+  'o3':                         200_000,
+  'o3-mini':                    200_000,
+  'o4-mini':                    200_000,
+  'gemini-2.5-pro':             1_048_576,
+  'gemini-2.5-pro-preview':     1_048_576,
+  'gemini-2.5-flash':           1_048_576,
+  'gemini-2.5-flash-preview':   1_048_576,
+  'gemini-2.0-flash':           1_048_576,
+  'gemini-2.0-flash-lite':      1_048_576,
+  'gemini-1.5-pro':             2_097_152,
+  'gemini-1.5-flash':           1_048_576,
+  'gemini-1.5-flash-8b':        1_048_576,
+};
+
+/** Return the context window size in tokens for a model (defaults to 128k if unknown). */
+export function getContextWindow(model: string): number {
+  return CONTEXT_WINDOWS[model] ?? 128_000;
+}
+
+/** Return all known context window sizes (for API exposure). */
+export function getContextWindowTable(): Record<string, number> {
+  return { ...CONTEXT_WINDOWS };
+}

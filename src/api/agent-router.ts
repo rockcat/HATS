@@ -397,7 +397,7 @@ export class AgentRouter {
       return true;
     }
 
-    if (pathname === '/api/pricing' && method === 'GET') { json(res, 200, { pricing: getPricingTable(), freeProviders: [...FREE_PROVIDERS] }); return true; }
+    if (pathname === '/api/pricing' && method === 'GET') { json(res, 200, { pricing: getPricingTable(), freeProviders: [...FREE_PROVIDERS], contextWindows: (await import('../providers/pricing.js')).getContextWindowTable() }); return true; }
 
     if (pathname === '/api/pricing/refresh' && method === 'POST') {
       try {
@@ -640,7 +640,7 @@ export class AgentRouter {
         json(res, 409, { error: 'Agent is already in this project' }); return true;
       }
       const provider = makeProvider(def.providerName) ?? new AnthropicProvider();
-      orch.registerAgent({ id: def.id, identity: def.identity, hatType: def.hatType, provider, model: def.model, enabledMcpServers: def.enabledMcpServers, personalMcpCredentials: def.personalMcpCredentials });
+      orch.registerAgent({ id: def.id, identity: def.identity, hatType: def.hatType, provider, model: def.model, enabledMcpServers: def.enabledMcpServers, personalMcpCredentials: def.personalMcpCredentials, maxContextTokens: def.maxContextTokens, maxCostPerHour: def.maxCostPerHour });
       sseBroadcast({ type: 'agent_update', agents: this.deps.buildAgentStatuses() });
       saveCurrentState().catch(() => {});
       json(res, 200, { ok: true });
@@ -695,6 +695,7 @@ export class AgentRouter {
         backstory?: string; specialisation?: string;
         provider?: string; model?: string;
         avatar?: string | null; voice?: string | null; speakerName?: string | null; background?: string | null;
+        maxContextTokens?: number | null; maxCostPerHour?: number | null;
       };
       const validHats = new Set(['none', 'white', 'red', 'black', 'yellow', 'green', 'blue']);
       if (patch.hatTypes && patch.hatTypes.some(h => !validHats.has(h))) {
@@ -713,9 +714,11 @@ export class AgentRouter {
           ...(patch.speakerName       !== undefined && { speakerName: patch.speakerName ?? undefined }),
           ...(patch.background        !== undefined && { background: patch.background ?? undefined }),
         },
-        ...(patch.hatTypes  !== undefined && { hatType: patch.hatTypes as import('../hats/types.js').HatType[] }),
-        ...(patch.provider  !== undefined && { providerName: patch.provider }),
-        ...(patch.model     !== undefined && { model: patch.model.trim() }),
+        ...(patch.hatTypes          !== undefined && { hatType: patch.hatTypes as import('../hats/types.js').HatType[] }),
+        ...(patch.provider          !== undefined && { providerName: patch.provider }),
+        ...(patch.model             !== undefined && { model: patch.model.trim() }),
+        ...(patch.maxContextTokens  !== undefined && { maxContextTokens: patch.maxContextTokens ?? undefined }),
+        ...(patch.maxCostPerHour    !== undefined && { maxCostPerHour: patch.maxCostPerHour ?? undefined }),
       };
       await store.addOrUpdate(updated);
       // Sync all changed fields to the running agent if it's in the current project.
@@ -738,6 +741,8 @@ export class AgentRouter {
           const provider = makeProvider(updated.providerName) ?? runningAgent.config.provider;
           orch.updateAgentConfig(runningAgent.name, provider, updated.model);
         }
+        if (patch.maxContextTokens !== undefined) orch.updateAgentMaxContextTokens(runningAgent.name, updated.maxContextTokens);
+        if (patch.maxCostPerHour   !== undefined) orch.updateAgentMaxCostPerHour(runningAgent.name, updated.maxCostPerHour);
       }
       saveCurrentState().catch(() => {});
       sseBroadcast({ type: 'agent_update', agents: this.deps.buildAgentStatuses() });

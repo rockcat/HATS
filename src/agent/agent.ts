@@ -17,8 +17,8 @@ type TelemetryRecorder = (entry: {
   promptLength: number; inputTokens: number; outputTokens: number; cost: number;
 }) => void;
 
-const MAX_TOOL_ROUNDS    = 10; // prevent infinite tool loops
-const MAX_HISTORY_MESSAGES = 20; // cap conversation history to control token usage
+const MAX_TOOL_ROUNDS      = 10; // prevent infinite tool loops
+const MAX_HISTORY_MESSAGES = 20; // fallback cap when no maxContextTokens is set
 
 export class Agent {
   readonly id: string;
@@ -44,6 +44,9 @@ export class Agent {
   private processing = false;
   private interruptFlag = false;
   private stopped = false;
+  private hourlyCost = 0;
+  private hourWindowStart = Date.now();
+  private costIdleTimer: ReturnType<typeof setTimeout> | null = null;
   private toolExecutor: ToolExecutor | null = null;
   private responseHandler: ResponseHandler | null = null;
   private extraToolsProvider: (() => import('../providers/types.js').ToolDefinition[]) | null = null;
@@ -152,6 +155,7 @@ export class Agent {
     this.interruptFlag = true;
     this.inbox.length = 0;
     this.priorityInbox.length = 0;
+    if (this.costIdleTimer) { clearTimeout(this.costIdleTimer); this.costIdleTimer = null; }
   }
 
   /** Deliver a message to this agent's inbox and trigger processing. */
@@ -196,6 +200,12 @@ export class Agent {
       while (this.inbox.length > 0) {
         if (this._state === AgentState.WaitingForHelp) break; // pause until unblocked
         if (this.interruptFlag) break; // new interrupt arrived — re-enter to handle it
+        if (this.isHourlyCostExceeded()) {
+          const msLeft = 3_600_000 - (Date.now() - this.hourWindowStart);
+          log.warn(`[${this.name}] hourly cost budget exceeded ($${this.hourlyCost.toFixed(4)}) — idling for ${Math.ceil(msLeft / 60000)} min`);
+          this.scheduleCostIdleResume(msLeft);
+          break;
+        }
         const message = this.inbox[0];
         // When waiting for new work, silently drop agent-to-agent chatter
         if (this._state === AgentState.Waiting && message.from !== 'human' && message.type !== 'task') {
@@ -383,6 +393,11 @@ export class Agent {
     }
   }
 
+  setMaxContextTokens(v: number | undefined): void { this.config.maxContextTokens = v; }
+  setMaxCostPerHour(v: number | undefined): void { this.config.maxCostPerHour = v; }
+  getHourlyCost(): number { return this.hourlyCost; }
+  isCostIdled(): boolean { return this.costIdleTimer !== null; }
+
   markTaskComplete(): void {
     this.applyEvent('task_complete');
     this.activeTaskId = null; // switch back to general thread; task thread is preserved
@@ -404,10 +419,33 @@ export class Agent {
 
   // ── Internals ───────────────────────────────────────────────────────────────
 
+  private isHourlyCostExceeded(): boolean {
+    if (!this.config.maxCostPerHour) return false;
+    if (Date.now() - this.hourWindowStart >= 3_600_000) {
+      this.hourlyCost = 0;
+      this.hourWindowStart = Date.now();
+    }
+    return this.hourlyCost >= this.config.maxCostPerHour;
+  }
+
+  private scheduleCostIdleResume(msUntilReset: number): void {
+    if (this.costIdleTimer) clearTimeout(this.costIdleTimer);
+    this.costIdleTimer = setTimeout(() => {
+      this.costIdleTimer = null;
+      this.hourlyCost = 0;
+      this.hourWindowStart = Date.now();
+      if (this.inbox.length > 0 && !this.stopped) {
+        this.processInbox().catch((err) => log.error(`[${this.name}] cost-idle resume error:`, err));
+      }
+    }, Math.max(msUntilReset, 1000));
+  }
+
   private recordTelemetry(req: CompletionRequest, inputTokens: number, outputTokens: number): void {
     if (!this.telemetryRecorder) return;
     const promptLength = req.systemPrompt.length +
       req.messages.reduce((n, m) => n + (m.content?.length ?? 0), 0);
+    const cost = calcCost(req.model, inputTokens, outputTokens, this.config.provider.name);
+    this.hourlyCost += cost;
     this.telemetryRecorder({
       agent:        this.name,
       provider:     this.config.provider.name,
@@ -415,7 +453,7 @@ export class Agent {
       promptLength,
       inputTokens,
       outputTokens,
-      cost: calcCost(req.model, inputTokens, outputTokens, this.config.provider.name),
+      cost,
     });
   }
 
@@ -440,7 +478,17 @@ export class Agent {
   }
 
   private persistHistory(working: Message[], historyKey: string): void {
-    const sliced = working.slice(-MAX_HISTORY_MESSAGES);
+    let sliced = working;
+    if (this.config.maxContextTokens) {
+      const maxChars = this.config.maxContextTokens * 4; // ~4 chars per token
+      while (sliced.length > 2) {
+        const totalChars = sliced.reduce((n, m) => n + (m.content?.length ?? 0), 0);
+        if (totalChars <= maxChars) break;
+        sliced = sliced.slice(1);
+      }
+    } else {
+      sliced = sliced.slice(-MAX_HISTORY_MESSAGES);
+    }
     this.threads.set(historyKey, sanitizeHistory(sliced).map((m): AgentMessage => ({
       role: m.role,
       content: m.content,
