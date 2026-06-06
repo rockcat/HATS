@@ -3503,13 +3503,16 @@ function initAddAgent() {
     document.getElementById('gen-bg-prompt').focus();
   });
 
-  // Prompt preview button (shown in edit mode only)
-  document.getElementById('add-agent-prompt-btn').addEventListener('click', openLibraryPromptPreview);
+  // Field focus → highlight matching prompt section; field change → refresh prompt
+  for (const [fieldId, sectionKey] of Object.entries(PROMPT_FIELD_SECTIONS)) {
+    const el = document.getElementById(fieldId);
+    if (!el) continue;
+    el.addEventListener('focusin', () => highlightPromptSection(sectionKey));
+    el.addEventListener('click',   () => highlightPromptSection(sectionKey));
+    el.addEventListener('input',   schedulePromptRefresh);
+    el.addEventListener('change',  () => { highlightPromptSection(sectionKey); schedulePromptRefresh(); });
+  }
 
-  // Close lib prompt preview
-  document.getElementById('lib-prompt-close').addEventListener('click', () => {
-    document.getElementById('lib-prompt-preview').hidden = true;
-  });
   // Close on overlay click (ignore clicks on the prompt preview panel sibling)
   document.getElementById('add-agent-modal').addEventListener('click', e => {
     if (e.target === e.currentTarget) closeAddAgent();
@@ -3519,6 +3522,35 @@ function initAddAgent() {
 let _agentEditorMode = 'new'; // 'new' | 'edit'
 let _libEditAgentId = null;
 
+const PROMPT_SECTION_ORDER = ['identityAnchor', 'hatRoleStatement', 'thinkingStyle', 'communicationTone', 'directives', 'avoidances', 'specialisation', 'teamRole', 'closingAnchor'];
+const PROMPT_FIELD_SECTIONS = {
+  'add-agent-name':                  'identityAnchor',
+  'add-agent-visual-desc':           'identityAnchor',
+  'add-agent-backstory':             'identityAnchor',
+  'add-agent-hat-group':             'hatRoleStatement',
+  'add-agent-specialisation':        'specialisation',
+  'add-agent-specialisation-custom': 'specialisation',
+};
+
+let _activePromptSection = null;
+let _promptRefreshTimer  = null;
+
+function highlightPromptSection(key) {
+  _activePromptSection = key;
+  const textEl = document.getElementById('lib-prompt-text');
+  if (!textEl) return;
+  textEl.querySelectorAll('.prompt-section').forEach(el => {
+    el.classList.toggle('prompt-section--highlight', el.dataset.section === key);
+  });
+  const target = textEl.querySelector(`.prompt-section[data-section="${key}"]`);
+  if (target) target.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function schedulePromptRefresh() {
+  clearTimeout(_promptRefreshTimer);
+  _promptRefreshTimer = setTimeout(() => openLibraryPromptPreview(), 600);
+}
+
 async function openLibraryPromptPreview() {
   const name        = document.getElementById('add-agent-name').value.trim() || 'Agent';
   const hats        = getSelectedHats('add-agent-hat-group');
@@ -3527,7 +3559,7 @@ async function openLibraryPromptPreview() {
     if (sel === '__custom__') return document.getElementById('add-agent-specialisation-custom').value.trim();
     return sel;
   })();
-  const backstory       = document.getElementById('add-agent-backstory').value.trim();
+  const backstory         = document.getElementById('add-agent-backstory').value.trim();
   const visualDescription = document.getElementById('add-agent-visual-desc').value.trim();
 
   const params = new URLSearchParams({ name, backstory, specialisation, visualDescription });
@@ -3535,29 +3567,40 @@ async function openLibraryPromptPreview() {
 
   const textEl   = document.getElementById('lib-prompt-text');
   const lengthEl = document.getElementById('lib-prompt-length');
-  textEl.textContent = 'Loading…';
-  lengthEl.textContent = '';
-  document.getElementById('lib-prompt-preview').hidden = false;
+  if (!textEl) return;
+  textEl.innerHTML = '<span style="color:var(--text-muted);font-style:italic">Loading…</span>';
+  if (lengthEl) lengthEl.textContent = '';
 
   try {
-    const res  = await fetch(`/api/prompt-preview?${params}`);
-    const data = await res.json();
-    const text = data.prompt ?? '';
-    textEl.textContent = text;
-    const chars = text.length;
+    const res      = await fetch(`/api/prompt-preview?${params}`);
+    const data     = await res.json();
+    const text     = data.prompt ?? '';
+    const sections = data.sections ?? {};
+
+    const parts = [];
+    for (const key of PROMPT_SECTION_ORDER) {
+      if (sections[key]) {
+        parts.push(`<span class="prompt-section" data-section="${key}">${esc(sections[key])}</span>`);
+      }
+    }
+    textEl.innerHTML = parts.length ? parts.join('\n\n') : `<span class="prompt-section">${esc(text)}</span>`;
+
+    const chars  = text.length;
     const tokens = Math.round(chars / 4);
-    lengthEl.textContent = `~${tokens.toLocaleString()} tokens (${chars.toLocaleString()} chars)`;
+    if (lengthEl) lengthEl.textContent = `~${tokens.toLocaleString()} tokens (${chars.toLocaleString()} chars)`;
+
+    if (_activePromptSection) highlightPromptSection(_activePromptSection);
   } catch (err) {
-    textEl.textContent = `Error: ${err.message}`;
+    textEl.innerHTML = `<span style="color:var(--red)">Error: ${esc(err.message)}</span>`;
   }
 }
 
 function openAddAgent() {
   _agentEditorMode = 'new';
   _libEditAgentId = null;
+  _activePromptSection = null;
   document.getElementById('add-agent-modal-title').textContent = 'Add Agent';
   document.getElementById('add-agent-save').textContent = 'Add Agent';
-  document.getElementById('add-agent-prompt-btn').hidden = true;
   document.getElementById('add-agent-name').value = '';
   document.getElementById('add-agent-visual-desc').value = '';
   document.getElementById('add-agent-backstory').value = '';
@@ -3596,15 +3639,16 @@ function openAddAgent() {
   populatePersonaSelect('add-agent-persona', hatType, '');
   document.getElementById('add-agent-modal').hidden = false;
   document.getElementById('add-agent-name').focus();
+  openLibraryPromptPreview();
 }
 
 async function openLibraryEdit(agent) {
   _agentEditorMode = 'edit';
+  _activePromptSection = null;
   _libEditAgentId = agent.id;
   document.getElementById('add-agent-modal-title').textContent = 'Edit Agent';
   document.getElementById('add-agent-save').textContent = 'Save';
   document.getElementById('add-agent-error').textContent = '';
-  document.getElementById('add-agent-prompt-btn').hidden = false;
   document.getElementById('add-agent-persona-group').hidden = true;
 
   document.getElementById('add-agent-name').value = agent.identity?.name ?? '';
@@ -3708,12 +3752,12 @@ async function openLibraryEdit(agent) {
 
   document.getElementById('add-agent-modal').hidden = false;
   document.getElementById('add-agent-name').focus();
+  openLibraryPromptPreview();
 }
 
 function closeAddAgent() {
   window.avatarAPI?.hide('lib-avatar-panel');
   document.getElementById('lib-avatar-panel').hidden = true;
-  document.getElementById('lib-prompt-preview').hidden = true;
   document.getElementById('add-agent-modal').hidden = true;
 }
 

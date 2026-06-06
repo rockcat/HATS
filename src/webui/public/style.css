@@ -1546,6 +1546,19 @@ main {
   border-top: 1px solid var(--border);
 }
 
+.prompt-section {
+  display: block;
+  border-radius: 4px;
+  padding: 3px 4px;
+  margin: -3px -4px;
+  transition: background 0.2s;
+}
+
+.prompt-section--highlight {
+  background: color-mix(in srgb, var(--accent, #58a6ff) 14%, transparent);
+  outline: 1px solid color-mix(in srgb, var(--accent, #58a6ff) 30%, transparent);
+}
+
 /* ── Library edit modal prompt preview panel (sibling inside the overlay) ── */
 .lib-prompt-panel {
   background: var(--surface-2);
@@ -1559,7 +1572,7 @@ main {
   flex-shrink: 0;
   box-shadow: 0 24px 64px rgba(0,0,0,0.6);
 }
-.lib-prompt-panel[hidden] { display: none; }
+/* Panel is always visible when the modal overlay is open — no hidden override needed */
 
 .agent-detail-feed {
   flex: 1;
@@ -4195,9 +4208,9 @@ body.has-expanded-panel main > section:not(.panel--expanded) {
 .add-agent-sched-label { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; cursor: pointer; }
 .add-agent-sched-label input[type="checkbox"] { margin-top: 2px; flex-shrink: 0; }
 
-/* Library editor modal — vertical layout with top-section preview */
-#add-agent-modal { gap: 16px; }
-.lib-editor-modal { max-width: 40vw; width: 90vw; height: 90vh;}
+/* Library editor modal — two-panel layout: form left, prompt right */
+#add-agent-modal { gap: 16px; align-items: flex-start; }
+.lib-editor-modal { max-width: 400px; width: 38vw; height: 90vh; }
 .lib-editor-body { display: flex; flex-direction: column; gap: 12px; }
 .lib-editor-top { display: flex; gap: 14px; align-items: flex-start; }
 .lib-editor-top-fields { flex: 1; display: flex; flex-direction: column; gap: 10px; min-width: 0; }

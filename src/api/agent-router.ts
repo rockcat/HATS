@@ -119,7 +119,7 @@ export class AgentRouter {
           avoidances: hat.avoidances, teamRole: hat.teamRole,
           specialisation: specParam,
         });
-        json(res, 200, { prompt: prompt.text });
+        json(res, 200, { prompt: prompt.text, sections: prompt.sections });
       } catch (err) { json(res, 400, { error: (err as Error).message }); }
       return true;
     }
@@ -147,7 +147,7 @@ export class AgentRouter {
           specialisation: specParam !== undefined ? specParam : agent.config.identity.specialisation,
           email: agent.config.identity.email,
         });
-        json(res, 200, { prompt: prompt.text });
+        json(res, 200, { prompt: prompt.text, sections: prompt.sections });
       } catch (err) { json(res, 400, { error: (err as Error).message }); }
       return true;
     }

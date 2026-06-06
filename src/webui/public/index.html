@@ -608,18 +608,16 @@
       </div>
       <div class="modal-footer">
         <span id="add-agent-error" class="modal-error"></span>
-        <button class="modal-btn secondary" id="add-agent-prompt-btn" hidden>Prompt…</button>
         <button class="modal-btn secondary" id="add-agent-cancel">Cancel</button>
         <button class="modal-btn primary" id="add-agent-save">Add Agent</button>
       </div>
     </div>
-    <!-- Prompt preview panel — expands the modal sideways -->
-    <div id="lib-prompt-preview" class="lib-prompt-panel" hidden>
+    <!-- Prompt preview panel — always visible alongside the form -->
+    <div id="lib-prompt-preview" class="lib-prompt-panel">
       <div class="agent-prompt-preview-header">
-        <span class="agent-prompt-preview-title">System Prompt Preview</span>
-        <button id="lib-prompt-close" class="agent-prompt-preview-close" title="Close"><img src="/assets/close.svg" class="svg-icon" alt="Close"></button>
+        <span class="agent-prompt-preview-title">System Prompt</span>
       </div>
-      <pre id="lib-prompt-text" class="agent-prompt-preview-text"></pre>
+      <div id="lib-prompt-text" class="agent-prompt-preview-text"></div>
       <div id="lib-prompt-length" class="agent-prompt-preview-length"></div>
     </div>
   </div>

@@ -24,6 +24,7 @@ export interface SystemPrompt {
     communicationTone: string;
     directives: string;
     avoidances: string;
+    specialisation?: string;
     teamRole?: string;
     closingAnchor: string;
   };

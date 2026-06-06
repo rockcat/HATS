@@ -36,6 +36,7 @@ export function generateSystemPrompt(context: PromptContext): SystemPrompt {
       communicationTone,
       directives,
       avoidances,
+      ...(specialisation ? { specialisation } : {}),
       ...(teamRole ? { teamRole } : {}),
       closingAnchor,
     },
