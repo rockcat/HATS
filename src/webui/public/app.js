@@ -149,30 +149,6 @@ function setSpecValue(selectId, customId, value) {
   }
 }
 
-// ── Personas ──────────────────────────────────────────────────────────────────
-
-let personasByHat = {};
-
-async function loadPersonas() {
-  try {
-    const res = await fetch('/api/personas');
-    personasByHat = await res.json();
-  } catch { personasByHat = {}; }
-}
-
-function populatePersonaSelect(selectId, hatType, currentName) {
-  const sel = document.getElementById(selectId);
-  if (!sel) return;
-  sel.innerHTML = '<option value="">— custom —</option>';
-  const pool = personasByHat[hatType] ?? [];
-  for (const p of pool) {
-    const opt = document.createElement('option');
-    opt.value = p.name; opt.textContent = p.name;
-    sel.appendChild(opt);
-  }
-  sel.value = (currentName && pool.some(p => p.name === currentName)) ? currentName : '';
-}
-
 // ── State ─────────────────────────────────────────────────────────────────────
 
 let state = { agents: [], tickets: [], humanName: 'human' };
@@ -3386,25 +3362,6 @@ function initAddAgent() {
   // Populate hat checkboxes
   populateHatGroup('add-agent-hat-group', ['white']);
 
-  // Repopulate persona select when hat changes
-  document.getElementById('add-agent-hat-group').addEventListener('change', () => {
-    const hatType = getSelectedHats('add-agent-hat-group').filter(h => h !== 'none')[0] ?? 'none';
-    populatePersonaSelect('add-agent-persona', hatType, '');
-  });
-
-  // Auto-fill fields when a persona is selected
-  document.getElementById('add-agent-persona').addEventListener('change', () => {
-    const hatType = getSelectedHats('add-agent-hat-group').filter(h => h !== 'none')[0] ?? 'none';
-    const personaName = document.getElementById('add-agent-persona').value;
-    const persona = (personasByHat[hatType] ?? []).find(p => p.name === personaName);
-    if (persona) {
-      document.getElementById('add-agent-name').value = persona.name;
-      document.getElementById('add-agent-visual-desc').value = persona.visualDescription ?? '';
-      document.getElementById('add-agent-backstory').value = persona.backstory ?? '';
-      setSpecValue('add-agent-specialisation', 'add-agent-specialisation-custom', persona.specialisation);
-    }
-  });
-
   // Show/hide custom spec input when "Custom…" is selected
   document.getElementById('add-agent-specialisation').addEventListener('change', e => {
     const cust = document.getElementById('add-agent-specialisation-custom');
@@ -3522,27 +3479,31 @@ function initAddAgent() {
 let _agentEditorMode = 'new'; // 'new' | 'edit'
 let _libEditAgentId = null;
 
-const PROMPT_SECTION_ORDER = ['identityAnchor', 'hatRoleStatement', 'thinkingStyle', 'communicationTone', 'directives', 'avoidances', 'specialisation', 'teamRole', 'closingAnchor'];
+// Editable sections first, auto-generated at the end — matches generator.ts order
+const PROMPT_SECTION_ORDER = ['identityAnchor', 'hatRoleStatement', 'specialisation', 'thinkingStyle', 'communicationTone', 'directives', 'avoidances', 'teamRole', 'closingAnchor'];
+// Hat impacts hatRoleStatement + thinkingStyle (and communicationTone/directives/avoidances but those are too noisy to highlight all at once)
 const PROMPT_FIELD_SECTIONS = {
-  'add-agent-name':                  'identityAnchor',
-  'add-agent-visual-desc':           'identityAnchor',
-  'add-agent-backstory':             'identityAnchor',
-  'add-agent-hat-group':             'hatRoleStatement',
-  'add-agent-specialisation':        'specialisation',
-  'add-agent-specialisation-custom': 'specialisation',
+  'add-agent-name':                  ['identityAnchor'],
+  'add-agent-visual-desc':           ['identityAnchor'],
+  'add-agent-backstory':             ['identityAnchor'],
+  'add-agent-hat-group':             ['hatRoleStatement', 'thinkingStyle'],
+  'add-agent-specialisation':        ['specialisation'],
+  'add-agent-specialisation-custom': ['specialisation'],
 };
 
 let _activePromptSection = null;
 let _promptRefreshTimer  = null;
 
-function highlightPromptSection(key) {
-  _activePromptSection = key;
+function highlightPromptSection(keys) {
+  _activePromptSection = keys;
+  const keySet = new Set(Array.isArray(keys) ? keys : [keys]);
   const textEl = document.getElementById('lib-prompt-text');
   if (!textEl) return;
   textEl.querySelectorAll('.prompt-section').forEach(el => {
-    el.classList.toggle('prompt-section--highlight', el.dataset.section === key);
+    el.classList.toggle('prompt-section--highlight', keySet.has(el.dataset.section));
   });
-  const target = textEl.querySelector(`.prompt-section[data-section="${key}"]`);
+  const firstKey = Array.isArray(keys) ? keys[0] : keys;
+  const target = textEl.querySelector(`.prompt-section[data-section="${firstKey}"]`);
   if (target) target.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
@@ -3589,7 +3550,7 @@ async function openLibraryPromptPreview() {
     const tokens = Math.round(chars / 4);
     if (lengthEl) lengthEl.textContent = `~${tokens.toLocaleString()} tokens (${chars.toLocaleString()} chars)`;
 
-    if (_activePromptSection) highlightPromptSection(_activePromptSection);
+    if (_activePromptSection) highlightPromptSection(_activePromptSection); // array or string both handled
   } catch (err) {
     textEl.innerHTML = `<span style="color:var(--red)">Error: ${esc(err.message)}</span>`;
   }
@@ -3628,15 +3589,12 @@ function openAddAgent() {
   setSpecValue('add-agent-specialisation', 'add-agent-specialisation-custom', '');
   document.getElementById('add-agent-error').textContent = '';
   document.getElementById('add-agent-schedules-section').hidden = true;
-  document.getElementById('add-agent-persona-group').hidden = false;
   const maxCtxOpenEl  = document.getElementById('add-agent-max-context');
   const maxCostOpenEl = document.getElementById('add-agent-max-cost');
   if (maxCtxOpenEl)  maxCtxOpenEl.value  = '';
   if (maxCostOpenEl) maxCostOpenEl.value = '';
   document.getElementById('lib-editor-pricing-line').hidden = true;
   document.getElementById('lib-avatar-panel').hidden = false;
-  const hatType = getSelectedHats('add-agent-hat-group').filter(h => h !== 'none')[0] ?? 'none';
-  populatePersonaSelect('add-agent-persona', hatType, '');
   document.getElementById('add-agent-modal').hidden = false;
   document.getElementById('add-agent-name').focus();
   openLibraryPromptPreview();
@@ -3649,7 +3607,6 @@ async function openLibraryEdit(agent) {
   document.getElementById('add-agent-modal-title').textContent = 'Edit Agent';
   document.getElementById('add-agent-save').textContent = 'Save';
   document.getElementById('add-agent-error').textContent = '';
-  document.getElementById('add-agent-persona-group').hidden = true;
 
   document.getElementById('add-agent-name').value = agent.identity?.name ?? '';
   document.getElementById('add-agent-visual-desc').value = agent.identity?.visualDescription ?? '';
@@ -3802,15 +3759,13 @@ async function saveAddAgent() {
       closeAddAgent();
       fetchGlobalAgents();
     } else {
-      const personaName = document.getElementById('add-agent-persona').value;
-      const persona = (personasByHat[hatType] ?? []).find(p => p.name === personaName);
       const res = await fetch('/api/agents', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name, hatTypes,
-          visualDescription: visualDescription || persona?.visualDescription || undefined,
-          backstory:         backstory || persona?.backstory || undefined,
-          specialisation:    specialisation || persona?.specialisation || undefined,
+          visualDescription: visualDescription || undefined,
+          backstory:         backstory         || undefined,
+          specialisation:    specialisation    || undefined,
           provider, model,
         }),
       }).then(r => r.json());
@@ -4457,7 +4412,6 @@ initSettings();
 initAddAgent();
 initAgentChat();
 loadSpecialisations();
-loadPersonas();
 initMCPEditor();
 initImpromptuMeeting();
 initCalendar();

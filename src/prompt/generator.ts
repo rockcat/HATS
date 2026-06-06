@@ -13,16 +13,17 @@ export function generateSystemPrompt(context: PromptContext): SystemPrompt {
   const specialisation = context.specialisation ? buildSpecialisationSection(context.specialisation) : undefined;
   const closingAnchor = buildClosingAnchor(context);
 
+  // Editable sections first (user-controlled), auto-generated at the end
   const sections = [
     identityAnchor,
     hatRoleStatement,
+    ...(specialisation ? [specialisation] : []),
     thinkingStyle,
     communicationTone,
     directives,
     avoidances,
     ...(projectGoal ? [projectGoal] : []),
     ...(workspace ? [workspace] : []),
-    ...(specialisation ? [specialisation] : []),
     ...(teamRole ? [teamRole] : []),
     closingAnchor,
   ];
