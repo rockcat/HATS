@@ -259,6 +259,10 @@ export class Agent {
     const history = message.isScheduled ? [] : (this.threads.get(historyKey) ?? []).map(toProviderMessage);
     const working: Message[] = [...history, { role: 'user', content: userContent }];
 
+    // Persist user message immediately so it appears in the UI while the agent is thinking.
+    // persistHistory is called again after the response to add the agent's reply.
+    if (!message.isScheduled) this.persistHistory(working, historyKey);
+
     // Tool loop — run until text response or max rounds
     for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
       const req: CompletionRequest = {
