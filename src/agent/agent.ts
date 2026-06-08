@@ -4,7 +4,8 @@ import { HatType } from '../hats/types.js';
 import { mergeHatDefinitions } from '../hats/definitions.js';
 import { generateSystemPrompt } from '../prompt/generator.js';
 import { AIProvider, CompletionRequest, Message, ProviderError, ToolCall } from '../providers/types.js';
-import { getToolsForHat } from '../tools/definitions.js';
+import { getToolsForHat, getAllToolsForHat } from '../tools/definitions.js';
+import { buildToolRegistry, searchTools, getTool, ToolRegistry } from '../tools/tool-search.js';
 import { TeamMessage } from '../orchestrator/types.js';
 import { AgentConfig, AgentMessage, AgentState, AgentEvent, ToolExecutor, ResponseHandler } from './types.js';
 import { transition } from './state-machine.js';
@@ -250,10 +251,9 @@ export class Agent {
         : this.activeThreadKey);
 
     const userContent = formatIncomingMessage(message);
-    const tools = [
-      ...getToolsForHat(this.config.hatType),
-      ...(this.extraToolsProvider?.() ?? []),
-    ];
+    const mcpTools = this.extraToolsProvider?.() ?? [];
+    const registry = buildToolRegistry([...getAllToolsForHat(this.config.hatType), ...mcpTools]);
+    let tools = [...getToolsForHat(this.config.hatType)]; // core only; on-demand tools injected via get_tool
 
     // Scheduled tasks start fresh — no history needed for a cron-style trigger
     const history = message.isScheduled ? [] : (this.threads.get(historyKey) ?? []).map(toProviderMessage);
@@ -309,18 +309,7 @@ export class Agent {
         });
 
         // Execute each tool call in sequence
-        for (const call of response.toolCalls) {
-          const result = this.toolExecutor
-            ? await this.toolExecutor(this.name, call)
-            : `Tool ${call.name} not connected.`;
-
-          working.push({
-            role: 'tool',
-            content: result,
-            toolCallId: call.id,
-            toolName: call.name,
-          });
-        }
+        await this.executeToolCalls(response.toolCalls, registry, tools, working);
         // Continue loop — let LLM respond to tool results
       } else {
         // Final text response
@@ -348,9 +337,11 @@ export class Agent {
   async meetingTurn(transcript: string, extraMeetingTools: import('../providers/types.js').ToolDefinition[] = []): Promise<string> {
     // Strip meeting-management tools — calling them inside a meeting creates duplicate meetings
     const MEETING_TOOLS = new Set(['request_meeting', 'schedule_meeting']);
-    const tools = [
+    const mcpMeetingTools = (this.extraToolsProvider?.() ?? []).filter(t => !MEETING_TOOLS.has(t.name));
+    const allHatTools = getAllToolsForHat(this.config.hatType).filter(t => !MEETING_TOOLS.has(t.name));
+    const meetingRegistry = buildToolRegistry([...allHatTools, ...mcpMeetingTools, ...extraMeetingTools]);
+    let tools = [
       ...getToolsForHat(this.config.hatType).filter(t => !MEETING_TOOLS.has(t.name)),
-      ...(this.extraToolsProvider?.() ?? []).filter(t => !MEETING_TOOLS.has(t.name)),
       ...extraMeetingTools,
     ];
     const working: Message[] = [
@@ -367,13 +358,7 @@ export class Agent {
 
       if (response.toolCalls && response.toolCalls.length > 0) {
         working.push({ role: 'assistant', content: response.content, toolCalls: response.toolCalls });
-        for (const call of response.toolCalls) {
-          // In a meeting, most tools route back to orchestrator via executor
-          const result = this.toolExecutor
-            ? await this.toolExecutor(this.name, call)
-            : `Tool ${call.name} not connected.`;
-          working.push({ role: 'tool', content: result, toolCallId: call.id, toolName: call.name });
-        }
+        await this.executeToolCalls(response.toolCalls, meetingRegistry, tools, working);
       } else {
         working.push({ role: 'assistant', content: response.content });
         this.persistHistory(working, this.activeThreadKey);
@@ -381,6 +366,34 @@ export class Agent {
       }
     }
     return '(no response)';
+  }
+
+  // ── Tool dispatch ───────────────────────────────────────────────────────────
+
+  private async executeToolCalls(
+    calls: ToolCall[],
+    registry: ToolRegistry,
+    tools: import('../providers/types.js').ToolDefinition[],
+    working: import('../providers/types.js').Message[],
+  ): Promise<void> {
+    for (const call of calls) {
+      let result: string;
+      if (call.name === 'search_tools') {
+        result = searchTools(call.arguments.query as string, registry);
+      } else if (call.name === 'get_tool') {
+        const toolName = call.arguments.name as string;
+        const found = getTool(toolName, registry);
+        result = found.result;
+        if (found.found && found.schema && !tools.some(t => t.name === toolName)) {
+          tools.push(found.schema);
+        }
+      } else {
+        result = this.toolExecutor
+          ? await this.toolExecutor(this.name, call)
+          : `Tool ${call.name} not connected.`;
+      }
+      working.push({ role: 'tool', content: result, toolCallId: call.id, toolName: call.name });
+    }
   }
 
   // ── State ───────────────────────────────────────────────────────────────────

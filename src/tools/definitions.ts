@@ -247,12 +247,51 @@ const CANCEL_ACTION: ToolDefinition = {
   },
 };
 
+// ── Meta-tools (always present — enable tool discovery) ──────────────────────
+
+export const SEARCH_TOOLS: ToolDefinition = {
+  name: 'search_tools',
+  description: 'Search for available tools by keyword. Returns names and descriptions of matching tools. Use this to discover capabilities, then call get_tool to fetch the full schema before using it.',
+  parameters: {
+    type: 'object',
+    properties: {
+      query: { type: 'string', description: 'Keyword or phrase to search for, e.g. "email", "file", "schedule".' },
+    },
+    required: ['query'],
+  },
+};
+
+export const GET_TOOL: ToolDefinition = {
+  name: 'get_tool',
+  description: 'Retrieve the full parameter schema for a specific tool by name. After calling this, the tool is available for immediate use. Call search_tools first if you are unsure of the exact name.',
+  parameters: {
+    type: 'object',
+    properties: {
+      name: { type: 'string', description: 'Exact tool name to retrieve.' },
+    },
+    required: ['name'],
+  },
+};
+
 // ── Registry ──────────────────────────────────────────────────────────────────
 
-const BASE_TOOLS = [SEND_MESSAGE, ESCALATE_TO_HUMAN, REPORT_TASK_COMPLETE, DISENGAGE_CONVERSATION, READ_FILE, WRITE_FILE, LIST_FILES, WEB_SEARCH, FETCH_URL, GET_CURRENT_DATETIME, REQUEST_EMAIL_APPROVAL, CHECK_EMAIL_PERMISSIONS, SCHEDULE_ACTION, LIST_MY_ACTIONS, CANCEL_ACTION];
-const BLUE_HAT_TOOLS = [...BASE_TOOLS, ASSIGN_TASK, REQUEST_MEETING, SCHEDULE_MEETING];
+// Core tools are always included in every LLM call.
+const CORE_TOOLS = [ESCALATE_TO_HUMAN, REPORT_TASK_COMPLETE, SEND_MESSAGE, DISENGAGE_CONVERSATION, GET_CURRENT_DATETIME, SEARCH_TOOLS, GET_TOOL];
+const CORE_TOOLS_BLUE = [...CORE_TOOLS, ASSIGN_TASK];
 
+// On-demand tools are discoverable via search_tools / get_tool but not sent upfront.
+const ON_DEMAND_TOOLS = [READ_FILE, WRITE_FILE, LIST_FILES, WEB_SEARCH, FETCH_URL, REQUEST_EMAIL_APPROVAL, CHECK_EMAIL_PERMISSIONS, SCHEDULE_ACTION, LIST_MY_ACTIONS, CANCEL_ACTION];
+const ON_DEMAND_TOOLS_BLUE = [...ON_DEMAND_TOOLS, REQUEST_MEETING, SCHEDULE_MEETING];
+
+/** Returns the minimum core tool set sent in every LLM call. */
 export function getToolsForHat(hatTypes: HatType[]): ToolDefinition[] {
-  return hatTypes.includes(HatType.Blue) ? BLUE_HAT_TOOLS : BASE_TOOLS;
+  return hatTypes.includes(HatType.Blue) ? CORE_TOOLS_BLUE : CORE_TOOLS;
+}
+
+/** Returns all hat tools (core + on-demand) for building the tool registry. */
+export function getAllToolsForHat(hatTypes: HatType[]): ToolDefinition[] {
+  const core = hatTypes.includes(HatType.Blue) ? CORE_TOOLS_BLUE : CORE_TOOLS;
+  const onDemand = hatTypes.includes(HatType.Blue) ? ON_DEMAND_TOOLS_BLUE : ON_DEMAND_TOOLS;
+  return [...core, ...onDemand];
 }
 
