@@ -45,6 +45,9 @@ export interface MCPCatalogueEntry {
   users?: MCPUser[];
   notes?: string;
   url?: string;             // link to docs / source for the setup page
+  /** Argument key renames applied before calling the server, per tool.
+   *  Use when the server's advertised schema doesn't match its internal validator. */
+  toolArgMappings?: Record<string, Record<string, string>>;
 }
 
 /** Returns true if this entry appears in the per-agent personal MCP section. */

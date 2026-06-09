@@ -398,7 +398,7 @@ export class TeamOrchestrator {
     const config = resolvePersonalConfig(entry, credentials);
     const credKeys = Object.keys(credentials);
     log.info(`[Team] Personal MCP "${serverId}" starting for ${agentName} — credential keys: [${credKeys.join(', ')}]`);
-    await personalMcp.add({ name: serverId, config });
+    await personalMcp.add({ name: serverId, config, toolArgMappings: entry.toolArgMappings });
     log.info(`[Team] Personal MCP "${serverId}" started for ${agentName}`);
   }
 

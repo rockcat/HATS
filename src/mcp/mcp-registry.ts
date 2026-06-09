@@ -10,7 +10,7 @@ export class MCPRegistry {
 
   async add(def: MCPServerDef): Promise<void> {
     const client = new MCPClient(def.name);
-    await client.connect(def.config);
+    await client.connect(def.config, def.toolArgMappings);
     this.clients.set(def.name, client);
   }
 

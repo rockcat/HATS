@@ -365,7 +365,7 @@ export class AgentRouter {
       if (orch.hasMCPServer(id)) { enabledMCPIds.add(id); json(res, 200, { ok: true }); return true; }
       try {
         const config = this.deps.resolveMCPConfig(id, entry);
-        await orch.addMCPServer({ name: id, config });
+        await orch.addMCPServer({ name: id, config, toolArgMappings: entry.toolArgMappings });
         enabledMCPIds.add(id);
         await this.deps.saveMCPEnabled();
         sseBroadcast({ type: 'tools_update', tools: orch.getToolInfo() });

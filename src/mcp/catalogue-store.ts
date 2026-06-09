@@ -165,6 +165,8 @@ export const BUILTIN_CATALOGUE: MCPCatalogueEntry[] = [
     ],
     notes: 'Run "npx @codefuturist/email-mcp setup" for a guided wizard that auto-detects server settings. For Gmail use an App Password (not your main password) and set IMAP host to imap.gmail.com, SMTP host to smtp.gmail.com.',
     url: 'https://www.npmjs.com/package/@codefuturist/email-mcp',
+    // The package advertises "id" in its schema but validates against "emailId" internally.
+    toolArgMappings: { 'get_email': { 'id': 'emailId' } },
   },
   {
     id: 'email-pop3',

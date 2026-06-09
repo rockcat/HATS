@@ -41,6 +41,10 @@ export function interpolateHeaders(
 export interface MCPServerDef {
   name: string;          // short identifier, used for tool namespacing
   config: MCPServerConfig;
+  /** Per-tool argument key renames applied before calling the server.
+   *  Maps toolName → { fromArgName: toArgName }.
+   *  Use this to work around MCP servers whose advertised schema doesn't match their validator. */
+  toolArgMappings?: Record<string, Record<string, string>>;
 }
 
 /**
@@ -61,8 +65,8 @@ export class MCPClient {
 
   getDef(): MCPServerDef | null { return this._def; }
 
-  async connect(config: MCPServerConfig): Promise<void> {
-    this._def = { name: this.serverName, config };
+  async connect(config: MCPServerConfig, toolArgMappings?: Record<string, Record<string, string>>): Promise<void> {
+    this._def = { name: this.serverName, config, toolArgMappings };
     let transport;
     if (config.transport === 'stdio') {
       transport = new StdioClientTransport({ command: config.command, args: config.args ?? [], env: config.env });
@@ -105,10 +109,14 @@ export class MCPClient {
   /** Call a tool and return the full MCP result object (content + isError). */
   async callToolRaw(namespacedName: string, args: Record<string, unknown>): Promise<Awaited<ReturnType<typeof this.client.callTool>>> {
     const toolName = this.stripNamespace(namespacedName);
-    log.info(`[MCP] callTool "${toolName}" on server "${this.serverName}" args=${JSON.stringify(args)}`);
+    const mappings = this._def?.toolArgMappings?.[toolName];
+    const resolvedArgs = mappings
+      ? Object.fromEntries(Object.entries(args).map(([k, v]) => [mappings[k] ?? k, v]))
+      : args;
+    log.info(`[MCP] callTool "${toolName}" on server "${this.serverName}" args=${JSON.stringify(resolvedArgs)}`);
     let result: Awaited<ReturnType<typeof this.client.callTool>>;
     try {
-      result = await this.client.callTool({ name: toolName, arguments: args });
+      result = await this.client.callTool({ name: toolName, arguments: resolvedArgs });
     } catch (err) {
       log.error(`[MCP] callTool "${toolName}" threw:`, (err as Error).message, (err as Error).stack ?? '');
       throw err;

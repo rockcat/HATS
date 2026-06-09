@@ -549,7 +549,7 @@ export class APIServer {
       try {
         if (this.orchestrator.hasMCPServer(id)) await this.orchestrator.removeMCPServer(id);
         const config = this.resolveMCPConfig(id, entry);
-        await this.orchestrator.addMCPServer({ name: id, config });
+        await this.orchestrator.addMCPServer({ name: id, config, toolArgMappings: entry.toolArgMappings });
         log.info(`[MCP] Reconnected "${id}" with fresh Google token`);
       } catch (err) {
         log.warn(`[MCP] Failed to reconnect "${id}":`, (err as Error).message);
@@ -566,7 +566,7 @@ export class APIServer {
         if (!entry || this.orchestrator.hasMCPServer(id)) continue;
         try {
           const config = this.resolveMCPConfig(id, entry);
-          await this.orchestrator.addMCPServer({ name: id, config });
+          await this.orchestrator.addMCPServer({ name: id, config, toolArgMappings: entry.toolArgMappings });
           this.enabledMCPIds.add(id);
         } catch (err) {
           log.warn(`[MCP] Failed to reconnect "${id}":`, (err as Error).message);
