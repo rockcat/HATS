@@ -748,7 +748,7 @@ export class TeamOrchestrator {
   private makeToolCallContext(): ToolCallContext {
     return {
       store: this.store,
-      projectDir: this.projectDir,
+      getProjectDir: () => this.projectDir,
       projectsRoot: this.projectsRoot,
       tasks: this.tasks,
       meetings: this.meetings,

@@ -21,7 +21,8 @@ function braveThrottle(): Promise<void> {
 
 export interface ToolCallContext {
   store: EventStore;
-  projectDir: string | null;
+  /** Always call this — do NOT capture the value at context-creation time. */
+  getProjectDir(): string | null;
   projectsRoot: string;
   tasks: Map<string, Task>;
   meetings: Map<string, Meeting>;
@@ -55,7 +56,7 @@ function agentOutputsDir(ctx: ToolCallContext, agentName: string, ticket?: strin
   const activeTask = Array.from(ctx.tasks.values()).find(
     t => t.status === 'active' && t.assignedTo.toLowerCase() === agentName.toLowerCase(),
   );
-  const base = activeTask?.projectFolder ?? ctx.projectDir;
+  const base = activeTask?.projectFolder ?? ctx.getProjectDir();
   if (!base) return null;
   return ticket ? path.join(base, 'outputs', ticket) : path.join(base, 'outputs');
 }
