@@ -10,8 +10,11 @@ class ConversationThreads extends HTMLElement {
     this._agentName = null;
     this._threads = {};
     this._generalMessages = [];
+    this._pendingMessages = [];        // sent but not yet confirmed by server
+    this._pendingThreadMessages = [];
     this._activeThread = null;
     this._activeMessages = [];
+    this._agentState = null;
     this._pollTimer = null;
     this._newThreadMode = false;
     this._sending = false;
@@ -36,6 +39,8 @@ class ConversationThreads extends HTMLElement {
       this._agentName = value;
       this._activeThread = null;
       this._newThreadMode = false;
+      this._pendingMessages = [];
+      this._pendingThreadMessages = [];
       this._refresh();
     }
   }
@@ -63,9 +68,17 @@ class ConversationThreads extends HTMLElement {
   async _refresh() {
     if (!this._agentName) { this._renderPlaceholder('No agent selected'); return; }
     try {
-      const threadsRes = await fetch(`/api/agents/${encodeURIComponent(this._agentName)}/threads`);
+      const [threadsRes, agentsRes] = await Promise.all([
+        fetch(`/api/agents/${encodeURIComponent(this._agentName)}/threads`),
+        fetch('/api/agents'),
+      ]);
       if (!threadsRes.ok) { this._renderPlaceholder('Agent not found'); return; }
       this._threads = await threadsRes.json();
+      if (agentsRes.ok) {
+        const agents = await agentsRes.json();
+        const found = agents.find(a => a.name === this._agentName);
+        this._agentState = found?.state ?? null;
+      }
       await this._loadGeneral();
       if (this._activeThread) await this._loadThread(this._activeThread);
       this._renderAndRestoreDrafts();
@@ -124,12 +137,12 @@ class ConversationThreads extends HTMLElement {
     const res = await fetch(`/api/agents/${encodeURIComponent(this._agentName)}/history?thread=general`);
     if (res.ok) {
       const msgs = await res.json();
-      // Accept server data if agent has responded (last msg is assistant) or server has more/equal messages.
-      // Pure length comparison breaks when persistHistory truncates history below the optimistic count.
-      const lastMsg = msgs[msgs.length - 1];
-      if (msgs.length >= this._generalMessages.length || lastMsg?.role === 'assistant') {
-        this._generalMessages = msgs;
-      }
+      // Clear pending messages that the server has now confirmed (matched by content)
+      this._pendingMessages = this._pendingMessages.filter(p =>
+        !msgs.some(m => m.role === 'user' && m.content.replace(/^\[.*?\]\s*/, '') === p.content)
+      );
+      // Always accept server data; pending messages are appended separately in render
+      this._generalMessages = msgs;
     }
   }
 
@@ -137,10 +150,10 @@ class ConversationThreads extends HTMLElement {
     const res = await fetch(`/api/agents/${encodeURIComponent(this._agentName)}/history?thread=${encodeURIComponent(key)}`);
     if (res.ok) {
       const msgs = await res.json();
-      const lastThreadMsg = msgs[msgs.length - 1];
-      if (msgs.length >= this._activeMessages.length || lastThreadMsg?.role === 'assistant') {
-        this._activeMessages = msgs;
-      }
+      this._pendingThreadMessages = this._pendingThreadMessages.filter(p =>
+        !msgs.some(m => m.role === 'user' && m.content.replace(/^\[.*?\]\s*/, '') === p.content)
+      );
+      this._activeMessages = msgs;
     }
   }
 
@@ -182,6 +195,7 @@ class ConversationThreads extends HTMLElement {
 
   async _openThread(key) {
     this._activeThread = key;
+    this._pendingThreadMessages = [];
     await this._loadThread(key);
     this._render();
   }
@@ -189,6 +203,7 @@ class ConversationThreads extends HTMLElement {
   _closeThread() {
     this._activeThread = null;
     this._activeMessages = [];
+    this._pendingThreadMessages = [];
     this._render();
   }
 
@@ -240,7 +255,7 @@ class ConversationThreads extends HTMLElement {
         const ci  = this._shadow.querySelector('#general-compose .compose-input');
         const msg = ci?.value.trim();
         if (!msg) return;
-        this._generalMessages = [...this._generalMessages, { role: 'user', content: msg, timestamp: new Date().toISOString() }];
+        this._pendingMessages = [...this._pendingMessages, { role: 'user', content: msg, timestamp: new Date().toISOString(), _pending: true }];
         if (ci) { ci.value = ''; ci.style.height = 'auto'; }
         this._render();
         this._shadow.getElementById('general-messages').scrollTop = this._shadow.getElementById('general-messages').scrollHeight;
@@ -250,7 +265,7 @@ class ConversationThreads extends HTMLElement {
       const ci  = this._shadow.querySelector('#thread-compose .compose-input');
       const msg = ci?.value.trim();
       if (!msg || !this._activeThread) return;
-      this._activeMessages = [...this._activeMessages, { role: 'user', content: msg, timestamp: new Date().toISOString() }];
+      this._pendingThreadMessages = [...this._pendingThreadMessages, { role: 'user', content: msg, timestamp: new Date().toISOString(), _pending: true }];
       if (ci) { ci.value = ''; ci.style.height = 'auto'; }
       this._render();
       this._shadow.getElementById('thread-messages').scrollTop = this._shadow.getElementById('thread-messages').scrollHeight;
@@ -285,7 +300,7 @@ class ConversationThreads extends HTMLElement {
         <div class="left-panel">
           <div class="panel-header"># general</div>
           <div class="messages-area" id="general-messages">
-            ${this._renderMessages(this._generalMessages, 'general')}
+            ${this._renderMessages([...this._generalMessages, ...this._pendingMessages], 'general', this._agentState)}
           </div>
           <div class="threads-section">
             <div class="threads-divider">
@@ -319,7 +334,7 @@ class ConversationThreads extends HTMLElement {
             <button class="panel-close" title="Close">&#x2715;</button>
           </div>
           <div class="messages-area" id="thread-messages">
-            ${this._renderMessages(this._activeMessages, this._activeThread)}
+            ${this._renderMessages([...this._activeMessages, ...this._pendingThreadMessages], this._activeThread, this._agentState)}
           </div>
           <div class="compose-bar" id="thread-compose" data-panel="thread">
             <textarea class="compose-input" rows="1" placeholder="Reply in thread… (Enter to send)"></textarea>
@@ -343,17 +358,20 @@ class ConversationThreads extends HTMLElement {
     if (root) root.innerHTML = `<div class="placeholder">${this._esc(msg)}</div>`;
   }
 
-  _renderMessages(messages, thread) {
-    if (!messages || messages.length === 0) {
-      return '<div class="empty-msg">No messages yet</div>';
-    }
-
+  _renderMessages(messages, thread, agentState) {
     const isGeneral = thread === 'general';
     const parts = [];
     let prevRole = null;
 
+    if (!messages || messages.length === 0) {
+      if (agentState === 'working') parts.push(this._thinkingBubble());
+      else parts.push('<div class="empty-msg">No messages yet</div>');
+      return parts.join('');
+    }
+
     for (const msg of messages) {
       const { role, content, timestamp, toolName } = msg;
+      const isPending = !!msg._pending;
       const time  = timestamp ? this._formatTime(timestamp) : '';
       const isFirst = role !== prevRole;
       prevRole = role;
@@ -373,12 +391,14 @@ class ConversationThreads extends HTMLElement {
         continue;
       }
 
-      const isUser   = role === 'user';
-      const label    = isUser ? 'You' : (this._agentName || 'Assistant');
-      const roleClass = isUser ? 'msg--user' : 'msg--assistant';
-      const text     = this._renderContent(content, role);
-      const threadKey = isGeneral ? this._esc(this._threadKey(content)) : '';
-      const replyBtn = isGeneral && threadKey
+      const isUser    = role === 'user';
+      const label     = isUser ? 'You' : (this._agentName || 'Assistant');
+      const roleClass = isUser
+        ? (isPending ? 'msg--user msg--pending' : 'msg--user')
+        : 'msg--assistant';
+      const text      = this._renderContent(content, role);
+      const threadKey = isGeneral && !isPending ? this._esc(this._threadKey(content)) : '';
+      const replyBtn  = isGeneral && threadKey
         ? `<button class="reply-in-thread-btn" data-key="${threadKey}" title="Reply in thread">↩ Thread</button>`
         : '';
 
@@ -398,7 +418,18 @@ class ConversationThreads extends HTMLElement {
       }
     }
 
+    // Show thinking indicator when last real message is from user and agent is processing
+    const lastMsg = messages[messages.length - 1];
+    const hasPending = messages.some(m => m._pending);
+    if (!hasPending && agentState === 'working' && lastMsg?.role === 'user') {
+      parts.push(this._thinkingBubble());
+    }
+
     return parts.join('');
+  }
+
+  _thinkingBubble() {
+    return `<div class="msg-group"><div class="msg msg--assistant msg--thinking"><span class="thinking-dot"></span><span class="thinking-dot"></span><span class="thinking-dot"></span></div></div>`;
   }
 
   _renderContent(content, role) {
@@ -704,6 +735,29 @@ class ConversationThreads extends HTMLElement {
         .new-thread-btn:hover { border-color: #72767d; color: #d1d2d3; }
         .new-thread-btn--active { border-color: #b84444; color: #b84444; }
         .new-thread-btn--active:hover { border-color: #d15555; color: #d15555; }
+
+        /* ── Pending / thinking ── */
+        .msg--pending { opacity: 0.55; }
+        .msg--thinking {
+          display: flex;
+          gap: 5px;
+          align-items: center;
+          padding: 10px 12px;
+          min-height: 38px;
+        }
+        .thinking-dot {
+          width: 7px;
+          height: 7px;
+          border-radius: 50%;
+          background: #72767d;
+          animation: thinking-pulse 1.2s ease-in-out infinite;
+        }
+        .thinking-dot:nth-child(2) { animation-delay: 0.2s; }
+        .thinking-dot:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes thinking-pulse {
+          0%, 80%, 100% { opacity: 0.3; transform: scale(0.9); }
+          40%            { opacity: 1;   transform: scale(1.15); }
+        }
 
         /* ── Misc ── */
         .placeholder {
