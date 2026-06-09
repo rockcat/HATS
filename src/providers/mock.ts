@@ -10,6 +10,7 @@ export interface MockResponse {
 
 export class MockProvider implements AIProvider {
   readonly name = 'mock';
+  readonly pricingPageUrl = 'https://example.com/pricing';
   private responses: MockResponse[];
   private callIndex = 0;
   public calls: CompletionRequest[] = [];

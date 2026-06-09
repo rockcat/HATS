@@ -269,7 +269,7 @@ export class Agent {
         systemPrompt: this.systemPrompt,
         messages: working,
         model: this.config.model,
-        tools,
+        tools: [...tools], // snapshot so later pushes don't mutate past requests
         agentName: this.name,
       };
 
@@ -350,7 +350,7 @@ export class Agent {
     ];
 
     for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-      const req2 = { systemPrompt: this.systemPrompt, messages: working, model: this.config.model, tools, agentName: this.name };
+      const req2 = { systemPrompt: this.systemPrompt, messages: working, model: this.config.model, tools: [...tools], agentName: this.name };
       const response = await (this.llmSemaphore
         ? this.llmSemaphore.run(() => this.config.provider.complete(req2))
         : this.config.provider.complete(req2));
