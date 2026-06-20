@@ -31,6 +31,7 @@ import { getRandomPersona } from './src/hats/personas.js';
 import { initCatalogue } from './src/mcp/catalogue-store.js';
 import { AgentStore } from './src/api/agent-store.js';
 import { ScheduledActionStore } from './src/api/scheduled-action-store.js';
+import { seedBuiltIns } from './src/store/built-in-agents.js';
 
 // ── Project layout ────────────────────────────────────────────────────────────
 
@@ -183,6 +184,7 @@ async function main() {
   const agentStore  = new AgentStore(path.join(PROJECTS_ROOT, 'agents.json'));
   const actionStore = new ScheduledActionStore(path.join(PROJECTS_ROOT, 'scheduled-actions.json'));
   await agentStore.load();
+  await seedBuiltIns(agentStore);
   await actionStore.load();
 
   const loader = makeProjectLoader(agentStore, actionStore);
