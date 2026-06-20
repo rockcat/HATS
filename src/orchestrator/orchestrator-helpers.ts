@@ -3,17 +3,17 @@ import { mkdir } from 'fs/promises';
 import { v4 as uuidv4 } from 'uuid';
 import { log } from '../util/logger.js';
 import { HatType } from '../hats/types.js';
-import { Agent } from '../agent/agent.js';
+import { IAgent } from '../agent/iagent.js';
 import { Task, TeamMessage } from './types.js';
 import { toProjectSlug } from './orchestrator-utils.js';
 
 export function deliverToAgent(
-  agents: Map<string, Agent>,
+  agents: Map<string, IAgent>,
   lastSenderByAgent: Map<string, string>,
   name: string,
   message: TeamMessage,
 ): void {
-  let target: Agent | undefined;
+  let target: IAgent | undefined;
   for (const a of agents.values()) {
     if (a.name === name) { target = a; break; }
   }
@@ -25,7 +25,7 @@ export function deliverToAgent(
   }
 }
 
-export function findBlueHat(agents: Map<string, Agent>): Agent | undefined {
+export function findBlueHat(agents: Map<string, IAgent>): IAgent | undefined {
   for (const a of agents.values()) {
     if (a.hatType.includes(HatType.Blue)) return a;
   }

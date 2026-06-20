@@ -4,7 +4,7 @@ import { MCPRegistry } from '../mcp/mcp-registry.js';
 import { EventStore } from '../store/event-store.js';
 import { ToolCall } from '../providers/types.js';
 import { AgendaStore } from '../api/agenda-store.js';
-import { Agent } from '../agent/agent.js';
+import { IAgent } from '../agent/iagent.js';
 import { Task, Meeting, TeamMessage, ScheduledMeeting, MeetingType } from './types.js';
 import { MeetingRoom } from './meeting-room.js';
 import { MeetingStore } from './meeting-store.js';
@@ -36,8 +36,8 @@ export interface ToolCallContext {
   getPersonalMcp(agentName: string): MCPRegistry | null;
   /** Mutable ref so the store stays live after context creation. */
   agendaStore: { store: AgendaStore | null };
-  findByName(name: string): Agent | undefined;
-  findBlueHat(): Agent | undefined;
+  findByName(name: string): IAgent | undefined;
+  findBlueHat(): IAgent | undefined;
   hasAgentWithName(name: string): boolean;
   deliverToAgent(name: string, msg: TeamMessage): void;
   /** Returns the kanban ticket ID the agent is currently working on, if any. */

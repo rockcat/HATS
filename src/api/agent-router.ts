@@ -276,10 +276,30 @@ export class AgentRouter {
       return true;
     }
 
+    if (pathname === '/api/agents/external/callback' && method === 'POST') {
+      try {
+        const body = await readBody(req);
+        const { agentId, messageId, response } =
+          JSON.parse(body) as { agentId: string; messageId: string; response: string };
+        if (!agentId || !messageId || typeof response !== 'string') {
+          json(res, 400, { error: 'agentId, messageId and response are required' }); return true;
+        }
+        await orch.deliverExternalCallback(agentId, messageId, response);
+        json(res, 200, { ok: true });
+      } catch (err) {
+        json(res, 400, { error: (err as Error).message });
+      }
+      return true;
+    }
+
     if (pathname === '/api/agents' && method === 'POST') {
       const body = await readBody(req);
-      const { name, hatTypes: rawHatTypes, visualDescription, specialisation, backstory, provider: providerName, model } =
-        JSON.parse(body) as { name: string; hatTypes?: string[]; visualDescription?: string; specialisation?: string; backstory?: string; provider?: string; model?: string };
+      const parsed = JSON.parse(body) as {
+        name: string; hatTypes?: string[]; visualDescription?: string; specialisation?: string;
+        backstory?: string; provider?: string; model?: string;
+        externalEndpoint?: { url: string; authHeader?: string; callbackUrl?: string; mode?: string; timeoutMs?: number };
+      };
+      const { name, hatTypes: rawHatTypes, visualDescription, specialisation, backstory, provider: providerName, model, externalEndpoint } = parsed;
       if (!name?.trim()) { json(res, 400, { error: 'name is required' }); return true; }
       const validHats = new Set(['none', 'white', 'red', 'black', 'yellow', 'green', 'blue']);
       const hatTypes = rawHatTypes?.length ? rawHatTypes : ['none'];
@@ -287,18 +307,26 @@ export class AgentRouter {
       if (orch.listAgents().some(a => a.name.toLowerCase() === name.trim().toLowerCase())) {
         json(res, 409, { error: `Agent "${name}" already exists` }); return true;
       }
-      const provider = makeProvider(providerName ?? 'anthropic') ?? new AnthropicProvider();
-      const resolvedModel = model?.trim() || (
-        providerName === 'openai'   ? (process.env['OPENAI_MODEL']    ?? 'gpt-4.1-mini') :
-        providerName === 'gemini'   ? (process.env['GEMINI_MODEL']    ?? 'gemini-2.5-flash') :
-        providerName === 'ollama'   ? (process.env['OLLAMA_MODEL']    ?? 'llama3.2') :
-        providerName === 'lmstudio' ? (process.env['LM_STUDIO_MODEL'] ?? '') :
-                                      (process.env['ANTHROPIC_MODEL'] ?? 'claude-haiku-4-5-20251001')
-      );
-      orch.registerAgent({
-        identity: { name: name.trim(), visualDescription: visualDescription?.trim() || 'a focused, capable team member', specialisation: specialisation?.trim() || undefined, backstory: backstory?.trim() || undefined },
-        hatType: hatTypes as HatType[], provider, model: resolvedModel,
-      });
+      const identity = { name: name.trim(), visualDescription: visualDescription?.trim() || 'a focused, capable team member', specialisation: specialisation?.trim() || undefined, backstory: backstory?.trim() || undefined };
+      if (providerName === 'external' || externalEndpoint) {
+        if (!externalEndpoint?.url) { json(res, 400, { error: 'externalEndpoint.url is required for external agents' }); return true; }
+        orch.registerAgent({
+          identity, hatType: hatTypes as HatType[],
+          provider: { name: 'external', pricingPageUrl: '', complete: async () => { throw new Error(); } },
+          model: 'external',
+          externalEndpoint: { url: externalEndpoint.url, authHeader: externalEndpoint.authHeader, callbackUrl: externalEndpoint.callbackUrl, mode: (externalEndpoint.mode ?? 'sync') as 'sync' | 'callback', timeoutMs: externalEndpoint.timeoutMs },
+        });
+      } else {
+        const provider = makeProvider(providerName ?? 'anthropic') ?? new AnthropicProvider();
+        const resolvedModel = model?.trim() || (
+          providerName === 'openai'   ? (process.env['OPENAI_MODEL']    ?? 'gpt-4.1-mini') :
+          providerName === 'gemini'   ? (process.env['GEMINI_MODEL']    ?? 'gemini-2.5-flash') :
+          providerName === 'ollama'   ? (process.env['OLLAMA_MODEL']    ?? 'llama3.2') :
+          providerName === 'lmstudio' ? (process.env['LM_STUDIO_MODEL'] ?? '') :
+                                        (process.env['ANTHROPIC_MODEL'] ?? 'claude-haiku-4-5-20251001')
+        );
+        orch.registerAgent({ identity, hatType: hatTypes as HatType[], provider, model: resolvedModel });
+      }
       sseBroadcast({ type: 'agent_update', agents: this.deps.buildAgentStatuses() }); saveCurrentState().catch(() => {}); json(res, 201, { ok: true });
       return true;
     }

@@ -1,0 +1,282 @@
+import { v4 as uuidv4 } from 'uuid';
+import { log } from '../util/logger.js';
+import { HatType } from '../hats/types.js';
+import { AIProvider, ToolDefinition } from '../providers/types.js';
+import { TeamMessage } from '../orchestrator/types.js';
+import { Semaphore } from '../providers/semaphore.js';
+import { AgentConfig, AgentMessage, AgentState, ExternalAgentEndpoint, ToolExecutor, ResponseHandler } from './types.js';
+import { IAgent } from './iagent.js';
+
+type HistoryEntryLike = {
+  role: 'user' | 'assistant' | 'tool';
+  content: string;
+  timestamp: Date | string;
+  toolCalls?: unknown;
+  toolCallId?: string;
+  toolName?: string;
+};
+
+type PendingEntry = { message: TeamMessage; timer: ReturnType<typeof setTimeout> | null };
+
+/** Stub so config.provider.name returns 'external' without a real LLM provider. */
+export const EXTERNAL_PROVIDER: AIProvider = {
+  name: 'external',
+  pricingPageUrl: '',
+  complete: async () => { throw new Error('ExternalAgent does not use a local LLM provider'); },
+};
+
+/**
+ * An agent whose processing is delegated to an external HTTP service.
+ * The service receives messages via POST and returns responses either
+ * synchronously in the response body or via a callback POST.
+ *
+ * External agent HTTP contract (sync mode — default):
+ *   POST {endpoint.url}
+ *   Authorization: {endpoint.authHeader}   (if set)
+ *   { messageId, agentId, agentName, from, type, content, taskId }
+ *   → 200 { response: "..." }
+ *
+ * Callback mode:
+ *   Same POST but with { ...payload, callbackUrl }
+ *   → 202 Accepted
+ *   Then external service POSTs: { messageId, response } to callbackUrl
+ */
+export class ExternalAgent implements IAgent {
+  readonly id: string;
+  readonly config: AgentConfig;
+
+  private _state: AgentState = AgentState.Idle;
+  private responseHandler: ResponseHandler | null = null;
+  private pendingMessages = new Map<string, PendingEntry>();
+
+  constructor(config: AgentConfig) {
+    this.id = config.id ?? uuidv4();
+    this.config = { ...config, provider: config.provider ?? EXTERNAL_PROVIDER };
+  }
+
+  get name(): string { return this.config.identity.name; }
+  get hatType(): HatType[] { return this.config.hatType; }
+  get state(): AgentState { return this._state; }
+
+  // ── Wiring ──────────────────────────────────────────────────────────────────
+
+  setResponseHandler(handler: ResponseHandler): void { this.responseHandler = handler; }
+  setToolExecutor(_executor: ToolExecutor): void {}
+  setExtraToolsProvider(_fn: () => ToolDefinition[]): void {}
+  setLLMSemaphore(_semaphore: Semaphore): void {}
+  setTelemetryRecorder(_fn: unknown): void {}
+
+  // ── Inbox ───────────────────────────────────────────────────────────────────
+
+  receive(message: TeamMessage): void {
+    if (this._state === AgentState.Idle || this._state === AgentState.Waiting) {
+      this._state = AgentState.Working;
+    }
+    this.sendToExternal(message).catch((err: Error) => {
+      log.error(`[ExternalAgent:${this.name}] delivery failed:`, err.message);
+      this.resolvePending();
+    });
+  }
+
+  interrupt(message: TeamMessage): void {
+    this.receive(message);
+  }
+
+  markHelpReceived(): void {
+    if (this._state === AgentState.WaitingForHelp) this._state = AgentState.Idle;
+  }
+
+  markBlocked(): void {
+    this._state = AgentState.WaitingForHelp;
+  }
+
+  markTaskComplete(): void {
+    this._state = AgentState.Waiting;
+  }
+
+  markDiscussionEnded(): void {
+    if (this._state === AgentState.InDiscussion) this._state = AgentState.Idle;
+  }
+
+  stop(): void {
+    for (const { timer } of this.pendingMessages.values()) {
+      if (timer) clearTimeout(timer);
+    }
+    this.pendingMessages.clear();
+    this._state = AgentState.Idle;
+  }
+
+  private resolvePending(): void {
+    if (this.pendingMessages.size === 0) this._state = AgentState.Idle;
+  }
+
+  // ── External HTTP ───────────────────────────────────────────────────────────
+
+  private async sendToExternal(message: TeamMessage): Promise<void> {
+    const endpoint = this.config.externalEndpoint;
+    if (!endpoint) {
+      log.error(`[ExternalAgent:${this.name}] no externalEndpoint configured`);
+      this.resolvePending();
+      return;
+    }
+
+    const messageId = uuidv4();
+    const timeoutMs = endpoint.timeoutMs ?? 120_000;
+    const isCallback = endpoint.mode === 'callback';
+
+    const payload: Record<string, unknown> = {
+      messageId,
+      agentId: this.id,
+      agentName: this.name,
+      from: message.from,
+      type: message.type,
+      content: message.content,
+      taskId: message.taskId ?? null,
+    };
+    if (isCallback && endpoint.callbackUrl) {
+      payload.callbackUrl = endpoint.callbackUrl;
+    }
+
+    if (isCallback) {
+      const timer = setTimeout(() => {
+        if (this.pendingMessages.has(messageId)) {
+          log.warn(`[ExternalAgent:${this.name}] callback timeout for ${messageId}`);
+          this.pendingMessages.delete(messageId);
+          this.resolvePending();
+        }
+      }, timeoutMs);
+      this.pendingMessages.set(messageId, { message, timer });
+    }
+
+    let res: Response;
+    try {
+      res = await fetch(endpoint.url, {
+        method: 'POST',
+        headers: this.buildHeaders(endpoint),
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+    } catch (err) {
+      log.error(`[ExternalAgent:${this.name}] fetch error:`, (err as Error).message);
+      this.cancelPending(messageId);
+      return;
+    }
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      log.error(`[ExternalAgent:${this.name}] HTTP ${res.status}: ${text.slice(0, 200)}`);
+      this.cancelPending(messageId);
+      return;
+    }
+
+    if (!isCallback) {
+      try {
+        const body = await res.json() as { response?: string };
+        await this.dispatchResponse(message, body.response ?? '');
+      } catch (err) {
+        log.error(`[ExternalAgent:${this.name}] failed to parse response:`, (err as Error).message);
+      }
+      this.resolvePending();
+    }
+    // callback mode: resolution happens in handleExternalCallback
+  }
+
+  async handleExternalCallback(messageId: string, response: string): Promise<void> {
+    const pending = this.pendingMessages.get(messageId);
+    if (!pending) {
+      log.warn(`[ExternalAgent:${this.name}] callback for unknown messageId ${messageId}`);
+      return;
+    }
+    if (pending.timer) clearTimeout(pending.timer);
+    this.pendingMessages.delete(messageId);
+    this.resolvePending();
+    await this.dispatchResponse(pending.message, response);
+  }
+
+  private async dispatchResponse(originalMessage: TeamMessage, response: string): Promise<void> {
+    if (this.responseHandler) {
+      await this.responseHandler(this.name, originalMessage, response);
+    }
+  }
+
+  private cancelPending(messageId: string): void {
+    const entry = this.pendingMessages.get(messageId);
+    if (entry) {
+      if (entry.timer) clearTimeout(entry.timer);
+      this.pendingMessages.delete(messageId);
+    }
+    this.resolvePending();
+  }
+
+  private buildHeaders(endpoint: ExternalAgentEndpoint): Record<string, string> {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (endpoint.authHeader) headers['Authorization'] = endpoint.authHeader;
+    return headers;
+  }
+
+  // ── Meeting turn ─────────────────────────────────────────────────────────────
+
+  async meetingTurn(transcript: string, _extraTools: ToolDefinition[] = []): Promise<string> {
+    const endpoint = this.config.externalEndpoint;
+    if (!endpoint) return '';
+    const timeoutMs = endpoint.timeoutMs ?? 60_000;
+    try {
+      const res = await fetch(endpoint.url, {
+        method: 'POST',
+        headers: this.buildHeaders(endpoint),
+        body: JSON.stringify({
+          messageId: uuidv4(),
+          agentId: this.id,
+          agentName: this.name,
+          type: 'meeting_turn',
+          content: transcript,
+        }),
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      if (!res.ok) return '';
+      const body = await res.json() as { response?: string };
+      return body.response ?? '';
+    } catch {
+      return '';
+    }
+  }
+
+  // ── Config mutations ─────────────────────────────────────────────────────────
+
+  rename(newName: string): void { this.config.identity.name = newName; }
+  setProvider(provider: AIProvider, model: string): void { this.config.provider = provider; this.config.model = model; }
+  setHat(hatTypes: HatType[]): void { this.config.hatType = hatTypes; }
+  updateTeamContext(teamContext: string): void { this.config.teamContext = teamContext; }
+  updateProjectDir(projectDir: string | null): void { this.config.projectDir = projectDir ?? undefined; }
+  updateProjectGoal(goal: string | null): void { this.config.projectGoal = goal ?? undefined; }
+  setSpecialisation(s: string | undefined): void { this.config.identity.specialisation = s; }
+  setIdentity(vd: string | undefined, bs: string | undefined): void {
+    if (vd !== undefined) this.config.identity.visualDescription = vd;
+    if (bs !== undefined) this.config.identity.backstory = bs;
+  }
+  setAvatar(a: string | undefined): void { this.config.identity.avatar = a; }
+  setBackground(b: string | undefined): void { (this.config.identity as unknown as Record<string, unknown>)['background'] = b; }
+  setVoice(v: string | undefined, sn: string | undefined): void {
+    this.config.identity.voice = v;
+    this.config.identity.speakerName = sn;
+  }
+  setMaxContextTokens(_v: number | undefined): void {}
+  setMaxCostPerHour(_v: number | undefined): void {}
+
+  toJSON(): object {
+    return { id: this.id, name: this.name, hatType: this.hatType, state: this._state, type: 'external' };
+  }
+
+  // ── History (external agents have no local history) ──────────────────────────
+
+  getHistory(): AgentMessage[] { return []; }
+  getAllThreadHistories(): Record<string, AgentMessage[]> { return {}; }
+  getThreadSummary(): Record<string, number> { return {}; }
+  getThreadHistory(_thread: string): AgentMessage[] { return []; }
+  getActiveThreadKey(): string { return 'general'; }
+  getHourlyCost(): number { return 0; }
+  isCostIdled(): boolean { return false; }
+  clearAllThreads(): void {}
+  setHistory(_history: HistoryEntryLike[]): void {}
+  setAllThreadHistories(_allThreads: Record<string, HistoryEntryLike[]>): void {}
+}

@@ -2,6 +2,8 @@ import * as nodePath from 'path';
 import { readFile, writeFile, rename, mkdir } from 'fs/promises';
 import { log } from '../util/logger.js';
 import { Agent } from '../agent/agent.js';
+import { ExternalAgent, EXTERNAL_PROVIDER } from '../agent/external-agent.js';
+import { IAgent } from '../agent/iagent.js';
 import { AgentConfig } from '../agent/types.js';
 import { HatType } from '../hats/types.js';
 import { getToolsForHat } from '../tools/definitions.js';
@@ -46,7 +48,7 @@ export interface OrchestratorConfig {
 }
 
 export class TeamOrchestrator {
-  private agents: Map<string, Agent> = new Map();
+  private agents: Map<string, IAgent> = new Map();
   private tasks: Map<string, Task> = new Map();
   private meetings: Map<string, Meeting> = new Map();
   private activeMeetingRooms: Map<string, MeetingRoom> = new Map();
@@ -162,7 +164,7 @@ export class TeamOrchestrator {
         toolName: m.toolName,
       }));
 
-    const serializeAllThreads = (agent: Agent): Record<string, HistoryEntry[]> => {
+    const serializeAllThreads = (agent: IAgent): Record<string, HistoryEntry[]> => {
       const out: Record<string, HistoryEntry[]> = {};
       for (const [key, msgs] of Object.entries(agent.getAllThreadHistories())) {
         out[key] = serializeMessages(msgs);
@@ -192,6 +194,7 @@ export class TeamOrchestrator {
           personalMcpCredentials:     agent.config.personalMcpCredentials,
           disabledPersonalMcpServers: agent.config.disabledPersonalMcpServers,
           scheduledActionIds:         existingDef?.scheduledActionIds ?? [],
+          externalEndpoint:           agent.config.externalEndpoint,
         };
         await this.agentStore.addOrUpdate(def);
       }
@@ -306,7 +309,8 @@ export class TeamOrchestrator {
         log.warn(`[Team] Agent "${agentId}" not found in global store — skipping`);
         continue;
       }
-      const provider = providerFactory(def.providerName);
+      const isExternal = !!def.externalEndpoint;
+      const provider = isExternal ? EXTERNAL_PROVIDER : providerFactory(def.providerName);
       const config: AgentConfig = {
         id:                    def.id,
         identity:              def.identity,
@@ -319,12 +323,15 @@ export class TeamOrchestrator {
         disabledPersonalMcpServers: def.disabledPersonalMcpServers,
         maxContextTokens:      def.maxContextTokens,
         maxCostPerHour:        def.maxCostPerHour,
+        externalEndpoint:      def.externalEndpoint,
       };
       const agent = this.registerAgent(config);
-      if (s.agentThreads?.[agentId]) {
-        agent.setAllThreadHistories(s.agentThreads[agentId]);
-      } else {
-        agent.setHistory(s.agentHistories[agentId] ?? []);
+      if (!isExternal) {
+        if (s.agentThreads?.[agentId]) {
+          agent.setAllThreadHistories(s.agentThreads[agentId]);
+        } else {
+          agent.setHistory(s.agentHistories[agentId] ?? []);
+        }
       }
       loadedCount++;
     }
@@ -430,50 +437,65 @@ export class TeamOrchestrator {
     this.rebuildTeamContext();
   }
 
-  registerAgent(config: AgentConfig): Agent {
+  registerAgent(config: AgentConfig): IAgent {
     if (this.projectDir) config = { ...config, projectDir: this.projectDir };
     if (this.projectGoal) config = { ...config, projectGoal: this.projectGoal };
-    const agent = new Agent(config);
-    agent.setToolExecutor(buildToolExecutor(this.makeToolCallContext(), this.mcp));
+
+    const agent: IAgent = config.externalEndpoint
+      ? new ExternalAgent(config)
+      : new Agent(config);
+
     agent.setResponseHandler(makeResponseHandlerFn({
       store: this.store,
       deliverToAgent: (name, msg) => this.deliverToAgent(name, msg),
       buildMessage,
     }));
-    agent.setExtraToolsProvider(() => {
-      const ids         = agent.config.enabledMcpServers;
-      const sharedTools = ids === undefined ? this.mcp.getAllTools() : this.mcp.getToolsForServers(ids);
-      const personalMcp = this.personalMcpByAgent.get(agent.name.toLowerCase());
-      if (!personalMcp) return sharedTools;
-      const personalTools   = personalMcp.getAllTools();
-      const personalToolNames = new Set(personalTools.map(t => t.name));
-      // Only deduplicate exact name matches — shared email tools remain available for reading.
-      // The system prompt directive governs which account to use when sending.
-      return [...sharedTools.filter(t => !personalToolNames.has(t.name)), ...personalTools];
-    });
-    agent.setLLMSemaphore(this.llmSemaphore);
-    if (this.telemetryRecorder) agent.setTelemetryRecorder(this.telemetryRecorder);
-    this.agents.set(agent.id, agent);
-    this.rebuildTeamContext();
-    // Start personal MCPs from config, skipping any that are explicitly disabled
-    if (config.personalMcpCredentials) {
-      const disabled = new Set(config.disabledPersonalMcpServers ?? []);
-      for (const [serverId, creds] of Object.entries(config.personalMcpCredentials)) {
-        if (disabled.has(serverId)) continue;
-        this.startPersonalMcp(agent.name, serverId, creds).catch((err: Error) => {
-          log.warn(`[Team] Personal MCP "${serverId}" for ${agent.name} failed to start:`, err.message);
-        });
+
+    if (!config.externalEndpoint) {
+      agent.setToolExecutor(buildToolExecutor(this.makeToolCallContext(), this.mcp));
+      agent.setExtraToolsProvider(() => {
+        const ids         = agent.config.enabledMcpServers;
+        const sharedTools = ids === undefined ? this.mcp.getAllTools() : this.mcp.getToolsForServers(ids);
+        const personalMcp = this.personalMcpByAgent.get(agent.name.toLowerCase());
+        if (!personalMcp) return sharedTools;
+        const personalTools   = personalMcp.getAllTools();
+        const personalToolNames = new Set(personalTools.map(t => t.name));
+        return [...sharedTools.filter(t => !personalToolNames.has(t.name)), ...personalTools];
+      });
+      agent.setLLMSemaphore(this.llmSemaphore);
+      if (this.telemetryRecorder) agent.setTelemetryRecorder(this.telemetryRecorder);
+      if (config.personalMcpCredentials) {
+        const disabled = new Set(config.disabledPersonalMcpServers ?? []);
+        for (const [serverId, creds] of Object.entries(config.personalMcpCredentials)) {
+          if (disabled.has(serverId)) continue;
+          this.startPersonalMcp(agent.name, serverId, creds).catch((err: Error) => {
+            log.warn(`[Team] Personal MCP "${serverId}" for ${agent.name} failed to start:`, err.message);
+          });
+        }
       }
     }
+
+    this.agents.set(agent.id, agent);
+    this.rebuildTeamContext();
     return agent;
   }
 
+  /** Deliver a callback response to an external agent. */
+  async deliverExternalCallback(agentId: string, messageId: string, response: string): Promise<void> {
+    const agent = this.agents.get(agentId);
+    if (!agent) throw new Error(`Agent "${agentId}" not found`);
+    if (typeof agent.handleExternalCallback !== 'function') {
+      throw new Error(`Agent "${agentId}" is not an external agent`);
+    }
+    await agent.handleExternalCallback(messageId, response);
+  }
 
-  getAgent(name: string): Agent | undefined { return this.findByName(name); }
-  findById(id: string): Agent | undefined { return this.agents.get(id); }
+
+  getAgent(name: string): IAgent | undefined { return this.findByName(name); }
+  findById(id: string): IAgent | undefined { return this.agents.get(id); }
   /** Returns the stable UUID for an agent name, or undefined if not found. */
   agentIdForName(name: string): string | undefined { return this.findByName(name)?.id; }
-  listAgents(): Agent[] { return Array.from(this.agents.values()); }
+  listAgents(): IAgent[] { return Array.from(this.agents.values()); }
 
   /** Clear tasks and agent histories while keeping agent definitions. */
   stopAllAgents(): void {
@@ -730,14 +752,14 @@ export class TeamOrchestrator {
 
   // ── Private helpers ────────────────────────────────────────────────────────
 
-  private findByName(name: string): Agent | undefined {
+  private findByName(name: string): IAgent | undefined {
     for (const agent of this.agents.values()) {
       if (agent.name === name) return agent;
     }
     return undefined;
   }
 
-  private requireAgent(name: string): Agent {
+  private requireAgent(name: string): IAgent {
     const agent = this.findByName(name);
     if (!agent) throw new Error(`Agent "${name}" not found`);
     return agent;
@@ -749,7 +771,7 @@ export class TeamOrchestrator {
     deliverToAgentFn(this.agents, this.lastSenderByAgent, name, msg);
   }
 
-  private findBlueHat(): Agent | undefined { return findBlueHatFn(this.agents); }
+  private findBlueHat(): IAgent | undefined { return findBlueHatFn(this.agents); }
 
   private async createTask(assignedTo: string, assignedBy: string, description: string, context?: string, projectName?: string): Promise<string> {
     return createTaskFn(this.tasks, this.projectsRoot, assignedTo, assignedBy, description, context, projectName);

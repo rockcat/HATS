@@ -1,7 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { log } from '../util/logger.js';
 import { renderMarkdown } from '../human/markdown.js';
-import { Agent } from '../agent/agent.js';
+import { IAgent } from '../agent/iagent.js';
 import { EventStore } from '../store/event-store.js';
 import { MeetingRoom } from './meeting-room.js';
 import { Meeting, MeetingTurn, TeamMessage } from './types.js';
@@ -9,7 +9,7 @@ import { Meeting, MeetingTurn, TeamMessage } from './types.js';
 export interface MeetingRunnerContext {
   meetings: Map<string, Meeting>;
   activeMeetingRooms: Map<string, MeetingRoom>;
-  agents: Map<string, Agent>;
+  agents: Map<string, IAgent>;
   store: EventStore;
   projectDir: string | null;
   onMeetingTurnPaced: ((meetingId: string, participant: string) => Promise<void>) | null;
@@ -50,7 +50,7 @@ export async function startMeeting(
   log.info(`\n━━━ MEETING: ${topic} ━━━`);
   log.info(`Participants: ${[facilitatorName, ...participants].join(', ')}\n`);
 
-  const agentsByName = new Map<string, Agent>();
+  const agentsByName = new Map<string, IAgent>();
   for (const agent of ctx.agents.values()) {
     agentsByName.set(agent.name, agent);
   }

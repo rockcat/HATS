@@ -8,6 +8,7 @@ import { getToolsForHat, getAllToolsForHat } from '../tools/definitions.js';
 import { buildToolRegistry, searchTools, getTool, ToolRegistry } from '../tools/tool-search.js';
 import { TeamMessage } from '../orchestrator/types.js';
 import { AgentConfig, AgentMessage, AgentState, AgentEvent, ToolExecutor, ResponseHandler } from './types.js';
+import { IAgent } from './iagent.js';
 import { transition } from './state-machine.js';
 import { Semaphore } from '../providers/semaphore.js';
 import { calcCost } from '../providers/pricing.js';
@@ -21,7 +22,7 @@ type TelemetryRecorder = (entry: {
 const MAX_TOOL_ROUNDS      = 10; // prevent infinite tool loops
 const MAX_HISTORY_MESSAGES = 20; // fallback cap when no maxContextTokens is set
 
-export class Agent {
+export class Agent implements IAgent {
   readonly id: string;
   readonly config: AgentConfig;
   private _state: AgentState;

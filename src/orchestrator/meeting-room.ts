@@ -1,7 +1,7 @@
 import { writeFile, mkdir } from 'fs/promises';
 import * as path from 'path';
 import { Meeting, MeetingTurn } from './types.js';
-import { Agent } from '../agent/agent.js';
+import { IAgent } from '../agent/iagent.js';
 import { EventStore } from '../store/event-store.js';
 import { renderMarkdown } from '../human/markdown.js';
 import { log } from '../util/logger.js';
@@ -30,7 +30,7 @@ export class MeetingRoom {
 
   constructor(
     private meeting: Meeting,
-    private agents: Map<string, Agent>,
+    private agents: Map<string, IAgent>,
     private store: EventStore,
     private humanResponder: HumanResponder,
     private projectDir?: string | null,
@@ -54,7 +54,7 @@ export class MeetingRoom {
    * Facilitator explicitly acknowledges and responds to the human's most recent contribution.
    * This makes it clear the human's input was heard and incorporated.
    */
-  private async acknowledgeHuman(facilitator: Agent): Promise<void> {
+  private async acknowledgeHuman(facilitator: IAgent): Promise<void> {
     if (this.closed) return;
     const ackPrompt =
       `${buildTranscriptText(this.meeting.turns)}\n\n` +

@@ -3329,6 +3329,11 @@ function initAddAgent() {
   // Populate provider select and re-populate models when provider changes
   loadProviders().then(providers => {
     populateProviderSelect(document.getElementById('add-agent-provider'), providers, 'anthropic');
+    // Add "External" option after API-supplied providers
+    const provSel = document.getElementById('add-agent-provider');
+    const extOpt = document.createElement('option');
+    extOpt.value = 'external'; extOpt.textContent = 'External (HTTP)';
+    provSel.appendChild(extOpt);
     const p = providers.find(p => p.id === 'anthropic');
     const defaultModel = p?.defaultModel ?? '';
     populateModelSelect(document.getElementById('add-agent-model'), providers, 'anthropic', defaultModel);
@@ -3337,8 +3342,21 @@ function initAddAgent() {
     updatePricingHint('anthropic', defaultModel, lineEl, hintEl);
     updateContextWindowPlaceholder(defaultModel);
   });
+
+  function toggleExternalFields() {
+    const pid = document.getElementById('add-agent-provider').value;
+    const isExternal = pid === 'external';
+    document.getElementById('add-agent-external-fields').hidden = !isExternal;
+    document.getElementById('add-agent-local-fields').hidden = isExternal;
+    document.getElementById('add-agent-model-group').hidden = isExternal;
+    document.getElementById('lib-editor-pricing-line').hidden = isExternal;
+    document.getElementById('lib-prompt-preview').hidden = isExternal;
+  }
+
   document.getElementById('add-agent-provider').addEventListener('change', async () => {
     const pid = document.getElementById('add-agent-provider').value;
+    toggleExternalFields();
+    if (pid === 'external') return;
     let providers = await loadProviders();
     if (providers.find(p => p.id === pid)?.baseUrlEnvKey) {
       await refreshProviderModels();
@@ -3721,6 +3739,10 @@ function closeAddAgent() {
   window.avatarAPI?.hide('lib-avatar-panel');
   document.getElementById('lib-avatar-panel').hidden = true;
   document.getElementById('add-agent-modal').hidden = true;
+  // Reset external fields visibility
+  document.getElementById('add-agent-external-fields').hidden = true;
+  document.getElementById('add-agent-local-fields').hidden = false;
+  document.getElementById('add-agent-model-group').hidden = false;
 }
 
 async function saveAddAgent() {
@@ -3764,15 +3786,27 @@ async function saveAddAgent() {
       closeAddAgent();
       fetchGlobalAgents();
     } else {
-      const res = await fetch('/api/agents', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const isExternal = provider === 'external';
+      let body;
+      if (isExternal) {
+        const endpointUrl  = document.getElementById('add-agent-endpoint-url').value.trim();
+        const authHeader   = document.getElementById('add-agent-auth-header').value.trim();
+        const callbackUrl  = document.getElementById('add-agent-callback-url').value.trim();
+        if (!endpointUrl) { errEl.textContent = 'Endpoint URL is required for external agents.'; btn.disabled = false; btn.textContent = 'Add Agent'; return; }
+        body = {
           name, hatTypes,
           visualDescription: visualDescription || undefined,
           backstory:         backstory         || undefined,
           specialisation:    specialisation    || undefined,
-          provider, model,
-        }),
+          provider: 'external',
+          externalEndpoint: { url: endpointUrl, authHeader: authHeader || undefined, callbackUrl: callbackUrl || undefined, mode: 'sync' },
+        };
+      } else {
+        body = { name, hatTypes, visualDescription: visualDescription || undefined, backstory: backstory || undefined, specialisation: specialisation || undefined, provider, model };
+      }
+      const res = await fetch('/api/agents', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
       }).then(r => r.json());
       if (res.error) { errEl.textContent = res.error; }
       else { closeAddAgent(); }

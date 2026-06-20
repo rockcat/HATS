@@ -30,6 +30,25 @@ export interface AgentIdentity {
   speakerName?: string;     // TTS speaker name (for multi-speaker voices)
 }
 
+/**
+ * HTTP endpoint configuration for an external agent.
+ * The external service must accept POST requests at `url` and return
+ * a JSON body `{ response: string }` (sync mode) or POST back to
+ * `callbackUrl` with `{ messageId, response }` (callback mode).
+ */
+export interface ExternalAgentEndpoint {
+  /** URL to POST incoming messages to. */
+  url: string;
+  /** Full Authorization header value, e.g. "Bearer sk-xxx". */
+  authHeader?: string;
+  /** For callback mode: URL the external agent should POST responses to. */
+  callbackUrl?: string;
+  /** 'sync' — response in POST body (default); 'callback' — external POSTs back. */
+  mode?: 'sync' | 'callback';
+  /** Request timeout in ms (default 120000). */
+  timeoutMs?: number;
+}
+
 export interface AgentConfig {
   id?: string;             // stable UUID — if provided, preserved across save/restore
   identity: AgentIdentity;
@@ -48,6 +67,8 @@ export interface AgentConfig {
   maxContextTokens?: number;
   /** If set, agent idles until the next hour when hourly spend exceeds this value (USD). */
   maxCostPerHour?: number;
+  /** If set, this agent delegates all processing to an external HTTP service. */
+  externalEndpoint?: ExternalAgentEndpoint;
 }
 
 export interface AgentMessage {

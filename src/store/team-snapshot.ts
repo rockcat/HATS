@@ -1,4 +1,4 @@
-import { AgentIdentity } from '../agent/types.js';
+import { AgentIdentity, ExternalAgentEndpoint } from '../agent/types.js';
 import { HatType } from '../hats/types.js';
 import { MCPServerDef } from '../mcp/mcp-client.js';
 import { Task, Meeting } from '../orchestrator/types.js';
@@ -37,6 +37,8 @@ export interface AgentDefinition {
   scheduledActionIds: string[];
   maxContextTokens?: number;
   maxCostPerHour?: number;
+  /** If set, this is an external agent — no local LLM is used. */
+  externalEndpoint?: ExternalAgentEndpoint;
 }
 
 // Global scheduled action definition

@@ -13,9 +13,11 @@ export { OpenAIProvider } from './providers/openai.js';
 export { GeminiProvider } from './providers/gemini.js';
 
 export { AgentState } from './agent/types.js';
-export type { AgentConfig, AgentMessage, AgentEvent } from './agent/types.js';
+export type { AgentConfig, AgentMessage, AgentEvent, ExternalAgentEndpoint } from './agent/types.js';
+export type { IAgent } from './agent/iagent.js';
 export { transition } from './agent/state-machine.js';
 export { Agent } from './agent/agent.js';
+export { ExternalAgent } from './agent/external-agent.js';
 
 export { AgentRegistry } from './registry/agent-registry.js';
 
