@@ -1,3 +1,4 @@
+import { spawn } from 'child_process';
 import { v4 as uuidv4 } from 'uuid';
 import { log } from '../util/logger.js';
 import { HatType } from '../hats/types.js';
@@ -110,7 +111,7 @@ export class ExternalAgent implements IAgent {
     if (this.pendingMessages.size === 0) this._state = AgentState.Idle;
   }
 
-  // ── External HTTP ───────────────────────────────────────────────────────────
+  // ── External HTTP / Subprocess ──────────────────────────────────────────────
 
   private async sendToExternal(message: TeamMessage): Promise<void> {
     const endpoint = this.config.externalEndpoint;
@@ -120,6 +121,72 @@ export class ExternalAgent implements IAgent {
       return;
     }
 
+    if (endpoint.mode === 'subprocess') {
+      await this.sendToSubprocess(message, endpoint);
+      return;
+    }
+
+    await this.sendToHttp(message, endpoint);
+  }
+
+  private async sendToSubprocess(message: TeamMessage, endpoint: ExternalAgentEndpoint): Promise<void> {
+    const command = endpoint.command;
+    if (!command) {
+      log.error(`[ExternalAgent:${this.name}] subprocess mode requires 'command'`);
+      this.resolvePending();
+      return;
+    }
+
+    const timeoutMs = endpoint.timeoutMs ?? 120_000;
+    const inputMode = endpoint.inputMode ?? 'stdin';
+    const baseArgs = endpoint.args ?? [];
+    const args = inputMode === 'arg' ? [...baseArgs, message.content] : baseArgs;
+    const cwd = this.config.projectDir ?? process.cwd();
+
+    const response = await new Promise<string>((resolve, reject) => {
+      const child = spawn(command, args, { cwd, stdio: ['pipe', 'pipe', 'pipe'] });
+      const stdoutChunks: Buffer[] = [];
+      const stderrChunks: Buffer[] = [];
+
+      child.stdout.on('data', (chunk: Buffer) => stdoutChunks.push(chunk));
+      child.stderr.on('data', (chunk: Buffer) => stderrChunks.push(chunk));
+
+      const timer = setTimeout(() => {
+        child.kill();
+        reject(new Error(`subprocess timeout after ${timeoutMs}ms`));
+      }, timeoutMs);
+
+      if (inputMode === 'stdin') {
+        child.stdin.write(message.content);
+        child.stdin.end();
+      }
+
+      child.on('close', (code) => {
+        clearTimeout(timer);
+        if (stderrChunks.length > 0) {
+          log.warn(`[ExternalAgent:${this.name}] stderr: ${Buffer.concat(stderrChunks).toString('utf-8').slice(0, 500)}`);
+        }
+        if (code !== 0) {
+          reject(new Error(`subprocess exited with code ${code}`));
+        } else {
+          resolve(Buffer.concat(stdoutChunks).toString('utf-8').trim());
+        }
+      });
+
+      child.on('error', (err) => {
+        clearTimeout(timer);
+        reject(err);
+      });
+    }).catch((err: Error) => {
+      log.error(`[ExternalAgent:${this.name}] subprocess error: ${err.message}`);
+      return '';
+    });
+
+    await this.dispatchResponse(message, response);
+    this.resolvePending();
+  }
+
+  private async sendToHttp(message: TeamMessage, endpoint: ExternalAgentEndpoint): Promise<void> {
     const messageId = uuidv4();
     const timeoutMs = endpoint.timeoutMs ?? 120_000;
     const isCallback = endpoint.mode === 'callback';
@@ -150,7 +217,7 @@ export class ExternalAgent implements IAgent {
 
     let res: Response;
     try {
-      res = await fetch(endpoint.url, {
+      res = await fetch(endpoint.url!, {
         method: 'POST',
         headers: this.buildHeaders(endpoint),
         body: JSON.stringify(payload),
@@ -219,9 +286,20 @@ export class ExternalAgent implements IAgent {
   async meetingTurn(transcript: string, _extraTools: ToolDefinition[] = []): Promise<string> {
     const endpoint = this.config.externalEndpoint;
     if (!endpoint) return '';
+
+    if (endpoint.mode === 'subprocess') {
+      const fakeMessage: TeamMessage = { id: 'meeting-turn', ts: new Date().toISOString(), from: 'meeting', to: this.name, type: 'meeting_turn', content: transcript };
+      let result = '';
+      const original = this.responseHandler;
+      this.responseHandler = async (_name, _msg, response) => { result = response; };
+      await this.sendToSubprocess(fakeMessage, endpoint);
+      this.responseHandler = original;
+      return result;
+    }
+
     const timeoutMs = endpoint.timeoutMs ?? 60_000;
     try {
-      const res = await fetch(endpoint.url, {
+      const res = await fetch(endpoint.url!, {
         method: 'POST',
         headers: this.buildHeaders(endpoint),
         body: JSON.stringify({

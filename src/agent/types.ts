@@ -32,21 +32,29 @@ export interface AgentIdentity {
 
 /**
  * HTTP endpoint configuration for an external agent.
- * The external service must accept POST requests at `url` and return
- * a JSON body `{ response: string }` (sync mode) or POST back to
- * `callbackUrl` with `{ messageId, response }` (callback mode).
+ *
+ * Modes:
+ *  - 'sync'       — POST to `url`, response in JSON body `{ response: "..." }`
+ *  - 'callback'   — POST to `url`, external service POSTs back to `callbackUrl`
+ *  - 'subprocess' — spawn a local command (e.g. `claude -p`), capture stdout
  */
 export interface ExternalAgentEndpoint {
-  /** URL to POST incoming messages to. */
-  url: string;
-  /** Full Authorization header value, e.g. "Bearer sk-xxx". */
+  /** URL to POST incoming messages to (http/callback modes). */
+  url?: string;
+  /** Full Authorization header value, e.g. "Bearer sk-xxx" (http modes). */
   authHeader?: string;
-  /** For callback mode: URL the external agent should POST responses to. */
+  /** Callback mode: URL the external agent should POST responses to. */
   callbackUrl?: string;
-  /** 'sync' — response in POST body (default); 'callback' — external POSTs back. */
-  mode?: 'sync' | 'callback';
-  /** Request timeout in ms (default 120000). */
+  /** 'sync' (default) | 'callback' | 'subprocess' */
+  mode?: 'sync' | 'callback' | 'subprocess';
+  /** Request/process timeout in ms (default 120000). */
   timeoutMs?: number;
+  /** subprocess mode: executable to run, e.g. 'claude'. */
+  command?: string;
+  /** subprocess mode: arguments before the message, e.g. ['-p']. */
+  args?: string[];
+  /** subprocess mode: how to pass the message — 'arg' appends to args, 'stdin' pipes it (default 'stdin'). */
+  inputMode?: 'arg' | 'stdin';
 }
 
 export interface AgentConfig {
