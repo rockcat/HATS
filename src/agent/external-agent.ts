@@ -1,4 +1,6 @@
 import { spawn } from 'child_process';
+import { writeFile, access } from 'fs/promises';
+import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { log } from '../util/logger.js';
 import { HatType } from '../hats/types.js';
@@ -49,6 +51,8 @@ export class ExternalAgent implements IAgent {
   private _state: AgentState = AgentState.Idle;
   private responseHandler: ResponseHandler | null = null;
   private pendingMessages = new Map<string, PendingEntry>();
+  /** Conversation history for subprocess mode — allows multi-turn exchange. */
+  private subprocessHistory: Array<{ role: 'human' | 'assistant'; content: string }> = [];
 
   constructor(config: AgentConfig) {
     this.id = config.id ?? uuidv4();
@@ -139,9 +143,11 @@ export class ExternalAgent implements IAgent {
 
     const timeoutMs = endpoint.timeoutMs ?? 120_000;
     const inputMode = endpoint.inputMode ?? 'stdin';
-    const baseArgs = endpoint.args ?? [];
-    const args = inputMode === 'arg' ? [...baseArgs, message.content] : baseArgs;
     const cwd = this.config.projectDir ?? process.cwd();
+
+    const stdin = this.buildSubprocessInput(message.content, inputMode);
+    const baseArgs = endpoint.args ?? [];
+    const args = inputMode === 'arg' ? [...baseArgs, stdin] : baseArgs;
 
     const response = await new Promise<string>((resolve, reject) => {
       const child = spawn(command, args, { cwd, stdio: ['pipe', 'pipe', 'pipe'] });
@@ -157,7 +163,7 @@ export class ExternalAgent implements IAgent {
       }, timeoutMs);
 
       if (inputMode === 'stdin') {
-        child.stdin.write(message.content);
+        child.stdin.write(stdin);
         child.stdin.end();
       }
 
@@ -182,8 +188,28 @@ export class ExternalAgent implements IAgent {
       return '';
     });
 
+    this.subprocessHistory.push({ role: 'human', content: message.content });
+    if (response) this.subprocessHistory.push({ role: 'assistant', content: response });
+
     await this.dispatchResponse(message, response);
     this.resolvePending();
+  }
+
+  /**
+   * Builds the full text to pass to the subprocess. When there is prior
+   * conversation history the prior turns are prepended so Claude can answer
+   * follow-up messages with full context.
+   */
+  private buildSubprocessInput(currentContent: string, inputMode: string): string {
+    if (inputMode !== 'stdin' || this.subprocessHistory.length === 0) {
+      return currentContent;
+    }
+    const lines: string[] = ['<conversation_history>'];
+    for (const turn of this.subprocessHistory) {
+      lines.push(turn.role === 'human' ? `Human: ${turn.content}` : `Assistant: ${turn.content}`);
+    }
+    lines.push('</conversation_history>', '', currentContent);
+    return lines.join('\n');
   }
 
   private async sendToHttp(message: TeamMessage, endpoint: ExternalAgentEndpoint): Promise<void> {
@@ -275,6 +301,36 @@ export class ExternalAgent implements IAgent {
     this.resolvePending();
   }
 
+  private async ensureClaudeMd(dir: string): Promise<void> {
+    const filePath = path.join(dir, 'CLAUDE.md');
+    try {
+      await access(filePath);
+      return; // already exists — don't overwrite
+    } catch { /* doesn't exist — create it */ }
+
+    const agentName = this.name;
+    const content = [
+      '# HATS Agent Context',
+      '',
+      `You are **${agentName}**, an AI agent operating inside HATS (Human Agent Teaming System).`,
+      'You receive tasks via stdin through `claude -p` and your stdout is captured as your response.',
+      '',
+      '## Behaviour',
+      '- Complete tasks directly and autonomously.',
+      '- Do **not** ask for confirmation before proceeding.',
+      '- Do **not** ask clarifying questions — use your best judgement and state any assumptions.',
+      '- Do **not** prompt for user input; you are running non-interactively.',
+      '- When you finish, summarise what you did and the outcome.',
+      '',
+      '## Context',
+      '- Other HATS agents (human and AI) may send you follow-up messages.',
+      '- Prior conversation turns are provided above the current message wrapped in `<conversation_history>` tags.',
+    ].join('\n');
+
+    await writeFile(filePath, content, 'utf-8');
+    log.info(`[ExternalAgent:${this.name}] wrote CLAUDE.md to ${dir}`);
+  }
+
   private buildHeaders(endpoint: ExternalAgentEndpoint): Record<string, string> {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (endpoint.authHeader) headers['Authorization'] = endpoint.authHeader;
@@ -325,7 +381,14 @@ export class ExternalAgent implements IAgent {
   setProvider(provider: AIProvider, model: string): void { this.config.provider = provider; this.config.model = model; }
   setHat(hatTypes: HatType[]): void { this.config.hatType = hatTypes; }
   updateTeamContext(teamContext: string): void { this.config.teamContext = teamContext; }
-  updateProjectDir(projectDir: string | null): void { this.config.projectDir = projectDir ?? undefined; }
+  updateProjectDir(projectDir: string | null): void {
+    this.config.projectDir = projectDir ?? undefined;
+    if (projectDir && this.config.externalEndpoint?.mode === 'subprocess') {
+      this.ensureClaudeMd(projectDir).catch((err: Error) =>
+        log.warn(`[ExternalAgent:${this.name}] could not write CLAUDE.md: ${err.message}`)
+      );
+    }
+  }
   updateProjectGoal(goal: string | null): void { this.config.projectGoal = goal ?? undefined; }
   setSpecialisation(s: string | undefined): void { this.config.identity.specialisation = s; }
   setIdentity(vd: string | undefined, bs: string | undefined): void {
@@ -354,7 +417,7 @@ export class ExternalAgent implements IAgent {
   getActiveThreadKey(): string { return 'general'; }
   getHourlyCost(): number { return 0; }
   isCostIdled(): boolean { return false; }
-  clearAllThreads(): void {}
+  clearAllThreads(): void { this.subprocessHistory = []; }
   setHistory(_history: HistoryEntryLike[]): void {}
   setAllThreadHistories(_allThreads: Record<string, HistoryEntryLike[]>): void {}
 }
