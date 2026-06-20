@@ -294,6 +294,15 @@ export class APIServer {
     await this.humanRequestStore.load();
     await this.emailAllowlistStore.load();
     this.orchestrator.setEmailAllowlistStore(this.emailAllowlistStore);
+    this.orchestrator.setTicketCommentHandler(
+      (agentName, text) => this.kanbanManager.addComment(
+        this.agentTicketMap.get(this.orchestrator.agentIdForName(agentName) ?? agentName) ?? '',
+        agentName,
+        text,
+      ),
+      (agentName) => this.agentTicketMap.get(this.orchestrator.agentIdForName(agentName) ?? agentName),
+      (agentName) => this.agentTicketMap.delete(this.orchestrator.agentIdForName(agentName) ?? agentName),
+    );
     await this.googleTokenStore.load();
     await this.googleTokenStore.syncToEnv();
     // Refresh Google access token every 45 minutes

@@ -14,6 +14,7 @@ import { SPECIALISATION_DIRECTIVES, generateSystemPrompt } from '../prompt/gener
 import { mergeHatDefinitions } from '../hats/definitions.js';
 import { personasByHat } from '../hats/personas.js';
 import { getPricingTable, FREE_PROVIDERS, reloadPricingFromFile } from '../providers/pricing.js';
+import { getToolsForHat } from '../tools/definitions.js';
 import { AnthropicProvider } from '../providers/anthropic.js';
 import { makeProvider, KNOWN_PROVIDERS, probeLocalLLM, getCachedModels, getModelCacheEntry, clearModelCache } from './providers.js';
 import { AgentStatus } from './project-manager.js';
@@ -119,7 +120,8 @@ export class AgentRouter {
           avoidances: hat.avoidances, teamRole: hat.teamRole,
           specialisation: specParam,
         });
-        json(res, 200, { prompt: prompt.text, sections: prompt.sections });
+        const toolsJson = JSON.stringify(getToolsForHat(hatParams.length > 0 ? hatParams : ['white' as HatType]));
+        json(res, 200, { prompt: prompt.text, sections: prompt.sections, toolsChars: toolsJson.length });
       } catch (err) { json(res, 400, { error: (err as Error).message }); }
       return true;
     }
@@ -147,7 +149,8 @@ export class AgentRouter {
           specialisation: specParam !== undefined ? specParam : agent.config.identity.specialisation,
           email: agent.config.identity.email,
         });
-        json(res, 200, { prompt: prompt.text, sections: prompt.sections });
+        const toolsJson2 = JSON.stringify(getToolsForHat(hatTypes));
+        json(res, 200, { prompt: prompt.text, sections: prompt.sections, toolsChars: toolsJson2.length });
       } catch (err) { json(res, 400, { error: (err as Error).message }); }
       return true;
     }

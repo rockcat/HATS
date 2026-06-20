@@ -135,14 +135,31 @@ export class MCPClient {
 
   private async refreshTools(): Promise<void> {
     const response = await this.client.listTools();
-    this.tools = response.tools.map((t) => ({
-      name: `mcp__${this.serverName}__${t.name}`,
-      description: t.description ?? t.name,
-      parameters: (t.inputSchema as ToolDefinition['parameters']) ?? {
+    this.tools = response.tools.map((t) => {
+      const toolMappings = this._def?.toolArgMappings?.[t.name];
+      let params: ToolDefinition['parameters'] = (t.inputSchema as ToolDefinition['parameters']) ?? {
         type: 'object',
         properties: {},
-      },
-    }));
+      };
+      if (toolMappings) {
+        // Reverse the mapping (toKey → fromKey) so the LLM always sees and uses the "from" key.
+        // The forward mapping at call time then reliably converts it to what the server validates.
+        const reverse: Record<string, string> = {};
+        for (const [from, to] of Object.entries(toolMappings)) reverse[to] = from;
+        const props: typeof params.properties = {};
+        for (const [k, v] of Object.entries(params.properties)) props[reverse[k] ?? k] = v;
+        params = {
+          ...params,
+          properties: props,
+          ...(params.required ? { required: params.required.map(r => reverse[r] ?? r) } : {}),
+        };
+      }
+      return {
+        name: `mcp__${this.serverName}__${t.name}`,
+        description: t.description ?? t.name,
+        parameters: params,
+      };
+    });
   }
 
   private stripNamespace(namespacedName: string): string {

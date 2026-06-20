@@ -28,6 +28,8 @@ export class AgendaRunner {
 
   start(): void {
     if (this.timer) return;
+    // Fire all enabled tasks immediately on startup, then continue on the regular interval.
+    void this.tick(true);
     this.timer = setInterval(() => void this.tick(), this.checkIntervalMs);
     log.info(`[Agenda] Runner started — checking every ${this.checkIntervalMs / 1000}s`);
   }
@@ -36,8 +38,10 @@ export class AgendaRunner {
     if (this.timer) { clearInterval(this.timer); this.timer = null; }
   }
 
-  async tick(): Promise<void> {
-    const due = this.store.listDue();
+  async tick(fireAll = false): Promise<void> {
+    const due = fireAll
+      ? this.store.list().filter(e => e.enabled)
+      : this.store.listDue();
     if (due.length === 0) return;
     const now = Date.now();
     for (const entry of due) {

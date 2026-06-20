@@ -68,6 +68,9 @@ export class TeamOrchestrator {
 
   private agentStore: AgentStore | null = null;
   private rebuildTimer: ReturnType<typeof setTimeout> | null = null;
+  private ticketCommentHandler: ((agentName: string, text: string) => Promise<void>) | null = null;
+  private agentTicketIdResolver: ((agentName: string) => string | undefined) | null = null;
+  private agentTicketClearer: ((agentName: string) => void) | null = null;
   private mcp = new MCPRegistry();
   private llmSemaphore: Semaphore;
   private lastSenderByAgent = new Map<string, string>();
@@ -352,6 +355,16 @@ export class TeamOrchestrator {
     this.emailAllowlistRef.store = store;
   }
 
+  setTicketCommentHandler(
+    handler: (agentName: string, text: string) => Promise<void>,
+    resolver: (agentName: string) => string | undefined,
+    clearer: (agentName: string) => void,
+  ): void {
+    this.ticketCommentHandler = handler;
+    this.agentTicketIdResolver = resolver;
+    this.agentTicketClearer = clearer;
+  }
+
   async enablePersonalMcp(agentName: string, serverId: string, credentials: Record<string, string>): Promise<void> {
     const agent = this.requireAgent(agentName);
     const entry = getCatalogue().find(e => e.id === serverId && isAgentMcp(e));
@@ -583,14 +596,27 @@ export class TeamOrchestrator {
     this.deliverToAgent(toAgentName, msg);
   }
 
-  async humanAssignTask(toAgentName: string, task: string, context?: string, projectName?: string): Promise<void> {
+  async humanAssignTask(
+    toAgentName: string,
+    task: string,
+    context?: string,
+    projectName?: string,
+    ticketId?: string,
+    sourceThreadId?: string,
+    sourceThreadLimit?: number,
+  ): Promise<void> {
     const taskId = await this.createTask(toAgentName, this.humanName, task, context, projectName);
     const storedTask = this.tasks.get(taskId)!;
+    if (ticketId) storedTask.ticketId = ticketId;
     const folderNote = storedTask.projectFolder
-      ? `\n\nA project workspace has been created for this task. Use read_file, write_file, list_files, and fetch_url to save and retrieve your work.`
+      ? `\n\nA project workspace is available. Use write_file, read_file, list_files, and fetch_url to manage files. Files are stored under outputs/ — pass the ticket ID (e.g. "${storedTask.ticketId ?? storedTask.projectName?.toUpperCase() ?? 'TKT-000'}") as the ticket parameter to keep work organised.`
       : '';
     const content = (context ? `${task}\n\nContext: ${context}` : task) + folderNote;
-    const msg = buildMessage('human', toAgentName, 'task', content, { taskId });
+    const msg = buildMessage('human', toAgentName, 'task', content, {
+      taskId,
+      ...(sourceThreadId ? { sourceThreadId } : {}),
+      ...(sourceThreadId && sourceThreadLimit ? { sourceThreadLimit } : {}),
+    });
     await this.store.append('task_assigned', { taskId, from: 'human', to: toAgentName, task, context, projectName: storedTask.projectName });
     this.deliverToAgent(toAgentName, msg);
   }
@@ -768,6 +794,13 @@ export class TeamOrchestrator {
       createScheduledMeeting: (data) => this.createScheduledMeeting(data),
       resolveAgentPath: (agentName, fp) => this.resolveAgentPath(agentName, fp),
       getAgentThreadKey: (name) => this.findByName(name)?.getActiveThreadKey(),
+      getAgentTicketId: (name) => this.agentTicketIdResolver?.(name),
+      addTicketComment: this.ticketCommentHandler
+        ? (name, text) => this.ticketCommentHandler!(name, text)
+        : undefined,
+      clearAgentTicket: this.agentTicketClearer
+        ? (name) => this.agentTicketClearer!(name)
+        : undefined,
     };
   }
 

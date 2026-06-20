@@ -52,7 +52,9 @@
       "Bash(dir \"c:\\\\Users\\\\pauln\\\\.claude\\\\projects\\\\c--Users-pauln-workspace-HATS\\\\memory\" /b)",
       "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d.get\\('scripts',{}\\)\\)\")",
       "Bash(dir \"c:\\\\Users\\\\pauln\\\\workspace\\\\HATS\\\\projects\" /b)",
-      "Bash(findstr /r /s /n \"SIGINT SIGTERM shutdown\" setup.js)"
+      "Bash(findstr /r /s /n \"SIGINT SIGTERM shutdown\" setup.js)",
+      "PowerShell($lines = \\(Get-Content \"F:\\\\workspace\\\\HATS\\\\src\\\\webui\\\\public\\\\thread-viewer.js\" | Measure-Object -Line\\).Lines; Write-Output \"Lines: $lines\")",
+      "PowerShell(git *)"
     ]
   }
 }

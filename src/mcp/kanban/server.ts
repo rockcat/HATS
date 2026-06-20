@@ -184,8 +184,11 @@ export async function startKanbanServer(boardPath: string): Promise<void> {
 
 async function handleTool(name: string, args: Record<string, unknown>, store: KanbanStore): Promise<unknown> {
   switch (name) {
-    case 'get_board':
-      return await store.getBoardSummary();
+    case 'get_board': {
+      const board = await store.getBoardSummary();
+      const { closed: _closed, ...visible } = board;
+      return visible;
+    }
 
     case 'create_ticket': {
       const title = (args['title'] as string | undefined)?.trim();
@@ -207,16 +210,20 @@ async function handleTool(name: string, args: Record<string, unknown>, store: Ka
 
     case 'get_ticket': {
       const ticket = await store.getTicket(args['id'] as string);
-      if (!ticket) throw new Error(`Ticket "${args['id']}" not found`);
+      if (!ticket || ticket.column === 'closed') throw new Error(`Ticket "${args['id']}" not found`);
       return ticket;
     }
 
-    case 'list_tickets':
-      return await store.listTickets({
-        column:   args['column'] as Column | undefined,
+    case 'list_tickets': {
+      const col = args['column'] as Column | undefined;
+      if (col === 'closed') return [];
+      const tickets = await store.listTickets({
+        column:   col,
         assignee: args['assignee'] as string | undefined,
         tag:      args['tag'] as string | undefined,
       });
+      return tickets.filter(t => t.column !== 'closed');
+    }
 
     case 'move_ticket': {
       const col = args['column'] as Column;

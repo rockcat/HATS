@@ -47,6 +47,18 @@ export class KanbanManager {
     return Object.values(board.tickets);
   }
 
+  async addComment(ticketId: string, author: string, text: string): Promise<void> {
+    if (!this.kanbanPath) return;
+    try {
+      const board = await this.readKanban();
+      const ticket = board.tickets[ticketId];
+      if (!ticket) return;
+      ticket.comments.push({ id: crypto.randomUUID(), author, text, ts: new Date().toISOString() });
+      ticket.updatedAt = new Date().toISOString();
+      await this.writeKanban(board);
+    } catch { /* non-fatal */ }
+  }
+
   watchKanban(filePath: string): void {
     try {
       this.kanbanWatcher = fs.watch(filePath, () => {
@@ -166,7 +178,7 @@ export class KanbanManager {
     }
   }
 
-  async dispatchTicket(ticket: { id: string; title: string; description: string; assignee?: string; priority?: string; tags?: string[] }): Promise<void> {
+  async dispatchTicket(ticket: { id: string; title: string; description: string; assignee?: string; priority?: string; tags?: string[]; comments?: import('../mcp/kanban/types.js').Comment[]; lastTaskId?: string }): Promise<void> {
     if (!ticket.assignee) return;
     const orch      = this.deps.getOrchestrator();
     const agentName = this.deps.resolveAgentName(ticket.assignee);
@@ -179,21 +191,32 @@ export class KanbanManager {
     );
     if (alreadyActive) return;
 
+    // Build the task briefing, including prior comments if any
+    const priorComments = ticket.comments ?? [];
+    const commentsSection = priorComments.length > 0
+      ? `\n\n## Activity log\n${priorComments.map(c => `- [${c.ts.slice(0, 16).replace('T', ' ')}] ${c.author}: ${c.text}`).join('\n')}`
+      : '';
+
     const projectName = ticket.id;
-    const description = `Work on ticket ${ticket.id}: ${ticket.title}${ticket.description ? `\n\n${ticket.description}` : ''}`;
-    await orch.humanAssignTask(agentName, description, undefined, projectName);
+    const description = `Work on ticket ${ticket.id}: ${ticket.title}${ticket.description ? `\n\n${ticket.description}` : ''}${commentsSection}`;
+    // Re-dispatch: seed from the previous task's thread (full history, no limit).
+    // First dispatch: seed the last few messages from the agent's general thread so they have recent context.
+    const sourceThreadId   = ticket.lastTaskId ?? 'general';
+    const sourceThreadLimit = ticket.lastTaskId ? undefined : 6;
+    await orch.humanAssignTask(agentName, description, undefined, projectName, ticket.id, sourceThreadId, sourceThreadLimit);
     this.deps.agentTicketMap.set(this.deps.agentIdForName(agentName), ticket.id);
 
     const stored = (orch.listTasks() as Task[]).find(
       t => t.assignedTo.toLowerCase() === agentName.toLowerCase() && t.description.includes(ticket.id),
     );
-    if (stored?.projectFolder && this.kanbanPath) {
+    if (stored && this.kanbanPath) {
       try {
         const board = await this.readKanban();
         const kt = board.tickets[ticket.id];
         if (kt) {
           kt.projectName   = stored.projectName ?? projectName;
-          kt.projectFolder = stored.projectFolder;
+          if (stored.projectFolder) kt.projectFolder = stored.projectFolder;
+          kt.lastTaskId    = stored.id;   // enables thread seeding on next dispatch
           kt.updatedAt     = new Date().toISOString();
           await this.writeKanban(board);
         }
@@ -216,7 +239,7 @@ export class KanbanManager {
           'Save all outputs, artefacts, and notes in this folder.',
           'Use `write_file`, `read_file`, and `list_files` to manage files here.',
         ].filter(l => l !== undefined).join('\n');
-        await writeFile(path.join(stored.projectFolder, 'README.md'), readme, 'utf-8');
+        await writeFile(path.join(stored.projectFolder!, 'README.md'), readme, 'utf-8');
       } catch { /* non-fatal */ }
     }
     log.info(`[API] Dispatched ${ticket.id} → ${agentName} (project: ${stored?.projectFolder ?? '?'})`);

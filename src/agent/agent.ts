@@ -234,7 +234,10 @@ export class Agent {
       const taskId = message.taskId ?? uuidv4();
       if (!this.threads.has(taskId) && message.sourceThreadId) {
         const source = this.threads.get(message.sourceThreadId);
-        if (source?.length) this.threads.set(taskId, [...source]);
+        if (source?.length) {
+          const slice = message.sourceThreadLimit ? source.slice(-message.sourceThreadLimit) : source;
+          this.threads.set(taskId, [...slice]);
+        }
       }
       this.activeTaskId = taskId;
     } else if (message.type === 'meeting_invite' || message.type === 'meeting_turn') {

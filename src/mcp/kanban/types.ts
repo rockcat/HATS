@@ -33,6 +33,7 @@ export interface Ticket {
   closedReason?: ClosedReason;  // set when column === 'closed'
   projectName?: string;    // human-readable project name
   projectFolder?: string;  // absolute path to the project working folder
+  lastTaskId?: string;     // task UUID from the most recent dispatch (used to seed thread on re-dispatch)
 }
 
 export interface Board {

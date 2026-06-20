@@ -21,6 +21,8 @@ export interface TeamMessage {
   isScheduled?: boolean;
   /** Thread key to seed this task's conversation from (e.g. the chat that spawned it). */
   sourceThreadId?: string;
+  /** Max messages to copy from sourceThreadId (takes the most recent N). Absent = copy all. */
+  sourceThreadLimit?: number;
   /** Target an explicit thread by ID instead of the default routing logic. */
   threadId?: string;
 }
@@ -51,6 +53,7 @@ export interface Task {
   summary?: string;
   projectName?: string;
   projectFolder?: string;
+  ticketId?: string;       // kanban ticket ID this task was created from, e.g. "TKT-003"
 }
 
 export type MeetingType = 'standup' | 'sprint_planning' | 'retro' | 'review' | 'ad_hoc';

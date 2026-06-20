@@ -49,12 +49,12 @@ const REPORT_TASK_COMPLETE: ToolDefinition = {
 
 const READ_FILE: ToolDefinition = {
   name: 'read_file',
-  description: 'Read a file from your project outputs folder.',
+  description: 'Read a file from the project outputs or sources folder.',
   parameters: {
     type: 'object',
     properties: {
-      filename: { type: 'string', description: 'File name to read, e.g. "report.md".' },
-      ticket:   { type: 'string', description: 'Sub-folder within outputs/, e.g. "TKT-003" for ticket work or "minutes" for meeting notes. Omit to read directly from outputs/.' },
+      filename: { type: 'string', description: 'Plain file name with no path separators, e.g. "report.md".' },
+      ticket:   { type: 'string', description: 'Sub-folder within outputs/, e.g. "TKT-003" for ticket work or "minutes" for meeting notes. Use "sources" to read from the sources/ folder. Omit to read directly from outputs/.' },
     },
     required: ['filename'],
   },
@@ -62,13 +62,13 @@ const READ_FILE: ToolDefinition = {
 
 const WRITE_FILE: ToolDefinition = {
   name: 'write_file',
-  description: 'Write or create a file in your project outputs folder.',
+  description: 'Write or create a file in the project outputs folder. Path is outputs/<ticket>/<filename> or outputs/<filename>.',
   parameters: {
     type: 'object',
     properties: {
-      filename: { type: 'string', description: 'File name to write, e.g. "analysis.md".' },
+      filename: { type: 'string', description: 'Plain file name with no path separators, e.g. "analysis.md".' },
       content:  { type: 'string', description: 'Full content to write to the file.' },
-      ticket:   { type: 'string', description: 'Sub-folder within outputs/, e.g. "TKT-003" for ticket work or "minutes" for meeting notes. Omit to save directly in outputs/.' },
+      ticket:   { type: 'string', description: 'Sub-folder within outputs/, e.g. "TKT-003" or "minutes". Must be a single name with no slashes. Omit to save directly in outputs/.' },
     },
     required: ['filename', 'content'],
   },
@@ -76,11 +76,11 @@ const WRITE_FILE: ToolDefinition = {
 
 const LIST_FILES: ToolDefinition = {
   name: 'list_files',
-  description: 'List files in your project outputs folder, optionally scoped to a sub-folder.',
+  description: 'List files in the project outputs folder, optionally scoped to a sub-folder.',
   parameters: {
     type: 'object',
     properties: {
-      ticket: { type: 'string', description: 'Sub-folder within outputs/ to list, e.g. "TKT-003" or "minutes". Omit to list the top-level outputs/ folder.' },
+      ticket: { type: 'string', description: 'Sub-folder to list, e.g. "TKT-003" or "minutes". Use "sources" to list the sources/ folder. Omit to list the top-level outputs/ folder.' },
     },
     required: [],
   },
@@ -107,13 +107,13 @@ const GET_CURRENT_DATETIME: ToolDefinition = {
 
 const FETCH_URL: ToolDefinition = {
   name: 'fetch_url',
-  description: 'Fetch the content of a URL and save it to your project outputs folder.',
+  description: 'Fetch the content of a URL and save it to the project outputs folder.',
   parameters: {
     type: 'object',
     properties: {
       url:      { type: 'string', description: 'The URL to fetch.' },
-      filename: { type: 'string', description: 'File name to save as (e.g. "page.html"). Derived from the URL if omitted.' },
-      ticket:   { type: 'string', description: 'Sub-folder within outputs/, e.g. "TKT-003" or "minutes". Omit to save directly in outputs/.' },
+      filename: { type: 'string', description: 'Plain file name to save as (e.g. "page.html"). Derived from the URL if omitted. No path separators.' },
+      ticket:   { type: 'string', description: 'Sub-folder within outputs/, e.g. "TKT-003" or "minutes". Must be a single name with no slashes. Omit to save directly in outputs/.' },
     },
     required: ['url'],
   },

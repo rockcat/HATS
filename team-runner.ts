@@ -35,9 +35,17 @@ import { ScheduledActionStore } from './src/api/scheduled-action-store.js';
 // ── Project layout ────────────────────────────────────────────────────────────
 
 const CATALOGUE_FILE = path.join(process.cwd(), 'config', 'mcp-catalogue.json');
+
+// ── CLI flags ─────────────────────────────────────────────────────────────────
+// Strip known flags before positional arg parsing so they don't interfere.
+const argv = process.argv.slice(2);
+const NO_EMAIL = argv.includes('--no-email');
+if (NO_EMAIL) process.env['HATS_NO_EMAIL'] = '1';
+const positionalArgs = argv.filter(a => !a.startsWith('--'));
+
 const PROJECTS_ROOT = path.resolve(process.env['PROJECTS_ROOT'] ?? './projects');
 const PROJECT_ID    = (() => {
-  if (process.argv[2]) return process.argv[2];
+  if (positionalArgs[0]) return positionalArgs[0];
   // npm run start --project=<name> sets npm_config_project
   if (process.env['npm_config_project']) return process.env['npm_config_project'];
   // Only honour TEAM_PROJECT if it's explicitly non-default; otherwise let last-project.json win

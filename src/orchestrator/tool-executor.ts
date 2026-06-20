@@ -40,6 +40,10 @@ export interface ToolCallContext {
   findBlueHat(): Agent | undefined;
   hasAgentWithName(name: string): boolean;
   deliverToAgent(name: string, msg: TeamMessage): void;
+  /** Returns the kanban ticket ID the agent is currently working on, if any. */
+  getAgentTicketId?(agentName: string): string | undefined;
+  /** Post a short action comment to the agent's current ticket. No-op if no ticket. */
+  addTicketComment?(agentName: string, text: string): Promise<void>;
   createTask(assignedTo: string, assignedBy: string, description: string, context?: string, projectName?: string): Promise<string>;
   startMeeting(facilitatorName: string, participants: string[], topic: string, agenda?: string): Promise<string>;
   createScheduledMeeting(data: {
@@ -49,16 +53,20 @@ export interface ToolCallContext {
   }): Promise<ScheduledMeeting>;
   resolveAgentPath(agentName: string, filePath: string): string;
   getAgentThreadKey?(agentName: string): string | undefined;
+  /** Clear the ticket association for an agent (called when task completes). */
+  clearAgentTicket?(agentName: string): void;
 }
 
-/** Return the outputs folder for the agent's active task, or null if no project is loaded. */
-function agentOutputsDir(ctx: ToolCallContext, agentName: string, ticket?: string): string | null {
-  const activeTask = Array.from(ctx.tasks.values()).find(
-    t => t.status === 'active' && t.assignedTo.toLowerCase() === agentName.toLowerCase(),
-  );
-  const base = activeTask?.projectFolder ?? ctx.getProjectDir();
-  if (!base) return null;
-  return ticket ? path.join(base, 'outputs', ticket) : path.join(base, 'outputs');
+/** Return the shared project root for file operations, or null if no project is loaded.
+ *  Always uses getProjectDir() — activeTask.projectFolder is an internal slug-based subfolder
+ *  and must not be used for file routing, since it would double-embed the ticket ID. */
+function agentProjectDir(ctx: ToolCallContext): string | null {
+  return ctx.getProjectDir() ?? null;
+}
+
+/** Returns true if s is a safe single path segment (no separators, no traversal). */
+function isSafeSegment(s: string): boolean {
+  return !!s && s === path.basename(s) && !s.includes('/') && !s.includes('\\') && s !== '.' && s !== '..';
 }
 
 const EMAIL_STANDALONE_RE = /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/;
@@ -85,6 +93,57 @@ function extractEmailsFromArgs(args: Record<string, unknown>): string[] {
   return [...emails];
 }
 
+const EMAIL_SEND_TOOLS = new Set([
+  'send_email', 'send_mail', 'send', 'reply_to_email', 'reply_to_thread',
+  'forward_email', 'create_draft', 'send_draft',
+]);
+
+/** Returns true if this MCP tool is an email-sending action that should be suppressed in --no-email mode. */
+function isEmailSendTool(toolName: string): boolean {
+  const bare = toolName.replace(/^mcp__[^_]+__/, '');
+  return EMAIL_SEND_TOOLS.has(bare);
+}
+
+/** Format a suppressed email call for console output. */
+function formatSuppressedEmail(agentName: string, toolName: string, args: Record<string, unknown>): string {
+  const bare = toolName.replace(/^mcp__[^_]+__/, '');
+  const to      = args['to'] ?? args['recipient'] ?? args['address'] ?? '(unknown)';
+  const subject = args['subject'] ?? '(no subject)';
+  const body    = args['body'] ?? args['content'] ?? args['text'] ?? args['message'] ?? '';
+  const preview = typeof body === 'string' ? body.slice(0, 300) + (body.length > 300 ? '…' : '') : '';
+  return [
+    `\n${'─'.repeat(60)}`,
+    `[NO-EMAIL] ${agentName} → ${bare}`,
+    `  To:      ${to}`,
+    `  Subject: ${subject}`,
+    preview ? `  Body:\n${String(preview).split('\n').map(l => `    ${l}`).join('\n')}` : '',
+    `${'─'.repeat(60)}\n`,
+  ].filter(Boolean).join('\n');
+}
+
+/** Build a short human-readable comment for notable tool calls. Returns undefined for tools we don't want to log. */
+function buildAutoComment(toolName: string, args: Record<string, unknown>): string | undefined {
+  const bare = toolName.replace(/^mcp__[^_]+__/, '');
+  if (bare === 'write_file') {
+    const ticket = args['ticket'] as string | undefined;
+    const file   = args['filename'] as string | undefined;
+    return file ? `Created file ${ticket ? `${ticket}/` : ''}${file}` : undefined;
+  }
+  if (bare === 'fetch_url') {
+    const url  = args['url'] as string | undefined;
+    const file = args['filename'] as string | undefined;
+    return url ? `Fetched ${url}${file ? ` → ${file}` : ''}` : undefined;
+  }
+  // Email / messaging MCP tools
+  const ACTION_TOOLS = ['send_email', 'send_message', 'send_mail', 'create_draft', 'reply_to_email', 'send'];
+  if (ACTION_TOOLS.some(t => bare === t || bare.endsWith(`_${t}`))) {
+    const to      = args['to'] ?? args['recipient'] ?? args['address'];
+    const subject = args['subject'];
+    if (to) return subject ? `Emailed "${subject}" to ${to}` : `Sent message to ${to}`;
+  }
+  return undefined;
+}
+
 export function buildToolExecutor(ctx: ToolCallContext, mcp: MCPRegistry) {
   return async (agentName: string, call: ToolCall): Promise<string> => {
     await ctx.store.append('tool_call', { agent: agentName, tool: call.name, args: call.arguments });
@@ -103,14 +162,24 @@ export function buildToolExecutor(ctx: ToolCallContext, mcp: MCPRegistry) {
             return result;
           }
         }
+        // --no-email: intercept send tools and print to console instead of dispatching
+        if (process.env['HATS_NO_EMAIL'] === '1' && isEmailSendTool(call.name)) {
+          const suppressed = formatSuppressedEmail(agentName, call.name, call.arguments ?? {});
+          process.stdout.write(suppressed);
+          result = `[no-email mode] Email suppressed — would have called ${call.name.replace(/^mcp__[^_]+__/, '')} with the provided arguments.`;
         // Personal MCP takes precedence over shared for the same tool name
-        if (personalMcp && personalMcp.isMCPTool(call.name)) {
+        } else if (personalMcp && personalMcp.isMCPTool(call.name)) {
           result = await personalMcp.callTool(call.name, call.arguments);
         } else {
           result = await mcp.callTool(call.name, call.arguments);
         }
       } else {
         result = await executeToolCall(ctx, agentName, call);
+      }
+      // Auto-post a short comment to the agent's current ticket for notable actions
+      const comment = buildAutoComment(call.name, call.arguments ?? {});
+      if (comment && ctx.addTicketComment && !result.startsWith('Error:') && !result.startsWith('Blocked:')) {
+        ctx.addTicketComment(agentName, comment).catch(() => {});
       }
       await ctx.store.append('tool_result', { agent: agentName, tool: call.name, result });
       return result;
@@ -154,6 +223,7 @@ export async function executeToolCall(ctx: ToolCallContext, agentName: string, c
           break;
         }
       }
+      ctx.clearAgentTicket?.(agentName);
       await ctx.store.append('task_complete', { agent: agentName, summary });
       for (const [meetingId, room] of ctx.activeMeetingRooms) {
         const meeting = ctx.meetings.get(meetingId);
@@ -245,8 +315,14 @@ export async function executeToolCall(ctx: ToolCallContext, agentName: string, c
 
     case 'read_file': {
       const { filename, ticket } = call.arguments as { filename: string; ticket?: string };
-      const dir = agentOutputsDir(ctx, agentName, ticket);
-      if (!dir) return 'Error: no project is open. Open or create a project first.';
+      const base = agentProjectDir(ctx);
+      if (!base) return 'Error: no project is open. Open or create a project first.';
+      if (!isSafeSegment(filename)) return `Error: filename must be a plain file name with no path separators (got "${filename}").`;
+      if (ticket !== undefined && !isSafeSegment(ticket)) return `Error: ticket must be a single folder name with no path separators (got "${ticket}").`;
+      // 'sources' reads from the sources/ folder; everything else reads from outputs/ or outputs/<ticket>/
+      const dir = ticket === 'sources'
+        ? path.join(base, 'sources')
+        : ticket ? path.join(base, 'outputs', ticket) : path.join(base, 'outputs');
       try {
         return await readFile(path.join(dir, filename), 'utf-8');
       } catch (err) {
@@ -256,13 +332,15 @@ export async function executeToolCall(ctx: ToolCallContext, agentName: string, c
 
     case 'write_file': {
       const { filename, content, ticket } = call.arguments as { filename: string; content: string; ticket?: string };
-      const dir = agentOutputsDir(ctx, agentName, ticket);
-      if (!dir) return 'Error: no project is open. Open or create a project first.';
+      const base = agentProjectDir(ctx);
+      if (!base) return 'Error: no project is open. Open or create a project first.';
+      if (ticket !== undefined && !isSafeSegment(ticket)) return `Error: ticket must be a single folder name with no path separators (got "${ticket}").`;
+      if (!isSafeSegment(filename)) return `Error: filename must be a plain file name with no path separators (got "${filename}").`;
       try {
-        const resolved = path.join(dir, filename);
-        await mkdir(path.dirname(resolved), { recursive: true });
-        await writeFile(resolved, content, 'utf-8');
-        return `File written: ${resolved}`;
+        const dir = ticket ? path.join(base, 'outputs', ticket) : path.join(base, 'outputs');
+        await mkdir(dir, { recursive: true });
+        await writeFile(path.join(dir, filename), content, 'utf-8');
+        return `File written: ${path.join(dir, filename)}`;
       } catch (err) {
         return `Error writing file: ${(err as Error).message}`;
       }
@@ -270,8 +348,13 @@ export async function executeToolCall(ctx: ToolCallContext, agentName: string, c
 
     case 'list_files': {
       const { ticket } = call.arguments as { ticket?: string };
-      const dir = agentOutputsDir(ctx, agentName, ticket);
-      if (!dir) return 'Error: no project is open. Open or create a project first.';
+      const base = agentProjectDir(ctx);
+      if (!base) return 'Error: no project is open. Open or create a project first.';
+      if (ticket !== undefined && !isSafeSegment(ticket)) return `Error: ticket must be a single folder name with no path separators (got "${ticket}").`;
+      // 'sources' lists the sources/ folder; everything else lists outputs/ or outputs/<ticket>/
+      const dir = ticket === 'sources'
+        ? path.join(base, 'sources')
+        : ticket ? path.join(base, 'outputs', ticket) : path.join(base, 'outputs');
       try {
         const entries = await readdir(dir, { withFileTypes: true });
         const lines = entries.map((e) => `${e.isDirectory() ? '[dir] ' : '      '}${e.name}`);
@@ -313,15 +396,18 @@ export async function executeToolCall(ctx: ToolCallContext, agentName: string, c
       if (!url?.trim()) return 'url argument is required.';
 
       const filename = (() => {
-        if (rawFilename?.trim()) return rawFilename.trim();
+        if (rawFilename?.trim()) return path.basename(rawFilename.trim());
         try {
           const u = new URL(url);
           const base = path.basename(u.pathname) || u.hostname;
           return base.includes('.') ? base : `${base}.html`;
         } catch { return 'fetched-content.html'; }
       })();
-      const outputDir = agentOutputsDir(ctx, agentName, ticket);
-      if (!outputDir) return 'Error: no project is open. Open or create a project first.';
+      const projectBase = agentProjectDir(ctx);
+      if (!projectBase) return 'Error: no project is open. Open or create a project first.';
+      if (ticket !== undefined && !isSafeSegment(ticket)) return `Error: ticket must be a single folder name with no path separators (got "${ticket}").`;
+      if (!isSafeSegment(filename)) return `Error: filename must be a plain file name with no path separators (got "${filename}").`;
+      const outputDir = ticket ? path.join(projectBase, 'outputs', ticket) : path.join(projectBase, 'outputs');
       const dest = path.join(outputDir, filename);
 
       try {

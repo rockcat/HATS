@@ -1993,10 +1993,12 @@ async function refreshPromptPreview() {
     const res = await fetch(`/api/agents/${encodeURIComponent(activeDetailAgent)}/prompt-preview?${params}`);
     const data = await res.json();
     textEl.textContent = data.prompt ?? data.error ?? 'Error';
-    // assume a token is about 4 characters
     const promptLength = data.prompt ? data.prompt.length : 0;
-    const numTokens = promptLength / 4
-    document.getElementById('agent-prompt-preview-length').textContent = `Length: ${promptLength} chars  ~${numTokens} tokens`; 
+    const numTokens    = Math.round(promptLength / 4);
+    const toolsChars   = data.toolsChars ?? 0;
+    const toolTokens   = Math.round(toolsChars / 4);
+    const toolNote     = toolsChars ? `  +~${toolTokens.toLocaleString()} tool tokens` : '';
+    document.getElementById('agent-prompt-preview-length').textContent = `~${numTokens.toLocaleString()} prompt tokens (${promptLength.toLocaleString()} chars)${toolNote}`;
   } catch (e) {
     textEl.textContent = 'Failed to load prompt.';
   }
@@ -3546,9 +3548,12 @@ async function openLibraryPromptPreview() {
     }
     textEl.innerHTML = parts.length ? parts.join('\n\n') : `<span class="prompt-section">${esc(text)}</span>`;
 
-    const chars  = text.length;
-    const tokens = Math.round(chars / 4);
-    if (lengthEl) lengthEl.textContent = `~${tokens.toLocaleString()} tokens (${chars.toLocaleString()} chars)`;
+    const chars      = text.length;
+    const tokens     = Math.round(chars / 4);
+    const toolsChars = data.toolsChars ?? 0;
+    const toolTokens = Math.round(toolsChars / 4);
+    const toolNote   = toolsChars ? `  +~${toolTokens.toLocaleString()} tool tokens` : '';
+    if (lengthEl) lengthEl.textContent = `~${tokens.toLocaleString()} prompt tokens (${chars.toLocaleString()} chars)${toolNote}`;
 
     if (_activePromptSection) highlightPromptSection(_activePromptSection); // array or string both handled
   } catch (err) {

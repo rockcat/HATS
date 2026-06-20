@@ -113,16 +113,16 @@ function buildWorkspaceSection(): string {
 
 Each task gives you a dedicated workspace. File tools automatically resolve to the right folder — you only need to supply a filename and an optional sub-folder.
 
-File tools:
-- \`write_file(filename, content)\` — saves to your workspace outputs folder
-- \`write_file(filename, content, ticket)\` — saves to \`outputs/<ticket>/\` (use a ticket ID like \`TKT-003\` or a category name like \`minutes\`)
-- \`read_file(filename)\` / \`read_file(filename, ticket)\` — reads a saved file
-- \`list_files()\` / \`list_files(ticket)\` — lists your outputs folder or a sub-folder
-- \`fetch_url(url, filename)\` / \`fetch_url(url, filename, ticket)\` — fetches a URL and saves it
+File tools write to \`outputs/\` and read from \`outputs/\` or \`sources/\`:
+- \`write_file(filename, content)\` — saves to \`outputs/<filename>\`
+- \`write_file(filename, content, ticket)\` — saves to \`outputs/<ticket>/<filename>\` (use a ticket ID like \`TKT-003\` or a category like \`minutes\`)
+- \`read_file(filename)\` / \`read_file(filename, ticket)\` — reads from \`outputs/\` or \`outputs/<ticket>/\`; pass \`ticket="sources"\` to read from \`sources/\`
+- \`list_files()\` / \`list_files(ticket)\` — lists \`outputs/\` or \`outputs/<ticket>/\`; pass \`ticket="sources"\` to list \`sources/\`
+- \`fetch_url(url, filename, ticket)\` — fetches a URL and saves to \`outputs/\`
 
 **When saving work:**
-- Use clear, descriptive filenames (e.g. \`competitor-analysis.md\`, \`q1-plan.docx\`)
-- Pass a ticket ID or category as \`ticket\` to keep work organised in sub-folders
+- Use the current ticket ID (e.g. \`TKT-003\`) as \`ticket\` to keep outputs organised
+- Use clear, descriptive filenames with no slashes (e.g. \`competitor-analysis.md\`, \`q1-plan.docx\`)
 - Prefer DOCX for prose, PDF for final formatted reports, markdown (.md) for technical docs`;
 }
 

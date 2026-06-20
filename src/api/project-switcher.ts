@@ -93,6 +93,14 @@ export async function executeProjectSwitch(newId: string, ctx: ProjectSwitchCont
   await ctx.humanRequestStore.switchTo(newRequestsFile).catch(() => {});
   await ctx.emailAllowlistStore.switchTo(newAllowlistFile).catch(() => {});
   newOrchestrator.setEmailAllowlistStore(ctx.emailAllowlistStore);
+  newOrchestrator.setTicketCommentHandler(
+    (agentName, text) => {
+      const agentId = newOrchestrator.agentIdForName(agentName) ?? agentName;
+      return ctx.kanbanManager.addComment(ctx.agentTicketMap.get(agentId) ?? '', agentName, text);
+    },
+    (agentName) => ctx.agentTicketMap.get(newOrchestrator.agentIdForName(agentName) ?? agentName),
+    (agentName) => ctx.agentTicketMap.delete(newOrchestrator.agentIdForName(agentName) ?? agentName),
+  );
   await ctx.loadMCPEnabled().catch(() => {});
   await ctx.projectManager.assignDefaultVisuals().catch(() => {});
 
