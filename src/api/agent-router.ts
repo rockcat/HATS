@@ -17,6 +17,7 @@ import { getPricingTable, FREE_PROVIDERS, reloadPricingFromFile } from '../provi
 import { getToolsForHat } from '../tools/definitions.js';
 import { AnthropicProvider } from '../providers/anthropic.js';
 import { makeProvider, KNOWN_PROVIDERS, probeLocalLLM, getCachedModels, getModelCacheEntry, clearModelCache } from './providers.js';
+import { EXTERNAL_PROVIDER } from '../agent/external-agent.js';
 import { AgentStatus } from './project-manager.js';
 import { AgentStore } from './agent-store.js';
 import { ScheduledActionStore } from './scheduled-action-store.js';
@@ -670,8 +671,9 @@ export class AgentRouter {
       if (orch.listAgents().some(a => a.id === agentId)) {
         json(res, 409, { error: 'Agent is already in this project' }); return true;
       }
-      const provider = makeProvider(def.providerName) ?? new AnthropicProvider();
-      orch.registerAgent({ id: def.id, identity: def.identity, hatType: def.hatType, provider, model: def.model, enabledMcpServers: def.enabledMcpServers, personalMcpCredentials: def.personalMcpCredentials, maxContextTokens: def.maxContextTokens, maxCostPerHour: def.maxCostPerHour });
+      const isExternal = def.providerName === 'external' || !!def.externalEndpoint;
+      const provider = isExternal ? EXTERNAL_PROVIDER : (makeProvider(def.providerName) ?? new AnthropicProvider());
+      orch.registerAgent({ id: def.id, identity: def.identity, hatType: def.hatType, provider, model: def.model, enabledMcpServers: def.enabledMcpServers, personalMcpCredentials: def.personalMcpCredentials, maxContextTokens: def.maxContextTokens, maxCostPerHour: def.maxCostPerHour, externalEndpoint: def.externalEndpoint });
       sseBroadcast({ type: 'agent_update', agents: this.deps.buildAgentStatuses() });
       saveCurrentState().catch(() => {});
       json(res, 200, { ok: true });
