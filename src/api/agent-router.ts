@@ -22,6 +22,13 @@ import { AgentStatus } from './project-manager.js';
 import { AgentStore } from './agent-store.js';
 import { ScheduledActionStore } from './scheduled-action-store.js';
 
+/** Extract the original sender from the [TYPE from Name] prefix added by formatIncomingMessage. */
+function extractMessageSender(role: string, content: string): string | undefined {
+  if (role !== 'user') return undefined;
+  const m = content.match(/^\[(?:TASK|MESSAGE|ESCALATION|MEETING INVITE|TASK COMPLETE) from ([^\]]+)\]/);
+  return m ? m[1] : undefined;
+}
+
 export interface AgentRouterDeps {
   getOrchestrator(): TeamOrchestrator;
   agentFeeds: Map<string, StoredEvent[]>;
@@ -87,6 +94,7 @@ export class AgentRouter {
         content:   m.content,
         timestamp: m.timestamp instanceof Date ? m.timestamp.toISOString() : m.timestamp,
         toolName:  m.toolName,
+        from:      extractMessageSender(m.role, m.content),
       })));
       return true;
     }

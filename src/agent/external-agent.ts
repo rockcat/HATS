@@ -51,8 +51,8 @@ export class ExternalAgent implements IAgent {
   private _state: AgentState = AgentState.Idle;
   private responseHandler: ResponseHandler | null = null;
   private pendingMessages = new Map<string, PendingEntry>();
-  /** Conversation history for subprocess mode — allows multi-turn exchange. */
-  private subprocessHistory: Array<{ role: 'human' | 'assistant'; content: string }> = [];
+  /** Conversation history for subprocess mode — allows multi-turn exchange and UI display. */
+  private subprocessHistory: Array<{ role: 'human' | 'assistant'; content: string; ts: Date }> = [];
 
   constructor(config: AgentConfig) {
     this.id = config.id ?? uuidv4();
@@ -188,8 +188,8 @@ export class ExternalAgent implements IAgent {
       return '';
     });
 
-    this.subprocessHistory.push({ role: 'human', content: message.content });
-    if (response) this.subprocessHistory.push({ role: 'assistant', content: response });
+    this.subprocessHistory.push({ role: 'human', content: message.content, ts: new Date() });
+    if (response) this.subprocessHistory.push({ role: 'assistant', content: response, ts: new Date() });
 
     await this.dispatchResponse(message, response);
     this.resolvePending();
@@ -419,14 +419,22 @@ export class ExternalAgent implements IAgent {
 
   // ── History (external agents have no local history) ──────────────────────────
 
-  getHistory(): AgentMessage[] { return []; }
-  getAllThreadHistories(): Record<string, AgentMessage[]> { return {}; }
+  getHistory(): AgentMessage[] { return this.subprocessHistoryAsMessages(); }
+  getAllThreadHistories(): Record<string, AgentMessage[]> { return { general: this.subprocessHistoryAsMessages() }; }
   getThreadSummary(): Record<string, number> { return {}; }
-  getThreadHistory(_thread: string): AgentMessage[] { return []; }
+  getThreadHistory(_thread: string): AgentMessage[] { return this.subprocessHistoryAsMessages(); }
   getActiveThreadKey(): string { return 'general'; }
   getHourlyCost(): number { return 0; }
   isCostIdled(): boolean { return false; }
   clearAllThreads(): void { this.subprocessHistory = []; }
   setHistory(_history: HistoryEntryLike[]): void {}
   setAllThreadHistories(_allThreads: Record<string, HistoryEntryLike[]>): void {}
+
+  private subprocessHistoryAsMessages(): AgentMessage[] {
+    return this.subprocessHistory.map(h => ({
+      role: h.role === 'human' ? 'user' : 'assistant',
+      content: h.content,
+      timestamp: h.ts,
+    }));
+  }
 }

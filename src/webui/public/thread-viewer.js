@@ -370,7 +370,7 @@ class ConversationThreads extends HTMLElement {
     }
 
     for (const msg of messages) {
-      const { role, content, timestamp, toolName } = msg;
+      const { role, content, timestamp, toolName, from } = msg;
       const isPending = !!msg._pending;
       const time  = timestamp ? this._formatTime(timestamp) : '';
       const isFirst = role !== prevRole;
@@ -392,7 +392,10 @@ class ConversationThreads extends HTMLElement {
       }
 
       const isUser    = role === 'user';
-      const label     = isUser ? 'You' : (this._agentName || 'Assistant');
+      const isHuman   = !from || from === 'human';
+      const label     = isUser
+        ? (isHuman ? 'You' : from)
+        : (this._agentName || 'Assistant');
       const roleClass = isUser
         ? (isPending ? 'msg--user msg--pending' : 'msg--user')
         : 'msg--assistant';
