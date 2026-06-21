@@ -326,12 +326,10 @@ export class TeamOrchestrator {
         externalEndpoint:      def.externalEndpoint,
       };
       const agent = this.registerAgent(config);
-      if (!isExternal) {
-        if (s.agentThreads?.[agentId]) {
-          agent.setAllThreadHistories(s.agentThreads[agentId]);
-        } else {
-          agent.setHistory(s.agentHistories[agentId] ?? []);
-        }
+      if (s.agentThreads?.[agentId]) {
+        agent.setAllThreadHistories(s.agentThreads[agentId]);
+      } else {
+        agent.setHistory(s.agentHistories[agentId] ?? []);
       }
       loadedCount++;
     }

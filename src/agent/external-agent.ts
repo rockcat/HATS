@@ -427,8 +427,20 @@ export class ExternalAgent implements IAgent {
   getHourlyCost(): number { return 0; }
   isCostIdled(): boolean { return false; }
   clearAllThreads(): void { this.subprocessHistory = []; }
-  setHistory(_history: HistoryEntryLike[]): void {}
-  setAllThreadHistories(_allThreads: Record<string, HistoryEntryLike[]>): void {}
+
+  setHistory(history: HistoryEntryLike[]): void {
+    this.subprocessHistory = history
+      .filter(m => m.role === 'user' || m.role === 'assistant')
+      .map(m => ({
+        role: m.role === 'user' ? 'human' : 'assistant' as 'human' | 'assistant',
+        content: m.content,
+        ts: m.timestamp instanceof Date ? m.timestamp : new Date(m.timestamp),
+      }));
+  }
+
+  setAllThreadHistories(allThreads: Record<string, HistoryEntryLike[]>): void {
+    this.setHistory(allThreads['general'] ?? []);
+  }
 
   private subprocessHistoryAsMessages(): AgentMessage[] {
     return this.subprocessHistory.map(h => ({
