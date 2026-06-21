@@ -1,5 +1,5 @@
 import { spawn } from 'child_process';
-import { writeFile, access } from 'fs/promises';
+import { writeFile, access, mkdir } from 'fs/promises';
 import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { log } from '../util/logger.js';
@@ -143,7 +143,7 @@ export class ExternalAgent implements IAgent {
 
     const timeoutMs = endpoint.timeoutMs ?? 120_000;
     const inputMode = endpoint.inputMode ?? 'stdin';
-    const cwd = this.config.projectDir ?? process.cwd();
+    const cwd = await this.subprocessWorkDir();
 
     const stdin = this.buildSubprocessInput(message.content, inputMode);
     const baseArgs = endpoint.args ?? [];
@@ -301,6 +301,15 @@ export class ExternalAgent implements IAgent {
     this.resolvePending();
   }
 
+  /** Returns (and creates) the working directory for this subprocess agent. */
+  private async subprocessWorkDir(): Promise<string> {
+    const slug = this.name.toLowerCase().replace(/\s+/g, '_');
+    const dir = path.join(this.config.projectDir ?? process.cwd(), slug);
+    await mkdir(dir, { recursive: true });
+    await this.ensureClaudeMd(dir);
+    return dir;
+  }
+
   private async ensureClaudeMd(dir: string): Promise<void> {
     const filePath = path.join(dir, 'CLAUDE.md');
     try {
@@ -384,8 +393,8 @@ export class ExternalAgent implements IAgent {
   updateProjectDir(projectDir: string | null): void {
     this.config.projectDir = projectDir ?? undefined;
     if (projectDir && this.config.externalEndpoint?.mode === 'subprocess') {
-      this.ensureClaudeMd(projectDir).catch((err: Error) =>
-        log.warn(`[ExternalAgent:${this.name}] could not write CLAUDE.md: ${err.message}`)
+      this.subprocessWorkDir().catch((err: Error) =>
+        log.warn(`[ExternalAgent:${this.name}] could not prepare work dir: ${err.message}`)
       );
     }
   }
