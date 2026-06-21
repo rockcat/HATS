@@ -14,10 +14,15 @@ export async function handleCLICommand(line: string, ctx: CLIContext): Promise<s
   if (!line) return '';
 
   if (line.startsWith('@')) {
-    const spaceIdx = line.indexOf(' ');
-    if (spaceIdx === -1) return 'Usage: @AgentName message';
-    const name    = ctx.resolveAgentName(line.slice(1, spaceIdx));
-    const message = line.slice(spaceIdx + 1);
+    const rest    = line.slice(1);
+    const agents  = ctx.orchestrator.listAgents();
+    // Match longest name first so multi-word names beat single-word prefixes
+    const sorted  = [...agents].sort((a, b) => b.name.length - a.name.length);
+    const matched = sorted.find(a => rest.startsWith(a.name) && (rest.length === a.name.length || rest[a.name.length] === ' '));
+    if (!matched) return 'Usage: @AgentName message';
+    const name    = matched.name;
+    const message = rest.slice(name.length + 1).trim();
+    if (!message) return 'Usage: @AgentName message';
     await ctx.orchestrator.humanMessage(name, message, ctx.threadId);
     const ticketId = ctx.agentTicketMap.get(name.toLowerCase());
     if (ticketId) ctx.updateKanbanColumn(ticketId, 'in_progress').catch(() => {});
