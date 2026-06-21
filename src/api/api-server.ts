@@ -102,6 +102,7 @@ export class APIServer {
   private agentFeeds = new Map<string, StoredEvent[]>();
   private readonly FEED_LIMIT = 200;
   private nudgeScheduler: ReturnType<typeof setInterval> | null = null;
+  private autosaveTimer: ReturnType<typeof setTimeout> | null = null;
   private unsubscribeEvents: (() => void) | null = null;
   private speechInterest = new Map<WebSocket, { agentName: string; voiceUrl: string | null; speakerId: number | null }>();
   private voiceManager = new VoiceManager();
@@ -415,7 +416,16 @@ export class APIServer {
     return this.orchestrator.agentIdForName(name) ?? name;
   }
 
+  private scheduleAutosave(): void {
+    if (this.autosaveTimer) clearTimeout(this.autosaveTimer);
+    this.autosaveTimer = setTimeout(() => {
+      this.autosaveTimer = null;
+      this.saveCurrentState().catch(() => {});
+    }, 3000);
+  }
+
   private handleOrchestratorEvent(ev: StoredEvent): void {
+    if (ev.type === 'agent_response') this.scheduleAutosave();
     handleOrchestratorEvent(ev, {
       agentActivity:        this.agentActivity,
       talkingTimers:        this.talkingTimers,
