@@ -21,6 +21,16 @@ const VISEME_TO_VRM = {
 };
 const VRM_VOWELS = ['aa', 'ih', 'ou', 'ee', 'oh'];
 
+// Rotate upper arms ~60° downward from T-pose to a natural resting A-pose.
+// VRM normalized space: right arm extends +X, left extends -X, so signs differ.
+const ARM_DOWN = Math.PI / 3;
+function applyVrmRestPose(v) {
+  const left  = v.humanoid?.getNormalizedBoneNode('leftUpperArm');
+  const right = v.humanoid?.getNormalizedBoneNode('rightUpperArm');
+  if (left)  left.rotation.z  =  ARM_DOWN;
+  if (right) right.rotation.z = -ARM_DOWN;
+}
+
 // ── Lipsync state ─────────────────────────────────────────────────────────────
 
 let targetViseme = 'viseme_sil';
@@ -119,6 +129,7 @@ function loadGLB(file, camPos, rotate, fov, scale) {
 
     if (isVRM && gltf.userData.vrm) {
       vrm = gltf.userData.vrm;
+      applyVrmRestPose(vrm);
       // Reset blink idle timer
       blinkTimer = 0; blinkPhase = 'open'; blinkT = 0;
       nextBlink = 2 + Math.random() * 3;

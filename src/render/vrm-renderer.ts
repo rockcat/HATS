@@ -30,6 +30,19 @@ const VISEME_TO_VRM: Record<string, VowelWeights> = {
 const VOWELS = ['aa', 'ih', 'ou', 'ee', 'oh'] as const;
 type Vowel = typeof VOWELS[number];
 
+// ── T-pose correction ─────────────────────────────────────────────────────────
+// VRM models load in T-pose (arms horizontal). Rotate upper arms ~60° downward
+// for a natural resting A-pose. VRM normalized space: character faces -Z,
+// right arm extends +X, left arm extends -X, so signs are opposite.
+const ARM_DOWN = Math.PI / 3; // 60°
+
+function applyRestPose(vrm: VRM): void {
+  const left  = vrm.humanoid.getNormalizedBoneNode('leftUpperArm');
+  const right = vrm.humanoid.getNormalizedBoneNode('rightUpperArm');
+  if (left)  left.rotation.z  =  ARM_DOWN;
+  if (right) right.rotation.z = -ARM_DOWN;
+}
+
 // ── VrmRenderer ───────────────────────────────────────────────────────────────
 
 export class VrmRenderer {
@@ -96,6 +109,7 @@ export class VrmRenderer {
     }
 
     this.vrm = gltf.userData.vrm as VRM ?? null;
+    if (this.vrm) applyRestPose(this.vrm);
 
     if (rotate) {
       const D = Math.PI / 180;
