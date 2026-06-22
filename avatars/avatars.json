@@ -101,6 +101,58 @@
             ],
             "fov": 50,
             "scale": 1
+        },
+        {
+            "name": "Ren",
+            "sex": "male",
+            "file": "vrmtest.vrm",
+            "camera": [
+                0,
+                1.85,
+                0.6
+            ],
+            "rotate": [
+                0,
+                180,
+                0
+            ],
+            "fov": 50,
+            "scale": 1
+        },
+        {
+            "name": "Ken",
+            "sex": "male",
+            "file": "hatsken.vrm",
+            "camera": [
+                0,
+                1.8,
+                0.6
+            ],
+            "rotate": [
+                0,
+                180,
+                0
+            ],
+            "fov": 50,
+            "scale": 1
+        },
+        {
+            "name": "John",
+            "sex": "male",
+            "file": "hatsjohn.vrm",
+            "camera": [
+                0,
+                2.1,
+                0.6
+            ],
+            "rotate": [
+                0,
+                180,
+                0
+            ],
+            "fov": 50,
+            "scale": 1
         }
+
     ]
 }

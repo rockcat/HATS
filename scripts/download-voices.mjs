@@ -13,6 +13,13 @@ const VOICES_DIR = process.env.PIPER_VOICES_DIR ?? join(ROOT, 'piper_voices');
 const HF_API     = 'https://huggingface.co/api/models/rhasspy/piper-voices/tree/main';
 const HF_RESOLVE = 'https://huggingface.co/rhasspy/piper-voices/resolve/main';
 
+
+const EXTRA_VOICES = [
+  'fr/fr_FR/tom',
+  'fr/fr_FR/siwis'
+]
+
+
 const green  = s => `  \x1b[32m✔\x1b[0m ${s}`;
 const yellow = s => `  \x1b[33m!\x1b[0m ${s}`;
 
@@ -37,7 +44,8 @@ await mkdir(VOICES_DIR, { recursive: true });
 
 let downloaded = 0, skipped = 0, failed = 0;
 
-const voices = (await hfList('en/en_GB')).filter(e => e.type === 'directory');
+const voices = (await hfList('en/en_GB')).filter(e => e.type === 'directory')
+                .concat(EXTRA_VOICES.map(path => ({ type: 'directory', path })));
 
 for (const voice of voices) {
   process.stdout.write(`Processing voice: ${voice.path.split('/').pop()}...\n`);
