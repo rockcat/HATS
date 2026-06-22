@@ -336,9 +336,52 @@ export class TeamOrchestrator {
     for (const task of s.tasks) this.tasks.set(task.id, task);
     for (const meeting of s.meetings) this.meetings.set(meeting.id, meeting);
     if (s.humanName) this.humanName = s.humanName;
+
+    // For external agents whose history is empty (e.g. saved before history
+    // serialisation was fixed), reconstruct from events since the last save.
+    await this.backfillExternalAgentHistory(s.savedAt);
+
     await this.store.append('state_loaded', { path: filePath, agentCount: loadedCount });
     log.info(`[Team] State restored from ${filePath} (v2, saved ${s.savedAt})`);
     return s.mcpServers;
+  }
+
+  /**
+   * For any external agent whose history is empty after state load, replay
+   * events from the event log that arrived after `savedAt` to recover
+   * messages that were recorded but not yet persisted.
+   */
+  private async backfillExternalAgentHistory(savedAt: string): Promise<void> {
+    const externalAgents = [...this.agents.values()].filter(
+      a => a.config.externalEndpoint && a.getHistory().length === 0
+    );
+    if (externalAgents.length === 0) return;
+
+    const events = await this.store.readAll();
+    const unsaved = events.filter(e => e.ts > savedAt);
+
+    for (const agent of externalAgents) {
+      const name = agent.name;
+      const relevant = unsaved.filter(e =>
+        (e.type === 'human_message'  && e['to']   === name) ||
+        (e.type === 'direct_message' && e['to']   === name) ||
+        (e.type === 'agent_response' && e['from'] === name)
+      );
+      if (relevant.length === 0) continue;
+
+      const history: HistoryEntry[] = relevant.map(e => {
+        if (e.type === 'agent_response') {
+          return { role: 'assistant' as const, content: String(e['content'] ?? ''), timestamp: e.ts };
+        }
+        const from    = String(e['from'] ?? 'human');
+        const content = String(e['content'] ?? '');
+        const prefix  = from !== 'human' ? `[MESSAGE from ${from}] ` : '';
+        return { role: 'user' as const, content: prefix + content, timestamp: e.ts };
+      });
+
+      agent.setHistory(history);
+      log.info(`[Team] Backfilled ${history.length} messages for ${name} from event log`);
+    }
   }
 
   // ── Agent registration ─────────────────────────────────────────────────────
