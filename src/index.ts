@@ -40,8 +40,9 @@ export type { LipsyncSessionConfig } from './lipsync/index.js';
 // Render
 export type { RendererConfig, FrameCallback } from './render/canvas-renderer.js';
 export { CanvasRenderer } from './render/canvas-renderer.js';
-export { GlbRenderer, createGlbRenderer } from './render/glb-renderer.js';
+export { GlbRenderer, createGlbRenderer, createAvatarRenderer } from './render/glb-renderer.js';
 export type { GlbAvatarConfig } from './render/glb-renderer.js';
+export { VrmRenderer } from './render/vrm-renderer.js';
 export { FrameClock } from './render/frame-clock.js';
 
 // Webcam

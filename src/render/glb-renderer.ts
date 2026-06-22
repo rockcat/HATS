@@ -202,3 +202,33 @@ export async function createGlbRenderer(
   });
   return renderer;
 }
+
+/**
+ * Unified avatar renderer factory — returns a GlbRenderer or VrmRenderer
+ * depending on the file extension (.vrm → VrmRenderer, otherwise GlbRenderer).
+ */
+export async function createAvatarRenderer(
+  avatarName: string,
+  avatarsDir: string,
+  rendererConfig?: RendererConfig,
+): Promise<GlbRenderer | import('./vrm-renderer.js').VrmRenderer> {
+  const cataloguePath = path.join(avatarsDir, 'avatars.json');
+  const raw = JSON.parse(await fs.readFile(cataloguePath, 'utf-8'));
+  const entry = (raw.avatars as any[]).find(
+    a => a.name.toLowerCase() === avatarName.toLowerCase(),
+  );
+  if (!entry) throw new Error(`Avatar "${avatarName}" not found in avatars.json`);
+
+  const filePath = path.join(avatarsDir, entry.file);
+
+  if (entry.file.toLowerCase().endsWith('.vrm')) {
+    const { VrmRenderer } = await import('./vrm-renderer.js');
+    const renderer = new VrmRenderer(rendererConfig);
+    await renderer.loadAvatar(filePath, entry.camera, entry.rotate, entry.fov, entry.scale);
+    return renderer;
+  }
+
+  const renderer = new GlbRenderer(rendererConfig);
+  await renderer.loadAvatar({ glbPath: filePath, camera: entry.camera, rotate: entry.rotate, fov: entry.fov, scale: entry.scale });
+  return renderer;
+}
