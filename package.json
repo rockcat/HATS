@@ -20,6 +20,7 @@
     "@kmamal/sdl": "^0.11.13",
     "@modelcontextprotocol/sdk": "^1.27.1",
     "@napi-rs/canvas": "^0.1.97",
+    "@pixiv/three-vrm": "^3.5.4",
     "cmu-pronouncing-dictionary": "^3.0.0",
     "express": "^5.2.1",
     "fluent-ffmpeg": "^2.1.3",
