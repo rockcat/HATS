@@ -1,5 +1,5 @@
 import { spawn } from 'child_process';
-import { writeFile, access, mkdir } from 'fs/promises';
+import { writeFile, mkdir } from 'fs/promises';
 import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { log } from '../util/logger.js';
@@ -149,6 +149,7 @@ export class ExternalAgent implements IAgent {
     const baseArgs = endpoint.args ?? [];
     const args = inputMode === 'arg' ? [...baseArgs, stdin] : baseArgs;
 
+    log.info(`[ExternalAgent:${this.name}] spawn ${command} in ${cwd}`);
     const response = await new Promise<string>((resolve, reject) => {
       const child = spawn(command, args, { cwd, stdio: ['pipe', 'pipe', 'pipe'] });
       const stdoutChunks: Buffer[] = [];
@@ -312,17 +313,17 @@ export class ExternalAgent implements IAgent {
 
   private async ensureClaudeMd(dir: string): Promise<void> {
     const filePath = path.join(dir, 'CLAUDE.md');
-    try {
-      await access(filePath);
-      return; // already exists — don't overwrite
-    } catch { /* doesn't exist — create it */ }
-
     const agentName = this.name;
     const content = [
       '# HATS Agent Context',
       '',
       `You are **${agentName}**, an AI agent operating inside HATS (Human Agent Teaming System).`,
       'You receive tasks via stdin through `claude -p` and your stdout is captured as your response.',
+      '',
+      '## Working directory',
+      `Your working directory for all file operations is: \`${dir}\``,
+      'Create, read, and edit files here. Do **not** touch files outside this directory unless explicitly instructed.',
+      'Ignore any parent-directory CLAUDE.md files — this file defines your context.',
       '',
       '## Behaviour',
       '- Complete tasks directly and autonomously.',
@@ -337,7 +338,6 @@ export class ExternalAgent implements IAgent {
     ].join('\n');
 
     await writeFile(filePath, content, 'utf-8');
-    log.info(`[ExternalAgent:${this.name}] wrote CLAUDE.md to ${dir}`);
   }
 
   private buildHeaders(endpoint: ExternalAgentEndpoint): Record<string, string> {
