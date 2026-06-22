@@ -62,7 +62,10 @@ export class VrmRenderer {
   private nextBlink = 2 + Math.random() * 3;
   private blinkPhase: 'open' | 'closing' | 'opening' = 'open';
   private blinkT = 0;
-  private readonly BLINK_HALF = 0.07; // seconds for each half (close / open)
+  private readonly BLINK_HALF = 0.07;
+
+  // Breathing + head sway
+  private elapsed = 0;
 
   constructor(config: RendererConfig = { width: 512, height: 512, fps: 25 }) {
     this.config = config;
@@ -139,8 +142,10 @@ export class VrmRenderer {
 
   renderFrame(): Buffer {
     const delta = this.clock.getDelta();
+    this.elapsed += delta;
     this._stepLipsync();
     this._stepBlink(delta);
+    this._stepIdle();
     this.vrm?.update(delta); // spring bones + expression flush
     return this.hlRenderer.render(this.scene, this.camera);
   }
@@ -166,6 +171,23 @@ export class VrmRenderer {
       em.setValue(v, next);
     }
     // expressionManager.update() is called inside vrm.update() — no need here
+  }
+
+  private _stepIdle(): void {
+    if (!this.vrm) return;
+    const t = this.elapsed;
+
+    // Breathing — ~12 breaths/min, slight forward spine lean
+    const breath = Math.sin(t * Math.PI * 0.4) * 0.018;
+    const spine = this.vrm.humanoid.getNormalizedBoneNode('spine');
+    if (spine) spine.rotation.x = breath;
+
+    // Subtle head sway — two overlapping sine waves for organic feel
+    const head = this.vrm.humanoid.getNormalizedBoneNode('head');
+    if (head) {
+      head.rotation.z = Math.sin(t * 0.37) * 0.012 + Math.sin(t * 0.71) * 0.007;
+      head.rotation.y = Math.sin(t * 0.23) * 0.010 + Math.sin(t * 0.59) * 0.005;
+    }
   }
 
   private _stepBlink(delta: number): void {

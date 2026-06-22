@@ -59,6 +59,7 @@ let clock    = new THREE.Clock();
 // VRM state
 let vrm          = null;  // VRM instance | null
 let vrmWeights   = {};    // live vowel weights for smooth lerp
+let vrmElapsed   = 0;     // total elapsed seconds, drives breathing + sway
 // VRM blink idle
 let blinkTimer   = 0;
 let nextBlink    = 2 + Math.random() * 3;
@@ -130,7 +131,7 @@ function loadGLB(file, camPos, rotate, fov, scale) {
     if (isVRM && gltf.userData.vrm) {
       vrm = gltf.userData.vrm;
       applyVrmRestPose(vrm);
-      // Reset blink idle timer
+      vrmElapsed = 0;
       blinkTimer = 0; blinkPhase = 'open'; blinkT = 0;
       nextBlink = 2 + Math.random() * 3;
       console.log('[Avatar] VRM loaded — spring bones + blink idle active');
@@ -170,6 +171,18 @@ function renderLoop() {
 
   if (vrm) {
     // ── VRM render path ───────────────────────────────────────────────────
+    vrmElapsed += delta;
+    const t  = vrmElapsed;
+
+    // Breathing (~12 breaths/min) + head sway
+    const spine = vrm.humanoid?.getNormalizedBoneNode('spine');
+    if (spine) spine.rotation.x = Math.sin(t * Math.PI * 0.4) * 0.018;
+    const head = vrm.humanoid?.getNormalizedBoneNode('head');
+    if (head) {
+      head.rotation.z = Math.sin(t * 0.37) * 0.012 + Math.sin(t * 0.71) * 0.007;
+      head.rotation.y = Math.sin(t * 0.23) * 0.010 + Math.sin(t * 0.59) * 0.005;
+    }
+
     const em = vrm.expressionManager;
     if (em) {
       // Lipsync: lerp vowel expressions
