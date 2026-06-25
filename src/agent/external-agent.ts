@@ -354,12 +354,14 @@ export class ExternalAgent implements IAgent {
     const outputsDir = path.join(this.config.projectDir ?? process.cwd(), 'outputs');
     const dir = path.join(outputsDir, slug);
     await mkdir(dir, { recursive: true });
-    await this.ensureClaudeMd(dir, outputsDir);
+    await Promise.all([
+      this.ensureClaudeMd(dir, outputsDir),
+      this.ensureClaudeSettings(dir),
+    ]);
     return dir;
   }
 
   private async ensureClaudeMd(dir: string, outputsDir: string): Promise<void> {
-    const filePath = path.join(dir, 'CLAUDE.md');
     const agentName = this.name;
     const content = [
       '# HATS Agent Context',
@@ -391,7 +393,40 @@ export class ExternalAgent implements IAgent {
       '- Prior conversation turns are included when this is a first-time session.',
     ].join('\n');
 
-    await writeFile(filePath, content, 'utf-8');
+    await writeFile(path.join(dir, 'CLAUDE.md'), content, 'utf-8');
+  }
+
+  /**
+   * Writes .claude/settings.local.json into the work dir to pre-approve all standard
+   * tools. Claude Code treats the presence of a .claude/ directory as a project root
+   * marker, so this also stops it from traversing up to the HATS git root where it
+   * would pick up unrelated settings.
+   */
+  private async ensureClaudeSettings(dir: string): Promise<void> {
+    const claudeDir = path.join(dir, '.claude');
+    await mkdir(claudeDir, { recursive: true });
+    const settings = {
+      permissions: {
+        allow: [
+          'Bash(*)',
+          'Read(*)',
+          'Write(*)',
+          'Edit(*)',
+          'Glob(*)',
+          'Grep(*)',
+          'WebFetch(*)',
+          'WebSearch(*)',
+          'TodoRead(*)',
+          'TodoWrite(*)',
+        ],
+        deny: [] as string[],
+      },
+    };
+    await writeFile(
+      path.join(claudeDir, 'settings.local.json'),
+      JSON.stringify(settings, null, 2),
+      'utf-8',
+    );
   }
 
   private buildHeaders(endpoint: ExternalAgentEndpoint): Record<string, string> {
