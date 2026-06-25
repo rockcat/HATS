@@ -21,6 +21,8 @@ const CLAUDE_CODE_DEF: AgentDefinition = {
     args: ['-p'],
     inputMode: 'stdin',
     timeoutMs: 120_000,
+    captureSessionId: true,
+    addDirs: ['outputs', 'project'],
   },
 };
 

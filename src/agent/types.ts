@@ -55,6 +55,18 @@ export interface ExternalAgentEndpoint {
   args?: string[];
   /** subprocess mode: how to pass the message — 'arg' appends to args, 'stdin' pipes it (default 'stdin'). */
   inputMode?: 'arg' | 'stdin';
+  /**
+   * subprocess mode: if true, adds '--output-format json' to args, captures 'session_id' from
+   * the JSON response, persists it to '<workdir>/.session_id', and passes '--resume <id>' on
+   * subsequent calls so the subprocess maintains a continuous session across messages.
+   */
+  captureSessionId?: boolean;
+  /**
+   * subprocess mode: directories to inject as '--add-dir <path>' args at call time.
+   * 'outputs' resolves to '<projectDir>/outputs/', 'project' resolves to '<projectDir>/'.
+   * Lets the subprocess read/write these directories without --dangerously-skip-permissions.
+   */
+  addDirs?: Array<'outputs' | 'project'>;
 }
 
 export interface AgentConfig {

@@ -1,5 +1,5 @@
 import { spawn } from 'child_process';
-import { writeFile, mkdir } from 'fs/promises';
+import { writeFile, mkdir, readFile } from 'fs/promises';
 import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { log } from '../util/logger.js';
@@ -145,13 +145,42 @@ export class ExternalAgent implements IAgent {
     const inputMode = endpoint.inputMode ?? 'stdin';
     const cwd = await this.subprocessWorkDir();
 
-    const stdin = this.buildSubprocessInput(message.content, inputMode);
-    const baseArgs = endpoint.args ?? [];
-    const args = inputMode === 'arg' ? [...baseArgs, stdin] : baseArgs;
+    // Session resumption: load saved session_id from disk so the subprocess can
+    // resume its prior conversation (including tool call history) across server restarts.
+    const sessionFile = endpoint.captureSessionId ? path.join(cwd, '.session_id') : null;
+    let sessionId: string | null = null;
+    if (sessionFile) {
+      sessionId = await readFile(sessionFile, 'utf-8').then(s => s.trim() || null).catch(() => null);
+    }
 
-    log.info(`[ExternalAgent:${this.name}] spawn ${command} in ${cwd}`);
-    const response = await new Promise<string>((resolve, reject) => {
-      const child = spawn(command, args, { cwd, stdio: ['pipe', 'pipe', 'pipe'] });
+    // Build args: inject --output-format json (to get session_id back) and --resume if continuing.
+    let args = [...(endpoint.args ?? [])];
+    if (endpoint.captureSessionId) {
+      args = [...args, '--output-format', 'json'];
+      if (sessionId) args = [...args, '--resume', sessionId];
+    }
+
+    // Inject --add-dir flags so the subprocess can access project directories without
+    // requiring --dangerously-skip-permissions.
+    if (endpoint.addDirs?.length && this.config.projectDir) {
+      for (const d of endpoint.addDirs) {
+        const resolved = d === 'outputs'
+          ? path.join(this.config.projectDir, 'outputs')
+          : this.config.projectDir;
+        args = [...args, '--add-dir', resolved];
+      }
+    }
+
+    // When resuming a real Claude session, the subprocess already has full history — send only
+    // the current message. Without a session, prepend conversation history so Claude has context.
+    const stdinText = (inputMode === 'stdin' && !sessionId)
+      ? this.buildSubprocessInput(message.content, inputMode)
+      : message.content;
+    const finalArgs = inputMode === 'arg' ? [...args, stdinText] : args;
+
+    log.info(`[ExternalAgent:${this.name}] spawn ${command} in ${cwd}${sessionId ? ` (resume ${sessionId.slice(0, 8)}…)` : ''}`);
+    const rawOutput = await new Promise<string>((resolve, reject) => {
+      const child = spawn(command, finalArgs, { cwd, stdio: ['pipe', 'pipe', 'pipe'] });
       const stdoutChunks: Buffer[] = [];
       const stderrChunks: Buffer[] = [];
 
@@ -164,7 +193,7 @@ export class ExternalAgent implements IAgent {
       }, timeoutMs);
 
       if (inputMode === 'stdin') {
-        child.stdin.write(stdin);
+        child.stdin.write(stdinText);
         child.stdin.end();
       }
 
@@ -188,6 +217,21 @@ export class ExternalAgent implements IAgent {
       log.error(`[ExternalAgent:${this.name}] subprocess error: ${err.message}`);
       return '';
     });
+
+    // Parse JSON output when captureSessionId is set; save the session_id for next call.
+    let response = rawOutput;
+    if (endpoint.captureSessionId && rawOutput) {
+      try {
+        const parsed = JSON.parse(rawOutput) as { result?: string; session_id?: string; is_error?: boolean };
+        response = parsed.result ?? rawOutput;
+        if (parsed.session_id && sessionFile) {
+          await writeFile(sessionFile, parsed.session_id, 'utf-8');
+          log.info(`[ExternalAgent:${this.name}] session_id saved: ${parsed.session_id.slice(0, 8)}…`);
+        }
+      } catch {
+        log.warn(`[ExternalAgent:${this.name}] output was not JSON — using raw text`);
+      }
+    }
 
     this.subprocessHistory.push({ role: 'human', content: message.content, ts: new Date() });
     if (response) this.subprocessHistory.push({ role: 'assistant', content: response, ts: new Date() });
@@ -302,16 +346,19 @@ export class ExternalAgent implements IAgent {
     this.resolvePending();
   }
 
-  /** Returns (and creates) the working directory for this subprocess agent. */
+  /** Returns (and creates) the working directory for this subprocess agent.
+   *  Placed under <projectDir>/outputs/<slug>/ so the agent can see sibling
+   *  agents' output files in the parent outputs/ folder. */
   private async subprocessWorkDir(): Promise<string> {
     const slug = this.name.toLowerCase().replace(/\s+/g, '_');
-    const dir = path.join(this.config.projectDir ?? process.cwd(), slug);
+    const outputsDir = path.join(this.config.projectDir ?? process.cwd(), 'outputs');
+    const dir = path.join(outputsDir, slug);
     await mkdir(dir, { recursive: true });
-    await this.ensureClaudeMd(dir);
+    await this.ensureClaudeMd(dir, outputsDir);
     return dir;
   }
 
-  private async ensureClaudeMd(dir: string): Promise<void> {
+  private async ensureClaudeMd(dir: string, outputsDir: string): Promise<void> {
     const filePath = path.join(dir, 'CLAUDE.md');
     const agentName = this.name;
     const content = [
@@ -321,9 +368,16 @@ export class ExternalAgent implements IAgent {
       'You receive tasks via stdin through `claude -p` and your stdout is captured as your response.',
       '',
       '## Working directory',
-      `Your working directory for all file operations is: \`${dir}\``,
-      'Create, read, and edit files here. Do **not** touch files outside this directory unless explicitly instructed.',
+      `Your working directory is: \`${dir}\``,
+      'This is where you create and edit your own files.',
+      'Do **not** touch files outside this directory unless explicitly instructed.',
       'Ignore any parent-directory CLAUDE.md files — this file defines your context.',
+      '',
+      '## Shared outputs folder',
+      `The shared outputs folder is: \`${outputsDir}\``,
+      'Other HATS agents write their output files into sub-folders here.',
+      'You can **read** files from sibling folders to see what other agents have produced.',
+      'Write your own output into **your** working directory above.',
       '',
       '## Behaviour',
       '- Complete tasks directly and autonomously.',
@@ -334,7 +388,7 @@ export class ExternalAgent implements IAgent {
       '',
       '## Context',
       '- Other HATS agents (human and AI) may send you follow-up messages.',
-      '- Prior conversation turns are provided above the current message wrapped in `<conversation_history>` tags.',
+      '- Prior conversation turns are included when this is a first-time session.',
     ].join('\n');
 
     await writeFile(filePath, content, 'utf-8');
