@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Play tic-tac-toe against an AI opponent with three difficulty levels">
+  <meta name="theme-color" content="#2563eb">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='75' font-size='75' font-weight='bold' fill='%232563eb'>X</text></svg>">
+  <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'><rect fill='%232563eb' width='180' height='180'/><text x='90' y='130' font-size='120' font-weight='bold' fill='white' text-anchor='middle'>X</text></svg>">
+  <title>Tic-Tac-Toe PWA</title>
+  <link rel="stylesheet" href="/src/style.css">
+</head>
+<body>
+  <div id="app">
+    <div class="container">
+      <header>
+        <h1>Tic-Tac-Toe</h1>
+        <p class="subtitle">Play against AI</p>
+      </header>
+
+      <main>
+        <!-- Game Mode Selection -->
+        <div id="modeScreen" class="screen active">
+          <div class="mode-selector">
+            <h2>Select Difficulty</h2>
+            <div class="difficulty-buttons">
+              <button class="difficulty-btn" data-level="1">
+                <span class="level">Easy</span>
+                <span class="desc">Random moves</span>
+              </button>
+              <button class="difficulty-btn" data-level="2">
+                <span class="level">Medium</span>
+                <span class="desc">Smart strategy</span>
+              </button>
+              <button class="difficulty-btn" data-level="3">
+                <span class="level">Hard</span>
+                <span class="desc">Unbeatable</span>
+              </button>
+            </div>
+            <button id="startBtn" class="start-btn" disabled>Start Game</button>
+          </div>
+        </div>
+
+        <!-- Game Screen -->
+        <div id="gameScreen" class="screen">
+          <div class="game-info">
+            <div class="info-item">
+              <span class="label">Difficulty:</span>
+              <span id="difficultyDisplay" class="value">-</span>
+            </div>
+            <div class="info-item">
+              <span class="label">Turn:</span>
+              <span id="turnDisplay" class="value">Your turn</span>
+            </div>
+          </div>
+
+          <div class="board" id="board">
+            <button class="cell" data-index="0"></button>
+            <button class="cell" data-index="1"></button>
+            <button class="cell" data-index="2"></button>
+            <button class="cell" data-index="3"></button>
+            <button class="cell" data-index="4"></button>
+            <button class="cell" data-index="5"></button>
+            <button class="cell" data-index="6"></button>
+            <button class="cell" data-index="7"></button>
+            <button class="cell" data-index="8"></button>
+          </div>
+
+          <button id="newGameBtn" class="new-game-btn">New Game</button>
+        </div>
+
+        <!-- Result Modal -->
+        <div id="resultModal" class="modal hidden">
+          <div class="modal-content">
+            <h2 id="resultTitle">Game Over</h2>
+            <p id="resultMessage"></p>
+            <button id="modalNewGameBtn" class="modal-btn">Play Again</button>
+          </div>
+        </div>
+      </main>
+
+      <footer>
+        <p>Works offline • Plays on any device</p>
+      </footer>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

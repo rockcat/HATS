@@ -226,20 +226,23 @@ async function handleTool(name: string, args: Record<string, unknown>, store: Ka
     }
 
     case 'move_ticket': {
-      const col = args['column'] as Column;
+      const id     = (args['id'] ?? args['ticket']) as string;
+      const col    = args['column'] as Column;
       const reason = args['closed_reason'] as ClosedReason | undefined;
-      const ticket = await store.moveTicket(args['id'] as string, col, reason);
+      const ticket = await store.moveTicket(id, col, reason);
       const suffix = ticket.closedReason ? ` (${ticket.closedReason})` : '';
       return `Moved ${ticket.id} to "${ticket.column}"${suffix}.`;
     }
 
     case 'assign_ticket': {
-      const ticket = await store.assignTicket(args['id'] as string, args['assignee'] as string);
+      const id       = (args['id']       ?? args['ticket'])   as string;
+      const assignee = (args['assignee'] ?? args['agent'])    as string;
+      const ticket = await store.assignTicket(id, assignee);
       return `Assigned ${ticket.id} to ${ticket.assignee}.`;
     }
 
     case 'update_ticket': {
-      const ticket = await store.updateTicket(args['id'] as string, {
+      const ticket = await store.updateTicket((args['id'] ?? args['ticket']) as string, {
         title:       args['title'] as string | undefined,
         description: args['description'] as string | undefined,
         priority:    args['priority'] as Priority | undefined,
@@ -250,16 +253,18 @@ async function handleTool(name: string, args: Record<string, unknown>, store: Ka
 
     case 'add_comment': {
       const ticket = await store.addComment(
-        args['id'] as string,
+        (args['id'] ?? args['ticket']) as string,
         args['author'] as string,
         args['text'] as string,
       );
       return `Comment added to ${ticket.id}.`;
     }
 
-    case 'delete_ticket':
-      await store.deleteTicket(args['id'] as string);
-      return `Deleted ${args['id']}.`;
+    case 'delete_ticket': {
+      const id = (args['id'] ?? args['ticket']) as string;
+      await store.deleteTicket(id);
+      return `Deleted ${id}.`;
+    }
 
     case 'add_blocker': {
       const ticket = await store.addBlocker(args['id'] as string, args['blocker_id'] as string);
