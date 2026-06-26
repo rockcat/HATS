@@ -267,12 +267,12 @@ async function handleTool(name: string, args: Record<string, unknown>, store: Ka
     }
 
     case 'add_blocker': {
-      const ticket = await store.addBlocker(args['id'] as string, args['blocker_id'] as string);
+      const ticket = await store.addBlocker((args['id'] ?? args['ticket']) as string, args['blocker_id'] as string);
       return `${ticket.id} is now blocked by ${args['blocker_id']}. blockedBy: [${(ticket.blockedBy ?? []).join(', ')}]`;
     }
 
     case 'remove_blocker': {
-      const ticket = await store.removeBlocker(args['id'] as string, args['blocker_id'] as string);
+      const ticket = await store.removeBlocker((args['id'] ?? args['ticket']) as string, args['blocker_id'] as string);
       const remaining = ticket.blockedBy ?? [];
       return remaining.length === 0
         ? `Removed blocker from ${ticket.id}. All blockers cleared — ticket is now ready.`

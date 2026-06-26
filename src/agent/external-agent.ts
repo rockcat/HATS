@@ -9,6 +9,7 @@ import { TeamMessage } from '../orchestrator/types.js';
 import { Semaphore } from '../providers/semaphore.js';
 import { AgentConfig, AgentMessage, AgentState, ExternalAgentEndpoint, ToolExecutor, ResponseHandler } from './types.js';
 import { IAgent } from './iagent.js';
+import { formatIncomingMessage } from './agent-utils.js';
 
 type HistoryEntryLike = {
   role: 'user' | 'assistant' | 'tool';
@@ -171,11 +172,15 @@ export class ExternalAgent implements IAgent {
       }
     }
 
+    // Format the message the same way regular agents do, so the [TYPE from Name] prefix is
+    // stored in history — this lets extractMessageSender() show the real sender in the UI.
+    const formattedContent = formatIncomingMessage(message);
+
     // When resuming a real Claude session, the subprocess already has full history — send only
     // the current message. Without a session, prepend conversation history so Claude has context.
     const stdinText = (inputMode === 'stdin' && !sessionId)
-      ? this.buildSubprocessInput(message.content, inputMode)
-      : message.content;
+      ? this.buildSubprocessInput(formattedContent, inputMode)
+      : formattedContent;
     const finalArgs = inputMode === 'arg' ? [...args, stdinText] : args;
 
     log.info(`[ExternalAgent:${this.name}] spawn ${command} in ${cwd}${sessionId ? ` (resume ${sessionId.slice(0, 8)}…)` : ''}`);
@@ -233,7 +238,7 @@ export class ExternalAgent implements IAgent {
       }
     }
 
-    this.subprocessHistory.push({ role: 'human', content: message.content, ts: new Date() });
+    this.subprocessHistory.push({ role: 'human', content: formattedContent, ts: new Date() });
     if (response) this.subprocessHistory.push({ role: 'assistant', content: response, ts: new Date() });
 
     await this.dispatchResponse(message, response);
