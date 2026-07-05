@@ -1,14 +1,11 @@
-import { defineConfig } from 'vite';
-
-export default defineConfig({
-  root: './',
+export default {
+  root: '.',
   build: {
     outDir: 'dist',
-    emptyOutDir: true,
     minify: 'terser',
+    target: 'es2020'
   },
   server: {
-    port: 3000,
-    open: true,
-  },
-});
+    port: 5173
+  }
+}

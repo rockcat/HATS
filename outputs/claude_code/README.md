@@ -1,176 +1,125 @@
 # Tic-Tac-Toe PWA
 
-A modern, fully-featured Progressive Web App implementation of Tic-Tac-Toe with an AI opponent.
+Single-player tic-tac-toe game with AI opponent. Progressive Web App with full offline support.
 
 ## Features
 
-- **Single-player vs AI**: Play against three difficulty levels
-  - Easy: Random valid moves
-  - Medium: Basic strategy (blocks, takes center/corners)
-  - Hard: Unbeatable minimax algorithm
-- **Full PWA Support**: 
-  - Offline-first with Service Worker caching
-  - Install as standalone app on mobile/desktop
-  - Works completely offline after first load
-- **Modern UI**: 
-  - Responsive design (mobile, tablet, desktop)
-  - Smooth animations and transitions
-  - Visual feedback on interactions
-- **Persistent Settings**: 
-  - Difficulty selection saved in localStorage
-  - Remembers your last played difficulty level
-- **Vanilla JavaScript**: 
-  - No external dependencies beyond Vite
-  - Clean, modular architecture
-  - ES6 modules
+- **Single-player vs AI** — Play against intelligent opponent
+- **Three difficulty levels:**
+  - Level 1 (Easy): Random moves
+  - Level 2 (Medium): Strategic blocking and positioning
+  - Level 3 (Hard): Unbeatable minimax algorithm
+- **Full PWA support:**
+  - Offline playable (Service Worker caching)
+  - Installable on mobile devices
+  - Standalone app mode
+- **Modern responsive UI** — Works on mobile, tablet, and desktop
+- **Persistent difficulty selection** — Your choice saved in localStorage
+- **Vanilla JavaScript** — No external dependencies (except Vite build tool)
 
 ## Tech Stack
 
-- **Frontend**: Vanilla JavaScript (ES6), CSS3
-- **Build Tool**: Vite
-- **Server**: Express.js (local development)
-- **PWA**: Service Worker, Web App Manifest
+- **Frontend:** Vanilla JavaScript, HTML5, CSS3
+- **Build:** Vite
+- **Server:** Express.js (local development)
+- **PWA:** Service Worker, Web App Manifest
 
-## Installation & Setup
+## Installation
 
-### Prerequisites
-- Node.js 16+ and npm
-
-### Development
-
-1. **Install dependencies**:
+1. Clone or download this project
+2. Install dependencies:
    ```bash
    npm install
    ```
 
-2. **Build the project**:
-   ```bash
-   npm run build
-   ```
+## Development
 
-3. **Start the development server**:
-   ```bash
-   npm run server
-   ```
+Run the development server with hot reload:
 
-4. **Open in browser**:
-   Navigate to `http://localhost:3000`
-
-### Development Mode (Hot Reload)
-
-For development with hot module reloading:
 ```bash
 npm run dev
 ```
 
-This starts Vite's dev server with live reload. Open `http://localhost:5173` in your browser.
+Server runs on `http://localhost:5173`
 
-## Project Structure
+## Production Build
+
+Build optimized production bundle:
+
+```bash
+npm run build
+```
+
+Outputs to `dist/` directory.
+
+## Running Locally
+
+Start the Express server to serve the built app:
+
+```bash
+npm run build
+npm run server
+```
+
+Server runs on `http://localhost:3000`
+
+## Offline Play
+
+1. Build the app: `npm run build`
+2. Start the server: `npm run server`
+3. Open `http://localhost:3000` in your browser
+4. Service Worker registers automatically and caches all assets
+5. Close network connection (DevTools → Network → Offline) and play offline
+
+## Install as App
+
+On compatible browsers (Chrome, Edge, Firefox Android):
+
+1. Open the app in browser
+2. Click the "Install" button in address bar
+3. App installs as standalone app on your device
+4. Fully playable offline
+
+## Game Rules
+
+- You are **X**, AI is **O**
+- Get three in a row (horizontal, vertical, or diagonal) to win
+- Fill the board without a winner = draw
+- Click "New Game" to reset anytime
+
+## AI Difficulty
+
+- **Easy (Level 1):** Makes random valid moves
+- **Medium (Level 2):** Blocks your winning moves, takes strategic positions (center/corners)
+- **Hard (Level 3):** Uses minimax algorithm — plays perfectly, unbeatable
+
+Difficulty selection persists across sessions using localStorage.
+
+## File Structure
 
 ```
-├── index.html          # Main HTML template
-├── styles.css          # Global styles and responsive design
-├── main.js             # App entry point and orchestration
-├── game.js             # Game logic and state management
-├── ai.js               # AI player with 3 difficulty levels
-├── ui.js               # UI controller
+├── index.html          # Main app structure
+├── style.css           # Modern responsive styling
+├── game.js             # Game logic and AI implementation
 ├── sw.js               # Service Worker for offline support
-├── manifest.json       # PWA manifest (icons, metadata)
-├── server.js           # Express server for production
+├── manifest.json       # PWA metadata
+├── server.js           # Express local server
 ├── vite.config.js      # Vite build configuration
 ├── package.json        # Dependencies and scripts
 └── README.md           # This file
 ```
 
-## Gameplay
-
-1. **Select Difficulty**: Choose Easy, Medium, or Hard before starting
-2. **Make Moves**: Click any empty cell to place your X
-3. **AI Responds**: The AI automatically plays as O with your selected difficulty
-4. **Win/Lose/Draw**: Game detects and displays results with option to play again
-5. **Persistent Difficulty**: Your chosen difficulty is remembered for next game
-
-## AI Difficulty Levels
-
-### Level 1 (Easy)
-- Plays random valid moves
-- Suitable for beginners
-
-### Level 2 (Medium)
-- Blocks player winning moves
-- Takes center (4) and corners (0, 2, 6, 8) when available
-- Falls back to random moves
-- Good challenge for casual players
-
-### Level 3 (Hard)
-- Implements minimax algorithm
-- Plays optimally and is unbeatable
-- Uses depth-based scoring for move selection
-- Challenge for experienced players
-
-## PWA Features
-
-### Offline Support
-- Service Worker caches all assets on first load
-- Game fully playable without internet connection
-- Works seamlessly offline after installation
-
-### Installation
-- **Mobile (iOS/Android)**: Add to Home Screen via browser menu
-- **Desktop (Chrome/Edge)**: Install app prompt appears automatically
-- **Standalone Mode**: App runs full-screen without browser UI
-
-### Caching Strategy
-- **Cache-First**: Static assets served from cache
-- **Network Fallback**: Updated assets fetched when online
-- **Versioned Cache**: New version (v1) auto-updates old caches
-
-## Browser Compatibility
+## Browser Support
 
 - Chrome/Edge 90+
 - Firefox 88+
-- Safari 14.1+
-- Mobile: iOS Safari 14.5+, Chrome Android 90+
+- Safari 15+
+- Mobile browsers (iOS Safari, Chrome Android)
 
-## Performance
+## Notes
 
-- **Build Size**: ~15KB gzipped (all assets)
-- **Load Time**: <1s on modern devices
-- **Offline**: Instant load after first visit
-- **AI Response**: <1s even on Hard difficulty
-
-## Development Guidelines
-
-### File Structure
-- Each module handles a single responsibility
-- No external dependencies beyond Vite
-- ES6 module syntax throughout
-
-### Adding Features
-1. Keep game logic in `game.js`
-2. Keep AI logic in `ai.js`
-3. Keep UI updates in `ui.js`
-4. Update styles in `styles.css`
-
-### Testing Offline
-1. Build: `npm run build`
-2. Start server: `npm run server`
-3. Visit `http://localhost:3000`
-4. Open DevTools → Application → Service Workers
-5. Check "Offline" to simulate offline mode
-
-## Future Enhancements
-
-- Two-player local multiplayer
-- Game statistics and win tracking
-- Theme customization
-- Sound effects
-- Replay functionality
-
-## License
-
-MIT
-
-## Author
-
-Claude Code - AI Agent
+- All game logic runs client-side (no backend persistence needed)
+- Service Worker caches assets on first load
+- Works perfectly offline once assets are cached
+- localStorage stores difficulty preference across sessions
+- No analytics, ads, or tracking
