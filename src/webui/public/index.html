@@ -9,8 +9,7 @@
   {
     "imports": {
       "three": "/nm/three/build/three.module.js",
-      "three/addons/": "/nm/three/examples/jsm/",
-      "@pixiv/three-vrm": "/nm/@pixiv/three-vrm/lib/three-vrm.module.js"
+      "three/addons/": "/nm/three/examples/jsm/"
     }
   }
   </script>
@@ -569,7 +568,7 @@
             <label class="field-label">Provider</label>
             <select id="add-agent-provider" class="modal-select"></select>
           </div>
-          <div class="field-group" id="add-agent-model-group">
+          <div class="field-group">
             <label class="field-label">Model</label>
             <select id="add-agent-model" class="modal-select"></select>
           </div>
@@ -577,22 +576,6 @@
         <div id="lib-editor-pricing-line" class="field-group" hidden>
           <span id="lib-editor-pricing-hint" class="agent-config-pricing-hint"></span>
         </div>
-        <!-- External agent fields — shown when provider = 'external' -->
-        <div id="add-agent-external-fields" hidden>
-          <div class="field-group">
-            <label class="field-label">Endpoint URL</label>
-            <input type="url" id="add-agent-endpoint-url" class="modal-input" placeholder="https://your-agent/receive">
-          </div>
-          <div class="field-group">
-            <label class="field-label">Auth header <span class="field-hint">(optional, e.g. Bearer sk-xxx)</span></label>
-            <input type="text" id="add-agent-auth-header" class="modal-input" placeholder="Bearer your-api-key" autocomplete="off">
-          </div>
-          <div class="field-group">
-            <label class="field-label">Callback URL <span class="field-hint">(optional, for async mode)</span></label>
-            <input type="url" id="add-agent-callback-url" class="modal-input" placeholder="https://your-hats-server/api/agents/external/callback">
-          </div>
-        </div>
-        <div id="add-agent-local-fields">
         <div class="field-row">
           <div class="field-group">
             <label class="field-label">Max context <span class="field-hint">(tokens)</span></label>
@@ -602,7 +585,6 @@
             <label class="field-label">Max cost/hour <span class="field-hint">(USD, optional)</span></label>
             <input type="number" id="add-agent-max-cost" class="modal-input" min="0.01" step="0.01" placeholder="No limit">
           </div>
-        </div>
         </div>
         <div class="field-group">
           <label class="field-label">Voice <span class="field-hint">(optional)</span></label>
@@ -925,7 +907,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
   <script src="/thread-viewer.js"></script>
-  <script src="app.js"></script>
+  <script type="module" src="app.js"></script>
   <script type="module" src="avatar.js"></script>
   <script type="module" src="meeting.js"></script>
 </body>
