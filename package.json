@@ -8,7 +8,7 @@
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc -p server/tsconfig.json",
-    "dev": "tsx server/src/index.ts",
+    "dev": "tsx --env-file=.env server/src/team-runner.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "start": "node --env-file=.env --import tsx/esm server/src/team-runner.ts",
