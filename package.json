@@ -13,7 +13,7 @@
     "test:watch": "vitest",
     "start": "node --env-file=.env --import tsx/esm team-runner.ts",
     "electron:build": "npm run build && electron-builder",
-    "electron:run": "electron --env-file=.env electron-main.js"
+    "electron:run": "electron --env-file=.env apps/electron/main.js"
   },
   "build": {
     "appId": "com.hatagents.app",
@@ -23,12 +23,12 @@
       "node_modules/@kmamal/sdl/**/*"
     ],
     "extraMetadata": {
-      "main": "electron-main.js"
+      "main": "apps/electron/main.js"
     },
     "files": [
-      "src/webui/public/**/*",
-      "electron-main.js",
-      "package.json"     
+      "apps/web/**/*",
+      "apps/electron/main.js",
+      "package.json"
     ],
     "directories": {
       "output": "dist-desktop"
