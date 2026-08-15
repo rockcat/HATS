@@ -14,7 +14,7 @@ import {
   collectVisemeMeshes,
   stepMorphWeights,
   applyMorphWeights,
-} from '../webui/public/morph-lipsync.js';
+} from '../../apps/web/morph-lipsync.js';
 
 // ── VisemeId → ARKit viseme_* morph name ──────────────────────────────────────
 

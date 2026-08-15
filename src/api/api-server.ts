@@ -30,7 +30,7 @@ import { GoogleTokenStore } from './google-token-store.js';
 import { GoogleOAuthRouter } from './google-oauth-router.js';
 
 const __dirname  = path.dirname(fileURLToPath(import.meta.url));
-const PUBLIC_DIR = path.join(__dirname, '..', 'webui', 'public');
+const PUBLIC_DIR = path.join(__dirname, '..', '..', 'apps', 'web');
 
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',

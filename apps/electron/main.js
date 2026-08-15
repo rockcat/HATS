@@ -18,12 +18,10 @@ function createWindow() {
   });
 
   if (isDev) {
-    // 🌐 Points to your live local web dev server port
-    win.loadURL('http://localhost:3000'); 
+    win.loadURL(`http://localhost:${process.env.HATS_PORT ?? 3001}`);
     win.webContents.openDevTools();
   } else {
-    // 📂 Points directly to your static public folder
-    win.loadFile(path.join(__dirname, 'src/webui/public/index.html')); 
+    win.loadURL(`http://localhost:${process.env.HATS_PORT ?? 3001}`);
   }
 }
 
