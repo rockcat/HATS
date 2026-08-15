@@ -4,7 +4,6 @@ node_modules/
 dist/
 dist-desktop/
 logs/
-projects/
 --db-path
 data.db
 
@@ -13,19 +12,14 @@ piper/*.dll
 piper/*.ort
 piper/espeak-ng-data
 
-piper_voices/
+runtime_data/projects/
+runtime_data/piper_voices/
+runtime_data/avatars_no_visemes/
+runtime_data/rhubarb/*
+!runtime_data/rhubarb/install_rhubard_in_here
 
-rhubarb/*
-!rhubarb/install_rhubard_in_here
-
-avatars_no_visemes/
 gltf/
 
 .claude/
 
-
 *.log
-
-
-
-

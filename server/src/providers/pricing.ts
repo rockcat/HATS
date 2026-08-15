@@ -1,5 +1,6 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import { runtimeDir } from '../util/runtime-dir.js';
 
 export interface ModelPricing {
   input:  number;   // $ per 1M input tokens
@@ -12,7 +13,7 @@ export const FREE_PROVIDERS = new Set(['ollama', 'lmstudio']);
 interface PricingFileEntry { provider?: string; input: number; output: number; }
 interface PricingFile { updatedAt?: string; models: Record<string, PricingFileEntry>; }
 
-const PRICING_FILE = join(process.cwd(), 'data', 'model-pricing.json');
+const PRICING_FILE = runtimeDir('data', 'model-pricing.json');
 
 /** Hardcoded fallback used only when model-pricing.json is absent. */
 const FALLBACK: Record<string, ModelPricing> = {

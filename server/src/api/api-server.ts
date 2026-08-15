@@ -28,9 +28,10 @@ import { AgentStore } from './agent-store.js';
 import { ScheduledActionStore } from './scheduled-action-store.js';
 import { GoogleTokenStore } from './google-token-store.js';
 import { GoogleOAuthRouter } from './google-oauth-router.js';
+import { runtimeDir } from '../util/runtime-dir.js';
 
 const __dirname  = path.dirname(fileURLToPath(import.meta.url));
-const PUBLIC_DIR = path.join(__dirname, '..', '..', 'apps', 'web');
+const PUBLIC_DIR = path.join(__dirname, '..', '..', '..', 'apps', 'web');
 
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -43,8 +44,8 @@ const MIME: Record<string, string> = {
   '.json': 'application/json',
 };
 
-const AVATARS_DIR     = path.join(process.cwd(), 'avatars');
-const BACKGROUNDS_DIR = path.join(process.cwd(), 'avatars', 'backgrounds');
+const AVATARS_DIR     = runtimeDir('avatars');
+const BACKGROUNDS_DIR = runtimeDir('avatars', 'backgrounds');
 const NM_DIR          = path.join(process.cwd(), 'node_modules');
 
 function serveFile(filePath: string, dir: string, res: ServerResponse, defaultMime = 'application/octet-stream', extra?: Record<string, string>): void {
@@ -230,7 +231,7 @@ export class APIServer {
       },
     });
 
-    const tokensPath = config.googleTokensPath ?? path.join(process.cwd(), 'data', 'google-tokens.json');
+    const tokensPath = config.googleTokensPath ?? runtimeDir('data', 'google-tokens.json');
     this.googleTokenStore = new GoogleTokenStore(tokensPath);
     this.googleOAuthRouter = new GoogleOAuthRouter(this.googleTokenStore, this.port);
     this.googleOAuthRouter.onAuthenticated(async () => {
@@ -269,7 +270,7 @@ export class APIServer {
 
     const telemetryPath = this.projectDir
       ? path.join(this.projectDir, 'telemetry.jsonl')
-      : path.join(process.cwd(), 'data', 'telemetry.jsonl');
+      : runtimeDir('data', 'telemetry.jsonl');
     await this.projectManager.initTelemetryStore(telemetryPath);
 
     this.unsubscribeEvents = this.orchestrator.onEvent((ev) => {

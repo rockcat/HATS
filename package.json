@@ -7,11 +7,11 @@
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
-    "build": "tsc",
-    "dev": "tsx src/index.ts",
+    "build": "tsc -p server/tsconfig.json",
+    "dev": "tsx server/src/index.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "start": "node --env-file=.env --import tsx/esm team-runner.ts",
+    "start": "node --env-file=.env --import tsx/esm server/src/team-runner.ts",
     "electron:build": "npm run build && electron-builder",
     "electron:run": "electron --env-file=.env apps/electron/main.js"
   },

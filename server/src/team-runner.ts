@@ -2,7 +2,7 @@
  * Team runner — 6 hat agents with real names + human CLI
  *
  * Usage:
- *   node --env-file=.env --import tsx/esm team-runner.ts [project-id]
+ *   node --env-file=.env --import tsx/esm server/src/team-runner.ts [project-id]
  *
  * Project layout:
  *   <PROJECTS_ROOT>/
@@ -20,22 +20,23 @@
 import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { mkdir } from 'fs/promises';
 import * as path from 'path';
-import { TeamOrchestrator } from './src/orchestrator/orchestrator.js';
-import { CLIInterface } from './src/human/cli-interface.js';
-import { APIServer, ProjectLoader } from './src/api/api-server.js';
-import { AnthropicProvider } from './src/providers/anthropic.js';
-import { OpenAIProvider, OllamaProvider, LMStudioProvider } from './src/providers/openai.js';
-import { GeminiProvider } from './src/providers/gemini.js';
-import { HatType } from './src/hats/types.js';
-import { getRandomPersona } from './src/hats/personas.js';
-import { initCatalogue } from './src/mcp/catalogue-store.js';
-import { AgentStore } from './src/api/agent-store.js';
-import { ScheduledActionStore } from './src/api/scheduled-action-store.js';
-import { seedBuiltIns } from './src/store/built-in-agents.js';
+import { TeamOrchestrator } from './orchestrator/orchestrator.js';
+import { CLIInterface } from './human/cli-interface.js';
+import { APIServer, ProjectLoader } from './api/api-server.js';
+import { AnthropicProvider } from './providers/anthropic.js';
+import { OpenAIProvider, OllamaProvider, LMStudioProvider } from './providers/openai.js';
+import { GeminiProvider } from './providers/gemini.js';
+import { HatType } from './hats/types.js';
+import { getRandomPersona } from './hats/personas.js';
+import { initCatalogue } from './mcp/catalogue-store.js';
+import { AgentStore } from './api/agent-store.js';
+import { ScheduledActionStore } from './api/scheduled-action-store.js';
+import { seedBuiltIns } from './store/built-in-agents.js';
+import { runtimeDir } from './util/runtime-dir.js';
 
 // ── Project layout ────────────────────────────────────────────────────────────
 
-const CATALOGUE_FILE = path.join(process.cwd(), 'config', 'mcp-catalogue.json');
+const CATALOGUE_FILE = runtimeDir('config', 'mcp-catalogue.json');
 
 // ── CLI flags ─────────────────────────────────────────────────────────────────
 // Strip known flags before positional arg parsing so they don't interfere.
@@ -44,7 +45,9 @@ const NO_EMAIL = argv.includes('--no-email');
 if (NO_EMAIL) process.env['HATS_NO_EMAIL'] = '1';
 const positionalArgs = argv.filter(a => !a.startsWith('--'));
 
-const PROJECTS_ROOT = path.resolve(process.env['PROJECTS_ROOT'] ?? './projects');
+const PROJECTS_ROOT = process.env['PROJECTS_ROOT']
+  ? path.resolve(process.env['PROJECTS_ROOT'])
+  : runtimeDir('projects');
 const PROJECT_ID    = (() => {
   if (positionalArgs[0]) return positionalArgs[0];
   // npm run start --project=<name> sets npm_config_project

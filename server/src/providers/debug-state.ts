@@ -1,12 +1,13 @@
 import { appendFileSync, mkdirSync } from 'fs';
 import * as path from 'path';
+import { runtimeDir } from '../util/runtime-dir.js';
 
 /** Shared debug flags — mutated at runtime via the API. */
 export const debugState = {
   logPrompts: false,
 };
 
-const LOG_FILE = path.join(process.cwd(), 'prompt-debug.log');
+const LOG_FILE = runtimeDir('prompt-debug.log');
 
 function ensureLogDir(): void {
   try { mkdirSync(path.dirname(LOG_FILE), { recursive: true }); } catch { /* ignore */ }
