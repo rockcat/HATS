@@ -9,7 +9,8 @@
   {
     "imports": {
       "three": "/nm/three/build/three.module.js",
-      "three/addons/": "/nm/three/examples/jsm/"
+      "three/addons/": "/nm/three/examples/jsm/",
+      "@pixiv/three-vrm": "/nm/@pixiv/three-vrm/lib/three-vrm.module.js"
     }
   }
   </script>
@@ -40,10 +41,10 @@
       <span class="telemetry-stat"><span class="telemetry-label">Out</span> <span id="tel-out">0</span></span>
       <span class="telemetry-sep">|</span>
       <span class="telemetry-stat"><span class="telemetry-label">Cost</span> <span id="tel-cost">$0.0000</span></span>
-      <button id="telemetry-btn" class="telemetry-detail-btn" title="View LLM usage details"><img src="/assets/info.svg" class="svg-icon" alt="Info"></button>
+      <button id="telemetry-btn" class="telemetry-detail-btn" title="View LLM usage details"><img src="assets/info.svg" class="svg-icon" alt="Info"></button>
     </div>
     <button id="mute-btn" class="header-btn mute-btn" title="Mute / unmute all speech">Mute</button>
-    <button id="settings-btn" class="header-btn header-btn--icon" title="Settings"><img src="/assets/settings.svg" class="svg-icon" alt="Settings"></button>
+    <button id="settings-btn" class="header-btn header-btn--icon" title="Settings"><img src="assets/settings.svg" class="svg-icon" alt="Settings"></button>
     <div id="connection-status" class="status-dot" title="Connecting…"></div>
   </header>
 
@@ -51,7 +52,7 @@
   <div id="goal-bar">
     <div id="goal-text-wrap">
       <span id="goal-text" class="goal-text" title="Click to set project goal"></span>
-      <button id="goal-edit-btn" class="goal-edit-btn" title="Edit goal"><img src="/assets/edit.svg" class="svg-icon" alt="Edit"></button>
+      <button id="goal-edit-btn" class="goal-edit-btn" title="Edit goal"><img src="assets/edit.svg" class="svg-icon" alt="Edit"></button>
       <input id="goal-input" class="goal-input" type="text" placeholder="Enter project goal…" hidden>
       <button id="goal-save-btn" class="goal-save-btn" hidden>Save</button>
     </div>
@@ -69,8 +70,8 @@
       <div class="panel-header panel-header--agents">
         Agents
         <button id="add-agent-btn" class="panel-add-btn" title="Add new agent">+ Agent</button>
-        <button id="impromptu-meeting-btn" class="panel-add-btn" title="Start an impromptu meeting now"><img src="/assets/meeting.svg" class="svg-icon" alt=""> Meet</button>
-        <button class="panel-expand-btn" data-panel="agents-panel" title="Expand"><img src="/assets/expand.svg" class="svg-icon" alt="Expand"></button>
+        <button id="impromptu-meeting-btn" class="panel-add-btn" title="Start an impromptu meeting now"><img src="assets/meeting.svg" class="svg-icon" alt=""> Meet</button>
+        <button class="panel-expand-btn" data-panel="agents-panel" title="Expand"><img src="assets/expand.svg" class="svg-icon" alt="Expand"></button>
       </div>
       <div id="agents-container">
         <svg id="comms-overlay" aria-hidden="true"></svg>
@@ -88,8 +89,8 @@
         <button class="panel-tab" data-tab="files">Project Files</button>
         <button class="panel-tab" data-tab="library">Agent Library</button>
         <button class="panel-tab" data-tab="schedules">Schedules</button>
-        <button id="mcp-catalogue-edit-btn" class="panel-header-action-btn" title="Edit MCP catalogue" hidden><img src="/assets/settings.svg" class="svg-icon" alt="Edit catalogue"></button>
-        <button class="panel-expand-btn" data-panel="tools-panel" title="Expand"><img src="/assets/expand.svg" class="svg-icon" alt="Expand"></button>
+        <button id="mcp-catalogue-edit-btn" class="panel-header-action-btn" title="Edit MCP catalogue" hidden><img src="assets/settings.svg" class="svg-icon" alt="Edit catalogue"></button>
+        <button class="panel-expand-btn" data-panel="tools-panel" title="Expand"><img src="assets/expand.svg" class="svg-icon" alt="Expand"></button>
       </div>
       <div id="tools-content" class="tab-pane"></div>
       <div id="mcp-content" class="tab-pane"></div>
@@ -116,7 +117,7 @@
         <div id="cli-input-row">
           <span class="cli-prompt">&gt;</span>
           <input type="text" id="cli-input" placeholder="Type a command or message…" autocomplete="off" spellcheck="false">
-          <button id="cli-mic-btn" class="mic-btn" title="Hold to speak (Whisper)"><img src="/assets/mic.svg" class="svg-icon" alt="Mic"></button>
+          <button id="cli-mic-btn" class="mic-btn" title="Hold to speak (Whisper)"><img src="assets/mic.svg" class="svg-icon" alt="Mic"></button>
         </div>
       </div>
       <div id="library-content" class="tab-pane library-pane">
@@ -171,8 +172,8 @@
           <option value="">All tags</option>
         </select>
         <button id="new-ticket-btn" class="panel-add-btn" title="Create a new ticket">+ New Ticket</button>
-        <button id="board-refresh-btn" class="panel-add-btn" title="Refresh board"><img src="/assets/refresh.svg" class="svg-icon" alt="Refresh"></button>
-        <button class="panel-expand-btn" data-panel="kanban-active" title="Expand"><img src="/assets/expand.svg" class="svg-icon" alt="Expand"></button>
+        <button id="board-refresh-btn" class="panel-add-btn" title="Refresh board"><img src="assets/refresh.svg" class="svg-icon" alt="Refresh"></button>
+        <button class="panel-expand-btn" data-panel="kanban-active" title="Expand"><img src="assets/expand.svg" class="svg-icon" alt="Expand"></button>
       </div>
       <div class="kanban-active-cols">
       <div class="kanban-col" id="col-ready">
@@ -219,9 +220,9 @@
         <button class="backlog-tab active" data-btab="backlog">Backlog <span id="backlog-count"></span></button>
         <button class="backlog-tab" data-btab="calendar">Calendar</button>
         <div id="cal-nav" class="cal-nav" hidden>
-          <button id="cal-prev" class="cal-nav-btn" title="Previous"><img src="/assets/chevron_left.svg" class="svg-icon" alt="Previous"></button>
+          <button id="cal-prev" class="cal-nav-btn" title="Previous"><img src="assets/chevron_left.svg" class="svg-icon" alt="Previous"></button>
           <span id="cal-period"></span>
-          <button id="cal-next" class="cal-nav-btn" title="Next"><img src="/assets/chevron_right.svg" class="svg-icon" alt="Next"></button>
+          <button id="cal-next" class="cal-nav-btn" title="Next"><img src="assets/chevron_right.svg" class="svg-icon" alt="Next"></button>
         </div>
         <div id="cal-view-tabs" class="cal-view-tabs" hidden>
           <button class="cal-view-btn active" data-view="week">Week</button>
@@ -229,7 +230,7 @@
           <button class="cal-view-btn" data-view="agenda">Agenda</button>
         </div>
         <button id="new-meeting-btn" class="panel-add-btn" hidden>+ Meeting</button>
-        <button class="panel-expand-btn" data-panel="backlog-panel" title="Expand"><img src="/assets/expand.svg" class="svg-icon" alt="Expand"></button>
+        <button class="panel-expand-btn" data-panel="backlog-panel" title="Expand"><img src="assets/expand.svg" class="svg-icon" alt="Expand"></button>
       </div>
       <div id="backlog-list" class="btab-pane active"></div>
       <div id="calendar-pane" class="btab-pane" hidden></div>
@@ -257,17 +258,17 @@
       <div class="meeting-right">
         <div class="meeting-right-header">
           <span>Conversation</span>
-          <button id="meeting-download-btn" class="meeting-action-btn" title="Download transcript as Markdown"><img src="/assets/download.svg" class="svg-icon" alt=""> Save</button>
+          <button id="meeting-download-btn" class="meeting-action-btn" title="Download transcript as Markdown"><img src="assets/download.svg" class="svg-icon" alt=""> Save</button>
         </div>
         <div id="meeting-transcript" class="meeting-transcript"></div>
         <div id="meeting-human-input" class="meeting-human-input" hidden>
           <div class="meeting-input-row">
             <span class="meeting-turn-label" id="meeting-turn-label" hidden>Your turn</span>
             <input id="meeting-input" class="meeting-input-field" type="text" placeholder="Say something…" autocomplete="off">
-            <button id="meeting-mic-btn" class="mic-btn" title="Hold to speak (Whisper)"><img src="/assets/mic.svg" class="svg-icon" alt="Mic"></button>
+            <button id="meeting-mic-btn" class="mic-btn" title="Hold to speak (Whisper)"><img src="assets/mic.svg" class="svg-icon" alt="Mic"></button>
           </div>
           <div class="meeting-action-row">
-            <button id="meeting-raise-hand-btn" class="meeting-raise-hand-btn" title="Raise / lower your hand"><img src="/assets/raisedhand.svg" class="svg-icon" alt=""> Raise Hand</button>
+            <button id="meeting-raise-hand-btn" class="meeting-raise-hand-btn" title="Raise / lower your hand"><img src="assets/raisedhand.svg" class="svg-icon" alt=""> Raise Hand</button>
             <button id="meeting-pass-btn" class="meeting-pass-btn" hidden>Pass</button>
             <button id="meeting-send-btn" class="meeting-send-btn">Send</button>
           </div>
@@ -288,7 +289,7 @@
         </div>
         <button id="agent-detail-configure-btn" class="agent-configure-btn" title="Open configuration">Configure</button>
         <button id="agent-remove-btn" class="agent-remove-btn" title="Remove agent">Remove</button>
-        <button id="agent-detail-close" class="modal-close" title="Close"><img src="/assets/close.svg" class="svg-icon" alt="Close"></button>
+        <button id="agent-detail-close" class="modal-close" title="Close"><img src="assets/close.svg" class="svg-icon" alt="Close"></button>
       </div>
       <div class="agent-config-row">
         <div class="agent-config-line">
@@ -322,7 +323,7 @@
     <div class="modal" role="dialog" aria-modal="true">
       <div class="modal-header">
         <span id="modal-ticket-id" class="modal-ticket-id"></span>
-        <button class="modal-close" id="modal-close" title="Close"><img src="/assets/close.svg" class="svg-icon" alt="Close"></button>
+        <button class="modal-close" id="modal-close" title="Close"><img src="assets/close.svg" class="svg-icon" alt="Close"></button>
       </div>
       <div class="modal-body">
         <div class="field-group">
@@ -396,7 +397,7 @@
     <div class="modal settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
       <div class="modal-header">
         <span id="settings-title" class="modal-ticket-id">Settings</span>
-        <button class="modal-close" id="settings-close" title="Close"><img src="/assets/close.svg" class="svg-icon" alt="Close"></button>
+        <button class="modal-close" id="settings-close" title="Close"><img src="assets/close.svg" class="svg-icon" alt="Close"></button>
       </div>
       <div class="modal-body settings-body" id="settings-body">
         <p class="settings-loading">Loading…</p>
@@ -415,7 +416,7 @@
       <div class="modal-header">
         <span class="modal-ticket-id">MCP Catalogue</span>
         <button id="mcp-editor-add-btn" class="modal-btn secondary mcp-editor-add-btn">+ Add</button>
-        <button class="modal-close" id="mcp-editor-close" title="Close"><img src="/assets/close.svg" class="svg-icon" alt="Close"></button>
+        <button class="modal-close" id="mcp-editor-close" title="Close"><img src="assets/close.svg" class="svg-icon" alt="Close"></button>
       </div>
       <div class="mcp-editor-body">
         <!-- Left: entry list -->
@@ -513,7 +514,7 @@
     <div class="modal lib-editor-modal" role="dialog" aria-modal="true">
       <div class="modal-header">
         <span id="add-agent-modal-title" class="modal-ticket-id">Add Agent</span>
-        <button class="modal-close" id="add-agent-close" title="Close"><img src="/assets/close.svg" class="svg-icon" alt="Close"></button>
+        <button class="modal-close" id="add-agent-close" title="Close"><img src="assets/close.svg" class="svg-icon" alt="Close"></button>
       </div>
       <div class="modal-body lib-editor-body">
 
@@ -591,7 +592,7 @@
           <div style="display:flex;gap:6px">
             <select id="add-agent-voice" class="modal-select" style="flex:1"></select>
             <select id="add-agent-speaker" class="modal-select" style="flex:1" hidden></select>
-            <button id="add-agent-preview-voice" type="button" class="modal-btn secondary" style="flex:none;padding:4px 8px" title="Preview voice"><img src="/assets/play.svg" class="svg-icon" alt="Play"></button>
+            <button id="add-agent-preview-voice" type="button" class="modal-btn secondary" style="flex:none;padding:4px 8px" title="Preview voice"><img src="assets/play.svg" class="svg-icon" alt="Play"></button>
           </div>
         </div>
         <div class="field-group" id="add-agent-schedules-section" hidden>
@@ -621,7 +622,7 @@
     <div class="modal" role="dialog" aria-modal="true">
       <div class="modal-header">
         <span class="modal-ticket-id">Schedule Meeting</span>
-        <button class="modal-close" id="new-meeting-close" title="Close"><img src="/assets/close.svg" class="svg-icon" alt="Close"></button>
+        <button class="modal-close" id="new-meeting-close" title="Close"><img src="assets/close.svg" class="svg-icon" alt="Close"></button>
       </div>
       <div class="modal-body">
         <div class="field-row">
@@ -681,7 +682,7 @@
     <div class="modal gen-bg-modal-box" role="dialog" aria-modal="true">
       <div class="modal-header">
         <span class="modal-ticket-id">Generate Background</span>
-        <button class="modal-close" id="gen-bg-close" title="Close"><img src="/assets/close.svg" class="svg-icon" alt="Close"></button>
+        <button class="modal-close" id="gen-bg-close" title="Close"><img src="assets/close.svg" class="svg-icon" alt="Close"></button>
       </div>
       <div class="modal-body">
         <div class="field-group">
@@ -713,8 +714,8 @@
       <div class="modal-header">
         <span class="modal-ticket-id" id="file-viewer-name"></span>
         <div style="display:flex;gap:8px;align-items:center">
-          <a id="file-viewer-download" class="modal-btn secondary" style="text-decoration:none;padding:4px 10px;font-size:11px"><img src="/assets/download.svg" class="svg-icon" alt=""> Download</a>
-          <button class="modal-close" id="file-viewer-close" title="Close"><img src="/assets/close.svg" class="svg-icon" alt="Close"></button>
+          <a id="file-viewer-download" class="modal-btn secondary" style="text-decoration:none;padding:4px 10px;font-size:11px"><img src="assets/download.svg" class="svg-icon" alt=""> Download</a>
+          <button class="modal-close" id="file-viewer-close" title="Close"><img src="assets/close.svg" class="svg-icon" alt="Close"></button>
         </div>
       </div>
       <div id="file-viewer-body" class="file-viewer-body"></div>
@@ -726,7 +727,7 @@
     <div class="modal" role="dialog" aria-modal="true">
       <div class="modal-header">
         <span class="modal-ticket-id">⚡ Start Meeting Now</span>
-        <button class="modal-close" id="impromptu-close" title="Close"><img src="/assets/close.svg" class="svg-icon" alt="Close"></button>
+        <button class="modal-close" id="impromptu-close" title="Close"><img src="assets/close.svg" class="svg-icon" alt="Close"></button>
       </div>
       <div class="modal-body">
         <div class="field-group">
@@ -761,7 +762,7 @@
     <div class="modal meeting-detail-modal" role="dialog" aria-modal="true">
       <div class="modal-header">
         <span class="modal-ticket-id" id="meeting-detail-topic"></span>
-        <button class="modal-close" id="meeting-detail-close" title="Close"><img src="/assets/close.svg" class="svg-icon" alt="Close"></button>
+        <button class="modal-close" id="meeting-detail-close" title="Close"><img src="assets/close.svg" class="svg-icon" alt="Close"></button>
       </div>
       <div class="modal-body">
         <div class="meeting-detail-row"><span class="meeting-detail-label">When</span><span id="meeting-detail-time"></span></div>
@@ -783,7 +784,7 @@
     <div class="modal minutes-modal" role="dialog" aria-modal="true">
       <div class="modal-header">
         <span class="modal-ticket-id" id="minutes-modal-title">Meeting Minutes</span>
-        <button class="modal-close" id="minutes-modal-close" title="Close"><img src="/assets/close.svg" class="svg-icon" alt="Close"></button>
+        <button class="modal-close" id="minutes-modal-close" title="Close"><img src="assets/close.svg" class="svg-icon" alt="Close"></button>
       </div>
       <div class="modal-body minutes-modal-body">
         <pre id="minutes-modal-content" class="minutes-modal-content"></pre>
@@ -796,7 +797,7 @@
     <div class="modal telemetry-modal" role="dialog" aria-modal="true">
       <div class="modal-header">
         <span class="modal-ticket-id">LLM Telemetry</span>
-        <button class="modal-close" id="telemetry-close" title="Close"><img src="/assets/close.svg" class="svg-icon" alt="Close"></button>
+        <button class="modal-close" id="telemetry-close" title="Close"><img src="assets/close.svg" class="svg-icon" alt="Close"></button>
       </div>
       <div class="modal-body telemetry-body">
         <div class="telemetry-summary-bar">
@@ -859,7 +860,7 @@
     <div class="modal schedule-modal" role="dialog" aria-modal="true">
       <div class="modal-header">
         <span id="schedule-modal-title" class="modal-ticket-id">New Scheduled Action</span>
-        <button class="modal-close" id="schedule-modal-close" title="Close"><img src="/assets/close.svg" class="svg-icon" alt="Close"></button>
+        <button class="modal-close" id="schedule-modal-close" title="Close"><img src="assets/close.svg" class="svg-icon" alt="Close"></button>
       </div>
       <div class="modal-body schedule-modal-body">
         <div class="schedules-type-row">

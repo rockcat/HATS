@@ -54,7 +54,8 @@
       "Bash(dir \"c:\\\\Users\\\\pauln\\\\workspace\\\\HATS\\\\projects\" /b)",
       "Bash(findstr /r /s /n \"SIGINT SIGTERM shutdown\" setup.js)",
       "PowerShell($lines = \\(Get-Content \"F:\\\\workspace\\\\HATS\\\\src\\\\webui\\\\public\\\\thread-viewer.js\" | Measure-Object -Line\\).Lines; Write-Output \"Lines: $lines\")",
-      "PowerShell(git *)"
+      "PowerShell(git *)",
+      "PowerShell(node \"C:\\\\Temp\\\\claude\\\\f--workspace-HATS\\\\9ef95528-4b98-47ee-90d1-d7a63259105a\\\\scratchpad\\\\fix-kanban.mjs\")"
     ]
   }
 }

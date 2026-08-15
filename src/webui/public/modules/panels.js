@@ -48,7 +48,7 @@ export function collapseExpandedPanel() {
     p.classList.remove('panel--expanded');
     p.style.top = '';
     const b = p.querySelector('.panel-expand-btn');
-    if (b) b.innerHTML = '<img src="/assets/expand.svg" class="svg-icon" alt="Expand">';
+    if (b) b.innerHTML = '<img src="assets/expand.svg" class="svg-icon" alt="Expand">';
   });
   document.body.classList.remove('has-expanded-panel');
 }
@@ -65,7 +65,7 @@ export function initPanelExpand() {
         panel.classList.add('panel--expanded');
         const mainEl = document.querySelector('main');
         if (mainEl) panel.style.top = mainEl.getBoundingClientRect().top + 'px';
-        btn.innerHTML = '<img src="/assets/reduce.svg" class="svg-icon" alt="Collapse">';
+        btn.innerHTML = '<img src="assets/reduce.svg" class="svg-icon" alt="Collapse">';
         document.body.classList.add('has-expanded-panel');
       }
     });

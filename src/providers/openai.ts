@@ -5,7 +5,7 @@ import {
   Message, ToolCall,
 } from './types.js';
 import { withRetry } from './retry.js';
-import { debugState, writePromptLog } from './debug-state.js';
+import { debugState, writePromptLog, tk } from './debug-state.js';
 
 export class OpenAIProvider implements AIProvider {
   readonly name: string;
@@ -71,7 +71,7 @@ export class OpenAIProvider implements AIProvider {
         ...(tools && tools.length > 0 ? { tools } : {}),
         ...(req.temperature !== undefined ? { temperature: req.temperature } : {}),
       });
-      log.info(`${label} ← ${this.name} (${response.usage?.prompt_tokens ?? 0}in/${response.usage?.completion_tokens ?? 0}out)`);
+      log.info(`${label} ← ${this.name} (${tk(response.usage?.prompt_tokens ?? 0)} prompt / ${tk(response.usage?.completion_tokens ?? 0)} gen)`);
       if (debugState.logPrompts) {
         const ts = new Date().toISOString().replace('T', ' ').slice(0, 23);
         const inp = response.usage?.prompt_tokens ?? 0;

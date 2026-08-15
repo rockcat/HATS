@@ -21,6 +21,20 @@ import { EXTERNAL_PROVIDER } from '../agent/external-agent.js';
 import { AgentStatus } from './project-manager.js';
 import { AgentStore } from './agent-store.js';
 import { ScheduledActionStore } from './scheduled-action-store.js';
+import { Task } from '../orchestrator/types.js';
+
+function labelForThread(key: string, tasks: Task[]): string {
+  if (key === 'general') return 'general';
+  const task = tasks.find(t => t.id === key);
+  if (!task) return key;
+  const m = task.description.match(/^Work on ticket (TKT-\d+): ([^\n]+)/);
+  if (m) {
+    const title = m[2].length > 35 ? m[2].slice(0, 35) + '…' : m[2];
+    return `${m[1]}: ${title}`;
+  }
+  const first = task.description.split('\n')[0];
+  return first.length > 45 ? first.slice(0, 45) + '…' : first;
+}
 
 /** Extract the original sender from the [TYPE from Name] prefix added by formatIncomingMessage. */
 function extractMessageSender(role: string, content: string): string | undefined {
@@ -79,7 +93,13 @@ export class AgentRouter {
       const name  = decodeURIComponent(pathname.slice('/api/agents/'.length, -'/threads'.length));
       const agent = orch.listAgents().find(a => a.name === resolveAgentName(name)) ?? orch.findById(name);
       if (!agent) { json(res, 404, { error: 'Agent not found' }); return true; }
-      json(res, 200, agent.getThreadSummary());
+      const tasks  = orch.listTasks();
+      const summary = agent.getThreadSummary();
+      const rich: Record<string, { count: number; label: string }> = {};
+      for (const [key, count] of Object.entries(summary)) {
+        rich[key] = { count, label: labelForThread(key, tasks) };
+      }
+      json(res, 200, rich);
       return true;
     }
 
@@ -243,7 +263,16 @@ export class AgentRouter {
       const body = await readBody(req);
       const { servers } = JSON.parse(body) as { servers: string[] | null };
       try {
-        orch.updateAgentMcpServers(resolveAgentName(agentName), servers ?? undefined);
+        const resolved = resolveAgentName(agentName);
+        orch.updateAgentMcpServers(resolved, servers ?? undefined);
+        const agentStore = this.deps.getAgentStore();
+        if (agentStore) {
+          const agent = orch.getAgent(resolved);
+          if (agent) {
+            const def = agentStore.get(agent.id);
+            if (def) agentStore.addOrUpdate({ ...def, enabledMcpServers: servers ?? undefined }).catch(() => {});
+          }
+        }
         sseBroadcast({ type: 'agent_update', agents: this.deps.buildAgentStatuses() }); saveCurrentState().catch(() => {}); json(res, 200, { ok: true });
       } catch (err) { json(res, 400, { error: (err as Error).message }); }
       return true;

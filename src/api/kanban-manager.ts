@@ -178,7 +178,7 @@ export class KanbanManager {
     }
   }
 
-  async dispatchTicket(ticket: { id: string; title: string; description: string; assignee?: string; priority?: string; tags?: string[]; comments?: import('../mcp/kanban/types.js').Comment[]; lastTaskId?: string }): Promise<void> {
+  async dispatchTicket(ticket: { id: string; title: string; description: string; assignee?: string; priority?: string; tags?: string[]; comments?: import('../mcp/kanban/types.js').Comment[]; lastTaskId?: string; threadId?: string }): Promise<void> {
     if (!ticket.assignee) return;
     const orch      = this.deps.getOrchestrator();
     const agentName = this.deps.resolveAgentName(ticket.assignee);
@@ -200,8 +200,8 @@ export class KanbanManager {
     const projectName = ticket.id;
     const description = `Work on ticket ${ticket.id}: ${ticket.title}${ticket.description ? `\n\n${ticket.description}` : ''}${commentsSection}`;
     // Re-dispatch: seed from the previous task's thread (full history, no limit).
-    // First dispatch: seed the last few messages from the agent's general thread so they have recent context.
-    const sourceThreadId   = ticket.lastTaskId ?? 'general';
+    // First dispatch: seed from the ticket's origin thread (where it was created/discussed), or general.
+    const sourceThreadId   = ticket.lastTaskId ?? ticket.threadId ?? 'general';
     const sourceThreadLimit = ticket.lastTaskId ? undefined : 6;
     await orch.humanAssignTask(agentName, description, undefined, projectName, ticket.id, sourceThreadId, sourceThreadLimit);
     this.deps.agentTicketMap.set(this.deps.agentIdForName(agentName), ticket.id);

@@ -152,7 +152,57 @@
             ],
             "fov": 50,
             "scale": 1
+        },
+        {
+            "name": "Simon",
+            "sex": "male",
+            "file": "hatssimon.vrm",
+            "camera": [
+                0,
+                1.65,
+                0.6
+            ],
+            "rotate": [
+                0,
+                180,
+                0
+            ],
+            "fov": 50,
+            "scale": 1
+        },
+        {
+            "name": "Chris",
+            "sex": "male",
+            "file": "chris.vrm",
+            "camera": [
+                0,
+                1.90,
+                0.6
+            ],
+            "rotate": [
+                0,
+                180,
+                0
+            ],
+            "fov": 50,
+            "scale": 1
+        },
+        {
+            "name": "Jean",
+            "sex": "female",
+            "file": "jean.vrm",
+            "camera": [
+                0,
+                1.70,
+                0.6
+            ],
+            "rotate": [
+                0,
+                180,
+                0
+            ],
+            "fov": 50,
+            "scale": 1
         }
-
     ]
 }

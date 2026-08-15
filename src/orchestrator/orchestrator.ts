@@ -496,7 +496,7 @@ export class TeamOrchestrator {
       agent.setToolExecutor(buildToolExecutor(this.makeToolCallContext(), this.mcp));
       agent.setExtraToolsProvider(() => {
         const ids         = agent.config.enabledMcpServers;
-        const sharedTools = ids === undefined ? this.mcp.getAllTools() : this.mcp.getToolsForServers(ids);
+        const sharedTools = ids == null ? this.mcp.getAllTools() : this.mcp.getToolsForServers(ids);
         const personalMcp = this.personalMcpByAgent.get(agent.name.toLowerCase());
         if (!personalMcp) return sharedTools;
         const personalTools   = personalMcp.getAllTools();

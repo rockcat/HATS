@@ -100,7 +100,6 @@ function makeProjectLoader(agentStore: AgentStore, _actionStore: ScheduledAction
     const agendaFile = path.join(projectDir, 'agent-agenda.json');
     await orchestrator.init();
     await orchestrator.initMeetingStore(meetingsFile);
-    await orchestrator.initAgendaStore(agendaFile);
 
     if (existsSync(stateFile)) {
       console.log(`[Team] Restoring state from ${stateFile}`);
@@ -166,6 +165,8 @@ function makeProjectLoader(agentStore: AgentStore, _actionStore: ScheduledAction
       const names = [blueIdentity.name, ...selected.map(a => a.identity.name)].join(' · ');
       console.log(`[Team] Team assembled: ${names}`);
     }
+
+    await orchestrator.initAgendaStore(agendaFile);
 
     return orchestrator;
   };

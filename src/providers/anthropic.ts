@@ -5,7 +5,7 @@ import {
   Message, ToolCall,
 } from './types.js';
 import { withRetry } from './retry.js';
-import { debugState, writePromptLog } from './debug-state.js';
+import { debugState, writePromptLog, tk } from './debug-state.js';
 
 export class AnthropicProvider implements AIProvider {
   readonly name = 'anthropic';
@@ -63,7 +63,7 @@ export class AnthropicProvider implements AIProvider {
         ...(tools && tools.length > 0 ? { tools } : {}),
         ...(req.temperature !== undefined ? { temperature: req.temperature } : {}),
       });
-      log.info(`${label} ← anthropic (${response.usage.input_tokens}in/${response.usage.output_tokens}out)`);
+      log.info(`${label} ← anthropic (${tk(response.usage.input_tokens)} prompt / ${tk(response.usage.output_tokens)} gen)`);
       if (debugState.logPrompts) {
         const ts = new Date().toISOString().replace('T', ' ').slice(0, 23);
         writePromptLog([`${ts} ${label} ← anthropic  input=${response.usage.input_tokens} output=${response.usage.output_tokens} total=${response.usage.input_tokens + response.usage.output_tokens}`]);

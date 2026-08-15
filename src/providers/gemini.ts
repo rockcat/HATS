@@ -1,7 +1,7 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { log } from '../util/logger.js';
 import { AIProvider, CompletionRequest, CompletionResponse, ProviderError } from './types.js';
-import { debugState, writePromptLog } from './debug-state.js';
+import { debugState, writePromptLog, tk } from './debug-state.js';
 
 export class GeminiProvider implements AIProvider {
   readonly name = 'gemini';
@@ -59,7 +59,7 @@ export class GeminiProvider implements AIProvider {
       const chat = model.startChat({ history });
       const result = await chat.sendMessage(lastMessage?.content ?? '');
       const response = result.response;
-      log.info(`${label} ← gemini (${response.usageMetadata?.promptTokenCount ?? 0}in/${response.usageMetadata?.candidatesTokenCount ?? 0}out)`);
+      log.info(`${label} ← gemini (${tk(response.usageMetadata?.promptTokenCount ?? 0)} prompt / ${tk(response.usageMetadata?.candidatesTokenCount ?? 0)} gen)`);
       if (debugState.logPrompts) {
         const ts  = new Date().toISOString().replace('T', ' ').slice(0, 23);
         const inp = response.usageMetadata?.promptTokenCount ?? 0;

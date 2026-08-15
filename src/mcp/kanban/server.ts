@@ -42,6 +42,7 @@ export async function startKanbanServer(boardPath: string): Promise<void> {
             creator:     { type: 'string', description: 'Name of the person or agent creating this ticket.' },
             assignee:    { type: 'string', description: 'Name of the person or agent to assign to (optional).' },
             tags:        { type: 'array', items: { type: 'string' }, description: 'Optional tags/labels.' },
+            thread_id:   { type: 'string', description: 'Conversation thread key this ticket originates from. Injected automatically — do not set manually.' },
           },
           required: ['title', 'description', 'creator'],
         },
@@ -204,6 +205,7 @@ async function handleTool(name: string, args: Record<string, unknown>, store: Ka
         creator:     args['creator'] as string,
         assignee:    args['assignee'] as string | undefined,
         tags:        args['tags'] as string[] | undefined,
+        threadId:    args['thread_id'] as string | undefined,
       });
       return `Created ${ticket.id}: "${ticket.title}" in backlog.`;
     }

@@ -99,7 +99,7 @@ export function initAddAgent({ fetchGlobalAgentsOverride } = {}) {
         src.buffer = audio; src.connect(ctx.destination); src.start();
       }
     } catch { /* ignore */ }
-    btn.innerHTML = '<img src="/assets/play.svg" class="svg-icon" alt="Play">'; btn.disabled = false;
+    btn.innerHTML = '<img src="assets/play.svg" class="svg-icon" alt="Play">'; btn.disabled = false;
   });
 
   document.getElementById('add-agent-avatar').addEventListener('change', () => {

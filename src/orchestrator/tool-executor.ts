@@ -69,6 +69,15 @@ function isSafeSegment(s: string): boolean {
   return !!s && s === path.basename(s) && !s.includes('/') && !s.includes('\\') && s !== '.' && s !== '..';
 }
 
+function injectKanbanThreadId(
+  toolName: string,
+  args: Record<string, unknown> | undefined,
+  threadKey: string | undefined,
+): Record<string, unknown> | undefined {
+  if (toolName !== 'mcp__kanban__create_ticket' || !threadKey || args?.['thread_id']) return args;
+  return { ...args, thread_id: threadKey };
+}
+
 const EMAIL_STANDALONE_RE = /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/;
 
 function extractEmailsFromArgs(args: Record<string, unknown>): string[] {
@@ -171,7 +180,8 @@ export function buildToolExecutor(ctx: ToolCallContext, mcp: MCPRegistry) {
         } else if (personalMcp && personalMcp.isMCPTool(call.name)) {
           result = await personalMcp.callTool(call.name, call.arguments);
         } else {
-          result = await mcp.callTool(call.name, call.arguments);
+          const callArgs = injectKanbanThreadId(call.name, call.arguments, ctx.getAgentThreadKey?.(agentName)) ?? {};
+          result = await mcp.callTool(call.name, callArgs);
         }
       } else {
         result = await executeToolCall(ctx, agentName, call);

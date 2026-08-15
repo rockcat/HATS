@@ -307,14 +307,16 @@ class ConversationThreads extends HTMLElement {
               <span>Threads</span>
               <button class="new-thread-btn${this._newThreadMode ? ' new-thread-btn--active' : ''}">${this._newThreadMode ? '✕ Cancel' : '+ New'}</button>
             </div>
-            ${nonGeneral.map(([k, count]) => `
-              <div class="thread-item${this._activeThread === k ? ' thread-item--active' : ''}" data-key="${this._esc(k)}">
+            ${nonGeneral.map(([k, entry]) => {
+              const count = typeof entry === 'object' ? entry.count : entry;
+              const label = typeof entry === 'object' ? entry.label : this._shortKey(k);
+              return `<div class="thread-item${this._activeThread === k ? ' thread-item--active' : ''}" data-key="${this._esc(k)}">
                 <span class="thread-icon">&#x1f9f5;</span>
-                <span class="thread-key">${this._shortKey(k)}</span>
+                <span class="thread-key">${this._esc(label)}</span>
                 <span class="thread-count">${count} msg${count !== 1 ? 's' : ''}</span>
                 <span class="thread-arrow">&#8594;</span>
-              </div>
-            `).join('')}
+              </div>`;
+            }).join('')}
           </div>
           <div class="compose-bar" id="general-compose" data-panel="general">
             ${this._newThreadMode ? `
@@ -330,7 +332,7 @@ class ConversationThreads extends HTMLElement {
         ${rightOpen ? `
         <div class="right-panel">
           <div class="panel-header panel-header--right">
-            <span>Thread: ${this._shortKey(this._activeThread)}</span>
+            <span>Thread: ${this._esc(this._threadLabel(this._activeThread))}</span>
             <button class="panel-close" title="Close">&#x2715;</button>
           </div>
           <div class="messages-area" id="thread-messages">
@@ -448,10 +450,34 @@ class ConversationThreads extends HTMLElement {
       text = text.replace(/^\[(TASK|MESSAGE|MEETING INVITE|ESCALATION|HUMAN REPLY|TASK COMPLETE)(?:\s+from\s+[^\]]+)?\]\s*/, '');
     }
 
-    if (role === 'assistant' && window.marked) {
-      try { return window.marked.parse(text); } catch { /* fall through */ }
+    if (role === 'assistant') {
+      const collapsed = this._collapseHatAnalysis(text);
+      if (collapsed) {
+        const md = t => { try { return window.marked?.parse(t) ?? this._esc(t); } catch { return this._esc(t); } };
+        return `
+          <details class="hat-thinking">
+            <summary>🤔 Thinking…</summary>
+            <div class="hat-thinking-content">${md(collapsed.thinking)}</div>
+          </details>
+          ${collapsed.synthesis ? `<div class="hat-synthesis">${md(collapsed.synthesis)}</div>` : ''}
+        `;
+      }
+      if (window.marked) {
+        try { return window.marked.parse(text); } catch { /* fall through */ }
+      }
     }
     return `<span>${this._esc(text)}</span>`;
+  }
+
+  _collapseHatAnalysis(text) {
+    const HAT_RE = /(?:^|\n)(?:\*{1,2}|#{1,3}\s*)?(Black|Yellow|White|Green|Red|Blue)\s+Hat\s*[:\*]+/i;
+    if (!HAT_RE.test(text)) return null;
+    const SYNTH_RE = /(?:^|\n)(?:\*{1,2}|#{1,3}\s*)?Synthesis\s*[:\*]+\s*/i;
+    const synthMatch = SYNTH_RE.exec(text);
+    if (!synthMatch) return { thinking: text.trim(), synthesis: '' };
+    const thinking  = text.slice(0, synthMatch.index).trim();
+    const synthesis = text.slice(synthMatch.index + synthMatch[0].length).trim();
+    return { thinking, synthesis };
   }
 
   _formatTime(ts) {
@@ -468,6 +494,13 @@ class ConversationThreads extends HTMLElement {
     const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}/i;
     if (uuidRe.test(key)) return key.slice(0, 8) + '…';
     return key.length > 16 ? key.slice(0, 16) + '…' : key;
+  }
+
+  _threadLabel(key) {
+    if (!key) return '';
+    const entry = this._threads[key];
+    if (entry && typeof entry === 'object' && entry.label) return entry.label;
+    return this._shortKey(key);
   }
 
   _threadKey(content) {
@@ -738,6 +771,36 @@ class ConversationThreads extends HTMLElement {
         .new-thread-btn:hover { border-color: #72767d; color: #d1d2d3; }
         .new-thread-btn--active { border-color: #b84444; color: #b84444; }
         .new-thread-btn--active:hover { border-color: #d15555; color: #d15555; }
+
+        /* ── Multi-hat collapsible thinking ── */
+        .hat-thinking {
+          margin: 2px 0 6px;
+          border-left: 2px solid #3e4146;
+          padding-left: 8px;
+        }
+        .hat-thinking summary {
+          cursor: pointer;
+          font-size: 11px;
+          color: #72767d;
+          user-select: none;
+          list-style: none;
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          padding: 2px 0;
+        }
+        .hat-thinking summary::-webkit-details-marker { display: none; }
+        .hat-thinking[open] summary { color: #9a9d9f; }
+        .hat-thinking-content {
+          padding: 6px 0 2px;
+          font-size: 12px;
+          color: #9a9d9f;
+          border-top: 1px solid #2e3338;
+          margin-top: 4px;
+        }
+        .hat-thinking-content p { margin: 0 0 4px; }
+        .hat-thinking-content p:last-child { margin-bottom: 0; }
+        .hat-synthesis { margin-top: 4px; }
 
         /* ── Pending / thinking ── */
         .msg--pending { opacity: 0.55; }

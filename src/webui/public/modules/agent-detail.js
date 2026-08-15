@@ -20,7 +20,7 @@ export const setToolCallDetail = (val) => { toolCallDetail = val; };
 const FEED_META = {
   task_assigned:  { icon: '📋', cls: 'task',      label: 'Task assigned'  },
   task_complete:  { icon: '✓',  cls: 'complete',  label: 'Task complete'  },
-  tool_call:      { icon: '<img src="/assets/settings.svg" class="svg-icon svg-icon--feed" alt="">', cls: 'tool', label: 'Tool call' },
+  tool_call:      { icon: '<img src="assets/settings.svg" class="svg-icon svg-icon--feed" alt="">', cls: 'tool', label: 'Tool call' },
   tool_result:    { icon: '↩',  cls: 'result',    label: 'Tool result'    },
   tool_error:     { icon: '✗',  cls: 'error',     label: 'Tool error'     },
   agent_response: { icon: '💬', cls: 'response',  label: 'Response'       },

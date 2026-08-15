@@ -116,7 +116,7 @@ async function runPiperServer(text: string, serverUrl: string, speakerId: number
   log.info(`[Speech] Piper server POST ${serverUrl} "${text.slice(0, 60)}"`);
   const payload: Record<string, unknown> = { text };
   if (speakerId !== null) payload['speaker_id'] = speakerId;
-  const res = await fetch(`${serverUrl}/`, {
+  const res = await fetch(`${serverUrl}/synthesize`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),

@@ -90,6 +90,7 @@ export class KanbanStore {
     creator: string;
     assignee?: string;
     tags?: string[];
+    threadId?: string;
   }): Promise<Ticket> {
     return this.serialise(async () => {
       await this.reload();
@@ -116,6 +117,7 @@ export class KanbanStore {
         comments: [],
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
+        ...(fields.threadId ? { threadId: fields.threadId } : {}),
       };
       this.board.tickets[id] = ticket;
       await this.save();
@@ -199,7 +201,7 @@ export class KanbanStore {
       const ticket = this.requireTicket(id);
       ticket.blockedBy = (ticket.blockedBy ?? []).filter(b => b !== blockerId);
       ticket.updatedAt = new Date().toISOString();
-      this.save();
+      await this.save();
       return ticket;
     });
   }

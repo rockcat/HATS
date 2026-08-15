@@ -56,9 +56,9 @@ function buildFileActions(f) {
   const url    = `/api/project/file?path=${encodeURIComponent(f.relativePath)}`;
   const canView = VIEWABLE_EXTS.has(fileExt(f.name));
   const viewBtn = canView
-    ? `<button class="file-action-btn file-view-btn" title="View" data-name="${esc(f.name)}" data-path="${esc(f.relativePath)}"><img src="/assets/preview.svg" class="svg-icon" alt="Preview"></button>`
+    ? `<button class="file-action-btn file-view-btn" title="View" data-name="${esc(f.name)}" data-path="${esc(f.relativePath)}"><img src="assets/preview.svg" class="svg-icon" alt="Preview"></button>`
     : `<span class="file-action-placeholder"></span>`;
-  const dlBtn   = `<a class="file-action-btn" title="Download" href="${esc(url)}" download="${esc(f.name)}"><img src="/assets/download.svg" class="svg-icon" alt="Download"></a>`;
+  const dlBtn   = `<a class="file-action-btn" title="Download" href="${esc(url)}" download="${esc(f.name)}"><img src="assets/download.svg" class="svg-icon" alt="Download"></a>`;
   return `<span class="file-actions">${viewBtn}${dlBtn}</span>`;
 }
 
