@@ -45,8 +45,24 @@
     </div>
     <button id="mute-btn" class="header-btn mute-btn" title="Mute / unmute all speech">Mute</button>
     <button id="settings-btn" class="header-btn header-btn--icon" title="Settings"><img src="assets/settings.svg" class="svg-icon" alt="Settings"></button>
+    <span id="current-user-label" class="current-user-label"></span>
+    <button id="logout-btn" class="header-btn" title="Sign out">Sign out</button>
     <div id="connection-status" class="status-dot" title="Connecting…"></div>
   </header>
+
+  <!-- Login overlay -->
+  <div id="login-overlay" class="login-overlay" hidden>
+    <div class="login-card">
+      <h2 class="login-title">HATS</h2>
+      <p class="login-subtitle">Sign in to continue</p>
+      <form id="login-form" class="login-form" novalidate>
+        <input type="text"     id="login-username" class="login-input" placeholder="Username" autocomplete="username"         autofocus>
+        <input type="password" id="login-password" class="login-input" placeholder="Password" autocomplete="current-password">
+        <p id="login-error" class="login-error" hidden></p>
+        <button type="submit" id="login-btn" class="modal-btn primary login-submit">Sign in</button>
+      </form>
+    </div>
+  </div>
 
   <!-- Project goal + kanban progress bar -->
   <div id="goal-bar">
@@ -397,6 +413,10 @@
     <div class="modal settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
       <div class="modal-header">
         <span id="settings-title" class="modal-ticket-id">Settings</span>
+        <div class="settings-tabs">
+          <button class="settings-tab-btn active" data-tab="general">General</button>
+          <button class="settings-tab-btn" data-tab="users">Users</button>
+        </div>
         <button class="modal-close" id="settings-close" title="Close"><img src="assets/close.svg" class="svg-icon" alt="Close"></button>
       </div>
       <div class="modal-body settings-body" id="settings-body">
