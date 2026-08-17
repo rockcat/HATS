@@ -33,6 +33,7 @@ import { AgentStore } from './api/agent-store.js';
 import { ScheduledActionStore } from './api/scheduled-action-store.js';
 import { seedBuiltIns } from './store/built-in-agents.js';
 import { runtimeDir } from './util/runtime-dir.js';
+import { UserStore } from './api/user-store.js';
 
 // ── Project layout ────────────────────────────────────────────────────────────
 
@@ -191,6 +192,18 @@ async function main() {
   await seedBuiltIns(agentStore);
   await actionStore.load();
 
+  const userStore = new UserStore(runtimeDir('data', 'users.json'));
+  await userStore.load();
+  if (userStore.isEmpty()) {
+    const username = process.env['HATS_ADMIN_USERNAME'] ?? 'admin';
+    const password = process.env['HATS_ADMIN_PASSWORD'] ?? 'changeme';
+    await userStore.createUser(username, password, 'admin');
+    console.log(`[Auth] Created initial admin user: ${username}`);
+    if (!process.env['HATS_ADMIN_PASSWORD']) {
+      console.warn('[Auth] WARNING: Using default password "changeme" — set HATS_ADMIN_PASSWORD in .env');
+    }
+  }
+
   const loader = makeProjectLoader(agentStore, actionStore);
   const orchestrator = await loader(PROJECT_DIR, KANBAN_FILE, STATE_FILE);
 
@@ -211,6 +224,7 @@ async function main() {
     projectLoader:  loader,
     agentStore,
     actionStore,
+    userStore,
   });
   api.start();
 
