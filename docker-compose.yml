@@ -1,0 +1,25 @@
+services:
+  hats:
+    build: .
+    image: hats:latest
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+      # Piper TTS HTTP servers — one per loaded voice model
+      - "5100-5120:5100-5120"
+    volumes:
+      # Bind-mount runtime data — survives container restarts and rebuilds
+      - ./runtime_data:/app/runtime_data
+    env_file:
+      # Docker injects these directly; no --env-file flag needed in CMD
+      - .env
+    environment:
+      NODE_ENV: production
+      RUNTIME_DIR: /app/runtime_data
+      PIPER_VOICES_DIR: /app/runtime_data/piper_voices
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/api/state"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
