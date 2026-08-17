@@ -4330,6 +4330,7 @@ body.has-expanded-panel main > section:not(.panel--expanded) {
   position: fixed; inset: 0; z-index: 9000;
   background: var(--bg); display: flex; align-items: center; justify-content: center;
 }
+.login-overlay[hidden] { display: none; }
 .login-card {
   background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
   padding: 36px 40px; width: 340px; display: flex; flex-direction: column; gap: 18px;
@@ -4393,6 +4394,7 @@ body.has-expanded-panel main > section:not(.panel--expanded) {
   position: absolute; inset: 0; z-index: 10; background: var(--surface);
   display: flex; align-items: center; justify-content: center; border-radius: 6px;
 }
+.qr-panel[hidden] { display: none; }
 .qr-inner { position: relative; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 24px; }
 .qr-close {
   position: absolute; top: 8px; right: 8px; background: none; border: none;
