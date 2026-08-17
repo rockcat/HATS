@@ -12,7 +12,10 @@ const pairingTokens = new Map<string, { userId: string; expiresAt: number }>();
 const PAIR_TTL      = 5 * 60 * 1000; // 5 minutes
 
 function json(res: ServerResponse, status: number, body: unknown): void {
-  res.writeHead(status, { 'Content-Type': 'application/json' });
+  // Set Content-Type via setHeader so it merges with any previously-set headers
+  // (e.g. Set-Cookie from setSessionCookie) rather than risking them being dropped.
+  res.setHeader('Content-Type', 'application/json');
+  res.writeHead(status);
   res.end(JSON.stringify(body));
 }
 
@@ -38,14 +41,16 @@ export class AuthRouter {
       if (!user) { json(res, 401, { error: 'Invalid username or password' }); return true; }
       const sid = createSession(user);
       setSessionCookie(res, sid);
-      json(res, 200, { ok: true, user: this.userStore.toPublic(user) });
+      json(res, 200, { ok: true, token: sid, user: this.userStore.toPublic(user) });
       return true;
     }
 
     // POST /api/auth/logout
     if (pathname === '/api/auth/logout' && method === 'POST') {
-      const sid = cookieSessionId(req);
-      if (sid) deleteSession(sid);
+      const cookieSid  = cookieSessionId(req);
+      const bearerSid  = (req.headers['authorization'] as string | undefined)?.replace(/^Bearer\s+/i, '');
+      if (cookieSid)  deleteSession(cookieSid);
+      if (bearerSid)  deleteSession(bearerSid);
       clearSessionCookie(res);
       json(res, 200, { ok: true });
       return true;
