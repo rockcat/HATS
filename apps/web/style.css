@@ -2379,6 +2379,7 @@ main {
 .settings-body {
   overflow-y: auto;
   padding: 0 !important;
+  position: relative;
 }
 
 .settings-section {
@@ -4323,3 +4324,82 @@ body.has-expanded-panel main > section:not(.panel--expanded) {
   color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
   border-radius: 3px; padding: 1px 4px; vertical-align: middle; margin-left: 4px;
 }
+
+/* ── Auth — login overlay ──────────────────────────────────────────────────── */
+.login-overlay {
+  position: fixed; inset: 0; z-index: 9000;
+  background: var(--bg); display: flex; align-items: center; justify-content: center;
+}
+.login-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+  padding: 36px 40px; width: 340px; display: flex; flex-direction: column; gap: 18px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.2);
+}
+.login-title { margin: 0; font-size: 22px; font-weight: 700; text-align: center; color: var(--text); letter-spacing: .06em; }
+.login-subtitle { margin: 0; font-size: 13px; color: var(--text-muted); text-align: center; }
+.login-form { display: flex; flex-direction: column; gap: 10px; }
+.login-input {
+  padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px;
+  background: var(--surface-2); color: var(--text); font-size: 14px; outline: none;
+}
+.login-input:focus { border-color: var(--accent); }
+.login-error { margin: 0; font-size: 12px; color: #f44336; }
+.login-submit { width: 100%; padding: 9px; font-size: 14px; margin-top: 4px; }
+
+/* ── Auth — header user display ──────────────────────────────────────────── */
+.current-user-label {
+  font-size: 12px; color: var(--text-muted); white-space: nowrap;
+  padding: 0 4px;
+}
+
+/* ── Settings modal — tabs ───────────────────────────────────────────────── */
+.settings-tabs { display: flex; gap: 2px; margin-left: 8px; }
+.settings-tab-btn {
+  padding: 3px 12px; border-radius: 4px; border: 1px solid var(--border);
+  background: transparent; color: var(--text-muted); font-size: 12px; cursor: pointer;
+  transition: background .15s, color .15s;
+}
+.settings-tab-btn:hover { background: var(--surface-2); color: var(--text); }
+.settings-tab-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* ── Users tab ───────────────────────────────────────────────────────────── */
+.user-add-form { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+.users-list { display: flex; flex-direction: column; gap: 10px; }
+.user-row {
+  padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px;
+  background: var(--surface-2); display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+}
+.user-name { font-weight: 600; font-size: 13px; flex: 1; }
+.user-role-badge {
+  font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 3px;
+  letter-spacing: .05em; text-transform: uppercase;
+}
+.user-role-admin { background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--accent); }
+.user-role-user  { background: var(--surface-3); color: var(--text-muted); }
+.user-self-tag   { font-size: 10px; color: var(--text-muted); }
+.user-actions    { display: flex; gap: 6px; flex-wrap: wrap; }
+.user-chpw-btn, .user-del-btn, .user-pair-btn { font-size: 11px; padding: 3px 8px; }
+.user-del-btn    { color: #f44336; border-color: #f44336; }
+.user-del-btn:hover { background: rgba(244,67,54,.1); }
+.user-keys       { width: 100%; display: flex; flex-direction: column; gap: 4px; padding-top: 6px; border-top: 1px solid var(--border); }
+.user-keys-label { font-size: 11px; font-weight: 600; color: var(--text-muted); margin-bottom: 2px; }
+.user-key-row    { display: flex; align-items: center; gap: 8px; font-size: 11px; }
+.user-key-date   { color: var(--text-muted); margin-left: auto; }
+.user-key-revoke { background: none; border: none; color: #f44336; cursor: pointer; font-size: 14px; line-height: 1; padding: 0 4px; }
+.user-key-revoke:hover { opacity: .7; }
+
+/* ── QR panel ────────────────────────────────────────────────────────────── */
+.qr-panel {
+  position: absolute; inset: 0; z-index: 10; background: var(--surface);
+  display: flex; align-items: center; justify-content: center; border-radius: 6px;
+}
+.qr-inner { position: relative; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 24px; }
+.qr-close {
+  position: absolute; top: 8px; right: 8px; background: none; border: none;
+  font-size: 20px; cursor: pointer; color: var(--text-muted); line-height: 1;
+}
+.qr-title  { margin: 0; font-size: 14px; font-weight: 600; color: var(--text); }
+.qr-image  { width: 220px; height: 220px; }
+.qr-image svg { width: 100% !important; height: 100% !important; }
+.qr-url    { margin: 0; font-size: 10px; word-break: break-all; color: var(--text-muted); max-width: 280px; }
+.qr-timer  { margin: 0; font-size: 12px; color: var(--accent); font-weight: 600; }

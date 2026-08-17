@@ -5,6 +5,7 @@ import { setToolCallDetail, toolCallDetail } from './agent-detail.js';
 import { resetProvidersCache, refreshProviderModels, loadProviders } from './providers.js';
 import { resetPricingCache } from './pricing.js';
 import { toggleMute } from './voice.js';
+import { currentUser, logout } from './auth.js';
 
 export const ENV_META = {
   ANTHROPIC_API_KEY:  { label: 'Anthropic API Key',        group: 'API Keys',     secret: true,  hint: 'sk-ant-…'             },
@@ -22,6 +23,8 @@ export const ENV_META = {
 
 export const GROUP_ORDER = ['API Keys', 'Models', 'Local Models', 'Other'];
 
+let activeTab = 'general';
+
 export function initSettings() {
   document.getElementById('settings-btn').addEventListener('click', openSettings);
   document.getElementById('mute-btn').addEventListener('click', toggleMute);
@@ -36,13 +39,29 @@ export function initSettings() {
       slider.querySelectorAll('.toggle-slider-opt').forEach(b => b.classList.remove('active'));
       opt.classList.add('active');
     }
+    const tab = e.target.closest('.settings-tab-btn');
+    if (tab) switchTab(tab.dataset.tab);
   });
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape' && !document.getElementById('settings-modal').hidden) closeSettings();
   });
+  document.getElementById('logout-btn')?.addEventListener('click', logout);
+}
+
+function switchTab(tab) {
+  activeTab = tab;
+  document.querySelectorAll('.settings-tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  document.getElementById('settings-save').hidden   = tab !== 'general';
+  document.getElementById('settings-cancel').hidden = tab !== 'general';
+  if (tab === 'general') {
+    openSettings();
+  } else if (tab === 'users') {
+    renderUsersTab();
+  }
 }
 
 export function openSettings() {
+  activeTab = 'general';
   refreshProviderModels();
   const modal = document.getElementById('settings-modal');
   const body  = document.getElementById('settings-body');
@@ -51,6 +70,9 @@ export function openSettings() {
   msg.className   = 'settings-msg';
   body.innerHTML  = '<p class="settings-loading">Loading…</p>';
   modal.hidden    = false;
+  document.querySelectorAll('.settings-tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === 'general'));
+  document.getElementById('settings-save').hidden   = false;
+  document.getElementById('settings-cancel').hidden = false;
 
   Promise.all([
     fetch('/api/env').then(r => r.json()),
@@ -191,6 +213,157 @@ export function renderSettingsBody(entries, providers, humanName, logPrompts) {
 
 export function closeSettings() {
   document.getElementById('settings-modal').hidden = true;
+}
+
+// ── Users tab ─────────────────────────────────────────────────────────────────
+
+async function renderUsersTab() {
+  const body = document.getElementById('settings-body');
+  body.innerHTML = '<p class="settings-loading">Loading users…</p>';
+
+  const isAdmin = currentUser?.role === 'admin';
+  let users = [];
+  if (isAdmin) {
+    try { users = await fetch('/api/users').then(r => r.json()); } catch { /* ignore */ }
+  } else {
+    users = [currentUser];
+  }
+
+  let html = `<div class="settings-section">
+    <div class="settings-section-title">Users</div>
+    ${isAdmin ? `
+    <div class="user-add-form">
+      <input type="text"     id="new-user-name" class="env-input" placeholder="Username"        autocomplete="off">
+      <input type="password" id="new-user-pass" class="env-input" placeholder="Password"        autocomplete="new-password">
+      <select id="new-user-role" class="env-input"><option value="user">User</option><option value="admin">Admin</option></select>
+      <button id="new-user-btn" class="modal-btn secondary">Add user</button>
+    </div>` : ''}
+    <div id="users-list" class="users-list">`;
+
+  for (const u of users) {
+    const isSelf = u.id === currentUser?.id;
+    html += `
+    <div class="user-row" data-id="${esc(u.id)}">
+      <span class="user-name">${esc(u.username)}</span>
+      <span class="user-role-badge user-role-${u.role}">${u.role}</span>
+      ${isSelf ? '<span class="user-self-tag">you</span>' : ''}
+      <div class="user-actions">
+        <button class="modal-btn secondary user-chpw-btn" data-id="${esc(u.id)}" data-name="${esc(u.username)}">Change password</button>
+        <button class="modal-btn secondary user-pair-btn" data-id="${esc(u.id)}">Pair mobile</button>
+        ${isAdmin && !isSelf ? `<button class="modal-btn secondary user-del-btn" data-id="${esc(u.id)}">Delete</button>` : ''}
+      </div>
+      ${u.apiKeys?.length ? `
+      <div class="user-keys">
+        <span class="user-keys-label">API keys</span>
+        ${u.apiKeys.map(k => `
+        <span class="user-key-row">
+          <span>${esc(k.label)}</span>
+          <span class="user-key-date">${new Date(k.createdAt).toLocaleDateString()}</span>
+          <button class="user-key-revoke" data-uid="${esc(u.id)}" data-kid="${esc(k.id)}" title="Revoke">×</button>
+        </span>`).join('')}
+      </div>` : ''}
+    </div>`;
+  }
+
+  html += `</div></div>
+  <div id="qr-panel" class="qr-panel" hidden>
+    <div class="qr-inner">
+      <button id="qr-close-btn" class="qr-close">×</button>
+      <p class="qr-title">Scan to pair a mobile device</p>
+      <div id="qr-image" class="qr-image"></div>
+      <p id="qr-url"  class="qr-url"></p>
+      <p id="qr-timer" class="qr-timer"></p>
+    </div>
+  </div>`;
+
+  body.innerHTML = html;
+  bindUsersTabEvents(isAdmin);
+}
+
+function bindUsersTabEvents(isAdmin) {
+  const body = document.getElementById('settings-body');
+
+  if (isAdmin) {
+    body.querySelector('#new-user-btn')?.addEventListener('click', async () => {
+      const name = body.querySelector('#new-user-name').value.trim();
+      const pass = body.querySelector('#new-user-pass').value;
+      const role = body.querySelector('#new-user-role').value;
+      if (!name || !pass) return;
+      const r = await fetch('/api/users', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: name, password: pass, role }),
+      });
+      if (r.ok) renderUsersTab(); else alert((await r.json()).error ?? 'Failed');
+    });
+  }
+
+  body.querySelectorAll('.user-chpw-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const pw = prompt(`New password for ${btn.dataset.name}:`);
+      if (!pw) return;
+      const r = await fetch(`/api/users/${btn.dataset.id}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: pw }),
+      });
+      if (r.ok) alert('Password updated.'); else alert((await r.json()).error ?? 'Failed');
+    });
+  });
+
+  body.querySelectorAll('.user-del-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('Delete this user?')) return;
+      const r = await fetch(`/api/users/${btn.dataset.id}`, { method: 'DELETE' });
+      if (r.ok) renderUsersTab(); else alert((await r.json()).error ?? 'Failed');
+    });
+  });
+
+  body.querySelectorAll('.user-key-revoke').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('Revoke this API key?')) return;
+      await fetch(`/api/users/${btn.dataset.uid}/api-keys/${btn.dataset.kid}`, { method: 'DELETE' });
+      renderUsersTab();
+    });
+  });
+
+  body.querySelectorAll('.user-pair-btn').forEach(btn => {
+    btn.addEventListener('click', () => openQrPanel(btn.dataset.id));
+  });
+
+  body.querySelector('#qr-close-btn')?.addEventListener('click', () => {
+    body.querySelector('#qr-panel').hidden = true;
+    clearInterval(body._qrInterval);
+  });
+}
+
+async function openQrPanel(userId) {
+  const body  = document.getElementById('settings-body');
+  const panel = body.querySelector('#qr-panel');
+  const img   = body.querySelector('#qr-image');
+  const urlEl = body.querySelector('#qr-url');
+  const timer = body.querySelector('#qr-timer');
+
+  img.innerHTML    = '<p class="settings-loading">Generating…</p>';
+  urlEl.textContent = '';
+  timer.textContent = '';
+  panel.hidden     = false;
+
+  const r    = await fetch('/api/auth/pair/generate', { method: 'POST' });
+  const data = await r.json();
+  if (!r.ok) { img.innerHTML = `<p style="color:red">${esc(data.error ?? 'Failed')}</p>`; return; }
+
+  img.innerHTML     = data.qrSvg;
+  urlEl.textContent = data.url;
+  panel.hidden      = false;
+
+  let remaining = data.expiresIn;
+  clearInterval(body._qrInterval);
+  body._qrInterval = setInterval(() => {
+    remaining--;
+    const m = String(Math.floor(remaining / 60)).padStart(2, '0');
+    const s = String(remaining % 60).padStart(2, '0');
+    timer.textContent = remaining > 0 ? `Expires in ${m}:${s}` : 'Expired';
+    if (remaining <= 0) { clearInterval(body._qrInterval); img.innerHTML = '<p>QR code expired — click Pair mobile to generate a new one.</p>'; }
+  }, 1000);
 }
 
 export function saveSettings() {

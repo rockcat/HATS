@@ -2,6 +2,7 @@
 // This file is loaded as <script type="module"> and does nothing except import
 // modules and call their init functions in dependency order.
 
+import { checkAuth }                                   from './modules/auth.js';
 import { loadSpecialisations }                         from './modules/specialisations.js';
 import { initTelemetry, initTelScopeToggle,
          applyTelemetrySummary }                       from './modules/telemetry.js';
@@ -24,6 +25,8 @@ import { initAllowlist }                               from './modules/allowlist
 import { initTabs, initBacklogCalendarTabs,
          initPanelExpand, initMicButtons }             from './modules/panels.js';
 import { connect, fetchTools, applyState }             from './modules/sse.js';
+
+if (!await checkAuth()) throw new Error('Not authenticated');
 
 // ── Cross-module dependency injection ─────────────────────────────────────────
 // These break import cycles by handing each module the functions it depends on
