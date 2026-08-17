@@ -59,7 +59,7 @@ function initLoginForm() {
     errorEl.hidden  = true;
     btn.textContent = 'Signing in…';
     try {
-      const r = await _fetch('/api/auth/login', {
+      const r = await fetch('/api/auth/login', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ username, password }),

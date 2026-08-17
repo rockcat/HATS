@@ -80,9 +80,12 @@ export function openSettings() {
     fetch('/api/project/human-name').then(r => r.json()).catch(() => ({ humanName: 'Human' })),
     fetch('/api/debug/logging').then(r => r.json()).catch(() => ({ logPrompts: false })),
   ])
-    .then(([entries, providers, { humanName }, { logPrompts }]) =>
-      renderSettingsBody(entries, providers, humanName, logPrompts))
-    .catch(() => { body.innerHTML = '<p class="settings-loading">Failed to load settings.</p>'; });
+    .then(([entries, providers, { humanName }, { logPrompts }]) => {
+      if (activeTab === 'general') renderSettingsBody(entries, providers, humanName, logPrompts);
+    })
+    .catch(() => {
+      if (activeTab === 'general') body.innerHTML = '<p class="settings-loading">Failed to load settings.</p>';
+    });
 }
 
 export function renderSettingsBody(entries, providers, humanName, logPrompts) {
@@ -224,7 +227,10 @@ async function renderUsersTab() {
   const isAdmin = currentUser?.role === 'admin';
   let users = [];
   if (isAdmin) {
-    try { users = await fetch('/api/users').then(r => r.json()); } catch { /* ignore */ }
+    try {
+      const r = await fetch('/api/users');
+      if (r.ok) users = await r.json();
+    } catch { /* ignore */ }
   } else {
     users = [currentUser];
   }
