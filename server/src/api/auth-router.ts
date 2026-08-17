@@ -75,8 +75,11 @@ export class AuthRouter {
       const expires = Date.now() + PAIR_TTL;
       pairingTokens.set(token, { userId: session.userId, expiresAt: expires });
 
-      const host    = req.headers['host'] ?? `localhost:${this.port}`;
-      const pairUrl = `http://${host}/api/auth/pair/${token}`;
+      const publicUrl = process.env['HATS_PUBLIC_URL']?.replace(/\/$/, '');
+      const host      = req.headers['host'] ?? `localhost:${this.port}`;
+      const pairUrl   = publicUrl
+        ? `${publicUrl}/api/auth/pair/${token}`
+        : `http://${host}/api/auth/pair/${token}`;
 
       let qrSvg = '';
       try {
