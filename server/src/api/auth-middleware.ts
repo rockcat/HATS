@@ -47,6 +47,10 @@ export function parseRequestAuth(req: IncomingMessage, userStore: UserStore): Se
   const raw = (req.headers['x-api-key'] as string | undefined)
     ?? (req.headers['authorization'] as string | undefined)?.replace(/^Bearer\s+/i, '');
   if (raw) {
+    // Could be a session token (sent by the web client via sessionStorage)
+    const s = getSession(raw);
+    if (s) return s;
+    // Or a static API key
     const u = userStore.getUserByApiKey(raw);
     if (u) return { userId: u.id, username: u.username, role: u.role, expiresAt: Infinity };
   }
