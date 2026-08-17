@@ -29,6 +29,10 @@ import { ScheduledActionStore } from './scheduled-action-store.js';
 import { GoogleTokenStore } from './google-token-store.js';
 import { GoogleOAuthRouter } from './google-oauth-router.js';
 import { runtimeDir } from '../util/runtime-dir.js';
+import { UserStore } from './user-store.js';
+import { AuthRouter } from './auth-router.js';
+import { UserManagementRouter } from './user-management-router.js';
+import { parseRequestAuth } from './auth-middleware.js';
 
 const __dirname  = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(__dirname, '..', '..', '..', 'apps', 'web');
@@ -74,6 +78,7 @@ export interface APIServerConfig {
   agentStore?:      AgentStore;
   actionStore?:     ScheduledActionStore;
   googleTokensPath?: string;
+  userStore?:       UserStore;
 }
 
 export class APIServer {
@@ -119,6 +124,9 @@ export class APIServer {
   private mcpCatalogueRouter: MCPCatalogueRouter;
   private googleTokenStore: GoogleTokenStore;
   private googleOAuthRouter: GoogleOAuthRouter;
+  private userStore: UserStore;
+  private authRouter: AuthRouter;
+  private userManagementRouter: UserManagementRouter;
   private googleRefreshTimer: ReturnType<typeof setInterval> | null = null;
   private readonly GOOGLE_HTTP_MCP_IDS = new Set(['google-gmail', 'google-calendar', 'google-drive', 'google-chat', 'google-contacts']);
 
@@ -238,6 +246,10 @@ export class APIServer {
       await this.reconnectGoogleMCPs();
       this.sseBroadcast({ type: 'google_auth_status', authenticated: true });
     });
+
+    this.userStore            = config.userStore ?? new UserStore(runtimeDir('data', 'users.json'));
+    this.authRouter           = new AuthRouter(this.userStore, this.port);
+    this.userManagementRouter = new UserManagementRouter(this.userStore);
 
     this.server = createServer((req, res) => {
       this.handleRequest(req, res).catch((err) => {
@@ -453,13 +465,25 @@ export class APIServer {
 
   private async handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, PUT, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-API-Key, Authorization');
     if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
 
     const url      = new URL(req.url ?? '/', `http://localhost:${this.port}`);
     const pathname = url.pathname;
     const method   = req.method ?? 'GET';
+
+    // ── Auth check — all /api/* and /events require a valid session or API key.
+    // Public exceptions: login, and the mobile pairing confirmation endpoint.
+    const isPublic = (pathname === '/api/auth/login' && method === 'POST')
+                  || (pathname.startsWith('/api/auth/pair/') && method === 'GET');
+    if (!isPublic && (pathname.startsWith('/api/') || pathname === '/events')) {
+      if (!parseRequestAuth(req, this.userStore)) {
+        res.writeHead(401, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Not authenticated' }));
+        return;
+      }
+    }
 
     if (pathname === '/events' && method === 'GET') {
       await this.sseInit(res);
@@ -486,6 +510,8 @@ export class APIServer {
       return;
     }
 
+    if (await this.authRouter.handleRoutes(pathname, method, req, res))               return;
+    if (await this.userManagementRouter.handleRoutes(pathname, method, req, res))     return;
     if (await this.kanbanManager.handleRoutes(pathname, method, url, req, res))       return;
     if (await this.meetingRouter.handleRoutes(pathname, method, req, res))            return;
     if (await this.speechRouter.handleRoutes(pathname, method, req, res))             return;
