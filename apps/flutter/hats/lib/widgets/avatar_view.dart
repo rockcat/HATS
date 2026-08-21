@@ -18,9 +18,9 @@ class AvatarView extends StatefulWidget {
 
 class AvatarViewState extends State<AvatarView> {
   late final WebViewController _ctrl;
-  final Completer<void> _vrmReady = Completer<void>();
+  Completer<void> _vrmReady = Completer<void>();
 
-  /// Completes when the VRM/GLB model has finished loading in the WebView.
+  /// Completes when the current model has finished loading in the WebView.
   /// Awaiting this before playing audio ensures lip sync can start on time.
   Future<void> get vrmReady => _vrmReady.future;
 
@@ -54,6 +54,17 @@ class AvatarViewState extends State<AvatarView> {
     if (!mounted) return;
     final json = jsonEncode(visemes);
     await _ctrl.runJavaScript('window._queueLipSync && window._queueLipSync($json)');
+  }
+
+  @override
+  void didUpdateWidget(AvatarView old) {
+    super.didUpdateWidget(old);
+    // Reuse the live WebView — just swap the model, skipping full HTML reload.
+    if (widget.src != old.src) {
+      _vrmReady = Completer<void>(); // fresh gate for the new model
+      final srcEsc = jsonEncode(widget.src);
+      _ctrl.runJavaScript('window.loadModel && window.loadModel($srcEsc)');
+    }
   }
 
   @override
@@ -152,36 +163,48 @@ let modelLoaded = false;
 const loader = new GLTFLoader();
 loader.register(p => new VRMLoaderPlugin(p));
 
-loader.load($srcEsc, gltf => {
-  const v = gltf.userData.vrm;
-  if (v) {
-    VRMUtils.removeUnnecessaryJoints(gltf.scene);
-    vrm = v;
-    applyVrmRestPose(vrm);
-    blink = makeBlink();
-    console.log('[Avatar] VRM expressions:', Object.keys(vrm.expressionManager?.expressionMap ?? {}).join(', ') || '(none)');
-  } else {
-    visemeMeshes = collectVisemeMeshes(gltf.scene);
-    applyGlbRestPose(gltf.scene);
-    if (gltf.animations?.length > 0) {
-      mixer = new THREE.AnimationMixer(gltf.scene);
-      for (const clip of gltf.animations) mixer.clipAction(clip).play();
-      console.log('[Avatar] GLB idle animations:', gltf.animations.length);
+function _unloadModel() {
+  scene.children.filter(c => !c.isLight).forEach(c => scene.remove(c));
+  vrm = null; vrmWeights = {}; vrmElapsed = 0; blink = makeBlink();
+  if (mixer) { mixer.stopAllAction(); mixer = null; }
+  visemeMeshes = []; Object.keys(morphWeights).forEach(k => delete morphWeights[k]);
+  lipData = null; lipFallback = false; lipT0 = null; pendingLip = null;
+  modelLoaded = false;
+}
+
+window.loadModel = function(url) {
+  _unloadModel();
+  loader.load(url, gltf => {
+    const v = gltf.userData.vrm;
+    if (v) {
+      VRMUtils.removeUnnecessaryJoints(gltf.scene);
+      vrm = v;
+      applyVrmRestPose(vrm);
+      blink = makeBlink();
+      console.log('[Avatar] VRM expressions:', Object.keys(vrm.expressionManager?.expressionMap ?? {}).join(', ') || '(none)');
+    } else {
+      visemeMeshes = collectVisemeMeshes(gltf.scene);
+      applyGlbRestPose(gltf.scene);
+      if (gltf.animations?.length > 0) {
+        mixer = new THREE.AnimationMixer(gltf.scene);
+        for (const clip of gltf.animations) mixer.clipAction(clip).play();
+        console.log('[Avatar] GLB idle animations:', gltf.animations.length);
+      }
+      console.log('[Avatar] GLB viseme meshes:', visemeMeshes.length);
     }
-    console.log('[Avatar] GLB viseme meshes:', visemeMeshes.length);
-  }
-  gltf.scene.rotation.y = $rotY;
-  scene.add(gltf.scene);
-  modelLoaded = true;
+    gltf.scene.rotation.y = $rotY;
+    scene.add(gltf.scene);
+    modelLoaded = true;
+    window.AvatarBridge?.postMessage('ready');
+    if (pendingLip !== null) { _startLipSync(pendingLip); pendingLip = null; }
+  }, undefined, e => {
+    console.error('[Avatar] load error', e);
+    modelLoaded = true;
+    window.AvatarBridge?.postMessage('error');
+  });
+};
 
-  window.AvatarBridge?.postMessage('ready');
-  if (pendingLip !== null) { _startLipSync(pendingLip); pendingLip = null; }
-
-}, undefined, e => {
-  console.error('[Avatar] load error', e);
-  modelLoaded = true;
-  window.AvatarBridge?.postMessage('error');
-});
+window.loadModel($srcEsc);
 
 // ── Lip-sync ──────────────────────────────────────────────────────────────
 function _startLipSync(visemes) {

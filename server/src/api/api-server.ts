@@ -45,8 +45,13 @@ const MIME: Record<string, string> = {
   '.png':  'image/png',
   '.svg':  'image/svg+xml',
   '.glb':  'model/gltf-binary',
+  '.vrm':  'model/gltf-binary',
   '.json': 'application/json',
 };
+
+// 1 day for immutable binary assets; 1 hour for mutable web source files
+const AVATAR_CACHE  = { 'Cache-Control': 'public, max-age=86400' };
+const STATIC_CACHE  = { 'Cache-Control': 'public, max-age=3600' };
 
 const AVATARS_DIR     = runtimeDir('avatars');
 const BACKGROUNDS_DIR = runtimeDir('avatars', 'backgrounds');
@@ -564,9 +569,9 @@ export class APIServer {
       serveFile(path.join(NM_DIR, pathname.slice(4)), NM_DIR, res, 'application/javascript', { 'Cache-Control': 'public, max-age=86400' });
       return;
     }
-    if (pathname.startsWith('/avatars/'))     { serveFile(path.join(AVATARS_DIR,     pathname.slice(9)),  AVATARS_DIR,     res); return; }
-    if (pathname.startsWith('/backgrounds/')) { serveFile(path.join(BACKGROUNDS_DIR, pathname.slice(13)), BACKGROUNDS_DIR, res, 'image/png'); return; }
-    serveFile(path.join(PUBLIC_DIR, pathname === '/' ? 'index.html' : pathname.slice(1)), PUBLIC_DIR, res);
+    if (pathname.startsWith('/avatars/'))     { serveFile(path.join(AVATARS_DIR,     pathname.slice(9)),  AVATARS_DIR,     res, 'application/octet-stream', AVATAR_CACHE); return; }
+    if (pathname.startsWith('/backgrounds/')) { serveFile(path.join(BACKGROUNDS_DIR, pathname.slice(13)), BACKGROUNDS_DIR, res, 'image/png', AVATAR_CACHE); return; }
+    serveFile(path.join(PUBLIC_DIR, pathname === '/' ? 'index.html' : pathname.slice(1)), PUBLIC_DIR, res, 'application/octet-stream', STATIC_CACHE);
   }
 
   // ── Shared helpers ────────────────────────────────────────────────────────
