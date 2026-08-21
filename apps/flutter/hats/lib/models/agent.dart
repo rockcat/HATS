@@ -8,6 +8,9 @@ class Agent {
   final String? model;
   final String? provider;
   final String? specialisation;
+  final String? voice;
+  final String? speakerName;
+  final String? background;
 
   const Agent({
     required this.name,
@@ -19,6 +22,9 @@ class Agent {
     this.model,
     this.provider,
     this.specialisation,
+    this.voice,
+    this.speakerName,
+    this.background,
   });
 
   factory Agent.fromJson(Map<String, dynamic> j) => Agent(
@@ -31,6 +37,9 @@ class Agent {
         model: j['model'] as String?,
         provider: j['provider'] as String?,
         specialisation: j['specialisation'] as String?,
+        voice: j['voice'] as String?,
+        speakerName: j['speakerName'] as String?,
+        background: j['background'] as String?,
       );
 
   bool get isBusy => state == 'busy' || talkingTo != null;
