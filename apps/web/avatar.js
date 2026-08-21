@@ -3,33 +3,13 @@
 
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { VRMLoaderPlugin, VRMExpressionPresetName } from '@pixiv/three-vrm';
+import { VRMLoaderPlugin } from '@pixiv/three-vrm';
 import { collectVisemeMeshes, stepMorphWeights, applyMorphWeights } from './morph-lipsync.js';
-
-// ── VRM viseme mapping (HATS viseme_* → VRM vowel expressions) ───────────────
-const VISEME_TO_VRM = {
-  viseme_sil: {},
-  viseme_aa:  { aa: 1.0 },
-  viseme_E:   { ee: 1.0 },
-  viseme_O:   { oh: 1.0 },
-  viseme_U:   { ou: 1.0 },
-  viseme_OO:  { ou: 0.8 },
-  viseme_PP:  {},
-  viseme_FF:  { ih: 0.7 },
-  viseme_nn:  { ih: 0.4, aa: 0.2 },
-  viseme_SS:  { ih: 0.5 },
-};
-const VRM_VOWELS = ['aa', 'ih', 'ou', 'ee', 'oh'];
-
-// Rotate upper arms ~60° downward from T-pose to a natural resting A-pose.
-// VRM normalized space: right arm extends +X, left extends -X, so signs differ.
-const ARM_DOWN = Math.PI / 3;
-function applyVrmRestPose(v) {
-  const left  = v.humanoid?.getNormalizedBoneNode('leftUpperArm');
-  const right = v.humanoid?.getNormalizedBoneNode('rightUpperArm');
-  if (left)  left.rotation.z  =  ARM_DOWN;
-  if (right) right.rotation.z = -ARM_DOWN;
-}
+import {
+  VISEME_TO_VRM, VRM_VOWELS,
+  applyVrmRestPose, applyGlbRestPose, stepIdleMotion,
+  makeBlink, stepBlink,
+} from './modules/avatar-core.js';
 
 // ── Lipsync state ─────────────────────────────────────────────────────────────
 
@@ -57,15 +37,10 @@ let mixer    = null; // THREE.AnimationMixer | null
 let clock    = new THREE.Clock();
 
 // VRM state
-let vrm          = null;  // VRM instance | null
-let vrmWeights   = {};    // live vowel weights for smooth lerp
-let vrmElapsed   = 0;     // total elapsed seconds, drives breathing + sway
-// VRM blink idle
-let blinkTimer   = 0;
-let nextBlink    = 2 + Math.random() * 3;
-let blinkPhase   = 'open'; // 'open' | 'closing' | 'opening'
-let blinkT       = 0;
-const BLINK_HALF = 0.07;
+let vrm        = null;  // VRM instance | null
+let vrmWeights = {};    // live vowel weights for smooth lerp
+let vrmElapsed = 0;     // total elapsed seconds
+let blink      = makeBlink();
 
 function initRenderer(canvas) {
   renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
@@ -132,11 +107,11 @@ function loadGLB(file, camPos, rotate, fov, scale) {
       vrm = gltf.userData.vrm;
       applyVrmRestPose(vrm);
       vrmElapsed = 0;
-      blinkTimer = 0; blinkPhase = 'open'; blinkT = 0;
-      nextBlink = 2 + Math.random() * 3;
+      blink = makeBlink();
       console.log('[Avatar] VRM loaded — spring bones + blink idle active');
     } else {
       visemeMeshes = collectVisemeMeshes(gltf.scene);
+      applyGlbRestPose(gltf.scene);
       if (gltf.animations?.length > 0) {
         mixer = new THREE.AnimationMixer(gltf.scene);
         for (const clip of gltf.animations) mixer.clipAction(clip).play();
@@ -174,41 +149,20 @@ function renderLoop() {
     vrmElapsed += delta;
     const t  = vrmElapsed;
 
-    // Breathing (~12 breaths/min) + head sway
-    const spine = vrm.humanoid?.getNormalizedBoneNode('spine');
-    if (spine) spine.rotation.x = Math.sin(t * Math.PI * 0.4) * 0.018;
-    const head = vrm.humanoid?.getNormalizedBoneNode('head');
-    if (head) {
-      head.rotation.z = Math.sin(t * 0.37) * 0.012 + Math.sin(t * 0.71) * 0.007;
-      head.rotation.y = Math.sin(t * 0.23) * 0.010 + Math.sin(t * 0.59) * 0.005;
-    }
+    stepIdleMotion(vrm, t);
 
     const em = vrm.expressionManager;
     if (em) {
-      // Lipsync: lerp vowel expressions
+      // Lipsync: lerp vowel expressions toward target
       const target = VISEME_TO_VRM[targetViseme] ?? {};
       for (const v of VRM_VOWELS) {
-        const t   = target[v] ?? 0;
-        const cur = vrmWeights[v] ?? 0;
-        vrmWeights[v] = cur + (t - cur) * 0.35;
+        const want = target[v] ?? 0;
+        const cur  = vrmWeights[v] ?? 0;
+        vrmWeights[v] = cur + (want - cur) * 0.35;
         em.setValue(v, vrmWeights[v]);
       }
-      // Blink idle
-      if (blinkPhase === 'open') {
-        blinkTimer += delta;
-        if (blinkTimer >= nextBlink) {
-          blinkPhase = 'closing'; blinkT = 0; blinkTimer = 0;
-          nextBlink = 2 + Math.random() * 4;
-        }
-      } else {
-        blinkT += delta / BLINK_HALF;
-        const progress = Math.min(blinkT, 1);
-        em.setValue('blink', blinkPhase === 'closing' ? progress : 1 - progress);
-        if (progress >= 1) {
-          if (blinkPhase === 'closing') { blinkPhase = 'opening'; blinkT = 0; }
-          else                         { blinkPhase = 'open'; }
-        }
-      }
+      // Blink — paused while speaking (getAudioTime is active)
+      stepBlink(blink, getAudioTime ? null : em, delta);
     }
     vrm.update(delta); // spring bones + expression flush
   } else {

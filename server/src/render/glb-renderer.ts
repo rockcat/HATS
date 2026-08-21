@@ -9,12 +9,13 @@ import { HeadlessRenderer } from '../renderer3d/headless-renderer.js';
 import { RendererConfig } from './canvas-renderer.js';
 import { VisemeId } from '../avatar/types.js';
 
-// Shared morph helpers — same module imported by browser avatar.js and meeting.js
+// Shared helpers — same modules imported by browser avatar.js, meeting.js, and Flutter WebView
 import {
   collectVisemeMeshes,
   stepMorphWeights,
   applyMorphWeights,
 } from '../../../apps/web/morph-lipsync.js';
+import { applyGlbRestPose } from '../../../apps/web/modules/avatar-core.js';
 
 // ── VisemeId → ARKit viseme_* morph name ──────────────────────────────────────
 
@@ -114,8 +115,9 @@ export class GlbRenderer {
 
     this.scene.add(gltf.scene);
 
-    // Collect viseme meshes using shared helper (also hides body geometry)
+    // Collect viseme meshes and lower arms from T-pose using shared helpers
     this.visemeMeshes = collectVisemeMeshes(gltf.scene);
+    applyGlbRestPose(gltf.scene);
 
     // Start idle animations if the GLB has any
     if (gltf.animations?.length > 0) {

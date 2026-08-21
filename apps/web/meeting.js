@@ -3,6 +3,7 @@
 // Three.js is loaded lazily so a CDN failure never prevents the overlay from working.
 
 import { collectVisemeMeshes, stepMorphWeights, applyMorphWeights } from './morph-lipsync.js';
+import { applyGlbRestPose } from './modules/avatar-core.js';
 
 // Lazily resolved Three.js handles — null until first meeting opens
 let THREE = null;
@@ -127,6 +128,7 @@ function loadSlotGLB(slot, file, camPos, rotate, fov, scale) {
     slot.camera.lookAt(new THREE.Vector3(camPos[0], camPos[1] - 0.08, 0));
 
     slot.visemeMeshes = collectVisemeMeshes(gltf.scene);
+    applyGlbRestPose(gltf.scene);
     // Start idle animations if the GLB has any
     if (gltf.animations?.length > 0) {
       slot.mixer = new THREE.AnimationMixer(gltf.scene);
