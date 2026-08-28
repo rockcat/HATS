@@ -102,7 +102,8 @@ import * as THREE from 'https://esm.sh/three@0.174.0';
 import { GLTFLoader }    from 'https://esm.sh/three@0.174.0/examples/jsm/loaders/GLTFLoader.js';
 import { OrbitControls } from 'https://esm.sh/three@0.174.0/examples/jsm/controls/OrbitControls.js';
 import { VRMLoaderPlugin, VRMUtils } from 'https://esm.sh/@pixiv/three-vrm@3.4.0?deps=three@0.174.0';
-import { VISEME_TO_VRM, VRM_VOWELS, applyVrmRestPose, applyGlbRestPose, stepIdleMotion, makeBlink, stepBlink }
+import { VISEME_TO_VRM, VRM_VOWELS, applyVrmRestPose, applyGlbRestPose, stepIdleMotion,
+         makeBlink, stepBlink, collectBlinkMeshes, applyBlinkMeshes }
   from '$origin/modules/avatar-core.js';
 import { collectVisemeMeshes, stepMorphWeights, applyMorphWeights }
   from '$origin/morph-lipsync.js';
@@ -151,6 +152,7 @@ let vrmElapsed   = 0;
 let blink        = makeBlink();
 let mixer        = null;        // AnimationMixer for GLB idle clips
 let visemeMeshes = [];          // GLB meshes with viseme_* morph targets
+let blinkMeshes  = [];          // GLB meshes with eyeBlinkLeft/Right morph targets
 const morphWeights = {};        // GLB morph weight lerp state
 
 let lipData     = null;         // [{viseme,start,end}] or null
@@ -167,7 +169,7 @@ function _unloadModel() {
   scene.children.filter(c => !c.isLight).forEach(c => scene.remove(c));
   vrm = null; vrmWeights = {}; vrmElapsed = 0; blink = makeBlink();
   if (mixer) { mixer.stopAllAction(); mixer = null; }
-  visemeMeshes = []; Object.keys(morphWeights).forEach(k => delete morphWeights[k]);
+  visemeMeshes = []; blinkMeshes = []; Object.keys(morphWeights).forEach(k => delete morphWeights[k]);
   lipData = null; lipFallback = false; lipT0 = null; pendingLip = null;
   modelLoaded = false;
 }
@@ -184,13 +186,15 @@ window.loadModel = function(url) {
       console.log('[Avatar] VRM expressions:', Object.keys(vrm.expressionManager?.expressionMap ?? {}).join(', ') || '(none)');
     } else {
       visemeMeshes = collectVisemeMeshes(gltf.scene);
+      blinkMeshes  = collectBlinkMeshes(gltf.scene);
+      blink = makeBlink();
       applyGlbRestPose(gltf.scene);
       if (gltf.animations?.length > 0) {
         mixer = new THREE.AnimationMixer(gltf.scene);
         for (const clip of gltf.animations) mixer.clipAction(clip).play();
         console.log('[Avatar] GLB idle animations:', gltf.animations.length);
       }
-      console.log('[Avatar] GLB viseme meshes:', visemeMeshes.length);
+      console.log('[Avatar] GLB viseme meshes:', visemeMeshes.length, 'blink meshes:', blinkMeshes.length);
     }
     gltf.scene.rotation.y = $rotY;
     scene.add(gltf.scene);
@@ -261,7 +265,7 @@ function animate() {
         vrmWeights[v] = cur + (want - cur) * 0.35;
         em.setValue(v, vrmWeights[v]);
       }
-      stepBlink(blink, lipT0 === null ? em : null, delta);
+      stepBlink(blink, v => em.setValue('blink', v), delta);
     }
     vrm.update(delta);
   }
@@ -272,6 +276,7 @@ function animate() {
     stepMorphWeights(morphWeights, currentViseme);
     applyMorphWeights(visemeMeshes, morphWeights);
   }
+  if (blinkMeshes.length > 0) stepBlink(blink, v => applyBlinkMeshes(blinkMeshes, v), delta);
 
   controls.update();
   renderer.render(scene, camera);
