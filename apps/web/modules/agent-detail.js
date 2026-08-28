@@ -102,6 +102,70 @@ function feedBody(ev) {
 
 import { parseFeatureOverrides, serializeFeatureOverrides } from './mcp.js';
 
+// ── Per-agent Google Account connection ───────────────────────────────────────
+
+function _renderAgentGoogleAuth(agentName, container) {
+  const section = document.createElement('div');
+  section.className = 'agent-google-auth-section';
+
+  const label = document.createElement('div');
+  label.className   = 'agent-google-auth-label';
+  label.textContent = 'Google Account';
+  section.appendChild(label);
+
+  const body = document.createElement('div');
+  body.className = 'agent-google-auth-body';
+  section.appendChild(body);
+  container.appendChild(section);
+
+  function render(status) {
+    body.innerHTML = '';
+    if (status.authenticated) {
+      const info = document.createElement('span');
+      info.className   = 'agent-google-auth-connected';
+      info.textContent = status.email ? `Connected as ${status.email}` : 'Connected';
+      body.appendChild(info);
+
+      const disconnectBtn = document.createElement('button');
+      disconnectBtn.className   = 'agent-google-auth-disconnect-btn';
+      disconnectBtn.textContent = 'Disconnect';
+      disconnectBtn.onclick = async () => {
+        disconnectBtn.disabled = true; disconnectBtn.textContent = 'Disconnecting…';
+        await fetch(`/api/auth/google/agent?agent=${encodeURIComponent(agentName)}`, { method: 'DELETE' });
+        render({ authenticated: false });
+      };
+      body.appendChild(disconnectBtn);
+    } else {
+      const connectBtn = document.createElement('button');
+      connectBtn.className   = 'agent-google-auth-connect-btn';
+      connectBtn.textContent = 'Connect Google Account';
+      connectBtn.onclick = () => {
+        const popup = window.open(
+          `/api/auth/google/agent/start?agent=${encodeURIComponent(agentName)}`,
+          'google-auth-agent',
+          'width=520,height=640,menubar=no,toolbar=no',
+        );
+        const onMessage = (e) => {
+          if (e.data?.type !== 'google-auth-success') return;
+          window.removeEventListener('message', onMessage);
+          popup?.close();
+          fetch(`/api/auth/google/agent/status?agent=${encodeURIComponent(agentName)}`)
+            .then(r => r.json())
+            .then(render)
+            .catch(() => {});
+        };
+        window.addEventListener('message', onMessage);
+      };
+      body.appendChild(connectBtn);
+    }
+  }
+
+  fetch(`/api/auth/google/agent/status?agent=${encodeURIComponent(agentName)}`)
+    .then(r => r.json())
+    .then(render)
+    .catch(() => { section.hidden = true; });
+}
+
 export function buildPersonalMcpEntry(agentName, entry) {
   const wrap = document.createElement('div');
   wrap.className = 'personal-mcp-entry';
@@ -427,6 +491,7 @@ export function openAgentDetail(name, chatOnly = false) {
       if (!entries.length) { line.hidden = true; return; }
       line.hidden = false;
       list.innerHTML = '';
+      _renderAgentGoogleAuth(name, list);
       for (const entry of entries) list.appendChild(buildPersonalMcpEntry(name, entry));
     })
     .catch(() => { document.getElementById('agent-config-personal-mcp-line').hidden = true; });

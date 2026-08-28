@@ -27,7 +27,8 @@ import { executeProjectSwitch } from './project-switcher.js';
 import { AgentStore } from './agent-store.js';
 import { ScheduledActionStore } from './scheduled-action-store.js';
 import { GoogleTokenStore } from './google-token-store.js';
-import { GoogleOAuthRouter } from './google-oauth-router.js';
+import { AgentGoogleTokenStore } from './agent-google-token-store.js';
+import { GoogleOAuthRouter, GOOGLE_PERSONAL_MCPS } from './google-oauth-router.js';
 import { runtimeDir } from '../util/runtime-dir.js';
 import { UserStore } from './user-store.js';
 import { AuthRouter } from './auth-router.js';
@@ -127,8 +128,9 @@ export class APIServer {
   private projectManager: ProjectManager;
   private agentRouter: AgentRouter;
   private mcpCatalogueRouter: MCPCatalogueRouter;
-  private googleTokenStore: GoogleTokenStore;
-  private googleOAuthRouter: GoogleOAuthRouter;
+  private googleTokenStore:      GoogleTokenStore;
+  private agentGoogleTokenStore: AgentGoogleTokenStore;
+  private googleOAuthRouter:     GoogleOAuthRouter;
   private userStore: UserStore;
   private authRouter: AuthRouter;
   private userManagementRouter: UserManagementRouter;
@@ -245,11 +247,17 @@ export class APIServer {
     });
 
     const tokensPath = config.googleTokensPath ?? runtimeDir('data', 'google-tokens.json');
-    this.googleTokenStore = new GoogleTokenStore(tokensPath);
-    this.googleOAuthRouter = new GoogleOAuthRouter(this.googleTokenStore, this.port);
+    this.googleTokenStore      = new GoogleTokenStore(tokensPath);
+    this.agentGoogleTokenStore = new AgentGoogleTokenStore(runtimeDir('data', 'google-agent-tokens'));
+    this.googleOAuthRouter     = new GoogleOAuthRouter(this.googleTokenStore, this.port);
+    this.googleOAuthRouter.setAgentTokenStore(this.agentGoogleTokenStore);
     this.googleOAuthRouter.onAuthenticated(async () => {
       await this.reconnectGoogleMCPs();
       this.sseBroadcast({ type: 'google_auth_status', authenticated: true });
+    });
+    this.googleOAuthRouter.onAgentAuthenticated(async (agentName, accessToken, refreshToken, expiresIn, email) => {
+      await this.agentGoogleTokenStore.saveTokens(agentName, accessToken, refreshToken, expiresIn, email);
+      await this._applyAgentGoogleToken(agentName, accessToken);
     });
 
     this.userStore            = config.userStore ?? new UserStore(runtimeDir('data', 'users.json'));
@@ -324,10 +332,15 @@ export class APIServer {
     );
     await this.googleTokenStore.load();
     await this.googleTokenStore.syncToEnv();
-    // Refresh Google access token every 45 minutes
+    await this.agentGoogleTokenStore.loadAll();
+    // Refresh Google access tokens every 45 minutes (shared + all per-agent)
     this.googleRefreshTimer = setInterval(async () => {
       const ok = await this.googleTokenStore.syncToEnv();
       if (ok) await this.reconnectGoogleMCPs();
+      for (const agentName of this.agentGoogleTokenStore.listAgents()) {
+        const token = await this.agentGoogleTokenStore.getAccessToken(agentName);
+        if (token) await this._applyAgentGoogleToken(agentName, token).catch(() => {});
+      }
     }, 45 * 60 * 1000);
     this.loadMCPEnabled().catch(() => {});
     if (this.meetingsPath) this.orchestrator.initMeetingStore(this.meetingsPath).catch(() => {});
@@ -590,6 +603,19 @@ export class APIServer {
       return { ...config, args: [...(config.args ?? []), this.projectDir] };
     }
     return config;
+  }
+
+  /** Write a fresh access token into all five personal Google MCP credentials for one agent. */
+  private async _applyAgentGoogleToken(agentName: string, accessToken: string): Promise<void> {
+    for (const { id, tokenVar } of GOOGLE_PERSONAL_MCPS) {
+      try {
+        await this.orchestrator.enablePersonalMcp(agentName, id, { [tokenVar]: accessToken });
+      } catch {
+        // Agent may not exist or MCP not in catalogue — not an error
+      }
+    }
+    this.saveCurrentState().catch(() => {});
+    this.sseBroadcast({ type: 'agent_update', agents: buildAgentStatuses(this.orchestrator, this.agentActivity) });
   }
 
   private async reconnectGoogleMCPs(): Promise<void> {
