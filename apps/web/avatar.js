@@ -8,7 +8,7 @@ import { collectVisemeMeshes, stepMorphWeights, applyMorphWeights } from './morp
 import {
   VISEME_TO_VRM, VRM_VOWELS,
   applyVrmRestPose, applyGlbRestPose, stepIdleMotion,
-  makeBlink, stepBlink,
+  makeBlink, stepBlink, collectBlinkMeshes, applyBlinkMeshes,
 } from './modules/avatar-core.js';
 
 // ── Lipsync state ─────────────────────────────────────────────────────────────
@@ -29,6 +29,7 @@ let scene    = null;
 let camera   = null;
 let rafId    = null;
 let visemeMeshes = [];
+let blinkMeshes  = [];
 let loadGen  = 0; // incremented each loadGLB call; stale async callbacks check this
 let glbLoaded = Promise.resolve(); // resolves when current GLB finishes loading
 
@@ -74,6 +75,7 @@ function loadGLB(file, camPos, rotate, fov, scale) {
   const toRemove = scene.children.filter(c => !c.isLight);
   for (const c of toRemove) scene.remove(c);
   visemeMeshes = [];
+  blinkMeshes  = [];
   vrm = null;
   vrmWeights = {};
   if (mixer) { mixer.stopAllAction(); mixer = null; }
@@ -111,12 +113,15 @@ function loadGLB(file, camPos, rotate, fov, scale) {
       console.log('[Avatar] VRM loaded — spring bones + blink idle active');
     } else {
       visemeMeshes = collectVisemeMeshes(gltf.scene);
+      blinkMeshes  = collectBlinkMeshes(gltf.scene);
+      blink = makeBlink();
       applyGlbRestPose(gltf.scene);
       if (gltf.animations?.length > 0) {
         mixer = new THREE.AnimationMixer(gltf.scene);
         for (const clip of gltf.animations) mixer.clipAction(clip).play();
         console.log(`[Avatar] ${gltf.animations.length} idle animation(s) started`);
       }
+      console.log(`[Avatar] GLB blink meshes: ${blinkMeshes.length}`);
     }
 
     resolveLoaded();
@@ -161,8 +166,7 @@ function renderLoop() {
         vrmWeights[v] = cur + (want - cur) * 0.35;
         em.setValue(v, vrmWeights[v]);
       }
-      // Blink — paused while speaking (getAudioTime is active)
-      stepBlink(blink, getAudioTime ? null : em, delta);
+      stepBlink(blink, v => em.setValue('blink', v), delta);
     }
     vrm.update(delta); // spring bones + expression flush
   } else {
@@ -170,6 +174,7 @@ function renderLoop() {
     if (mixer) mixer.update(delta);
     stepMorphWeights(morphWeights, targetViseme);
     applyMorphWeights(visemeMeshes, morphWeights);
+    if (blinkMeshes.length > 0) stepBlink(blink, v => applyBlinkMeshes(blinkMeshes, v), delta);
   }
 
   renderer.render(scene, camera);

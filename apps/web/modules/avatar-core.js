@@ -70,17 +70,19 @@ export function stepIdleMotion(vrm, elapsed) {
 // ── Blink state machine ───────────────────────────────────────────────────────
 export const BLINK_HALF = 0.07; // seconds per blink half (close + open = ~140 ms)
 
-/** Create a fresh blink state object. Call once per VRM load. */
+/** Create a fresh blink state object. Call once per model load. */
 export function makeBlink() {
   return { timer: 0, next: 2 + Math.random() * 3, phase: 'open', t: 0 };
 }
 
 /**
  * Advance the blink state machine one frame.
- * Pass null for `em` to pause blinking (e.g. during lipsync).
+ * `applyFn` receives the current blink value (0 = open, 1 = closed).
+ * Works for both VRM (pass `v => em.setValue('blink', v)`) and
+ * GLB (pass `v => applyBlinkMeshes(meshes, v)`).
  */
-export function stepBlink(state, em, delta) {
-  if (!em) return;
+export function stepBlink(state, applyFn, delta) {
+  if (!applyFn) return;
   if (state.phase === 'open') {
     state.timer += delta;
     if (state.timer >= state.next) {
@@ -90,10 +92,35 @@ export function stepBlink(state, em, delta) {
   } else {
     state.t += delta / BLINK_HALF;
     const progress = Math.min(state.t, 1);
-    em.setValue('blink', state.phase === 'closing' ? progress : 1 - progress);
+    applyFn(state.phase === 'closing' ? progress : 1 - progress);
     if (progress >= 1) {
       if (state.phase === 'closing') { state.phase = 'opening'; state.t = 0; }
-      else                          { state.phase = 'open'; em.setValue('blink', 0); }
+      else                          { state.phase = 'open'; applyFn(0); }
     }
+  }
+}
+
+// ── GLB blink helpers ─────────────────────────────────────────────────────────
+
+/**
+ * Find all meshes in a GLB scene that carry eyeBlinkLeft / eyeBlinkRight
+ * morph targets (standard Ready Player Me naming).
+ */
+export function collectBlinkMeshes(scene) {
+  const result = [];
+  scene.traverse(obj => {
+    if (!obj.isMesh || !obj.morphTargetDictionary) return;
+    const li = obj.morphTargetDictionary['eyeBlinkLeft']  ?? -1;
+    const ri = obj.morphTargetDictionary['eyeBlinkRight'] ?? -1;
+    if (li >= 0 || ri >= 0) result.push({ mesh: obj, li, ri });
+  });
+  return result;
+}
+
+/** Apply a blink value (0–1) to both eye morph targets on each mesh. */
+export function applyBlinkMeshes(blinkMeshes, value) {
+  for (const { mesh, li, ri } of blinkMeshes) {
+    if (li >= 0) mesh.morphTargetInfluences[li] = value;
+    if (ri >= 0) mesh.morphTargetInfluences[ri] = value;
   }
 }
