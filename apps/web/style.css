@@ -2331,6 +2331,56 @@ main {
   border-color: #e55;
 }
 
+/* ── Per-agent Google Account connection ─────────────────────────────────── */
+.agent-google-auth-section {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+.agent-google-auth-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+}
+.agent-google-auth-body {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+.agent-google-auth-connected {
+  font-size: 11px;
+  color: var(--text-muted);
+  flex: 1;
+}
+.agent-google-auth-connect-btn {
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+}
+.agent-google-auth-connect-btn:hover { opacity: 0.85; }
+.agent-google-auth-disconnect-btn {
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.agent-google-auth-disconnect-btn:hover { color: #e55; border-color: #e55; }
+.agent-google-auth-disconnect-btn:disabled { opacity: 0.5; cursor: default; }
+
 .agent-config-input {
   flex: 1;
   min-width: 0;
