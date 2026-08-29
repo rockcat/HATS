@@ -11,7 +11,7 @@
       "const": 1
     },
     "id": {
-      "$ref": "common.schema.json#/$defs/uuid",
+      "$ref": "common.schema.json#/$defs/identifier",
       "description": "Stable template identity. Never reused, never changed."
     },
     "name": {
@@ -28,6 +28,7 @@
     "hats": { "$ref": "common.schema.json#/$defs/hatList" },
     "identity": { "$ref": "common.schema.json#/$defs/identity" },
     "model": { "$ref": "common.schema.json#/$defs/modelBinding" },
+    "externalEndpoint": { "$ref": "common.schema.json#/$defs/externalEndpoint" },
     "limits": { "$ref": "common.schema.json#/$defs/limits" },
     "tools": { "$ref": "common.schema.json#/$defs/toolAccess" },
     "scheduledActionIds": {

@@ -373,7 +373,7 @@ components:
 
     ProviderName:
       type: string
-      enum: [anthropic, openai, gemini, ollama, lmstudio, mock]
+      enum: [anthropic, openai, gemini, ollama, lmstudio, external, mock]
 
     Identity:
       type: object

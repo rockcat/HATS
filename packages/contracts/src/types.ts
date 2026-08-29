@@ -14,10 +14,12 @@ export const HAT_TYPE_NAMES: readonly HatTypeName[] = [
   'none', 'white', 'red', 'black', 'yellow', 'green', 'blue',
 ];
 
-export type ProviderName = 'anthropic' | 'openai' | 'gemini' | 'ollama' | 'lmstudio' | 'mock';
+/** `external` delegates the agent to an out-of-process runner such as Claude Code. */
+export type ProviderName =
+  'anthropic' | 'openai' | 'gemini' | 'ollama' | 'lmstudio' | 'external' | 'mock';
 
 export const PROVIDER_NAMES: readonly ProviderName[] = [
-  'anthropic', 'openai', 'gemini', 'ollama', 'lmstudio', 'mock',
+  'anthropic', 'openai', 'gemini', 'ollama', 'lmstudio', 'external', 'mock',
 ];
 
 export interface AgentIdentitySpec {
@@ -34,6 +36,17 @@ export interface AgentIdentitySpec {
 export interface ModelBinding {
   provider: ProviderName;
   model: string;
+}
+
+/** How to reach an agent whose provider is `external`. Passed through verbatim. */
+export interface ExternalEndpoint {
+  mode: 'subprocess' | 'http';
+  command?: string;
+  args?: string[];
+  inputMode?: string;
+  url?: string;
+  timeoutMs?: number;
+  [key: string]: unknown;
 }
 
 export interface AgentLimits {
@@ -68,6 +81,7 @@ export interface AgentTemplate {
   hats: HatTypeName[];
   identity: AgentIdentitySpec;
   model: ModelBinding;
+  externalEndpoint?: ExternalEndpoint;
   limits?: AgentLimits;
   tools?: ToolAccess;
   scheduledActionIds?: string[];
@@ -97,6 +111,7 @@ export interface DeployedAgent {
   hats: HatTypeName[];
   identity: AgentIdentitySpec;
   model: ModelBinding;
+  externalEndpoint?: ExternalEndpoint;
   limits?: AgentLimits;
   tools?: ToolAccess;
   scheduledActionIds?: string[];

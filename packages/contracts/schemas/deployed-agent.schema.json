@@ -7,11 +7,11 @@
   "properties": {
     "schemaVersion": { "type": "integer", "const": 1 },
     "instanceId": {
-      "$ref": "common.schema.json#/$defs/uuid",
+      "$ref": "common.schema.json#/$defs/identifier",
       "description": "Identity of this agent within this project. Also the runtime agent id used by the Embodiment API."
     },
     "templateId": {
-      "$ref": "common.schema.json#/$defs/uuid",
+      "$ref": "common.schema.json#/$defs/identifier",
       "description": "Library template this agent was deployed from. Absent for agents authored directly in the project."
     },
     "templateRevision": {
@@ -28,6 +28,7 @@
     "hats": { "$ref": "common.schema.json#/$defs/hatList" },
     "identity": { "$ref": "common.schema.json#/$defs/identity" },
     "model": { "$ref": "common.schema.json#/$defs/modelBinding" },
+    "externalEndpoint": { "$ref": "common.schema.json#/$defs/externalEndpoint" },
     "limits": { "$ref": "common.schema.json#/$defs/limits" },
     "tools": { "$ref": "common.schema.json#/$defs/toolAccess" },
     "scheduledActionIds": {
