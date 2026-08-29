@@ -4,7 +4,7 @@ import {
   badRequest, conflict, json, noContent, notFound, readJsonBody,
   del, get, patch, post, put, type RequestContext, type Route,
 } from '../../../../packages/service-kit/src/index.js';
-import { slugifyProjectId } from '../../../../packages/contracts/src/factories.js';
+import { isValidProjectId, slugifyProjectId } from '../../../../packages/contracts/src/factories.js';
 import type { ProjectDefinition } from '../../../../packages/contracts/src/types.js';
 import { ProjectStore, RevisionConflictError, ValidationError } from '../project-store.js';
 
@@ -32,8 +32,8 @@ export function projectRoutes(store: ProjectStore): Route[] {
       const body = await readJsonBody<{ id?: string; name?: string } & Partial<ProjectDefinition>>(ctx.req);
       if (!body?.name?.trim()) { badRequest(ctx.res, 'name is required'); return; }
       const id = (body.id?.trim() || slugifyProjectId(body.name));
-      if (!/^[a-z0-9][a-z0-9_-]{0,63}$/.test(id)) {
-        badRequest(ctx.res, `"${id}" is not a valid project id — use lowercase letters, digits, dashes or underscores`);
+      if (!isValidProjectId(id)) {
+        badRequest(ctx.res, `"${id}" is not a valid project id — letters, digits, spaces, dashes and underscores only`);
         return;
       }
       if (store.has(id)) { conflict(ctx.res, `A project with id "${id}" already exists`); return; }
