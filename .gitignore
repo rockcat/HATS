@@ -4,6 +4,8 @@ node_modules/
 dist/
 logs/
 projects/
+runtime_data/agent-library/
+runtime_data/project-server/
 --db-path
 data.db
 

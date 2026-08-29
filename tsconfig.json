@@ -4,14 +4,27 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "outDir": "dist",
-    "rootDir": "src",
+    "rootDir": ".",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "declaration": true,
     "declarationMap": true,
-    "sourceMap": true
+    "sourceMap": true,
+    "resolveJsonModule": true
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist"]
+  "include": [
+    "src/**/*",
+    "packages/*/src/**/*",
+    "packages/ui-kit/index.ts",
+    "apps/*/src/**/*",
+    "team-runner.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "dist-desktop",
+    "apps/flutter",
+    "**/public/**"
+  ]
 }

@@ -61,6 +61,17 @@ Click for a demo video:
 - Local support via Ollama / LM Studio
 - Token + cost tracking per agent
 - Voice + 3D avatar support
+- Four separable applications behind formal APIs — see [docs/architecture.md](docs/architecture.md)
+
+HATS is split into an **Agent Library** (reusable agent templates), a **Project
+Server** (project definitions), a **Project Designer** (compose a team), and the
+**Team Runner** (embodies the team and runs the work). The runner exposes the
+**Embodiment API** — an OpenAPI-described contract any web site or app can use to
+give an agent a face, a voice and a conversation. Every service publishes its own
+JSON Schemas and OpenAPI document live.
+
+Nothing in the split is mandatory: with no services running, the Team Runner
+falls back to local files and behaves exactly as a single-process install.
 
 ## Live Meetings with Faces and Voices
 
@@ -212,11 +223,26 @@ npm install
 cp .env.example .env
 # Edit .env and add at least one LLM provider API key
 
-# 3. Run
+# 3. Run the services (agent library, project server, designer, embodiment test)
+npm run services
+
+# 4. Run the team, in another terminal
 npm start
 ```
 
-The web UI is available at `http://localhost:3001`.
+| | URL |
+| --- | --- |
+| Operator dashboard | <http://localhost:3001> |
+| Agent Library | <http://localhost:3010> |
+| Project Designer | <http://localhost:3030> |
+| Embodiment API test | <http://localhost:3040> |
+| Embodiment API spec | <http://localhost:3001/api/embodiment/v1/openapi.yaml> |
+
+Create a few agents in the Agent Library, compose a team in the Project Designer,
+click **Set active**, then start the runner.
+
+To run without the services — the old single-process behaviour — use
+`npm run start:standalone`.
 
 Alternatively, run the setup script which checks all dependencies:
 
@@ -231,13 +257,25 @@ scripts\setup.bat
 ## Project structure
 
 ```sh
+apps/
+  agent-library/    Agent Library service — API + UI (port 3010)
+  project-server/   Project Server — project definitions API (port 3020)
+  project-designer/ Project Designer UI (port 3030)
+  embodiment-test/  Embodiment API test harness (port 3040)
+packages/
+  contracts/      JSON Schemas, OpenAPI documents, shared types and validators
+  service-kit/    HTTP shell shared by the services (router, SSE, JSON store, proxy)
+  clients/        Typed clients for the Agent Library and Project Server
+  ui-kit/         Shared CSS and browser helpers, served at /ui-kit
 src/
   agent/          Agent execution loop and state machine
   api/            HTTP + SSE + WebSocket server (port 3001)
+  embodiment/     Embodiment API router, event and agent mappers
   hats/           Six Thinking Hat definitions and directives
   human/          CLI interface for terminal interaction
   mcp/            MCP tool servers (kanban, filesystem, etc.)
   orchestrator/   Team coordination, meetings, task dispatch
+  project/        Project source resolution, sync, and team assembly
   prompt/         System prompt generation
   providers/      LLM adapters (Anthropic, OpenAI, Gemini, Ollama, LM Studio)
   speech/         TTS + lip-sync pipeline (Piper + Rhubarb)
@@ -247,7 +285,8 @@ src/
   webui/          Web UI — HTML/CSS/JS + Three.js avatar renderer
 avatars/          GLB avatar models and avatars.json catalogue
 projects/         Per-project runtime data (kanban, meetings, agent state)
-scripts/          Setup scripts (setup.sh, setup.bat)
+runtime_data/     Agent Library and Project Server storage
+scripts/          Setup scripts and the dev service launcher
 tools/            Developer utilities (glb-viewer.mjs)
 rhubarb/          Install rhubarb in here
 piper_voices/     Install voices for piper tts in here
@@ -256,9 +295,16 @@ piper_voices/     Install voices for piper tts in here
 ## Development
 
 ```bash
-npm test          # run tests (vitest)
+npm test            # run tests (vitest)
 npm run test:watch  # watch mode
-npm run build     # compile TypeScript to dist/
+npm run typecheck   # tsc --noEmit across src, apps and packages
+npm run build       # compile TypeScript to dist/
 ```
 
-No build step is required to run the app — `npm start` uses `tsx` to run TypeScript directly.
+No build step is required to run the app — `npm start` and every service use
+`tsx` to run TypeScript directly.
+
+Changing an API or a document shape means changing a contract in
+`packages/contracts` — see [its README](packages/contracts/README.md) for the
+steps, and [docs/architecture.md](docs/architecture.md) for how the pieces fit
+together.
