@@ -3,7 +3,9 @@
 
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
 import { collectVisemeMeshes, stepMorphWeights, applyMorphWeights } from './morph-lipsync.js';
+import { stepVrmWeights, applyVrmWeights } from './vrm-lipsync.js';
 
 // ── Lipsync state ─────────────────────────────────────────────────────────────
 
@@ -25,6 +27,12 @@ let rafId    = null;
 let visemeMeshes = [];
 let loadGen  = 0; // incremented each loadGLB call; stale async callbacks check this
 let glbLoaded = Promise.resolve(); // resolves when current GLB finishes loading
+
+// VRM avatars use vowel expressions instead of ARKit morph targets.
+let currentVrm = null;
+const vrmWeights = {};
+/** VRM models load in a T-pose; drop the upper arms to a natural rest. */
+const ARM_DOWN = Math.PI / 3;
 
 // Idle animation
 let mixer    = null; // THREE.AnimationMixer | null
@@ -62,6 +70,7 @@ function loadGLB(file, camPos, rotate, fov, scale) {
   const toRemove = scene.children.filter(c => !c.isLight);
   for (const c of toRemove) scene.remove(c);
   visemeMeshes = [];
+  if (currentVrm) { VRMUtils.deepDispose(currentVrm.scene); currentVrm = null; }
   if (mixer) { mixer.stopAllAction(); mixer = null; }
   clock.getDelta(); // reset clock delta
 
@@ -69,27 +78,45 @@ function loadGLB(file, camPos, rotate, fov, scale) {
   let resolveLoaded;
   glbLoaded = new Promise(res => { resolveLoaded = res; });
 
-  new GLTFLoader().load(`/avatars/${file}`, gltf => {
+  const loader = new GLTFLoader();
+  loader.register(parser => new VRMLoaderPlugin(parser));
+
+  loader.load(`/avatars/${file}`, gltf => {
     if (gen !== loadGen) { resolveLoaded(); return; } // stale — a newer load started, discard this one
-    scene.add(gltf.scene);
+
+    const vrm = gltf.userData?.vrm ?? null;
+    const root = vrm ? vrm.scene : gltf.scene;
+    scene.add(root);
+
+    if (vrm) {
+      currentVrm = vrm;
+      VRMUtils.removeUnnecessaryVertices(root);
+      VRMUtils.combineSkeletons(root);
+      // Arms out horizontally reads as a mannequin; a rest pose reads as a person.
+      const left  = vrm.humanoid?.getNormalizedBoneNode('leftUpperArm');
+      const right = vrm.humanoid?.getNormalizedBoneNode('rightUpperArm');
+      if (left)  left.rotation.z  =  ARM_DOWN;
+      if (right) right.rotation.z = -ARM_DOWN;
+    }
 
     if (rotate && rotate.length === 3) {
       const DEG = Math.PI / 180;
-      gltf.scene.rotation.set(rotate[0] * DEG, rotate[1] * DEG, rotate[2] * DEG);
+      root.rotation.set(rotate[0] * DEG, rotate[1] * DEG, rotate[2] * DEG);
     }
 
-    if (scale != null) gltf.scene.scale.setScalar(scale);
+    if (scale != null) root.scale.setScalar(scale);
 
     camera.fov = fov ?? 50;
     camera.updateProjectionMatrix();
     camera.position.set(camPos[0], camPos[1], camPos[2]);
     camera.lookAt(new THREE.Vector3(camPos[0], camPos[1] - 0.08, 0));
 
-    visemeMeshes = collectVisemeMeshes(gltf.scene);
+    // A VRM drives its mouth through expressions, not ARKit morph targets.
+    visemeMeshes = vrm ? [] : collectVisemeMeshes(root);
 
-    // Start idle animations if the GLB has any
+    // Start idle animations if the model has any
     if (gltf.animations?.length > 0) {
-      mixer = new THREE.AnimationMixer(gltf.scene);
+      mixer = new THREE.AnimationMixer(root);
       for (const clip of gltf.animations) {
         mixer.clipAction(clip).play();
       }
@@ -97,7 +124,7 @@ function loadGLB(file, camPos, rotate, fov, scale) {
     }
 
     resolveLoaded();
-  }, undefined, () => resolveLoaded()); // error → resolve anyway
+  }, undefined, err => { console.warn(`[Avatar] failed to load ${file}:`, err); resolveLoaded(); });
 }
 
 function renderLoop() {
@@ -128,10 +155,17 @@ function renderLoop() {
     }
   }
 
-  // Lerp morph weights toward target, then write to meshes.
+  // Lerp mouth weights toward target, then write them out.
   // Runs after mixer.update() so lipsync overrides mouth tracks from idle animation.
-  stepMorphWeights(morphWeights, targetViseme);
-  applyMorphWeights(visemeMeshes, morphWeights);
+  if (currentVrm) {
+    stepVrmWeights(vrmWeights, targetViseme);
+    applyVrmWeights(currentVrm, vrmWeights);
+    // vrm.update() applies expressions and springbones, so it must come last.
+    currentVrm.update(delta);
+  } else {
+    stepMorphWeights(morphWeights, targetViseme);
+    applyMorphWeights(visemeMeshes, morphWeights);
+  }
 
   renderer.render(scene, camera);
 }
