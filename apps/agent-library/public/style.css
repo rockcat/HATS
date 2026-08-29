@@ -1,0 +1,30 @@
+/* Agent Library specific tweaks on top of the shared UI kit. */
+
+#editor-body { max-height: calc(100vh - 140px); }
+
+#hat-checkboxes label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  font-size: 13px;
+  text-transform: capitalize;
+}
+
+#hat-checkboxes input { width: auto; }
+
+#template-list li .hats { display: flex; gap: 3px; flex: none; }
+
+#prompt-dialog {
+  width: min(760px, 92vw);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  padding: 16px;
+  box-shadow: var(--shadow);
+}
+
+#prompt-dialog::backdrop { background: rgb(0 0 0 / 45%); }
+
+.dirty-marker { color: var(--warn); font-weight: 700; }

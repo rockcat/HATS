@@ -1,0 +1,43 @@
+/** Read-only reference data used when authoring a template. */
+
+import { readFile } from 'fs/promises';
+import * as path from 'path';
+import { get, json, type Route } from '../../../../packages/service-kit/src/index.js';
+import { hatDefinitions } from '../../../../src/hats/definitions.js';
+import { personasByHat } from '../../../../src/hats/personas.js';
+import { SPECIALISATION_DIRECTIVES } from '../../../../src/prompt/generator.js';
+import { KNOWN_PROVIDERS } from '../../../../src/api/providers.js';
+
+const BASE = '/api/v1';
+
+interface AvatarCatalogue { avatars?: Array<{ file: string; name?: string }> }
+
+export function catalogueRoutes(avatarsDir: string): Route[] {
+  return [
+    get(`${BASE}/personas`, ({ res }) => json(res, 200, personasByHat)),
+
+    get(`${BASE}/hats`, ({ res }) => json(res, 200, { hats: Object.values(hatDefinitions) })),
+
+    get(`${BASE}/specialisations`, ({ res }) =>
+      json(res, 200, { specialisations: Object.keys(SPECIALISATION_DIRECTIVES).sort() })),
+
+    get(`${BASE}/providers`, ({ res }) => json(res, 200, {
+      providers: KNOWN_PROVIDERS.map((p) => ({
+        name: p.id,
+        label: p.label,
+        models: p.models,
+        configured: Boolean(process.env[p.envKey]),
+      })),
+    })),
+
+    get(`${BASE}/avatars`, async ({ res }) => {
+      try {
+        const raw = await readFile(path.join(avatarsDir, 'avatars.json'), 'utf-8');
+        const parsed = JSON.parse(raw) as AvatarCatalogue;
+        json(res, 200, { avatars: parsed.avatars ?? [] });
+      } catch {
+        json(res, 200, { avatars: [] });
+      }
+    }),
+  ];
+}
