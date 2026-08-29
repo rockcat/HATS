@@ -1,0 +1,40 @@
+/* Project Designer specific tweaks on top of the shared UI kit. */
+
+#design-body { max-height: calc(100vh - 140px); }
+
+.list.bordered {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.list.bordered li:last-child { border-bottom: none; }
+
+.list li .hats { display: flex; gap: 3px; flex: none; }
+.list li .actions { display: flex; gap: 4px; flex: none; opacity: 0; transition: opacity 120ms ease; }
+.list li:hover .actions, .list li:focus-within .actions { opacity: 1; }
+
+li.disabled-agent .name { text-decoration: line-through; opacity: 0.6; }
+
+#agent-dialog {
+  width: min(620px, 92vw);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  padding: 16px;
+  box-shadow: var(--shadow);
+}
+
+#agent-dialog::backdrop { background: rgb(0 0 0 / 45%); }
+
+.drift {
+  color: var(--warn);
+  font-size: 11px;
+  border: 1px solid color-mix(in srgb, var(--warn) 40%, var(--border));
+  border-radius: 999px;
+  padding: 0 6px;
+  flex: none;
+}
+
+.dirty-marker { color: var(--warn); font-weight: 700; }

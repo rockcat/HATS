@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HATS Project Designer</title>
+  <link rel="stylesheet" href="/ui-kit/hats-ui.css">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="app-header">
+    <h1>HATS Project Designer</h1>
+    <span class="subtitle">compose a team, then hand it to the runner</span>
+    <span class="spacer"></span>
+    <span class="row" style="gap:6px">
+      <span class="status-dot" id="library-dot"></span>
+      <span class="muted mono" id="library-label">library</span>
+      <span class="status-dot" id="server-dot" style="margin-left:10px"></span>
+      <span class="muted mono" id="server-label">projects</span>
+    </span>
+  </header>
+
+  <main class="layout thirds">
+    <!-- ── Projects ────────────────────────────────────────────────────── -->
+    <section class="panel">
+      <header>
+        Projects
+        <span class="spacer"></span>
+        <button class="primary small" id="new-project">New</button>
+      </header>
+      <div class="panel-body flush scroll">
+        <ul class="list" id="project-list"></ul>
+        <div class="empty" id="project-empty" hidden>No projects yet.</div>
+      </div>
+    </section>
+
+    <!-- ── The project being designed ──────────────────────────────────── -->
+    <section class="panel" id="design-panel">
+      <header>
+        <span id="design-title">Select a project</span>
+        <span class="spacer"></span>
+        <span class="tag mono" id="design-revision" hidden></span>
+        <button class="small" id="activate-project" disabled title="Tell the Team Runner to load this project">Set active</button>
+        <button class="small danger" id="delete-project" disabled>Delete</button>
+        <button class="primary small" id="save-project" disabled>Save</button>
+      </header>
+
+      <div class="panel-body scroll" id="design-body">
+        <div class="empty" id="design-empty">Pick a project on the left, or create one.</div>
+
+        <form id="project-form" hidden autocomplete="off">
+          <div class="grid-2">
+            <label class="field">
+              <span>Project name</span>
+              <input name="name" required maxlength="120">
+            </label>
+            <label class="field">
+              <span>Human team lead</span>
+              <input name="humanName" maxlength="80" placeholder="Human">
+            </label>
+          </div>
+
+          <label class="field">
+            <span>Goal</span>
+            <textarea name="goal" rows="2" maxlength="4000"
+              placeholder="Injected into every agent's system prompt"></textarea>
+          </label>
+
+          <label class="field">
+            <span>Description</span>
+            <textarea name="description" rows="2" maxlength="4000"></textarea>
+          </label>
+        </form>
+
+        <section id="team-section" hidden>
+          <div class="row" style="margin: 4px 0 10px">
+            <strong>Team</strong>
+            <span class="tag" id="team-count">0</span>
+            <span class="spacer"></span>
+            <span class="muted" style="font-size:12px">Deploy templates from the right →</span>
+          </div>
+          <ul class="list bordered" id="team-list"></ul>
+          <div class="empty" id="team-empty">No agents deployed yet.</div>
+        </section>
+      </div>
+    </section>
+
+    <!-- ── Agent library ───────────────────────────────────────────────── -->
+    <section class="panel">
+      <header>
+        Agent Library
+        <span class="spacer"></span>
+        <a class="btn small" id="library-link" href="#" target="_blank" rel="noopener">Open</a>
+      </header>
+      <div class="panel-body">
+        <input id="library-search" type="search" placeholder="Search templates…" autocomplete="off">
+      </div>
+      <div class="panel-body flush scroll">
+        <ul class="list" id="library-list"></ul>
+        <div class="empty" id="library-empty" hidden>
+          No templates. Create some in the Agent Library first.
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="agent-dialog">
+    <form method="dialog" id="agent-form">
+      <header class="row" style="margin-bottom:12px">
+        <strong id="agent-dialog-title">Edit deployed agent</strong>
+        <span class="spacer"></span>
+      </header>
+
+      <div class="grid-2">
+        <label class="field">
+          <span>Name in this project</span>
+          <input name="name" required maxlength="80">
+        </label>
+        <label class="field">
+          <span>Role</span>
+          <input name="projectRole" maxlength="120" placeholder="facilitator, risk owner…">
+        </label>
+      </div>
+
+      <div class="grid-2">
+        <label class="field">
+          <span>Provider</span>
+          <select name="provider"></select>
+        </label>
+        <label class="field">
+          <span>Model</span>
+          <input name="model" list="agent-model-options" required>
+          <datalist id="agent-model-options"></datalist>
+        </label>
+      </div>
+
+      <div class="grid-2">
+        <label class="field">
+          <span>Max cost per hour (USD)</span>
+          <input name="maxCostPerHour" type="number" min="0" step="0.25" placeholder="unlimited">
+        </label>
+        <label class="field">
+          <span>Enabled MCP servers</span>
+          <input name="enabledMcpServers" placeholder="kanban, filesystem">
+        </label>
+      </div>
+
+      <label class="field row" style="gap:8px; align-items:center">
+        <input type="checkbox" name="enabled" style="width:auto">
+        <span style="margin:0">Embody this agent when the project runs</span>
+      </label>
+
+      <footer class="row" style="justify-content:flex-end; gap:8px; margin-top:8px">
+        <button value="cancel">Cancel</button>
+        <button class="primary" value="save" id="agent-save">Apply</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
