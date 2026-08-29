@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Embodiment API Test</title>
+  <link rel="stylesheet" href="/ui-kit/hats-ui.css">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="app-header">
+    <h1>Embodiment API Test</h1>
+    <span class="subtitle" id="project-line">no project loaded</span>
+    <span class="spacer"></span>
+    <span class="row" style="gap:6px">
+      <span class="status-dot" id="runner-dot"></span>
+      <span class="muted mono" id="runner-label">runner</span>
+      <span class="tag" id="stream-state">stream: closed</span>
+    </span>
+    <a class="btn" href="/runner/api/embodiment/v1/openapi.yaml" target="_blank" rel="noopener">OpenAPI</a>
+  </header>
+
+  <main class="layout thirds">
+    <!-- ── Roster ──────────────────────────────────────────────────────── -->
+    <section class="panel">
+      <header>
+        Agents
+        <span class="spacer"></span>
+        <span class="tag" id="agent-count">0</span>
+        <button class="small" id="refresh-agents">Refresh</button>
+      </header>
+      <div class="panel-body flush scroll">
+        <ul class="list" id="agent-list"></ul>
+        <div class="empty" id="agent-empty">
+          No agents. Start the Team Runner, then refresh.
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Conversation ────────────────────────────────────────────────── -->
+    <section class="panel" id="chat-panel">
+      <header>
+        <span id="chat-title">Select an agent</span>
+        <span class="spacer"></span>
+        <select id="thread-select" style="max-width:170px" title="Conversation thread"></select>
+        <button class="small" id="speak-last" disabled title="POST /agents/{id}/speech with the last reply">Speak</button>
+      </header>
+
+      <div class="panel-body flush scroll" id="transcript">
+        <div class="empty" id="chat-empty">Pick an agent to start a conversation.</div>
+      </div>
+
+      <div class="panel-body composer">
+        <div class="row" style="margin-bottom:6px">
+          <label class="row" style="gap:5px; font-size:12px" title="task routes through the orchestrator task pipeline">
+            <input type="radio" name="mode" value="chat" checked style="width:auto"> chat
+          </label>
+          <label class="row" style="gap:5px; font-size:12px">
+            <input type="radio" name="mode" value="task" style="width:auto"> task
+          </label>
+          <span class="spacer"></span>
+          <span class="muted mono" id="agent-state-line"></span>
+        </div>
+        <form id="send-form" class="row">
+          <input id="message-input" placeholder="Say something…" autocomplete="off" disabled>
+          <button class="primary" id="send-button" disabled>Send</button>
+        </form>
+      </div>
+    </section>
+
+    <!-- ── Wire log ────────────────────────────────────────────────────── -->
+    <section class="panel">
+      <header>
+        API traffic
+        <span class="spacer"></span>
+        <button class="small" id="clear-log">Clear</button>
+      </header>
+      <div class="panel-body flush scroll" id="wire-log"></div>
+    </section>
+  </main>
+
+  <audio id="speech-player" hidden></audio>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
