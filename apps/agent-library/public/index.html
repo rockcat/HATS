@@ -6,6 +6,14 @@
   <title>HATS Agent Library</title>
   <link rel="stylesheet" href="/ui-kit/hats-ui.css">
   <link rel="stylesheet" href="/style.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "/nm/three/build/three.module.js",
+        "three/addons/": "/nm/three/examples/jsm/"
+      }
+    }
+  </script>
 </head>
 <body>
   <header class="app-header">
@@ -20,7 +28,8 @@
     <a class="btn" href="/api/v1/schemas/agentTemplate" target="_blank" rel="noopener">Schema</a>
   </header>
 
-  <main class="layout split">
+  <main class="layout thirds">
+    <!-- ── Templates ───────────────────────────────────────────────────── -->
     <section class="panel">
       <header>
         Templates
@@ -30,8 +39,8 @@
       </header>
       <div class="panel-body">
         <div class="row">
-          <input id="search" type="search" placeholder="Search name, specialisation, backstory…" autocomplete="off">
-          <select id="hat-filter" style="max-width:130px">
+          <input id="search" type="search" placeholder="Search…" autocomplete="off">
+          <select id="hat-filter" style="max-width:120px">
             <option value="">All hats</option>
           </select>
         </div>
@@ -42,12 +51,12 @@
       </div>
     </section>
 
+    <!-- ── Editor ──────────────────────────────────────────────────────── -->
     <section class="panel" id="editor-panel">
       <header>
         <span id="editor-title">Select a template</span>
         <span class="spacer"></span>
         <span class="tag mono" id="editor-revision" hidden></span>
-        <button class="small" id="preview-prompt" disabled>Preview prompt</button>
         <button class="small" id="duplicate-template" disabled>Duplicate</button>
         <button class="small danger" id="delete-template" disabled>Delete</button>
         <button class="primary small" id="save-template" disabled>Save</button>
@@ -67,7 +76,7 @@
             <label class="field">
               <span>Seed from persona</span>
               <select name="persona"><option value="">—</option></select>
-              <small>Fills name, description, specialisation and backstory.</small>
+              <small>Fills name, specialisation and backstory.</small>
             </label>
           </div>
 
@@ -122,8 +131,19 @@
               <select name="avatar"><option value="">—</option></select>
             </label>
             <label class="field">
+              <span>Background</span>
+              <select name="background"><option value="">—</option></select>
+            </label>
+          </div>
+
+          <div class="grid-2">
+            <label class="field">
               <span>Voice</span>
               <input name="voice" placeholder="en_GB-cori-high">
+            </label>
+            <label class="field">
+              <span>Speaker</span>
+              <input name="speakerName" placeholder="multi-speaker voices only">
             </label>
           </div>
 
@@ -142,7 +162,7 @@
             <label class="field">
               <span>Enabled MCP servers</span>
               <input name="enabledMcpServers" placeholder="kanban, filesystem">
-              <small>Comma separated. Leave blank to allow every team server.</small>
+              <small>Comma separated. Blank allows every team server.</small>
             </label>
             <label class="field">
               <span>Tags</span>
@@ -152,16 +172,28 @@
         </form>
       </div>
     </section>
-  </main>
 
-  <dialog id="prompt-dialog">
-    <header class="row" style="margin-bottom:10px">
-      <strong>System prompt preview</strong>
-      <span class="spacer"></span>
-      <button class="small" id="close-prompt">Close</button>
-    </header>
-    <pre class="code" id="prompt-text"></pre>
-  </dialog>
+    <!-- ── Live preview ────────────────────────────────────────────────── -->
+    <section class="panel" id="preview-panel">
+      <header>
+        Preview
+        <span class="spacer"></span>
+        <span class="tag" id="prompt-length"></span>
+      </header>
+
+      <div class="panel-body" id="stage-body">
+        <div id="avatar-stage">
+          <img id="stage-background" alt="">
+          <canvas id="avatar-canvas"></canvas>
+          <div class="stage-hint" id="stage-hint">No avatar selected</div>
+        </div>
+      </div>
+
+      <div class="panel-body flush scroll" id="prompt-scroll">
+        <pre class="code" id="prompt-text">Select a template to see the system prompt it produces.</pre>
+      </div>
+    </section>
+  </main>
 
   <script type="module" src="/app.js"></script>
 </body>

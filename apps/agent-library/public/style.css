@@ -1,5 +1,17 @@
 /* Agent Library specific tweaks on top of the shared UI kit. */
 
+/* Templates | editor | preview — the preview needs real width for the prompt. */
+.layout.thirds { grid-template-columns: minmax(240px, 300px) minmax(380px, 1fr) minmax(320px, 460px); }
+
+@media (max-width: 1200px) {
+  .layout.thirds { grid-template-columns: minmax(220px, 280px) 1fr; }
+  #preview-panel { grid-column: 1 / -1; }
+}
+
+@media (max-width: 900px) {
+  .layout.thirds { grid-template-columns: 1fr; }
+}
+
 #editor-body { max-height: calc(100vh - 140px); }
 
 #hat-checkboxes label {
@@ -15,16 +27,52 @@
 
 #template-list li .hats { display: flex; gap: 3px; flex: none; }
 
-#prompt-dialog {
-  width: min(760px, 92vw);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-  color: var(--text);
-  padding: 16px;
-  box-shadow: var(--shadow);
+/* ── Preview stage ───────────────────────────────────────────────────────── */
+
+#stage-body { padding: 0; border-bottom: 1px solid var(--border); }
+
+#avatar-stage {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  width: 100%;
+  background: var(--surface-2);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-#prompt-dialog::backdrop { background: rgb(0 0 0 / 45%); }
+#stage-background {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+#avatar-canvas {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.stage-hint {
+  position: relative;
+  color: var(--text-muted);
+  font-size: 12px;
+  text-align: center;
+  padding: 0 16px;
+}
+
+#prompt-scroll { max-height: calc(100vh - 460px); min-height: 200px; padding: 12px; }
+
+#prompt-text {
+  background: transparent;
+  padding: 0;
+  max-height: none;
+  font-size: 11.5px;
+  line-height: 1.55;
+}
 
 .dirty-marker { color: var(--warn); font-weight: 700; }

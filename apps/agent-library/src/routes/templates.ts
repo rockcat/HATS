@@ -76,5 +76,13 @@ export function templateRoutes(store: TemplateStore): Route[] {
       if (!template) { notFound(res, 'Template'); return; }
       json(res, 200, { prompt: renderTemplatePrompt(template) });
     }),
+
+    // Render from unsaved input — the editor calls this on every change so the
+    // prompt panel tracks what the user is typing.
+    post('/api/v1/prompt-preview', async ({ req, res }) => {
+      const body = await readJsonBody<AgentTemplateInput>(req);
+      if (!body) { badRequest(res, 'A JSON body is required'); return; }
+      json(res, 200, { prompt: renderTemplatePrompt(body) });
+    }),
   ];
 }

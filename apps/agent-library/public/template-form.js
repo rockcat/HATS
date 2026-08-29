@@ -41,7 +41,9 @@ export function readForm(form) {
       backstory: value('backstory'),
       email: value('email'),
       avatar: value('avatar'),
+      background: value('background'),
       voice: value('voice'),
+      speakerName: value('speakerName'),
     },
     model: {
       provider: value('provider') ?? 'anthropic',
@@ -78,7 +80,9 @@ export function writeForm(form, template) {
   set('backstory', template.identity?.backstory);
   set('email', template.identity?.email);
   set('avatar', template.identity?.avatar);
+  set('background', template.identity?.background);
   set('voice', template.identity?.voice);
+  set('speakerName', template.identity?.speakerName);
   set('provider', template.model?.provider ?? 'anthropic');
   set('model', template.model?.model);
   set('maxContextTokens', template.limits?.maxContextTokens);

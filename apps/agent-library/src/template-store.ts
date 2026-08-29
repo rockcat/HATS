@@ -16,6 +16,7 @@ import { validateAgentTemplate } from '../../../packages/contracts/src/validate.
 import type {
   AgentTemplate,
   AgentTemplateInput,
+  ExternalEndpoint,
   HatTypeName,
   ProviderName,
 } from '../../../packages/contracts/src/types.js';
@@ -42,6 +43,7 @@ interface LegacyAgentDefinition {
   scheduledActionIds?: string[];
   maxContextTokens?: number;
   maxCostPerHour?: number;
+  externalEndpoint?: ExternalEndpoint;
 }
 
 export interface TemplateQuery {
@@ -154,6 +156,8 @@ export class TemplateStore {
           provider: (entry.providerName ?? 'anthropic') as ProviderName,
           model: entry.model || 'claude-haiku-4-5-20251001',
         },
+        // Carried through so an external agent stays reachable after import.
+        ...(entry.externalEndpoint && { externalEndpoint: entry.externalEndpoint }),
         limits: {
           ...(entry.maxContextTokens !== undefined && { maxContextTokens: entry.maxContextTokens }),
           ...(entry.maxCostPerHour !== undefined && { maxCostPerHour: entry.maxCostPerHour }),

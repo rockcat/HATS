@@ -1,18 +1,19 @@
-/** HATS Agent Library — template browser and editor. */
+/** HATS Agent Library — template browser, editor and live preview. */
 
 import {
-  $, clear, debounce, el, guard, hatDots, makeClient, relativeTime, toastOk, trackHealth,
+  $, clear, debounce, el, guard, hatDots, makeClient, relativeTime, toastError, toastOk, trackHealth,
 } from '/ui-kit/hats-ui.js';
 import { applyPersona, buildHatCheckboxes, emptyTemplate, readForm, writeForm } from '/template-form.js';
+import { clearAvatar, showAvatar } from '/avatar-preview.js';
 
 const api = makeClient('/api/v1');
 
 const state = {
   templates: [],
   selectedId: null,
-  draft: null,        // set while editing an unsaved new template
   personas: {},
   providers: [],
+  avatars: [],
   dirty: false,
 };
 
@@ -29,22 +30,25 @@ const ui = {
   save:        $('#save-template'),
   del:         $('#delete-template'),
   duplicate:   $('#duplicate-template'),
-  preview:     $('#preview-prompt'),
   newBtn:      $('#new-template'),
-  dialog:      $('#prompt-dialog'),
   promptText:  $('#prompt-text'),
+  promptLen:   $('#prompt-length'),
+  canvas:      $('#avatar-canvas'),
+  background:  $('#stage-background'),
+  stageHint:   $('#stage-hint'),
 };
 
 // ── Loading ──────────────────────────────────────────────────────────────────
 
 async function loadCatalogue() {
-  const [personas, providers, avatars, specialisations, hats] = await Promise.all([
+  const [personas, providers, avatars, backgrounds, specialisations, hats] = await Promise.all([
     api.get('/personas'), api.get('/providers'), api.get('/avatars'),
-    api.get('/specialisations'), api.get('/hats'),
+    api.get('/backgrounds'), api.get('/specialisations'), api.get('/hats'),
   ]);
 
   state.personas = personas ?? {};
   state.providers = providers?.providers ?? [];
+  state.avatars = avatars?.avatars ?? [];
 
   const providerSelect = ui.form.elements['provider'];
   providerSelect.replaceChildren(...state.providers.map((p) =>
@@ -57,13 +61,16 @@ async function loadCatalogue() {
 
   ui.form.elements['avatar'].replaceChildren(
     el('option', { value: '' }, '—'),
-    ...(avatars?.avatars ?? []).map((a) => el('option', { value: a.file }, a.name ?? a.file)));
+    ...state.avatars.map((a) => el('option', { value: a.file }, a.name ?? a.file)));
+
+  ui.form.elements['background'].replaceChildren(
+    el('option', { value: '' }, '—'),
+    ...(backgrounds?.backgrounds ?? []).map((f) => el('option', { value: f }, f.replace(/\.\w+$/, ''))));
 
   ui.hatFilter.replaceChildren(
     el('option', { value: '' }, 'All hats'),
     ...(hats?.hats ?? []).map((h) => el('option', { value: h.type }, h.label ?? h.type)));
 
-  const personaSelect = ui.form.elements['persona'];
   const options = [el('option', { value: '' }, '—')];
   for (const [hat, list] of Object.entries(state.personas)) {
     if (!list?.length) continue;
@@ -71,7 +78,7 @@ async function loadCatalogue() {
     for (const persona of list) group.append(el('option', { value: `${hat}:${persona.name}` }, persona.name));
     options.push(group);
   }
-  personaSelect.replaceChildren(...options);
+  ui.form.elements['persona'].replaceChildren(...options);
 }
 
 function refreshModelOptions() {
@@ -96,6 +103,11 @@ function renderList() {
   clear(ui.list);
 
   for (const template of state.templates) {
+    // An avatar that is no longer in the catalogue would just render as an
+    // empty stage, so flag it here where it can be found and fixed.
+    const avatar = template.identity?.avatar;
+    const missingAvatar = avatar && !state.avatars.some((a) => a.file === avatar);
+
     ui.list.append(el('li', {
       dataset: { id: template.id },
       'aria-selected': template.id === state.selectedId,
@@ -107,7 +119,9 @@ function renderList() {
         el('div', { class: 'meta' },
           [template.identity?.specialisation, template.description].filter(Boolean).join(' · ') || 'no description'),
       ),
-      el('span', { class: 'meta' }, relativeTime(template.updatedAt)),
+      missingAvatar
+        ? el('span', { class: 'tag warn', title: `Avatar "${avatar}" is missing — pick another` }, 'no avatar')
+        : el('span', { class: 'meta' }, relativeTime(template.updatedAt)),
     ));
   }
 }
@@ -116,20 +130,70 @@ function renderEditor(template, { isNew = false } = {}) {
   ui.editorEmpty.hidden = true;
   ui.form.hidden = false;
   writeForm(ui.form, template);
-  ui.title.textContent = isNew ? 'New template' : template.name;
+  setTitle(isNew ? 'New template' : template.name);
   ui.revision.hidden = isNew;
   ui.revision.textContent = isNew ? '' : `rev ${template.revision}`;
   ui.del.disabled = isNew;
   ui.duplicate.disabled = isNew;
-  ui.preview.disabled = isNew;
   setDirty(isNew);
+  refreshPreview();
+}
+
+function setTitle(text) {
+  ui.title.dataset.base = text;
+  ui.title.replaceChildren(text, ...(state.dirty ? [el('span', { class: 'dirty-marker' }, ' •')] : []));
 }
 
 function setDirty(dirty) {
   state.dirty = dirty;
   ui.save.disabled = !dirty;
-  ui.title.textContent = ui.title.textContent.replace(/ •$/, '');
-  if (dirty) ui.title.append(el('span', { class: 'dirty-marker' }, ' •'));
+  setTitle(ui.title.dataset.base ?? 'Select a template');
+}
+
+// ── Live preview ─────────────────────────────────────────────────────────────
+
+/** Re-render prompt and stage from whatever is currently in the form. */
+function refreshPreview() {
+  if (ui.form.hidden) return;
+  renderStage();
+  void renderPrompt();
+}
+
+const renderPrompt = debounce(async () => {
+  if (ui.form.hidden) return;
+  try {
+    const result = await api.post('/prompt-preview', readForm(ui.form));
+    ui.promptText.textContent = result.prompt;
+    ui.promptLen.textContent = `${result.prompt.length.toLocaleString()} chars`;
+  } catch (err) {
+    ui.promptText.textContent = `Could not render the prompt: ${err.message}`;
+    ui.promptLen.textContent = '';
+  }
+}, 200);
+
+function renderStage() {
+  const backgroundFile = ui.form.elements['background'].value;
+  ui.background.hidden = !backgroundFile;
+  if (backgroundFile) ui.background.src = `/backgrounds/${encodeURIComponent(backgroundFile)}`;
+
+  const avatarFile = ui.form.elements['avatar'].value;
+  const entry = state.avatars.find((a) => a.file === avatarFile);
+
+  if (!entry) {
+    clearAvatar();
+    ui.canvas.hidden = true;
+    ui.stageHint.hidden = false;
+    ui.stageHint.textContent = avatarFile ? `${avatarFile} is not in the catalogue` : 'No avatar selected';
+    return;
+  }
+
+  ui.canvas.hidden = false;
+  ui.stageHint.hidden = true;
+  showAvatar(ui.canvas, entry).catch((err) => {
+    ui.canvas.hidden = true;
+    ui.stageHint.hidden = false;
+    ui.stageHint.textContent = `Could not load ${entry.file}: ${err.message}`;
+  });
 }
 
 // ── Actions ──────────────────────────────────────────────────────────────────
@@ -139,7 +203,6 @@ function selectTemplate(id) {
   const template = state.templates.find((t) => t.id === id);
   if (!template) return;
   state.selectedId = id;
-  state.draft = null;
   renderEditor(template);
   renderList();
 }
@@ -148,10 +211,9 @@ function startNewTemplate() {
   if (state.dirty && !confirm('Discard unsaved changes?')) return;
   const defaultProvider = state.providers.find((p) => p.configured) ?? state.providers[0];
   state.selectedId = null;
-  state.draft = emptyTemplate(defaultProvider
+  renderEditor(emptyTemplate(defaultProvider
     ? { provider: defaultProvider.name, model: defaultProvider.models?.[0] ?? '' }
-    : undefined);
-  renderEditor(state.draft, { isNew: true });
+    : undefined), { isNew: true });
   renderList();
   ui.form.elements['name'].focus();
   ui.form.elements['name'].select();
@@ -166,7 +228,6 @@ async function save() {
       ? await api.put(`/agent-templates/${state.selectedId}`, input)
       : await api.post('/agent-templates', input);
     state.selectedId = saved.id;
-    state.draft = null;
     await loadTemplates();
     renderEditor(saved);
     toastOk(`Saved ${saved.name}`);
@@ -182,9 +243,16 @@ async function remove() {
     setDirty(false);
     ui.form.hidden = true;
     ui.editorEmpty.hidden = false;
-    ui.title.textContent = 'Select a template';
+    setTitle('Select a template');
     ui.revision.hidden = true;
-    ui.del.disabled = ui.duplicate.disabled = ui.preview.disabled = true;
+    ui.del.disabled = ui.duplicate.disabled = true;
+    ui.promptText.textContent = 'Select a template to see the system prompt it produces.';
+    ui.promptLen.textContent = '';
+    clearAvatar();
+    ui.canvas.hidden = true;
+    ui.background.hidden = true;
+    ui.stageHint.hidden = false;
+    ui.stageHint.textContent = 'No avatar selected';
     await loadTemplates();
   }, `Deleted ${template.name}`);
 }
@@ -200,59 +268,53 @@ async function duplicate() {
   }, 'Duplicated');
 }
 
-async function previewPrompt() {
-  if (!state.selectedId) return;
-  await guard(async () => {
-    const result = await api.get(`/agent-templates/${state.selectedId}/prompt-preview`);
-    ui.promptText.textContent = result.prompt;
-    ui.dialog.showModal();
-  });
-}
-
 function onPersonaChange(event) {
   const [hat, name] = (event.target.value || '').split(':');
   const persona = (state.personas[hat] ?? []).find((p) => p.name === name);
+  if (!persona) return;
   applyPersona(ui.form, persona);
-  const checkbox = ui.form.querySelector(`input[name="hats"][value="${hat}"]`);
-  if (checkbox) {
-    for (const box of ui.form.querySelectorAll('input[name="hats"]')) box.checked = false;
-    checkbox.checked = true;
-  }
+  for (const box of ui.form.querySelectorAll('input[name="hats"]')) box.checked = box.value === hat;
   setDirty(true);
+  refreshPreview();
 }
 
 // ── Wiring ───────────────────────────────────────────────────────────────────
 
 function init() {
   buildHatCheckboxes($('#hat-checkboxes'));
+
   ui.form.addEventListener('input', (event) => {
-    if (event.target.name !== 'persona') setDirty(true);
+    if (event.target.name === 'persona') return;
+    setDirty(true);
+    refreshPreview();
   });
   ui.form.addEventListener('change', (event) => {
-    if (event.target.name === 'persona') onPersonaChange(event);
+    if (event.target.name === 'persona') { onPersonaChange(event); return; }
+    setDirty(true);
+    refreshPreview();
   });
   ui.form.addEventListener('submit', (event) => { event.preventDefault(); void save(); });
 
   ui.save.addEventListener('click', () => void save());
   ui.del.addEventListener('click', () => void remove());
   ui.duplicate.addEventListener('click', () => void duplicate());
-  ui.preview.addEventListener('click', () => void previewPrompt());
   ui.newBtn.addEventListener('click', startNewTemplate);
-  $('#close-prompt').addEventListener('click', () => ui.dialog.close());
 
   const reload = debounce(() => void loadTemplates(), 250);
   ui.search.addEventListener('input', reload);
   ui.hatFilter.addEventListener('change', () => void loadTemplates());
 
-  window.addEventListener('beforeunload', (event) => {
-    if (state.dirty) event.preventDefault();
-  });
+  window.addEventListener('beforeunload', (event) => { if (state.dirty) event.preventDefault(); });
 
   trackHealth($('#health-dot'), $('#health-label'), '/api/v1/health');
 }
 
 init();
-await guard(async () => {
+try {
   await loadCatalogue();
   await loadTemplates();
-});
+  const first = state.templates[0];
+  if (first) selectTemplate(first.id);
+} catch (err) {
+  toastError(err);
+}

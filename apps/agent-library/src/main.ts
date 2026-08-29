@@ -30,7 +30,14 @@ async function main(): Promise<void> {
     name: config.name,
     port: config.port,
     publicDir: PUBLIC_DIR,
-    mounts: [uiKitMount()],
+    mounts: [
+      uiKitMount(),
+      // The editor previews the GLB avatar and the background image, so the
+      // library serves the same assets the runner does.
+      { prefix: '/avatars', dir: config.avatarsDir },
+      { prefix: '/backgrounds', dir: config.backgroundsDir },
+      { prefix: '/nm', dir: config.nodeModulesDir },
+    ],
     routes: [
       ...metaRoutes({
         base: '/api/v1',
@@ -43,7 +50,7 @@ async function main(): Promise<void> {
         }),
       }),
       ...templateRoutes(store),
-      ...catalogueRoutes(config.avatarsDir),
+      ...catalogueRoutes(config.avatarsDir, config.backgroundsDir),
     ],
     banner: [
       `templates: ${config.templatesDir} (${store.size} loaded)`,

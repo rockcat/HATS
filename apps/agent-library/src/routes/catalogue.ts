@@ -1,6 +1,6 @@
 /** Read-only reference data used when authoring a template. */
 
-import { readFile } from 'fs/promises';
+import { readFile, readdir } from 'fs/promises';
 import * as path from 'path';
 import { get, json, type Route } from '../../../../packages/service-kit/src/index.js';
 import { hatDefinitions } from '../../../../src/hats/definitions.js';
@@ -10,9 +10,15 @@ import { KNOWN_PROVIDERS } from '../../../../src/api/providers.js';
 
 const BASE = '/api/v1';
 
-interface AvatarCatalogue { avatars?: Array<{ file: string; name?: string }> }
+/** Entries carry the camera framing the preview needs, so it is passed through whole. */
+interface AvatarCatalogue {
+  avatars?: Array<{
+    file: string; name?: string; sex?: string;
+    camera?: number[]; rotate?: number[]; fov?: number; scale?: number;
+  }>;
+}
 
-export function catalogueRoutes(avatarsDir: string): Route[] {
+export function catalogueRoutes(avatarsDir: string, backgroundsDir: string): Route[] {
   return [
     get(`${BASE}/personas`, ({ res }) => json(res, 200, personasByHat)),
 
@@ -37,6 +43,15 @@ export function catalogueRoutes(avatarsDir: string): Route[] {
         json(res, 200, { avatars: parsed.avatars ?? [] });
       } catch {
         json(res, 200, { avatars: [] });
+      }
+    }),
+
+    get(`${BASE}/backgrounds`, async ({ res }) => {
+      try {
+        const files = await readdir(backgroundsDir);
+        json(res, 200, { backgrounds: files.filter((f) => /\.(png|jpe?g|webp)$/i.test(f)).sort() });
+      } catch {
+        json(res, 200, { backgrounds: [] });
       }
     }),
   ];
