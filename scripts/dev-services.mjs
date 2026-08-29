@@ -10,10 +10,17 @@
  */
 
 import { spawn } from 'child_process';
+import { existsSync } from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+
+// Load .env into every child, so running this file directly behaves the same as
+// `npm run services`. Without it the services would pick different defaults for
+// PROJECTS_ROOT than the Team Runner does.
+const ENV_FILE = path.join(REPO_ROOT, '.env');
+const ENV_ARGS = existsSync(ENV_FILE) ? [`--env-file=${ENV_FILE}`] : [];
 
 const SERVICES = {
   library:   { label: 'library  ', script: 'apps/agent-library/src/main.ts',    port: 3010, colour: '\x1b[36m' },
@@ -44,7 +51,7 @@ for (const name of selected) {
   const service = SERVICES[name];
   const child = spawn(
     process.execPath,
-    ['--import', 'tsx/esm', path.join(REPO_ROOT, service.script)],
+    [...ENV_ARGS, '--import', 'tsx/esm', path.join(REPO_ROOT, service.script)],
     { cwd: REPO_ROOT, env: process.env, stdio: ['ignore', 'pipe', 'pipe'] },
   );
 
