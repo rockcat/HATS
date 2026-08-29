@@ -2,7 +2,34 @@ import { readFile, writeFile } from 'fs/promises';
 import { v4 as uuidv4 } from 'uuid';
 import { AgentDefinition } from '../store/team-snapshot.js';
 
-export class AgentStore {
+/**
+ * The runner's view of the agent library.
+ *
+ * Two implementations exist: `AgentStore` keeps definitions in a local file,
+ * and `LibraryAgentStore` delegates to the standalone Agent Library service.
+ * The runner works against this interface so it does not care which is in play.
+ */
+export interface AgentDefinitionStore {
+  load(): Promise<void>;
+  /** The library's own entries. Never includes agents that only exist at runtime. */
+  list(): AgentDefinition[];
+  get(id: string): AgentDefinition | undefined;
+  has(id: string): boolean;
+  /** Create or edit a library entry. */
+  addOrUpdate(def: AgentDefinition): Promise<AgentDefinition>;
+  /**
+   * Persist a *running* agent's current config.
+   *
+   * A running agent is identified by its project instance id, not a library id,
+   * so this must never create a new library entry — the project definition, not
+   * the library, is where a deployed agent belongs.
+   */
+  syncRunningAgent(def: AgentDefinition): Promise<void>;
+  remove(id: string): Promise<boolean>;
+}
+
+/** File-backed store — the fallback used when no Agent Library service is reachable. */
+export class AgentStore implements AgentDefinitionStore {
   private filePath: string;
   private agents = new Map<string, AgentDefinition>();
 
@@ -36,6 +63,11 @@ export class AgentStore {
     this.agents.set(entry.id, entry);
     await this.save();
     return entry;
+  }
+
+  /** Standalone mode keeps one flat file, so a running agent is stored like any other. */
+  async syncRunningAgent(def: AgentDefinition): Promise<void> {
+    await this.addOrUpdate(def);
   }
 
   async remove(id: string): Promise<boolean> {

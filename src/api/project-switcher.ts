@@ -8,7 +8,7 @@ import { HumanRequestStore } from './human-request-store.js';
 import { EmailAllowlistStore } from './email-allowlist-store.js';
 import { ProjectManager, AgentStatus } from './project-manager.js';
 import { ProjectLoader } from './api-server.js';
-import { AgentStore } from './agent-store.js';
+import { AgentDefinitionStore } from './agent-store.js';
 
 export interface ProjectSwitchContext {
   projectLoader: ProjectLoader;
@@ -38,7 +38,7 @@ export interface ProjectSwitchContext {
   buildAgentStatuses(): AgentStatus[];
   sseBroadcast(data: object): void;
   projectSwitchCallback: ((o: TeamOrchestrator) => void) | null;
-  agentStore: AgentStore | null;
+  agentStore: AgentDefinitionStore | null;
 }
 
 export async function executeProjectSwitch(newId: string, ctx: ProjectSwitchContext): Promise<void> {

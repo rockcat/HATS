@@ -18,7 +18,7 @@ import { getToolsForHat } from '../tools/definitions.js';
 import { AnthropicProvider } from '../providers/anthropic.js';
 import { makeProvider, KNOWN_PROVIDERS, probeLocalLLM, getCachedModels, getModelCacheEntry, clearModelCache } from './providers.js';
 import { AgentStatus } from './project-manager.js';
-import { AgentStore } from './agent-store.js';
+import { AgentDefinitionStore } from './agent-store.js';
 import { ScheduledActionStore } from './scheduled-action-store.js';
 
 export interface AgentRouterDeps {
@@ -40,7 +40,7 @@ export interface AgentRouterDeps {
   resolveMCPConfig(id: string, entry: import('../mcp/mcp-catalogue.js').MCPCatalogueEntry): ReturnType<typeof import('../mcp/mcp-catalogue.js').resolveConfig>;
   saveMCPEnabled(): Promise<void>;
   enabledMCPIds: Set<string>;
-  getAgentStore(): AgentStore | null;
+  getAgentStore(): AgentDefinitionStore | null;
   getActionStore(): ScheduledActionStore | null;
   sseBroadcast(data: object): void;
   json(res: ServerResponse, status: number, body: unknown): void;
