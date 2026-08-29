@@ -24,10 +24,11 @@ import { EmailAllowlistRouter } from './email-allowlist-router.js';
 import { MCPCatalogueRouter } from './mcp-catalogue-router.js';
 import { handleOrchestratorEvent, bufferAgentFeedEvent } from './event-handler.js';
 import { executeProjectSwitch } from './project-switcher.js';
-import { AgentStore } from './agent-store.js';
+import { AgentDefinitionStore } from './agent-store.js';
 import { ScheduledActionStore } from './scheduled-action-store.js';
 import { GoogleTokenStore } from './google-token-store.js';
 import { GoogleOAuthRouter } from './google-oauth-router.js';
+import { EmbodimentRouter } from '../embodiment/embodiment-router.js';
 
 const __dirname  = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(__dirname, '..', 'webui', 'public');
@@ -70,9 +71,13 @@ export interface APIServerConfig {
   projectDir?:      string;
   projectsRoot?:    string;
   projectLoader?:   ProjectLoader;
-  agentStore?:      AgentStore;
+  agentStore?:      AgentDefinitionStore;
   actionStore?:     ScheduledActionStore;
   googleTokensPath?: string;
+  /** Human-readable project name shown by the Embodiment API. */
+  projectName?:     string;
+  /** Where the loaded project definition came from. */
+  projectSource?:   'project-server' | 'local';
 }
 
 export class APIServer {
@@ -86,7 +91,7 @@ export class APIServer {
   private projectDir: string | null;
   private projectsRoot: string | null;
   private projectLoader: ProjectLoader | null;
-  private agentStore: AgentStore | null;
+  private agentStore: AgentDefinitionStore | null;
   private actionStore: ScheduledActionStore | null;
   private projectSwitchCallback: ((orchestrator: TeamOrchestrator) => void) | null = null;
   private enabledMCPIds: Set<string> = new Set();
@@ -117,6 +122,9 @@ export class APIServer {
   private mcpCatalogueRouter: MCPCatalogueRouter;
   private googleTokenStore: GoogleTokenStore;
   private googleOAuthRouter: GoogleOAuthRouter;
+  private embodimentRouter: EmbodimentRouter;
+  private projectName: string;
+  private projectSource: 'project-server' | 'local';
   private googleRefreshTimer: ReturnType<typeof setInterval> | null = null;
   private readonly GOOGLE_HTTP_MCP_IDS = new Set(['google-gmail', 'google-calendar', 'google-drive', 'google-chat', 'google-contacts']);
 
@@ -132,6 +140,8 @@ export class APIServer {
     this.projectLoader  = config.projectLoader ?? null;
     this.agentStore     = config.agentStore  ?? null;
     this.actionStore    = config.actionStore ?? null;
+    this.projectName    = config.projectName ?? config.projectId ?? 'default';
+    this.projectSource  = config.projectSource ?? 'local';
     this.humanRequestStore   = new HumanRequestStore(config.requestsPath ?? null);
     this.emailAllowlistStore = new EmailAllowlistStore(config.allowlistPath ?? null);
 
@@ -229,6 +239,22 @@ export class APIServer {
       },
     });
 
+    this.embodimentRouter = new EmbodimentRouter({
+      getOrchestrator:   () => self.orchestrator,
+      getProjectContext: () => ({
+        id:        self.projectId,
+        name:      self.projectName,
+        goal:      self.orchestrator.getProjectGoal() ?? '',
+        humanName: self.orchestrator.getHumanName(),
+        source:    self.projectSource,
+      }),
+      activityFor:    (agentId) => self.agentActivity.get(agentId),
+      voiceManager:   self.voiceManager,
+      avatarsDir:     AVATARS_DIR,
+      backgroundsDir: BACKGROUNDS_DIR,
+      version:        '1.0.0',
+    });
+
     const tokensPath = config.googleTokensPath ?? path.join(process.cwd(), 'data', 'google-tokens.json');
     this.googleTokenStore = new GoogleTokenStore(tokensPath);
     this.googleOAuthRouter = new GoogleOAuthRouter(this.googleTokenStore, this.port);
@@ -322,9 +348,10 @@ export class APIServer {
     if (this.kanbanManager.kanbanPath) this.kanbanManager.watchKanban(this.kanbanManager.kanbanPath);
 
     this.server.listen(this.port, () => {
-      log.info(`[API] UI    http://localhost:${this.port}`);
-      log.info(`[API] REST  http://localhost:${this.port}/api`);
-      log.info(`[API] WS    ws://localhost:${this.port}/ws`);
+      log.info(`[API] UI         http://localhost:${this.port}`);
+      log.info(`[API] REST       http://localhost:${this.port}/api`);
+      log.info(`[API] WS         ws://localhost:${this.port}/ws`);
+      log.info(`[API] Embodiment http://localhost:${this.port}/api/embodiment/v1  (spec: /api/embodiment/v1/openapi.yaml)`);
       if (isSpeechAvailable() || this.voiceManager.getVoices().length > 0) {
         const voices = this.voiceManager.getVoices();
         if (voices.length > 0)
@@ -342,6 +369,7 @@ export class APIServer {
     if (this.nudgeScheduler)      { clearInterval(this.nudgeScheduler);      this.nudgeScheduler      = null; }
     if (this.googleRefreshTimer)  { clearInterval(this.googleRefreshTimer);  this.googleRefreshTimer  = null; }
     this.orchestrator.stopAgendaRunner();
+    this.embodimentRouter.close();
     this.voiceManager.stop();
     this.wss.close();
     this.server.close();
@@ -433,6 +461,9 @@ export class APIServer {
       buildAgentStatuses:   () => this.buildAgentStatuses(),
     });
     bufferAgentFeedEvent(ev, this.agentFeeds, this.FEED_LIMIT, (d) => this.sseBroadcast(d), (n) => this.agentIdForName(n));
+    // Mirror onto the public stream. Runs last so activity labels set above are
+    // already in place when the embodiment event is built.
+    this.embodimentRouter.publishOrchestratorEvent(ev);
   }
 
   private buildRequestsList() { return this.humanRequestStore.list(); }
@@ -449,6 +480,10 @@ export class APIServer {
     const url      = new URL(req.url ?? '/', `http://localhost:${this.port}`);
     const pathname = url.pathname;
     const method   = req.method ?? 'GET';
+
+    // The Embodiment API is the public contract — it is matched before any
+    // dashboard route so an internal refactor can never shadow it.
+    if (await this.embodimentRouter.handleRoutes(pathname, method, req, res)) return;
 
     if (pathname === '/events' && method === 'GET') {
       await this.sseInit(res);

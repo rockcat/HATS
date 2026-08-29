@@ -11,7 +11,7 @@ import { MCPRegistry } from '../mcp/mcp-registry.js';
 import { MCPServerDef } from '../mcp/mcp-client.js';
 import { Semaphore } from '../providers/semaphore.js';
 import { TeamSnapshot, TeamSnapshotV1, TeamSnapshotV2, AgentSnapshot, AgentDefinition, HistoryEntry } from '../store/team-snapshot.js';
-import { AgentStore } from '../api/agent-store.js';
+import { AgentDefinitionStore } from '../api/agent-store.js';
 import { MeetingRoom } from './meeting-room.js';
 import { TeamMessage, Task, Meeting, MeetingTurn, ScheduledMeeting, MeetingType } from './types.js';
 import { MeetingStore } from './meeting-store.js';
@@ -66,7 +66,7 @@ export class TeamOrchestrator {
   private agendaStoreRef: { store: AgendaStore | null } = { store: null };
   private agendaRunner: AgendaRunner | null = null;
 
-  private agentStore: AgentStore | null = null;
+  private agentStore: AgentDefinitionStore | null = null;
   private rebuildTimer: ReturnType<typeof setTimeout> | null = null;
   private ticketCommentHandler: ((agentName: string, text: string) => Promise<void>) | null = null;
   private agentTicketIdResolver: ((agentName: string) => string | undefined) | null = null;
@@ -115,8 +115,8 @@ export class TeamOrchestrator {
 
   stopAgendaRunner(): void { this.agendaRunner?.stop(); }
 
-  setAgentStore(store: AgentStore): void { this.agentStore = store; }
-  getAgentStore(): AgentStore | null { return this.agentStore; }
+  setAgentStore(store: AgentDefinitionStore): void { this.agentStore = store; }
+  getAgentStore(): AgentDefinitionStore | null { return this.agentStore; }
 
   async addMCPServer(def: MCPServerDef): Promise<void> {
     await this.mcp.add(def);
@@ -193,7 +193,7 @@ export class TeamOrchestrator {
           disabledPersonalMcpServers: agent.config.disabledPersonalMcpServers,
           scheduledActionIds:         existingDef?.scheduledActionIds ?? [],
         };
-        await this.agentStore.addOrUpdate(def);
+        await this.agentStore.syncRunningAgent(def);
       }
       const snapshot: TeamSnapshotV2 = {
         version: 2,
@@ -430,6 +430,9 @@ export class TeamOrchestrator {
     this.rebuildTeamContext();
   }
 
+  getProjectGoal(): string | null { return this.projectGoal; }
+  getHumanName(): string { return this.humanName; }
+
   registerAgent(config: AgentConfig): Agent {
     if (this.projectDir) config = { ...config, projectDir: this.projectDir };
     if (this.projectGoal) config = { ...config, projectGoal: this.projectGoal };
@@ -604,7 +607,7 @@ export class TeamOrchestrator {
     ticketId?: string,
     sourceThreadId?: string,
     sourceThreadLimit?: number,
-  ): Promise<void> {
+  ): Promise<string> {
     const taskId = await this.createTask(toAgentName, this.humanName, task, context, projectName);
     const storedTask = this.tasks.get(taskId)!;
     if (ticketId) storedTask.ticketId = ticketId;
@@ -619,6 +622,7 @@ export class TeamOrchestrator {
     });
     await this.store.append('task_assigned', { taskId, from: 'human', to: toAgentName, task, context, projectName: storedTask.projectName });
     this.deliverToAgent(toAgentName, msg);
+    return taskId;
   }
 
   async humanReply(toAgentName: string, content: string, threadId?: string): Promise<void> {
