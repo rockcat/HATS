@@ -28,6 +28,7 @@
     "@kmamal/sdl": "^0.11.13",
     "@modelcontextprotocol/sdk": "^1.27.1",
     "@napi-rs/canvas": "^0.1.97",
+    "@pixiv/three-vrm": "^3.5.5",
     "ajv": "^8.20.0",
     "ajv-formats": "^3.0.1",
     "cmu-pronouncing-dictionary": "^3.0.0",
