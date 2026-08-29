@@ -18,8 +18,8 @@
     },
     "providerName": {
       "type": "string",
-      "description": "LLM provider adapter id.",
-      "enum": ["anthropic", "openai", "gemini", "ollama", "lmstudio", "mock"]
+      "description": "LLM provider adapter id. 'external' delegates the agent to an out-of-process runner such as Claude Code.",
+      "enum": ["anthropic", "openai", "gemini", "ollama", "lmstudio", "external", "mock"]
     },
     "identity": {
       "type": "object",
@@ -150,13 +150,32 @@
     },
     "slug": {
       "type": "string",
-      "description": "Filesystem-safe identifier.",
-      "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$"
+      "description": "Filesystem-safe identifier. Doubles as a folder name, so path separators and dots are excluded; spaces and capitals are allowed because existing project folders use them.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9 _-]{0,63}$"
+    },
+    "identifier": {
+      "type": "string",
+      "description": "A stable identity. Usually a generated UUID, but a well-known constant such as 'builtin-claude-code' is also valid.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$"
     },
     "uuid": {
       "type": "string",
       "description": "RFC 4122 identifier.",
       "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+    },
+    "externalEndpoint": {
+      "type": "object",
+      "description": "How to reach an agent whose provider is 'external' — a subprocess or HTTP runner outside this process. Passed through verbatim to the runner that understands it.",
+      "properties": {
+        "mode": { "type": "string", "enum": ["subprocess", "http"] },
+        "command": { "type": "string" },
+        "args": { "type": "array", "items": { "type": "string" } },
+        "inputMode": { "type": "string" },
+        "url": { "type": "string" },
+        "timeoutMs": { "type": "integer", "minimum": 0 }
+      },
+      "required": ["mode"],
+      "additionalProperties": true
     },
     "error": {
       "type": "object",

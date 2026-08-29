@@ -202,7 +202,18 @@ export function summariseProject(project: ProjectDefinition, active: boolean): P
   }) as ProjectSummary;
 }
 
-/** Turn arbitrary user text into a valid project id. */
+/**
+ * Valid project ids, matching `slug` in common.schema.json.
+ *
+ * A project id doubles as a folder name, so path separators and dots are
+ * excluded; spaces and capitals are allowed because existing project folders
+ * use them and an id must be able to name one.
+ */
+export const PROJECT_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9 _-]{0,63}$/;
+
+export const isValidProjectId = (id: string): boolean => PROJECT_ID_PATTERN.test(id);
+
+/** Turn arbitrary user text into a valid project id. New ids are kept tidy. */
 export function slugifyProjectId(input: string): string {
   const slug = input.trim().toLowerCase()
     .replace(/[^a-z0-9_-]+/g, '-')
