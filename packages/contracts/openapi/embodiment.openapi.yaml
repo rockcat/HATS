@@ -1,0 +1,445 @@
+openapi: 3.1.0
+info:
+  title: HATS Embodiment API
+  version: 1.0.0
+  description: |
+    The contract between a running HATS team and anything that wants to talk to
+    it — web sites, desktop apps, mobile clients, kiosk installations.
+
+    "Embodiment" is the whole surface of an agent as a presence: its identity and
+    hats, its live state, its conversation threads, its face (GLB avatar and
+    background) and its voice (synthesised speech with viseme timings for lip
+    sync). A client that speaks this API can give an agent a body without
+    knowing anything about orchestration, MCP or the project store.
+
+    ## Interaction model
+
+    Messaging is asynchronous. `POST /agents/{agentId}/messages` accepts a
+    message and returns immediately; the agent's reply arrives over the SSE
+    stream at `/events` and is appended to the thread readable at
+    `GET /agents/{agentId}/messages`. Clients that only want request/response
+    can poll the thread, but the stream is the intended path.
+  license:
+    name: SEE LICENSE IN LICENSE.txt
+servers:
+  - url: http://localhost:3001/api/embodiment/v1
+    description: Team Runner, mounted alongside the operator dashboard
+
+tags:
+  - name: Presence
+    description: Who is here and what are they doing
+  - name: Conversation
+    description: Talking to an agent
+  - name: Body
+    description: Face and voice
+  - name: Meta
+    description: Health, project context and this document
+
+paths:
+  /health:
+    get:
+      tags: [Meta]
+      summary: Liveness probe
+      operationId: getHealth
+      responses:
+        '200':
+          description: Runner is up
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  service: { type: string }
+                  version: { type: string }
+                  agentCount: { type: integer }
+                  speechAvailable: { type: boolean }
+
+  /openapi.yaml:
+    get:
+      tags: [Meta]
+      summary: This document
+      operationId: getOpenApi
+      responses:
+        '200':
+          description: OpenAPI document
+          content:
+            application/yaml:
+              schema: { type: string }
+
+  /project:
+    get:
+      tags: [Meta]
+      summary: The project this team is running
+      operationId: getProjectInfo
+      responses:
+        '200':
+          description: Project context
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProjectInfo' }
+
+  /agents:
+    get:
+      tags: [Presence]
+      summary: List the embodied agents
+      operationId: listAgents
+      responses:
+        '200':
+          description: The team
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  agents:
+                    type: array
+                    items: { $ref: '#/components/schemas/EmbodiedAgent' }
+
+  /agents/{agentId}:
+    parameters:
+      - $ref: '#/components/parameters/AgentId'
+    get:
+      tags: [Presence]
+      summary: Fetch one agent
+      operationId: getAgent
+      responses:
+        '200':
+          description: The agent
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmbodiedAgent' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /agents/{agentId}/threads:
+    parameters:
+      - $ref: '#/components/parameters/AgentId'
+    get:
+      tags: [Conversation]
+      summary: List the agent's conversation threads
+      description: Maps thread key to message count. `general` is the default direct-chat thread.
+      operationId: listThreads
+      responses:
+        '200':
+          description: Threads
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  threads:
+                    type: object
+                    additionalProperties: { type: integer }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /agents/{agentId}/messages:
+    parameters:
+      - $ref: '#/components/parameters/AgentId'
+    get:
+      tags: [Conversation]
+      summary: Read a conversation thread
+      operationId: getMessages
+      parameters:
+        - name: thread
+          in: query
+          schema: { type: string, default: general }
+        - name: limit
+          in: query
+          description: Return only the most recent N messages
+          schema: { type: integer, minimum: 1, maximum: 500, default: 100 }
+        - name: since
+          in: query
+          description: Only messages with a timestamp strictly after this ISO-8601 instant
+          schema: { type: string, format: date-time }
+      responses:
+        '200':
+          description: Messages, oldest first
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  thread: { type: string }
+                  messages:
+                    type: array
+                    items: { $ref: '#/components/schemas/Message' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [Conversation]
+      summary: Say something to an agent
+      description: |
+        Accepted immediately. The reply is delivered over `/events` as an
+        `agent_message` event and appended to the thread.
+      operationId: sendMessage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SendMessageRequest' }
+      responses:
+        '202':
+          description: Accepted for delivery
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SendMessageResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /agents/{agentId}/tasks:
+    parameters:
+      - $ref: '#/components/parameters/AgentId'
+    post:
+      tags: [Conversation]
+      summary: Assign durable work to an agent
+      description: Unlike a message, a task is tracked to completion and appears in the runner's task list.
+      operationId: assignTask
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [description]
+              properties:
+                description: { type: string }
+                context: { type: string }
+      responses:
+        '202':
+          description: Task accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accepted: { type: boolean, const: true }
+                  agentId: { type: string }
+                  taskId: { type: string }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /agents/{agentId}/speech:
+    parameters:
+      - $ref: '#/components/parameters/AgentId'
+    post:
+      tags: [Body]
+      summary: Speak text in the agent's voice
+      description: |
+        Synthesises WAV audio using the agent's assigned voice. When lip-sync is
+        available the response also carries viseme timings, so a client can drive
+        a mouth without running Rhubarb itself.
+      operationId: synthesiseSpeech
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text: { type: string, maxLength: 4000 }
+                withVisemes:
+                  type: boolean
+                  default: false
+                  description: When true the JSON response embeds base64 audio plus viseme cues instead of returning raw WAV.
+      responses:
+        '200':
+          description: Synthesised speech
+          content:
+            audio/wav:
+              schema: { type: string, format: binary }
+            application/json:
+              schema: { $ref: '#/components/schemas/SpeechResult' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503':
+          description: No TTS voice configured for this agent
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /agents/{agentId}/avatar:
+    parameters:
+      - $ref: '#/components/parameters/AgentId'
+    get:
+      tags: [Body]
+      summary: Download the agent's 3D head
+      operationId: getAvatar
+      responses:
+        '200':
+          description: GLB model
+          content:
+            model/gltf-binary:
+              schema: { type: string, format: binary }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /agents/{agentId}/background:
+    parameters:
+      - $ref: '#/components/parameters/AgentId'
+    get:
+      tags: [Body]
+      summary: Download the agent's background image
+      operationId: getBackground
+      responses:
+        '200':
+          description: Image
+          content:
+            image/png:
+              schema: { type: string, format: binary }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /events:
+    get:
+      tags: [Presence]
+      summary: Live event stream
+      description: |
+        A `text/event-stream` of everything the team does. Event `data` is a JSON
+        object whose `type` field selects the payload:
+
+        | type | meaning |
+        | --- | --- |
+        | `hello` | first frame — carries the current agent roster |
+        | `agent_state` | an agent changed state or activity |
+        | `agent_message` | an agent produced text in a thread |
+        | `agent_speech` | an agent started speaking (audio URL + visemes) |
+        | `project_update` | goal, name or team membership changed |
+        | `heartbeat` | keep-alive, sent every 25s |
+
+        Filter with `?agentId=` to receive only one agent's traffic.
+      operationId: streamEvents
+      parameters:
+        - name: agentId
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Event stream
+          content:
+            text/event-stream:
+              schema: { type: string }
+
+components:
+  parameters:
+    AgentId:
+      name: agentId
+      in: path
+      required: true
+      description: The agent's `instanceId`. The agent's name is also accepted for convenience.
+      schema: { type: string }
+
+  responses:
+    NotFound:
+      description: No such agent
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    BadRequest:
+      description: Malformed request
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
+  schemas:
+    HatType:
+      type: string
+      enum: [none, white, red, black, yellow, green, blue]
+
+    AgentState:
+      type: string
+      enum: [idle, working, waiting, waiting_for_help, in_discussion]
+
+    EmbodiedAgent:
+      type: object
+      required: [id, name, hats, state, activity, model, identity, threads]
+      properties:
+        id: { type: string, description: Deployed agent instanceId }
+        name: { type: string }
+        hats: { type: array, items: { $ref: '#/components/schemas/HatType' } }
+        state: { $ref: '#/components/schemas/AgentState' }
+        activity: { type: string, description: Human-readable status line }
+        talkingTo: { type: string }
+        model:
+          type: object
+          properties:
+            provider: { type: string }
+            model: { type: string }
+        identity:
+          type: object
+          properties:
+            visualDescription: { type: string }
+            specialisation: { type: string }
+            backstory: { type: string }
+            email: { type: string }
+            avatar: { type: string }
+            background: { type: string }
+            voice: { type: string }
+            speakerName: { type: string }
+        threads:
+          type: object
+          additionalProperties: { type: integer }
+        hourlyCost: { type: number }
+        costIdled: { type: boolean }
+        hasVoice: { type: boolean }
+        hasAvatar: { type: boolean }
+
+    Message:
+      type: object
+      required: [role, content, timestamp]
+      properties:
+        role: { type: string, enum: [user, assistant, tool] }
+        content: { type: string }
+        timestamp: { type: string, format: date-time }
+        toolName: { type: string }
+
+    SendMessageRequest:
+      type: object
+      required: [content]
+      properties:
+        content: { type: string, minLength: 1, maxLength: 32000 }
+        thread: { type: string, default: general }
+        mode:
+          type: string
+          enum: [chat, task]
+          default: chat
+          description: '`task` routes through the orchestrator task pipeline instead of direct chat.'
+        context: { type: string, description: Extra context, only used when mode is task }
+
+    SendMessageResponse:
+      type: object
+      properties:
+        accepted: { type: boolean, const: true }
+        agentId: { type: string }
+        thread: { type: string }
+        messageId: { type: string }
+
+    SpeechResult:
+      type: object
+      properties:
+        audioBase64: { type: string, description: WAV bytes, base64 encoded }
+        mimeType: { type: string, const: audio/wav }
+        durationMs: { type: number }
+        visemes:
+          type: array
+          items:
+            type: object
+            properties:
+              start: { type: number, description: Seconds from the start of the clip }
+              end: { type: number }
+              viseme: { type: string, description: ARKit viseme name }
+
+    ProjectInfo:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        goal: { type: string }
+        humanName: { type: string }
+        source:
+          type: string
+          enum: [project-server, local]
+          description: Whether the definition came from the Project Server or from local disk.
+        agentCount: { type: integer }
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string }
+        code: { type: string }
