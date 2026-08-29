@@ -65,7 +65,7 @@
   padding: 0 16px;
 }
 
-#prompt-scroll { max-height: calc(100vh - 460px); min-height: 200px; padding: 12px; }
+#prompt-scroll { max-height: calc(100vh - 480px); min-height: 200px; padding: 12px; }
 
 #prompt-text {
   background: transparent;
