@@ -97,6 +97,23 @@ export function patchAgentTemplate(current: AgentTemplate, patch: Partial<AgentT
   return merged;
 }
 
+/**
+ * Replace a template wholesale, keeping only its identity and history.
+ *
+ * Unlike `patchAgentTemplate`, a field absent from the input is *removed* — that
+ * is what makes PUT a replace. Clearing an optional field such as an MCP
+ * allow-list is impossible otherwise.
+ */
+export function replaceAgentTemplate(current: AgentTemplate, input: AgentTemplateInput): AgentTemplate {
+  const replaced = createAgentTemplate(input, current.id);
+  return {
+    ...replaced,
+    revision: current.revision + 1,
+    createdAt: current.createdAt,
+    updatedAt: nowIso(),
+  };
+}
+
 export interface DeployOptions {
   instanceId?: string;
   name?: string;
