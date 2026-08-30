@@ -19,11 +19,25 @@ info:
     stream at `/events` and is appended to the thread readable at
     `GET /agents/{agentId}/messages`. Clients that only want request/response
     can poll the thread, but the stream is the intended path.
+
+    ## Authentication
+
+    Every endpoint requires a credential — the Team Runner authenticates all of
+    `/api/*`. Third-party clients should use a static API key, created in the
+    dashboard's Users tab and sent as `X-API-Key`. Browser clients signed into
+    the dashboard may instead present their session token as a Bearer token.
+
+    An unauthenticated request is answered with 401 and
+    `{"error": "Not authenticated"}`.
   license:
     name: SEE LICENSE IN LICENSE.txt
 servers:
   - url: http://localhost:3001/api/embodiment/v1
     description: Team Runner, mounted alongside the operator dashboard
+
+security:
+  - ApiKeyAuth: []
+  - BearerAuth: []
 
 tags:
   - name: Presence
@@ -316,6 +330,17 @@ paths:
               schema: { type: string }
 
 components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: A static API key created in the dashboard's Users tab.
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: A dashboard session token, for clients already signed in.
+
   parameters:
     AgentId:
       name: agentId

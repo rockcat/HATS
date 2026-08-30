@@ -21,6 +21,12 @@ export interface ProxyOptions {
   target: string;
   label: string;
   timeoutMs?: number;
+  /**
+   * Headers added to every forwarded request — typically credentials for an
+   * authenticated upstream. Set here rather than in the browser so the secret
+   * stays on the server.
+   */
+  headers?: Record<string, string>;
 }
 
 export function proxyRoutes(options: ProxyOptions): Route[] {
@@ -35,6 +41,7 @@ export function proxyRoutes(options: ProxyOptions): Route[] {
       if (HOP_BY_HOP.has(key.toLowerCase()) || value === undefined) continue;
       headers[key] = Array.isArray(value) ? value.join(', ') : value;
     }
+    Object.assign(headers, options.headers ?? {});
 
     const init: RequestInit = { method, headers, signal: AbortSignal.timeout(timeoutMs) };
     if (method !== 'GET' && method !== 'DELETE') {

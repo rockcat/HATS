@@ -10,7 +10,7 @@
  */
 
 import * as path from 'path';
-import { startKanbanServer } from '../src/mcp/kanban/server.js';
+import { startKanbanServer } from '../server/src/mcp/kanban/server.js';
 
 const boardPath = process.argv[2] ?? path.join(process.cwd(), 'kanban-board.json');
 startKanbanServer(boardPath).catch((err) => {
