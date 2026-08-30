@@ -17,6 +17,10 @@ const state = {
   providers: [],
   avatars: [],
   dirty: false,
+  // What the stage is currently showing, so an unrelated keystroke does not
+  // trigger a multi-megabyte model reload.
+  shownAvatar: null,
+  shownBackground: null,
 };
 
 const ui = {
@@ -138,7 +142,8 @@ function renderEditor(template, { isNew = false } = {}) {
   ui.del.disabled = isNew;
   ui.duplicate.disabled = isNew;
   setDirty(isNew);
-  refreshPreview();
+  // Switching template always repaints the stage, even onto the same filename.
+  refreshPreview({ force: true });
 }
 
 function setTitle(text) {
@@ -155,9 +160,9 @@ function setDirty(dirty) {
 // ── Live preview ─────────────────────────────────────────────────────────────
 
 /** Re-render prompt and stage from whatever is currently in the form. */
-function refreshPreview() {
+function refreshPreview({ force = false } = {}) {
   if (ui.form.hidden) return;
-  renderStage();
+  renderStage(force);
   void renderPrompt();
 }
 
@@ -173,12 +178,26 @@ const renderPrompt = debounce(async () => {
   }
 }, 200);
 
-function renderStage() {
+/**
+ * Repaint the stage, but only touch the renderer when the selection actually
+ * changed. An avatar is a 4–18 MB GLB or VRM, so reloading it on every
+ * keystroke in an unrelated field would be ruinous.
+ *
+ * Pass `force` after switching template, where the same filename may need
+ * re-rendering onto a freshly cleared stage.
+ */
+function renderStage(force = false) {
   const backgroundFile = ui.form.elements['background'].value;
-  ui.background.hidden = !backgroundFile;
-  if (backgroundFile) ui.background.src = `/backgrounds/${encodeURIComponent(backgroundFile)}`;
+  if (force || backgroundFile !== state.shownBackground) {
+    state.shownBackground = backgroundFile;
+    ui.background.hidden = !backgroundFile;
+    if (backgroundFile) ui.background.src = `/backgrounds/${encodeURIComponent(backgroundFile)}`;
+  }
 
   const avatarFile = ui.form.elements['avatar'].value;
+  if (!force && avatarFile === state.shownAvatar) return;
+  state.shownAvatar = avatarFile;
+
   const entry = state.avatars.find((a) => a.file === avatarFile);
 
   if (!entry) {
@@ -261,6 +280,8 @@ async function remove() {
     ui.promptText.textContent = 'Select a template to see the system prompt it produces.';
     ui.promptLen.textContent = '';
     clearAvatar();
+    state.shownAvatar = null;
+    state.shownBackground = null;
     ui.canvas.hidden = true;
     ui.background.hidden = true;
     ui.stageHint.hidden = false;
