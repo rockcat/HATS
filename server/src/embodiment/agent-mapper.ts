@@ -91,10 +91,15 @@ export function toDeployedAgent(agent: IAgent, existing?: DeployedAgent): Deploy
 /**
  * A project-server deployed agent turned into the config the orchestrator
  * registers. `resolveProvider` supplies the live provider adapter.
+ *
+ * `secrets` carries the per-agent MCP credentials the runner keeps locally.
+ * They are deliberately absent from the deployed-agent contract — a project
+ * definition is shared, and a credential is not — so they are re-attached here.
  */
 export function toAgentConfig(
   deployed: DeployedAgent,
   resolveProvider: (name: string) => AIProvider,
+  secrets: { personalMcpCredentials?: Record<string, Record<string, string>> } = {},
 ): AgentConfig {
   return compact({
     id: deployed.instanceId,
@@ -115,6 +120,7 @@ export function toAgentConfig(
     teamContext: deployed.teamContext,
     enabledMcpServers: deployed.tools?.enabledMcpServers,
     disabledPersonalMcpServers: deployed.tools?.disabledPersonalMcpServers,
+    personalMcpCredentials: secrets.personalMcpCredentials,
     maxContextTokens: deployed.limits?.maxContextTokens,
     maxCostPerHour: deployed.limits?.maxCostPerHour,
   }) as AgentConfig;

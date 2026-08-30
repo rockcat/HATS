@@ -26,6 +26,11 @@ export interface AgentDefinitionStore {
    */
   syncRunningAgent(def: AgentDefinition): Promise<void>;
   remove(id: string): Promise<boolean>;
+  /**
+   * Per-agent MCP credentials, which never travel in a project definition or a
+   * shared library. Returns an empty object when the store keeps none.
+   */
+  secretsFor?(id: string, templateId?: string): { personalMcpCredentials?: Record<string, Record<string, string>> };
 }
 
 /** File-backed store — the fallback used when no Agent Library service is reachable. */
