@@ -11,6 +11,7 @@ import { JsonStore, readJsonFile } from '../../../packages/service-kit/src/json-
 import {
   createAgentTemplate,
   patchAgentTemplate,
+  replaceAgentTemplate,
 } from '../../../packages/contracts/src/factories.js';
 import { validateAgentTemplate } from '../../../packages/contracts/src/validate.js';
 import type {
@@ -100,10 +101,21 @@ export class TemplateStore {
     return this.persist(createAgentTemplate(input));
   }
 
+  /** Merge a partial change over the stored template — the PATCH path. */
   async update(id: string, patch: Partial<AgentTemplateInput>): Promise<AgentTemplate | undefined> {
     const current = this.store.get(id);
     if (!current) return undefined;
     return this.persist(patchAgentTemplate(current, patch));
+  }
+
+  /**
+   * Replace the template — the PUT path. A field the caller omits is dropped,
+   * which is the only way to clear an optional one such as an MCP allow-list.
+   */
+  async replace(id: string, input: AgentTemplateInput): Promise<AgentTemplate | undefined> {
+    const current = this.store.get(id);
+    if (!current) return undefined;
+    return this.persist(replaceAgentTemplate(current, input));
   }
 
   async duplicate(id: string, name?: string): Promise<AgentTemplate | undefined> {

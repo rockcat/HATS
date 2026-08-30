@@ -159,17 +159,21 @@
             </label>
           </div>
 
-          <div class="grid-2">
-            <label class="field">
-              <span>Enabled MCP servers</span>
-              <input name="enabledMcpServers" placeholder="kanban, filesystem">
-              <small>Comma separated. Blank allows every team server.</small>
+          <label class="field">
+            <span>Team MCP servers</span>
+            <label class="row all-servers">
+              <input type="checkbox" name="allMcpServers" checked>
+              <span>Use every server the team has enabled</span>
             </label>
-            <label class="field">
-              <span>Tags</span>
-              <input name="tags" placeholder="facilitator, finance">
-            </label>
-          </div>
+            <div id="shared-mcp-list" class="server-picker" hidden></div>
+            <small>Shared tools started for the whole team. Per-agent servers
+              with their own credentials live on the MCP tab.</small>
+          </label>
+
+          <label class="field">
+            <span>Tags</span>
+            <input name="tags" placeholder="facilitator, finance">
+          </label>
         </form>
       </div>
     </section>

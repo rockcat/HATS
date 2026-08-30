@@ -51,7 +51,9 @@ export function templateRoutes(store: TemplateStore): Route[] {
     put(`${BASE}/:id`, async (ctx) => {
       const body = await readJsonBody<AgentTemplateInput>(ctx.req);
       if (!body?.name?.trim()) { badRequest(ctx.res, 'name is required'); return; }
-      await write(ctx, () => store.update(ctx.params['id'] as string, body), 200);
+      // PUT replaces: an omitted field is cleared, which is how the editor
+      // turns an explicit MCP allow-list back into "every team server".
+      await write(ctx, () => store.replace(ctx.params['id'] as string, body), 200);
     }),
 
     patch(`${BASE}/:id`, async (ctx) => {

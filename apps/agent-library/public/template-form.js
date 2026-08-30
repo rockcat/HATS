@@ -18,6 +18,30 @@ export function selectedHats(form) {
   return $$('input[name="hats"]:checked', form).map((input) => input.value);
 }
 
+/**
+ * Render the shared team MCP servers as a checkable list, grouped by category.
+ * A free-text field gave no way to know what was valid.
+ */
+export function buildServerPicker(container, servers) {
+  const byCategory = new Map();
+  for (const server of servers) {
+    const key = server.category ?? 'other';
+    if (!byCategory.has(key)) byCategory.set(key, []);
+    byCategory.get(key).push(server);
+  }
+
+  container.replaceChildren(...[...byCategory].flatMap(([category, list]) => [
+    el('div', { class: 'server-group' }, category),
+    ...list.map((server) => el('label', { class: 'server-option', title: server.id },
+      el('input', { type: 'checkbox', name: 'mcpServer', value: server.id }),
+      server.name ?? server.id)),
+  ]));
+}
+
+export function selectedServers(form) {
+  return $$('input[name="mcpServer"]:checked', form).map((input) => input.value);
+}
+
 /** Form fields → the AgentTemplateInput accepted by the API. */
 export function readForm(form) {
   const data = new FormData(form);
@@ -28,7 +52,10 @@ export function readForm(form) {
     maxContextTokens: number(data.get('maxContextTokens')),
     maxCostPerHour: number(data.get('maxCostPerHour')),
   };
-  const enabledMcpServers = csv(data.get('enabledMcpServers'));
+  // An absent list means "every team server"; a present one is an explicit
+  // allow-list. The "use every server" checkbox picks between the two.
+  const useAllServers = form.elements['allMcpServers']?.checked ?? true;
+  const enabledMcpServers = useAllServers ? [] : selectedServers(form);
   const tags = csv(data.get('tags'));
 
   const input = {
@@ -54,7 +81,7 @@ export function readForm(form) {
   // Omit empty optional objects entirely — the schema forbids stray nulls.
   const definedLimits = Object.fromEntries(Object.entries(limits).filter(([, v]) => v !== undefined));
   if (Object.keys(definedLimits).length) input.limits = definedLimits;
-  if (enabledMcpServers.length) input.tools = { enabledMcpServers };
+  if (!useAllServers) input.tools = { enabledMcpServers };
   if (tags.length) input.tags = tags;
 
   for (const key of Object.keys(input.identity)) {
@@ -87,7 +114,15 @@ export function writeForm(form, template) {
   set('model', template.model?.model);
   set('maxContextTokens', template.limits?.maxContextTokens);
   set('maxCostPerHour', template.limits?.maxCostPerHour);
-  set('enabledMcpServers', (template.tools?.enabledMcpServers ?? []).join(', '));
+  // An absent list means every team server, which is the default state.
+  const allowList = template.tools?.enabledMcpServers;
+  const useAll = allowList === undefined;
+  const allBox = form.elements['allMcpServers'];
+  if (allBox) allBox.checked = useAll;
+  const picker = form.querySelector('#shared-mcp-list');
+  if (picker) picker.hidden = useAll;
+  const chosen = new Set(allowList ?? []);
+  for (const input of $$('input[name="mcpServer"]', form)) input.checked = chosen.has(input.value);
   set('tags', (template.tags ?? []).join(', '));
   set('persona', '');
 

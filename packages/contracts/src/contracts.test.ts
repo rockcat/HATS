@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   createAgentTemplate, createDeployedAgent, createProject, deployTemplate,
-  patchAgentTemplate, reviseProject, slugifyProjectId, summariseProject,
+  patchAgentTemplate, replaceAgentTemplate, reviseProject, slugifyProjectId, summariseProject,
 } from './factories.js';
 import { listSchemas, readSchema, validateAgentTemplate, validateDeployedAgent, validateProject } from './validate.js';
 import { readOpenApiJson, OPENAPI_FILES } from './openapi.js';
@@ -78,6 +78,43 @@ describe('agent templates', () => {
     expect(patched.createdAt).toBe(template.createdAt);
     expect(patched.name).toBe('Amara');
     expect(validateAgentTemplate(patched).errors).toEqual([]);
+  });
+
+  it('replaces on PUT, so an omitted field is cleared', () => {
+    const template = createAgentTemplate({
+      ...MINIMAL_TEMPLATE,
+      tools: { enabledMcpServers: ['kanban', 'filesystem'] },
+      description: 'has an allow-list',
+    });
+    expect(template.tools?.enabledMcpServers).toEqual(['kanban', 'filesystem']);
+
+    // Omitting tools must drop the allow-list — that is how the editor turns
+    // an explicit selection back into "every team server".
+    const replaced = replaceAgentTemplate(template, MINIMAL_TEMPLATE);
+    expect(replaced.tools).toBeUndefined();
+    expect(replaced.description).toBeUndefined();
+    expect(replaced.id).toBe(template.id);
+    expect(replaced.createdAt).toBe(template.createdAt);
+    expect(replaced.revision).toBe(template.revision + 1);
+    expect(validateAgentTemplate(replaced).errors).toEqual([]);
+  });
+
+  it('keeps an omitted field on PATCH, unlike PUT', () => {
+    const template = createAgentTemplate({
+      ...MINIMAL_TEMPLATE,
+      tools: { enabledMcpServers: ['kanban'] },
+    });
+    const patched = patchAgentTemplate(template, { description: 'still has tools' });
+    expect(patched.tools?.enabledMcpServers).toEqual(['kanban']);
+  });
+
+  it('distinguishes an empty allow-list from an absent one', () => {
+    const none = createAgentTemplate({ ...MINIMAL_TEMPLATE, tools: { enabledMcpServers: [] } });
+    expect(none.tools?.enabledMcpServers).toEqual([]);
+    expect(validateAgentTemplate(none).errors).toEqual([]);
+
+    const all = createAgentTemplate(MINIMAL_TEMPLATE);
+    expect(all.tools).toBeUndefined();
   });
 
   it('merges identity rather than replacing it', () => {

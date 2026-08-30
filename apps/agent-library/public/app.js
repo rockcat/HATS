@@ -3,7 +3,9 @@
 import {
   $, $$, clear, debounce, el, guard, hatDots, makeClient, relativeTime, toastError, toastOk, trackHealth,
 } from '/ui-kit/hats-ui.js';
-import { applyPersona, buildHatCheckboxes, emptyTemplate, readForm, writeForm } from '/template-form.js';
+import {
+  applyPersona, buildHatCheckboxes, buildServerPicker, emptyTemplate, readForm, writeForm,
+} from '/template-form.js';
 import { clearAvatar, showAvatar } from '/avatar-preview.js';
 import { loadMcpCatalogue, showMcpFor } from '/mcp-panel.js';
 import { initChat, showChatFor } from '/chat-panel.js';
@@ -328,6 +330,11 @@ function init() {
   });
   ui.form.addEventListener('change', (event) => {
     if (event.target.name === 'persona') { onPersonaChange(event); return; }
+    // Showing the picker only when an explicit allow-list is in play keeps the
+    // "every server" default from looking like "no servers".
+    if (event.target.name === 'allMcpServers') {
+      $('#shared-mcp-list').hidden = event.target.checked;
+    }
     setDirty(true);
     refreshPreview();
   });
@@ -360,7 +367,8 @@ function init() {
 init();
 try {
   await loadCatalogue();
-  await loadMcpCatalogue();
+  const mcp = await loadMcpCatalogue();
+  buildServerPicker($('#shared-mcp-list'), mcp.shared ?? []);
   await loadTemplates();
   const first = state.templates[0];
   if (first) selectTemplate(first.id);
