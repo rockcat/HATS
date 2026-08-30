@@ -5,22 +5,42 @@
   "license": "SEE LICENSE IN LICENSE.txt",
   "author": "Ely House 25 Ltd",
   "type": "module",
-  "main": "dist/src/index.js",
+  "main": "server/dist/server/src/index.js",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc -p server/tsconfig.json",
     "typecheck": "tsc --noEmit",
-    "dev": "tsx src/index.ts",
+    "dev": "tsx --env-file=.env server/src/team-runner.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "start": "node --env-file=.env --import tsx/esm team-runner.ts",
-    "start:standalone": "node --env-file=.env --import tsx/esm team-runner.ts --standalone",
+    "start": "node --env-file=.env --import tsx/esm server/src/team-runner.ts",
+    "start:standalone": "node --env-file=.env --import tsx/esm server/src/team-runner.ts --standalone",
     "agent-library": "node --env-file=.env --import tsx/esm apps/agent-library/src/main.ts",
     "project-server": "node --env-file=.env --import tsx/esm apps/project-server/src/main.ts",
     "project-designer": "node --env-file=.env --import tsx/esm apps/project-designer/src/main.ts",
     "embodiment-test": "node --env-file=.env --import tsx/esm apps/embodiment-test/src/main.ts",
     "services": "node --env-file=.env scripts/dev-services.mjs",
     "services:all": "node --env-file=.env scripts/dev-services.mjs --with-runner",
-    "webui": "tsx webui-demo.ts"
+    "electron:build": "npm run build && electron-builder",
+    "electron:run": "electron --env-file=.env apps/electron/main.js"
+  },
+  "build": {
+    "appId": "com.hatagents.app",
+    "productName": "Hat Agents",
+    "npmRebuild": false,
+    "asarUnpack": [
+      "node_modules/@kmamal/sdl/**/*"
+    ],
+    "extraMetadata": {
+      "main": "apps/electron/main.js"
+    },
+    "files": [
+      "apps/web/**/*",
+      "apps/electron/main.js",
+      "package.json"
+    ],
+    "directories": {
+      "output": "dist-desktop"
+    }
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
@@ -28,7 +48,7 @@
     "@kmamal/sdl": "^0.11.13",
     "@modelcontextprotocol/sdk": "^1.27.1",
     "@napi-rs/canvas": "^0.1.97",
-    "@pixiv/three-vrm": "^3.5.5",
+    "@pixiv/three-vrm": "^3.5.4",
     "ajv": "^8.20.0",
     "ajv-formats": "^3.0.1",
     "cmu-pronouncing-dictionary": "^3.0.0",
@@ -40,6 +60,7 @@
     "marked-terminal": "^7.3.0",
     "multer": "^2.1.1",
     "openai": "^4.85.0",
+    "qrcode": "^1.5.4",
     "three": "0.162.0",
     "uuid": "^11.1.0",
     "ws": "^8.19.0"
@@ -48,9 +69,13 @@
     "@types/fluent-ffmpeg": "^2.1.28",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^22.0.0",
+    "@types/qrcode": "^1.5.6",
     "@types/three": "0.162.0",
     "@types/uuid": "^10.0.0",
     "@types/ws": "^8.18.1",
+    "electron": "^43.4.0",
+    "electron-builder": "^26.15.3",
+    "node-addon-api": "^8.9.2",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",
     "vitest": "^3.0.0"

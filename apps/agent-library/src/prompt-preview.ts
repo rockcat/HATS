@@ -8,9 +8,9 @@
  * re-renders the prompt live while the user is still typing.
  */
 
-import { mergeHatDefinitions } from '../../../src/hats/definitions.js';
-import { generateSystemPrompt } from '../../../src/prompt/generator.js';
-import type { HatType } from '../../../src/hats/types.js';
+import { mergeHatDefinitions } from '../../../server/src/hats/definitions.js';
+import { generateSystemPrompt } from '../../../server/src/prompt/generator.js';
+import type { HatType } from '../../../server/src/hats/types.js';
 import type { AgentTemplate, AgentTemplateInput, HatTypeName } from '../../../packages/contracts/src/types.js';
 
 type PromptSource = AgentTemplate | AgentTemplateInput;

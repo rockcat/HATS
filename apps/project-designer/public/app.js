@@ -65,7 +65,7 @@ async function openProject(id) {
 function renderProjectList() {
   ui.projectEmpty.hidden = state.projects.length > 0;
   clear(ui.projectList);
-  for (const project of state.projects) {
+  for (const project of state.projects.sort((a, b) => a.name.localeCompare(b.name))) {
     ui.projectList.append(el('li', {
       'aria-selected': project.id === state.current?.id,
       onclick: () => void openProject(project.id),
@@ -129,7 +129,7 @@ function renderTeam() {
 function renderLibrary() {
   ui.libraryEmpty.hidden = state.templates.length > 0;
   clear(ui.libraryList);
-  for (const template of state.templates) {
+  for (const template of state.templates.sort((a, b) => a.name.localeCompare(b.name))) {
     const deployed = (state.current?.team ?? []).some((a) => a.templateId === template.id);
     ui.libraryList.append(el('li', {},
       el('span', { class: 'hats' }, ...hatDots(template.hats)),

@@ -1,0 +1,20 @@
+### local ollama
+
+POST http://localhost:11434/api/generate
+Content-Type: application/json
+
+{
+  "model": "gemma4:12b-it-qat",
+  "prompt": "Why is the sky blue?"
+}
+
+
+### remote lm studio
+
+POST http://10.0.10.97:1234/api/v1/chat/completions
+Content-Type: application/json
+
+{
+  "model": "gemma4:12b-it-qat",
+  "prompt": "Why is the sky blue?"
+}

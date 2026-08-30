@@ -14,17 +14,22 @@
     "resolveJsonModule": true
   },
   "include": [
-    "src/**/*",
+    "server/src/**/*",
     "packages/*/src/**/*",
     "packages/ui-kit/index.ts",
-    "apps/*/src/**/*",
-    "team-runner.ts"
+    "apps/agent-library/src/**/*",
+    "apps/project-server/src/**/*",
+    "apps/project-designer/src/**/*",
+    "apps/embodiment-test/src/**/*"
   ],
   "exclude": [
     "node_modules",
     "dist",
     "dist-desktop",
+    "server/dist",
     "apps/flutter",
+    "apps/electron",
+    "apps/web",
     "**/public/**"
   ]
 }

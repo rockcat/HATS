@@ -3,10 +3,10 @@
 import { readFile, readdir } from 'fs/promises';
 import * as path from 'path';
 import { get, json, type Route } from '../../../../packages/service-kit/src/index.js';
-import { hatDefinitions } from '../../../../src/hats/definitions.js';
-import { personasByHat } from '../../../../src/hats/personas.js';
-import { SPECIALISATION_DIRECTIVES } from '../../../../src/prompt/generator.js';
-import { KNOWN_PROVIDERS } from '../../../../src/api/providers.js';
+import { hatDefinitions } from '../../../../server/src/hats/definitions.js';
+import { personasByHat } from '../../../../server/src/hats/personas.js';
+import { SPECIALISATION_DIRECTIVES } from '../../../../server/src/prompt/generator.js';
+import { KNOWN_PROVIDERS } from '../../../../server/src/api/providers.js';
 
 const BASE = '/api/v1';
 

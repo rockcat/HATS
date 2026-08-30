@@ -18,6 +18,12 @@ const config = {
   version: '1.0.0',
   port: Number(process.env['EMBODIMENT_TEST_PORT'] ?? 3040),
   teamRunnerUrl: process.env['TEAM_RUNNER_URL'] ?? 'http://localhost:3001',
+  /**
+   * The Team Runner authenticates /api/*, so the harness needs a credential.
+   * Create an API key in the dashboard's Users tab and set HATS_API_KEY. It is
+   * attached by the proxy server-side and never reaches the browser.
+   */
+  apiKey: process.env['HATS_API_KEY'] ?? '',
 };
 
 await startService({
@@ -37,10 +43,14 @@ await startService({
       target: config.teamRunnerUrl,
       label: 'Team Runner',
       timeoutMs: 120_000,
+      ...(config.apiKey && { headers: { 'X-API-Key': config.apiKey } }),
     }),
   ],
   banner: [
     `team runner: ${config.teamRunnerUrl}`,
     `proxying:    /runner/api/embodiment/v1/*`,
+    config.apiKey
+      ? 'auth:        X-API-Key from HATS_API_KEY'
+      : 'auth:        HATS_API_KEY not set — the runner will answer 401',
   ],
 });

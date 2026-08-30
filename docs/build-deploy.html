@@ -1,0 +1,1281 @@
+<title>HATS Build & Deploy</title>
+<style>
+/* ── Tokens ─────────────────────────────────────────────────────────────────── */
+:root {
+  --bg:           #F5F4F1;
+  --surface:      #FFFFFF;
+  --border:       #DEDAD3;
+  --text:         #1B1917;
+  --muted:        #6B6761;
+  --accent:       #1A4EC8;
+  --accent-tint:  #ECF1FC;
+  --accent-mid:   #4070DB;
+  --code-bg:      #191C26;
+  --code-text:    #CDD6E4;
+  --code-kw:      #79AAEE;
+  --code-str:     #95D2A0;
+  --code-cmt:     #586070;
+  --code-num:     #F0A868;
+  --ok:           #14532D;
+  --ok-bg:        #DCFCE7;
+  --warn:         #78350F;
+  --warn-bg:      #FEF3C7;
+  --sidebar-w:    220px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg:          #131217;
+    --surface:     #1B1921;
+    --border:      #2C2A36;
+    --text:        #E1DDD5;
+    --muted:       #8C8880;
+    --accent:      #5B8DF2;
+    --accent-tint: #182040;
+    --accent-mid:  #4F7DE0;
+    --code-bg:     #0F1118;
+    --code-cmt:    #4E5868;
+    --ok:          #86EFAC;
+    --ok-bg:       #14532D;
+    --warn:        #FCD34D;
+    --warn-bg:     #78350F;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg:          #131217;
+  --surface:     #1B1921;
+  --border:      #2C2A36;
+  --text:        #E1DDD5;
+  --muted:       #8C8880;
+  --accent:      #5B8DF2;
+  --accent-tint: #182040;
+  --accent-mid:  #4F7DE0;
+  --code-bg:     #0F1118;
+  --code-cmt:    #4E5868;
+  --ok:          #86EFAC;
+  --ok-bg:       #14532D;
+  --warn:        #FCD34D;
+  --warn-bg:     #78350F;
+}
+
+:root[data-theme="light"] {
+  --bg:          #F5F4F1;
+  --surface:     #FFFFFF;
+  --border:      #DEDAD3;
+  --text:        #1B1917;
+  --muted:       #6B6761;
+  --accent:      #1A4EC8;
+  --accent-tint: #ECF1FC;
+  --accent-mid:  #4070DB;
+  --code-bg:     #191C26;
+  --code-text:   #CDD6E4;
+  --code-kw:     #79AAEE;
+  --code-str:    #95D2A0;
+  --code-cmt:    #586070;
+  --code-num:    #F0A868;
+  --ok:          #14532D;
+  --ok-bg:       #DCFCE7;
+  --warn:        #78350F;
+  --warn-bg:     #FEF3C7;
+}
+
+/* ── Reset & base ────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 15px;
+  line-height: 1.65;
+  color: var(--text);
+  background: var(--bg);
+}
+
+/* ── Shell ───────────────────────────────────────────────────────────────────── */
+.shell {
+  max-width: 1060px;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+  display: grid;
+  grid-template-columns: var(--sidebar-w) 1fr;
+  grid-template-areas: "sidebar main";
+  gap: 0 3rem;
+  align-items: start;
+}
+
+/* ── Header ──────────────────────────────────────────────────────────────────── */
+.site-header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+.header-inner {
+  max-width: 1060px;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.header-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.badge-hats {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  background: var(--accent-tint);
+  padding: 3px 8px;
+  border-radius: 3px;
+}
+
+.header-title {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.header-title span {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* ── Sidebar ─────────────────────────────────────────────────────────────────── */
+.sidebar {
+  grid-area: sidebar;
+  position: sticky;
+  top: calc(56px + 2rem);
+  height: calc(100vh - 56px - 4rem);
+  overflow-y: auto;
+  padding: 2rem 0 2rem;
+  scrollbar-width: thin;
+}
+
+.nav-group {
+  margin-bottom: 1.75rem;
+}
+
+.nav-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 0 0 0.5rem;
+  display: block;
+}
+
+.nav-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.nav-list a {
+  display: block;
+  font-size: 13.5px;
+  color: var(--muted);
+  text-decoration: none;
+  padding: 3px 0 3px 12px;
+  border-left: 2px solid transparent;
+  line-height: 1.4;
+  transition: color 0.12s, border-color 0.12s;
+}
+
+.nav-list a:hover { color: var(--text); }
+
+.nav-list a.active {
+  color: var(--accent);
+  border-color: var(--accent);
+  font-weight: 500;
+}
+
+/* ── Main content ────────────────────────────────────────────────────────────── */
+.main {
+  grid-area: main;
+  padding: 2.5rem 0 5rem;
+  min-width: 0;
+}
+
+/* ── Sections ────────────────────────────────────────────────────────────────── */
+.doc-section {
+  margin-bottom: 4rem;
+  scroll-margin-top: calc(56px + 1.5rem);
+}
+
+.section-eyebrow {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent-mid);
+  margin-bottom: 0.35rem;
+}
+
+.doc-section h2 {
+  font-size: 1.55rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  margin-bottom: 1rem;
+  text-wrap: balance;
+}
+
+.doc-section h3 {
+  font-size: 1.05rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  margin: 1.75rem 0 0.6rem;
+}
+
+.doc-section p {
+  max-width: 65ch;
+  color: var(--text);
+  margin-bottom: 0.9rem;
+}
+
+.doc-section p + ul,
+.doc-section p + ol { margin-top: -0.3rem; }
+
+/* ── Prose lists ─────────────────────────────────────────────────────────────── */
+.prose-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-bottom: 1rem;
+  max-width: 65ch;
+}
+
+.prose-list li {
+  padding-left: 1.4rem;
+  position: relative;
+  color: var(--text);
+}
+
+.prose-list li::before {
+  content: '–';
+  position: absolute;
+  left: 0;
+  color: var(--muted);
+}
+
+/* ── Steps ───────────────────────────────────────────────────────────────────── */
+.steps {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  margin: 1rem 0 1.5rem;
+}
+
+.step {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  gap: 0 0.85rem;
+  align-items: start;
+}
+
+.step-num {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.step-body strong {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 0.2rem;
+}
+
+/* ── Code blocks ─────────────────────────────────────────────────────────────── */
+.code-wrap {
+  overflow-x: auto;
+  border-radius: 5px;
+  margin: 0.75rem 0 1.25rem;
+}
+
+pre {
+  background: var(--code-bg);
+  color: var(--code-text);
+  font-family: ui-monospace, 'Cascadia Code', 'Fira Code', Menlo, Monaco, 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.7;
+  padding: 1.1rem 1.25rem;
+  border-radius: 5px;
+  white-space: pre;
+  overflow-x: auto;
+}
+
+.code-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0;
+  padding: 0.45rem 1.1rem;
+  background: var(--code-bg);
+  border-radius: 5px 5px 0 0;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+}
+
+.code-label + pre {
+  border-radius: 0 0 5px 5px;
+}
+
+.code-lang {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #5A6475;
+  font-family: ui-monospace, monospace;
+}
+
+.code-filename {
+  font-size: 12px;
+  color: #7A8090;
+  font-family: ui-monospace, monospace;
+  flex: 1;
+}
+
+/* Inline code */
+code {
+  font-family: ui-monospace, 'Cascadia Code', Menlo, Monaco, monospace;
+  font-size: 0.875em;
+  background: var(--accent-tint);
+  color: var(--accent);
+  padding: 0.1em 0.35em;
+  border-radius: 3px;
+}
+
+pre code {
+  background: none;
+  color: inherit;
+  padding: 0;
+  font-size: inherit;
+  border-radius: 0;
+}
+
+/* Syntax colours — applied via spans inside pre */
+.kw  { color: var(--code-kw); }
+.str { color: var(--code-str); }
+.cmt { color: var(--code-cmt); font-style: italic; }
+.num { color: var(--code-num); }
+.var { color: #E5C07B; }
+
+/* ── Tables ──────────────────────────────────────────────────────────────────── */
+.table-wrap {
+  overflow-x: auto;
+  margin: 0.75rem 0 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+
+thead th {
+  background: var(--surface);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 0.6rem 1rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+tbody td {
+  padding: 0.6rem 1rem;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+  color: var(--text);
+}
+
+tbody tr:last-child td { border-bottom: none; }
+
+tbody tr:hover { background: var(--accent-tint); }
+
+td.mono {
+  font-family: ui-monospace, monospace;
+  font-size: 12.5px;
+  color: var(--accent);
+}
+
+td.opt { color: var(--muted); font-size: 13px; }
+
+/* ── Callouts ────────────────────────────────────────────────────────────────── */
+.callout {
+  border-left: 3px solid;
+  padding: 0.75rem 1rem;
+  border-radius: 0 4px 4px 0;
+  margin: 0.75rem 0 1.25rem;
+  font-size: 14px;
+}
+
+.callout-ok   { background: var(--ok-bg);   border-color: var(--ok);   color: var(--ok); }
+.callout-warn { background: var(--warn-bg); border-color: var(--warn); color: var(--warn); }
+
+.callout strong { display: block; margin-bottom: 0.2rem; font-weight: 700; }
+
+/* ── Dir tree ────────────────────────────────────────────────────────────────── */
+.dir-tree {
+  font-family: ui-monospace, monospace;
+  font-size: 13px;
+  color: var(--code-text);
+  line-height: 1.85;
+  background: var(--code-bg);
+  padding: 1.1rem 1.25rem;
+  border-radius: 5px;
+  overflow-x: auto;
+  margin: 0.75rem 0 1.25rem;
+}
+
+.dir-tree .hl { color: var(--code-str); }
+.dir-tree .cm { color: var(--code-cmt); }
+.dir-tree .dr { color: var(--code-kw); }
+
+/* ── Badge chips ─────────────────────────────────────────────────────────────── */
+.chip {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  padding: 1px 6px;
+  border-radius: 3px;
+}
+
+.chip-opt  { background: var(--surface); border: 1px solid var(--border); color: var(--muted); }
+.chip-req  { background: #FEF3C7; color: #92400E; border: 1px solid #FDE68A; }
+
+[data-theme="dark"] .chip-req,
+@media (prefers-color-scheme: dark) { }
+
+/* ── Responsive ──────────────────────────────────────────────────────────────── */
+@media (max-width: 720px) {
+  .shell {
+    grid-template-columns: 1fr;
+    grid-template-areas: "main";
+  }
+  .sidebar { display: none; }
+  .main { padding: 1.5rem 0 4rem; }
+}
+</style>
+
+<header class="site-header">
+  <div class="header-inner">
+    <div class="header-badge">
+      <span class="badge-hats">HATS</span>
+      <span class="header-title"><span>Build &amp; Deploy</span> — Developer Guide</span>
+    </div>
+  </div>
+</header>
+
+<div class="shell">
+  <!-- ── Sidebar TOC ──────────────────────────────────────────────────────────── -->
+  <nav class="sidebar" aria-label="Page sections">
+    <div class="nav-group">
+      <span class="nav-label">Setup</span>
+      <ul class="nav-list">
+        <li><a href="#prerequisites">Prerequisites</a></li>
+        <li><a href="#layout">Repository Layout</a></li>
+        <li><a href="#quickstart">Quick Start</a></li>
+      </ul>
+    </div>
+    <div class="nav-group">
+      <span class="nav-label">Reference</span>
+      <ul class="nav-list">
+        <li><a href="#scripts">npm Scripts</a></li>
+        <li><a href="#env">Environment Variables</a></li>
+        <li><a href="#runtime-data">Runtime Data</a></li>
+      </ul>
+    </div>
+    <div class="nav-group">
+      <span class="nav-label">Production</span>
+      <ul class="nav-list">
+        <li><a href="#build">TypeScript Build</a></li>
+        <li><a href="#deploy">Deploying</a></li>
+        <li><a href="#docker">Docker</a></li>
+        <li><a href="#compose">Docker Compose</a></li>
+      </ul>
+    </div>
+    <div class="nav-group">
+      <span class="nav-label">Optional</span>
+      <ul class="nav-list">
+        <li><a href="#piper">Piper TTS</a></li>
+        <li><a href="#rhubarb">Rhubarb Lip Sync</a></li>
+        <li><a href="#electron">Electron Desktop</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- ── Main ────────────────────────────────────────────────────────────────── -->
+  <main class="main">
+
+    <!-- Prerequisites -->
+    <section class="doc-section" id="prerequisites">
+      <div class="section-eyebrow">Setup</div>
+      <h2>Prerequisites</h2>
+      <p>The server is a single Node.js process. Avatar rendering and speech synthesis pull in native addons that require system libraries at install time.</p>
+
+      <h3>Required</h3>
+      <ul class="prose-list">
+        <li><strong>Node.js 20+</strong> — <code>node --version</code> to verify. Download from <a href="https://nodejs.org" style="color:var(--accent)">nodejs.org</a>.</li>
+        <li><strong>npm 10+</strong> — bundled with Node.js 20.</li>
+        <li><strong>An Anthropic API key</strong> — agents default to Claude Haiku. Other providers are optional.</li>
+      </ul>
+
+      <h3>Native addon build deps (Linux / CI)</h3>
+      <p>These packages are needed when running <code>npm ci</code> on Linux so that <code>@napi-rs/canvas</code>, <code>gl</code>, and <code>@kmamal/sdl</code> can compile their C++ addons.</p>
+      <div class="code-wrap">
+        <pre><span class="cmt"># Debian / Ubuntu</span>
+sudo apt-get install -y \
+  build-essential pkg-config \
+  libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev \
+  libgl1-mesa-dev libglu1-mesa-dev libxi-dev libxext-dev \
+  libsdl2-dev</pre>
+      </div>
+
+      <h3>Optional</h3>
+      <ul class="prose-list">
+        <li><strong>Python 3.9+</strong> — required for Piper TTS (avatar speech). The <code>PYTHON_BIN</code> env var selects the executable (default: <code>python</code>; use <code>py</code> on Windows).</li>
+        <li><strong>ffmpeg</strong> — used by <code>fluent-ffmpeg</code> for media processing.</li>
+        <li><strong>Rhubarb</strong> — lip-sync binary, placed at <code>runtime_data/rhubarb/rhubarb</code> (or <code>.exe</code> on Windows).</li>
+      </ul>
+    </section>
+
+    <!-- Repository Layout -->
+    <section class="doc-section" id="layout">
+      <div class="section-eyebrow">Setup</div>
+      <h2>Repository Layout</h2>
+      <p>The repo is a monorepo with three top-level areas: the API server source, UI apps, and runtime data.</p>
+      <div class="dir-tree"><span class="dr">HATS/</span>
+├── <span class="hl">server/</span>            API server (TypeScript)
+│   ├── src/           Source modules
+│   │   ├── api/       HTTP + WebSocket server, routers
+│   │   ├── orchestrator/  Agent orchestration
+│   │   ├── mcp/       MCP server / client
+│   │   ├── speech/    Piper TTS voice manager
+│   │   ├── providers/ AI provider adapters
+│   │   └── team-runner.ts  <span class="hl">Entry point</span>
+│   ├── dist/          Compiled output (gitignored)
+│   ├── tsconfig.json  TypeScript config (rootDir: src)
+│   └── package.json   Server-scoped build scripts
+│
+├── <span class="hl">apps/</span>
+│   ├── web/           Browser UI (ES modules, no bundler)
+│   ├── electron/      Electron desktop wrapper
+│   ├── admin/         <span class="cm">placeholder</span>
+│   ├── agent_manager/ <span class="cm">placeholder</span>
+│   └── flutter/       <span class="cm">placeholder</span>
+│
+├── <span class="hl">runtime_data/</span>      All files read/written at runtime
+│   ├── avatars/       GLB / VRM avatar models + backgrounds
+│   ├── config/        mcp-catalogue.json
+│   ├── data/          model-pricing.json, telemetry
+│   ├── projects/      <span class="cm">gitignored — per-project state</span>
+│   ├── piper_voices/  <span class="cm">gitignored — .onnx voice models</span>
+│   └── rhubarb/       Rhubarb binary
+│
+├── scripts/           kanban-mcp.ts, download-voices.mjs, setup scripts
+├── tools/             Developer utilities
+├── package.json       Root — npm scripts, all deps
+└── tsconfig.json      Root — delegates to server/tsconfig.json</div>
+
+      <p>The <code>RUNTIME_DIR</code> env var overrides the base path for <code>runtime_data/</code>. Default: <code>&lt;cwd&gt;/runtime_data</code>.</p>
+    </section>
+
+    <!-- Quick Start -->
+    <section class="doc-section" id="quickstart">
+      <div class="section-eyebrow">Setup</div>
+      <h2>Quick Start (local dev)</h2>
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <strong>Clone and run the setup script</strong>
+            <div class="code-wrap"><pre><span class="cmt"># Windows</span>
+scripts\setup.bat
+
+<span class="cmt"># macOS / Linux / Git Bash</span>
+bash scripts/setup.sh</pre></div>
+            <p style="font-size:13.5px;color:var(--muted)">This checks Node.js, runs <code>npm install</code>, creates <code>.env</code> from <code>.env.example</code>, and downloads default Piper voices.</p>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <strong>Fill in API keys in <code>.env</code></strong>
+            <div class="code-wrap"><pre>ANTHROPIC_API_KEY=sk-ant-...</pre></div>
+            <p style="font-size:13.5px;color:var(--muted)">At minimum, set <code>ANTHROPIC_API_KEY</code>. Other provider keys are optional — agents use Anthropic by default.</p>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-body">
+            <strong>Start the server</strong>
+            <div class="code-wrap"><pre>npm start</pre></div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-num">4</div>
+          <div class="step-body">
+            <strong>Open the UI</strong>
+            <p style="font-size:13.5px;color:var(--muted);margin-bottom:0">Navigate to <code>http://localhost:3001</code></p>
+          </div>
+        </div>
+      </div>
+
+      <div class="callout callout-ok">
+        <strong>Development mode</strong>
+        <code>npm run dev</code> uses <code>tsx</code> for instant TypeScript execution — no build step needed. Changes to <code>server/src/</code> take effect on the next restart.
+      </div>
+    </section>
+
+    <!-- npm Scripts -->
+    <section class="doc-section" id="scripts">
+      <div class="section-eyebrow">Reference</div>
+      <h2>npm Scripts</h2>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Script</th>
+              <th>What it does</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="mono">npm start</td>
+              <td>Run the server with <code>tsx</code> (loads <code>.env</code>, no compile step). The normal way to run in development and for quick production deploys.</td>
+            </tr>
+            <tr>
+              <td class="mono">npm run dev</td>
+              <td>Identical to <code>start</code> — alias kept for convention.</td>
+            </tr>
+            <tr>
+              <td class="mono">npm run build</td>
+              <td>Compile <code>server/src/</code> → <code>server/dist/</code> via <code>tsc -p server/tsconfig.json</code>. Required before running compiled JS in production.</td>
+            </tr>
+            <tr>
+              <td class="mono">npm test</td>
+              <td>Run the Vitest test suite once.</td>
+            </tr>
+            <tr>
+              <td class="mono">npm run test:watch</td>
+              <td>Vitest in watch mode.</td>
+            </tr>
+            <tr>
+              <td class="mono">npm run electron:run</td>
+              <td>Launch the Electron desktop wrapper pointing at the running API server. Start <code>npm start</code> first.</td>
+            </tr>
+            <tr>
+              <td class="mono">npm run electron:build</td>
+              <td>Build TypeScript then package the Electron app with <code>electron-builder</code>.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Server-scoped scripts (<code>cd server</code>)</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Script</th><th>What it does</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="mono">npm run build</td>
+              <td>Compile with <code>tsc</code> using <code>server/tsconfig.json</code>. Equivalent to the root build script.</td>
+            </tr>
+            <tr>
+              <td class="mono">npm start</td>
+              <td>Run compiled server with <code>node --env-file=../.env server/dist/team-runner.js</code>. Requires a prior build.</td>
+            </tr>
+            <tr>
+              <td class="mono">npm run dev</td>
+              <td>Run source directly with <code>tsx --env-file=../.env src/team-runner.ts</code>.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Environment Variables -->
+    <section class="doc-section" id="env">
+      <div class="section-eyebrow">Reference</div>
+      <h2>Environment Variables</h2>
+      <p>Copy <code>.env.example</code> to <code>.env</code> and fill in values. The server loads this file via <code>node --env-file=.env</code> on startup.</p>
+
+      <h3>AI providers</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Variable</th><th>Default</th><th>Notes</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="mono">ANTHROPIC_API_KEY</td>
+              <td class="opt">—</td>
+              <td><span class="chip chip-req">required</span> Primary provider for all hat agents.</td>
+            </tr>
+            <tr>
+              <td class="mono">ANTHROPIC_MODEL</td>
+              <td class="opt">claude-haiku-4-5-20251001</td>
+              <td>Model ID passed to new agent registrations.</td>
+            </tr>
+            <tr>
+              <td class="mono">OPENAI_API_KEY</td>
+              <td class="opt">—</td>
+              <td><span class="chip chip-opt">optional</span> Also used by OpenAI TTS provider.</td>
+            </tr>
+            <tr>
+              <td class="mono">OPENAI_MODEL</td>
+              <td class="opt">gpt-4.1-mini</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td class="mono">GEMINI_API_KEY</td>
+              <td class="opt">—</td>
+              <td><span class="chip chip-opt">optional</span></td>
+            </tr>
+            <tr>
+              <td class="mono">GEMINI_MODEL</td>
+              <td class="opt">gemini-2.5-flash</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td class="mono">BRAVE_API_KEY</td>
+              <td class="opt">—</td>
+              <td><span class="chip chip-opt">optional</span> Web-search MCP tool.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Local inference</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Variable</th><th>Default</th><th>Notes</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="mono">OLLAMA_BASE_URL</td>
+              <td class="opt">http://localhost:11434/v1</td>
+              <td>Set <code>OLLAMA_MODEL</code> to enable.</td>
+            </tr>
+            <tr>
+              <td class="mono">OLLAMA_MODEL</td>
+              <td class="opt">""</td>
+              <td>Empty = provider disabled.</td>
+            </tr>
+            <tr>
+              <td class="mono">LM_STUDIO_BASE_URL</td>
+              <td class="opt">http://localhost:1234/v1</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td class="mono">LM_STUDIO_MODEL</td>
+              <td class="opt">""</td>
+              <td>Empty = provider disabled.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Project</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Variable</th><th>Default</th><th>Notes</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="mono">TEAM_PROJECT</td>
+              <td class="opt">default</td>
+              <td>Project ID to load on startup. Also accepts first CLI arg.</td>
+            </tr>
+            <tr>
+              <td class="mono">PROJECTS_ROOT</td>
+              <td class="opt">runtime_data/projects</td>
+              <td>Override the projects root directory. Absolute or relative to cwd.</td>
+            </tr>
+            <tr>
+              <td class="mono">RUNTIME_DIR</td>
+              <td class="opt">&lt;cwd&gt;/runtime_data</td>
+              <td>Base directory for all runtime data (avatars, config, data, voices). Override with an absolute path in Docker.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Speech</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Variable</th><th>Default</th><th>Notes</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="mono">PIPER_VOICES_DIR</td>
+              <td class="opt">runtime_data/piper_voices</td>
+              <td>Directory containing <code>.onnx</code> voice model files.</td>
+            </tr>
+            <tr>
+              <td class="mono">PIPER_SERVER_PORT_START</td>
+              <td class="opt">5100</td>
+              <td>First port used for Piper HTTP servers (one per voice model).</td>
+            </tr>
+            <tr>
+              <td class="mono">PYTHON_BIN</td>
+              <td class="opt">python</td>
+              <td>Python executable. Use <code>py</code> on Windows if <code>python</code> is not in PATH.</td>
+            </tr>
+            <tr>
+              <td class="mono">PIPER_BIN</td>
+              <td class="opt">runtime_data/piper/piper.exe</td>
+              <td>Path to the native Piper binary (alternative to Python mode).</td>
+            </tr>
+            <tr>
+              <td class="mono">RHUBARB_BIN</td>
+              <td class="opt">runtime_data/rhubarb/rhubarb</td>
+              <td>Path to the Rhubarb lip-sync executable.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Runtime Data -->
+    <section class="doc-section" id="runtime-data">
+      <div class="section-eyebrow">Reference</div>
+      <h2>Runtime Data</h2>
+      <p>Everything the server reads or writes at runtime lives under <code>runtime_data/</code>. This directory is separate from source so it can be bind-mounted as a Docker volume, excluded from builds, and managed independently.</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Path</th><th>Tracked</th><th>Contents</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="mono">runtime_data/avatars/</td>
+              <td>Git</td>
+              <td>GLB and VRM avatar models; background images.</td>
+            </tr>
+            <tr>
+              <td class="mono">runtime_data/config/</td>
+              <td>Git</td>
+              <td><code>mcp-catalogue.json</code> — MCP server definitions.</td>
+            </tr>
+            <tr>
+              <td class="mono">runtime_data/data/</td>
+              <td>Git</td>
+              <td><code>model-pricing.json</code>, telemetry files.</td>
+            </tr>
+            <tr>
+              <td class="mono">runtime_data/projects/</td>
+              <td>Gitignored</td>
+              <td>Per-project state: agent snapshots, events, kanban board, meetings.</td>
+            </tr>
+            <tr>
+              <td class="mono">runtime_data/piper_voices/</td>
+              <td>Gitignored</td>
+              <td><code>.onnx</code> voice models downloaded by <code>scripts/download-voices.mjs</code>.</td>
+            </tr>
+            <tr>
+              <td class="mono">runtime_data/rhubarb/</td>
+              <td>Git (placeholder)</td>
+              <td>Place the Rhubarb binary here. All binaries are gitignored; only the placeholder file is tracked.</td>
+            </tr>
+            <tr>
+              <td class="mono">runtime_data/outputs/</td>
+              <td>Git</td>
+              <td>Agent-generated file outputs.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout callout-warn">
+        <strong>New installs</strong>
+        The gitignored directories (<code>projects/</code>, <code>piper_voices/</code>) are created automatically on first startup. You do not need to create them manually.
+      </div>
+    </section>
+
+    <!-- TypeScript Build -->
+    <section class="doc-section" id="build">
+      <div class="section-eyebrow">Production</div>
+      <h2>TypeScript Build</h2>
+      <p>The server source in <code>server/src/</code> is plain TypeScript targeting Node.js with <code>NodeNext</code> module resolution. The web UI in <code>apps/web/</code> is already browser-native ES modules — no compile step needed for the frontend.</p>
+
+      <div class="code-wrap">
+        <div class="code-label"><span class="code-lang">shell</span></div>
+        <pre>npm run build
+<span class="cmt"># → runs: tsc -p server/tsconfig.json
+# → output: server/dist/</span></pre>
+      </div>
+
+      <p>Alternatively, build from inside the server directory:</p>
+      <div class="code-wrap">
+        <pre>cd server && npm run build</pre>
+      </div>
+
+      <p>The compiled output preserves the <code>src/</code> structure under <code>dist/</code>:</p>
+      <div class="dir-tree">server/dist/
+├── team-runner.js      ← <span class="hl">entry point</span>
+├── api/
+├── orchestrator/
+├── util/runtime-dir.js
+└── ...</div>
+
+      <h3>Running compiled JS</h3>
+      <div class="code-wrap">
+        <pre>node --env-file=.env server/dist/team-runner.js</pre>
+      </div>
+
+      <div class="callout callout-warn">
+        <strong>kanban-mcp.ts subprocess</strong>
+        The kanban MCP server is spawned as a subprocess running <code>scripts/kanban-mcp.ts</code> via <code>tsx</code>. Ensure <code>tsx</code> is in <code>node_modules</code> (it is by default — it's in devDependencies and installed by <code>npm ci</code>).
+      </div>
+    </section>
+
+    <!-- Deploying -->
+    <section class="doc-section" id="deploy">
+      <div class="section-eyebrow">Production</div>
+      <h2>Deploying</h2>
+
+      <h3>Direct (with tsx, simplest)</h3>
+      <p>No build step required. Suitable for a VPS or bare-metal server where you can install Node.js and clone the repo.</p>
+      <div class="code-wrap">
+        <pre>git clone &lt;repo&gt; /opt/hats
+cd /opt/hats
+npm ci
+cp .env.example .env   <span class="cmt"># then fill in keys</span>
+node --env-file=.env --import tsx/esm server/src/team-runner.ts</pre>
+      </div>
+
+      <h3>As a systemd service</h3>
+      <div class="code-wrap">
+        <div class="code-label">
+          <span class="code-lang">ini</span>
+          <span class="code-filename">/etc/systemd/system/hats.service</span>
+        </div>
+        <pre>[Unit]
+Description=HATS multi-agent server
+After=network.target
+
+[Service]
+Type=simple
+User=hats
+WorkingDirectory=/opt/hats
+EnvironmentFile=/opt/hats/.env
+ExecStart=/usr/bin/node --import tsx/esm server/src/team-runner.ts
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target</pre>
+      </div>
+
+      <div class="code-wrap">
+        <pre>systemctl daemon-reload
+systemctl enable --now hats
+journalctl -u hats -f     <span class="cmt"># follow logs</span></pre>
+      </div>
+
+      <h3>Port and reverse proxy</h3>
+      <p>The server listens on port <code>3001</code> by default. For HTTPS, place nginx or Caddy in front:</p>
+      <div class="code-wrap">
+        <div class="code-label"><span class="code-lang">nginx</span></div>
+        <pre>location / {
+    proxy_pass         http://localhost:3001;
+    proxy_http_version 1.1;
+    proxy_set_header   Upgrade $http_upgrade;
+    proxy_set_header   Connection "upgrade"; <span class="cmt"># WebSocket</span>
+    proxy_set_header   Host $host;
+    proxy_read_timeout 3600s;
+}</pre>
+      </div>
+      <p>The WebSocket connection (<code>/ws</code>) requires the <code>Upgrade</code> headers above. The <code>proxy_read_timeout</code> should be long enough to keep SSE streams alive.</p>
+    </section>
+
+    <!-- Docker -->
+    <section class="doc-section" id="docker">
+      <div class="section-eyebrow">Production</div>
+      <h2>Dockerfile</h2>
+      <p>A multi-stage build: the <strong>builder</strong> stage installs all dependencies and compiles TypeScript; the <strong>runner</strong> stage copies the compiled artifacts and only the shared libraries needed at runtime.</p>
+
+      <div class="callout callout-warn">
+        <strong>Native addons</strong>
+        The builder and runner must use the same base image so the compiled <code>.node</code> files match the glibc version in the runner. Switching from <code>node:22-slim</code> to <code>node:22-alpine</code> between stages will break native addons.
+      </div>
+
+      <div class="code-wrap">
+        <div class="code-label">
+          <span class="code-lang">dockerfile</span>
+          <span class="code-filename">Dockerfile</span>
+        </div>
+        <pre><span class="cmt"># syntax=docker/dockerfile:1</span>
+
+<span class="cmt"># ─── Stage 1: builder ────────────────────────────────────────────────────────</span>
+<span class="kw">FROM</span> node:22-slim <span class="kw">AS</span> builder
+<span class="kw">WORKDIR</span> /build
+
+<span class="cmt"># Build-time deps for native Node addons:</span>
+<span class="cmt">#   @napi-rs/canvas → Cairo + Pango</span>
+<span class="cmt">#   gl              → Mesa OpenGL (headless rendering)</span>
+<span class="cmt">#   @kmamal/sdl     → SDL2</span>
+<span class="kw">RUN</span> apt-get update &amp;&amp; apt-get install -y --no-install-recommends \
+      python3 build-essential pkg-config \
+      libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev \
+      libgl1-mesa-dev libglu1-mesa-dev libxi-dev libxext-dev \
+      libsdl2-dev \
+    &amp;&amp; rm -rf /var/lib/apt/lists/*
+
+<span class="cmt"># Install deps first — this layer is cached until package*.json changes</span>
+<span class="kw">COPY</span> package*.json ./
+<span class="kw">RUN</span> npm ci
+
+<span class="cmt"># Source files</span>
+<span class="kw">COPY</span> server/tsconfig.json ./server/tsconfig.json
+<span class="kw">COPY</span> server/src/          ./server/src/
+<span class="kw">COPY</span> apps/web/            ./apps/web/
+<span class="kw">COPY</span> scripts/             ./scripts/
+
+<span class="cmt"># Compile TypeScript → server/dist/</span>
+<span class="kw">RUN</span> npm run build
+
+
+<span class="cmt"># ─── Stage 2: runner ─────────────────────────────────────────────────────────</span>
+<span class="kw">FROM</span> node:22-slim <span class="kw">AS</span> runner
+<span class="kw">WORKDIR</span> /app
+
+<span class="cmt"># Runtime shared libraries (not -dev headers)</span>
+<span class="kw">RUN</span> apt-get update &amp;&amp; apt-get install -y --no-install-recommends \
+      python3 python3-pip \
+      libcairo2 libpango-1.0-0 libpangocairo-1.0-0 libjpeg62-turbo libgif7 \
+      libgl1-mesa-glx libglu1-mesa libxi6 libxext6 \
+      libsdl2-2.0-0 \
+      ffmpeg \
+    &amp;&amp; rm -rf /var/lib/apt/lists/*
+
+<span class="cmt"># Piper TTS Python package (flask = HTTP server shim)</span>
+<span class="cmt"># --break-system-packages required on Debian 12+ / bookworm</span>
+<span class="kw">RUN</span> pip3 install --no-cache-dir --break-system-packages piper-tts flask
+
+<span class="cmt"># node_modules carries compiled .node files AND tsx (needed for the</span>
+<span class="cmt"># kanban MCP subprocess: node --import tsx/esm scripts/kanban-mcp.ts)</span>
+<span class="kw">COPY</span> --from=builder /build/node_modules ./node_modules
+<span class="kw">COPY</span> --from=builder /build/server/dist  ./server/dist
+<span class="kw">COPY</span> --from=builder /build/apps/web     ./apps/web
+<span class="kw">COPY</span> --from=builder /build/scripts      ./scripts
+<span class="kw">COPY</span> package.json ./
+
+<span class="cmt"># runtime_data/ is always mounted — never bake project data into the image.</span>
+<span class="cmt"># The volume must contain at minimum: avatars/, config/, data/</span>
+<span class="kw">VOLUME</span> ["/app/runtime_data"]
+
+<span class="kw">EXPOSE</span> 3001
+<span class="cmt"># Piper TTS servers (one per voice model, starting at PIPER_SERVER_PORT_START)</span>
+<span class="kw">EXPOSE</span> 5100-5120
+
+<span class="kw">ENV</span> NODE_ENV=production \
+    RUNTIME_DIR=/app/runtime_data
+
+<span class="kw">CMD</span> ["node", "server/dist/team-runner.js"]</pre>
+      </div>
+
+      <h3>Building and running</h3>
+      <div class="code-wrap">
+        <pre>docker build -t hats .
+
+docker run -d \
+  --name hats \
+  -p 3001:3001 \
+  -p 5100-5120:5100-5120 \
+  -v $(pwd)/runtime_data:/app/runtime_data \
+  --env-file .env \
+  -e RUNTIME_DIR=/app/runtime_data \
+  hats</pre>
+      </div>
+    </section>
+
+    <!-- Docker Compose -->
+    <section class="doc-section" id="compose">
+      <div class="section-eyebrow">Production</div>
+      <h2>Docker Compose</h2>
+
+      <div class="code-wrap">
+        <div class="code-label">
+          <span class="code-lang">yaml</span>
+          <span class="code-filename">docker-compose.yml</span>
+        </div>
+        <pre>services:
+  hats:
+    build: .
+    image: hats:latest
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+      <span class="cmt"># Piper TTS HTTP servers — one per loaded voice model</span>
+      - "5100-5120:5100-5120"
+    volumes:
+      <span class="cmt"># Bind-mount runtime data — survives container restarts and rebuilds</span>
+      - ./runtime_data:/app/runtime_data
+    env_file:
+      <span class="cmt"># Docker injects these directly; no --env-file flag needed in CMD</span>
+      - .env
+    environment:
+      NODE_ENV: production
+      RUNTIME_DIR: /app/runtime_data
+      PIPER_VOICES_DIR: /app/runtime_data/piper_voices
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/api/state"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s</pre>
+      </div>
+
+      <div class="code-wrap">
+        <pre>docker compose up -d          <span class="cmt"># start</span>
+docker compose logs -f hats   <span class="cmt"># follow logs</span>
+docker compose pull &amp;&amp; docker compose up -d  <span class="cmt"># update</span></pre>
+      </div>
+
+      <div class="callout callout-warn">
+        <strong>First run</strong>
+        Before starting the container, ensure <code>runtime_data/config/mcp-catalogue.json</code> and <code>runtime_data/data/model-pricing.json</code> exist — they are tracked in git and should be present in the bind-mounted directory. The <code>projects/</code> and <code>piper_voices/</code> subdirectories are created automatically.
+      </div>
+    </section>
+
+    <!-- Piper TTS -->
+    <section class="doc-section" id="piper">
+      <div class="section-eyebrow">Optional Components</div>
+      <h2>Piper TTS</h2>
+      <p>Piper provides avatar speech synthesis. The server supports two modes:</p>
+
+      <h3>Python HTTP server (recommended)</h3>
+      <p>Requires Python 3.9+ with <code>piper-tts</code> and <code>flask</code>.</p>
+      <div class="code-wrap">
+        <pre>pip install piper-tts flask      <span class="cmt"># or: py -m pip install ... (Windows)</span></pre>
+      </div>
+      <p>The voice manager discovers all <code>.onnx</code> files in <code>runtime_data/piper_voices/</code> and starts one Flask server per model, beginning at port <code>5100</code>.</p>
+      <p>Download voices:</p>
+      <div class="code-wrap">
+        <pre>node scripts/download-voices.mjs</pre>
+      </div>
+
+      <h3>Native binary</h3>
+      <p>Place the Piper native binary at <code>runtime_data/piper/piper</code> (or <code>piper.exe</code> on Windows) and set:</p>
+      <div class="code-wrap">
+        <pre>PIPER_BIN=runtime_data/piper/piper.exe</pre>
+      </div>
+
+      <div class="callout callout-warn">
+        <strong>Windows Python</strong>
+        If <code>python</code> is not in PATH, set <code>PYTHON_BIN=py</code> in your <code>.env</code>. The voice manager reads this env var before spawning piper processes.
+      </div>
+    </section>
+
+    <!-- Rhubarb -->
+    <section class="doc-section" id="rhubarb">
+      <div class="section-eyebrow">Optional Components</div>
+      <h2>Rhubarb Lip Sync</h2>
+      <p>Rhubarb analyses audio and outputs phoneme timings for avatar mouth animation. Without it, lip sync is disabled but all other features work normally.</p>
+
+      <ol class="prose-list">
+        <li>Download the release for your platform from <a href="https://github.com/DanielSWolf/rhubarb-lip-sync/releases" style="color:var(--accent)">github.com/DanielSWolf/rhubarb-lip-sync</a></li>
+        <li>Place the binary at <code>runtime_data/rhubarb/rhubarb</code> (Linux/macOS) or <code>runtime_data/rhubarb/rhubarb.exe</code> (Windows)</li>
+        <li>Set <code>RHUBARB_BIN=runtime_data/rhubarb/rhubarb</code> in <code>.env</code> if you use a non-default path</li>
+      </ol>
+
+      <div class="callout callout-warn">
+        <strong>Containers</strong>
+        Rhubarb binaries are platform-specific. For Docker (Linux), download the Linux release and place it in the bind-mounted <code>runtime_data/rhubarb/</code> directory on the host.
+      </div>
+    </section>
+
+    <!-- Electron -->
+    <section class="doc-section" id="electron">
+      <div class="section-eyebrow">Optional Components</div>
+      <h2>Electron Desktop</h2>
+      <p>The Electron wrapper in <code>apps/electron/</code> opens a browser window pointed at the API server. The server must be running separately.</p>
+
+      <h3>Development</h3>
+      <div class="code-wrap">
+        <pre><span class="cmt"># Terminal 1: start the API server</span>
+npm start
+
+<span class="cmt"># Terminal 2: launch the Electron window</span>
+npm run electron:run</pre>
+      </div>
+
+      <h3>Package for distribution</h3>
+      <div class="code-wrap">
+        <pre>npm run electron:build
+<span class="cmt"># → dist-desktop/ contains the packaged app</span></pre>
+      </div>
+
+      <div class="callout callout-warn">
+        <strong>Self-contained packaging</strong>
+        The current <code>electron:build</code> packages the web UI but not the Node.js server. A fully self-contained desktop app would need the Electron main process to spawn <code>server/src/team-runner.ts</code> as a child process and bundle all server dependencies.
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+// Active section tracking
+const links = document.querySelectorAll('.nav-list a');
+const sections = document.querySelectorAll('.doc-section[id]');
+
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      links.forEach(l => l.classList.remove('active'));
+      const active = document.querySelector(`.nav-list a[href="#${entry.target.id}"]`);
+      if (active) active.classList.add('active');
+    }
+  });
+}, {
+  rootMargin: '-20% 0px -70% 0px',
+  threshold: 0
+});
+
+sections.forEach(s => observer.observe(s));
+</script>

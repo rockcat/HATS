@@ -1,0 +1,471 @@
+<title>HATS v0.01 — Release Notes</title>
+<style>
+  /* ── Tokens ───────────────────────────────────────────────── */
+  :root {
+    --bg:           #F3F5F9;
+    --surface:      #FFFFFF;
+    --text:         #141824;
+    --text-muted:   #5A6278;
+    --text-faint:   #8E97AD;
+    --border:       #DDE2EC;
+    --rule:         #CBD1DF;
+    --accent:       #2B5EA7;
+
+    --hat-blue:     #2B5EA7;
+    --hat-red:      #C0392B;
+    --hat-yellow:   #C57D0A;
+    --hat-green:    #2A7A48;
+    --hat-white:    #7080A0;
+    --hat-black:    #3A3F52;
+
+    --radius:       4px;
+    --gap:          32px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:         #0D1018;
+      --surface:    #161B28;
+      --text:       #E4EAF4;
+      --text-muted: #8A95B0;
+      --text-faint: #5A6278;
+      --border:     #252D40;
+      --rule:       #2A3348;
+      --accent:     #5E8FD8;
+
+      --hat-blue:   #5E8FD8;
+      --hat-red:    #E05A4A;
+      --hat-yellow: #E09A30;
+      --hat-green:  #45A868;
+      --hat-white:  #8A9AB8;
+      --hat-black:  #7888A8;
+    }
+  }
+
+  :root[data-theme="light"] {
+    --bg:         #F3F5F9;
+    --surface:    #FFFFFF;
+    --text:       #141824;
+    --text-muted: #5A6278;
+    --text-faint: #8E97AD;
+    --border:     #DDE2EC;
+    --rule:       #CBD1DF;
+    --accent:     #2B5EA7;
+
+    --hat-blue:   #2B5EA7;
+    --hat-red:    #C0392B;
+    --hat-yellow: #C57D0A;
+    --hat-green:  #2A7A48;
+    --hat-white:  #7080A0;
+    --hat-black:  #3A3F52;
+  }
+
+  :root[data-theme="dark"] {
+    --bg:         #0D1018;
+    --surface:    #161B28;
+    --text:       #E4EAF4;
+    --text-muted: #8A95B0;
+    --text-faint: #5A6278;
+    --border:     #252D40;
+    --rule:       #2A3348;
+    --accent:     #5E8FD8;
+
+    --hat-blue:   #5E8FD8;
+    --hat-red:    #E05A4A;
+    --hat-yellow: #E09A30;
+    --hat-green:  #45A868;
+    --hat-white:  #8A9AB8;
+    --hat-black:  #7888A8;
+  }
+
+  /* ── Reset ────────────────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif;
+    font-size: 15px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── Page shell ───────────────────────────────────────────── */
+  .page {
+    max-width: 700px;
+    margin: 0 auto;
+    padding: 56px 24px 88px;
+  }
+
+  /* ── Header ───────────────────────────────────────────────── */
+  .header {
+    margin-bottom: 48px;
+  }
+
+  .header-eyebrow {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .product-name {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  .version-badge {
+    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+    border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+    padding: 2px 8px;
+    border-radius: 3px;
+    letter-spacing: 0.02em;
+  }
+
+  .header h1 {
+    font-size: clamp(26px, 5vw, 34px);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+    color: var(--text);
+    text-wrap: balance;
+    margin-bottom: 10px;
+  }
+
+  .header-meta {
+    font-size: 13px;
+    color: var(--text-faint);
+  }
+
+  .header-meta time {
+    font-variant-numeric: tabular-nums;
+  }
+
+  hr.rule {
+    border: none;
+    border-top: 1px solid var(--rule);
+    margin: 32px 0;
+  }
+
+  /* ── Hat legend ───────────────────────────────────────────── */
+  .legend {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px 16px;
+    margin-bottom: 48px;
+  }
+
+  @media (max-width: 520px) {
+    .legend { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  .hat-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .hat-dot--blue   { background: var(--hat-blue); }
+  .hat-dot--red    { background: var(--hat-red); }
+  .hat-dot--yellow { background: var(--hat-yellow); }
+  .hat-dot--green  { background: var(--hat-green); }
+  .hat-dot--white  { background: var(--hat-white); }
+  .hat-dot--black  { background: var(--hat-black); }
+
+  .legend-label {
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  /* ── Feature sections ─────────────────────────────────────── */
+  .sections {
+    display: flex;
+    flex-direction: column;
+    gap: 40px;
+  }
+
+  .section {
+    padding-left: 20px;
+    border-left: 3px solid var(--border);
+    position: relative;
+  }
+
+  .section--blue   { border-left-color: var(--hat-blue); }
+  .section--red    { border-left-color: var(--hat-red); }
+  .section--yellow { border-left-color: var(--hat-yellow); }
+  .section--green  { border-left-color: var(--hat-green); }
+  .section--white  { border-left-color: var(--hat-white); }
+  .section--black  { border-left-color: var(--hat-black); }
+
+  .section-header {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+
+  .section-hat {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    opacity: 0.55;
+  }
+
+  .section--blue   .section-hat { color: var(--hat-blue); }
+  .section--red    .section-hat { color: var(--hat-red); }
+  .section--yellow .section-hat { color: var(--hat-yellow); }
+  .section--green  .section-hat { color: var(--hat-green); }
+  .section--white  .section-hat { color: var(--hat-white); }
+  .section--black  .section-hat { color: var(--hat-black); }
+
+  .section h2 {
+    font-size: 17px;
+    font-weight: 650;
+    letter-spacing: -0.01em;
+    color: var(--text);
+    text-wrap: balance;
+  }
+
+  .section-desc {
+    font-size: 13.5px;
+    color: var(--text-muted);
+    margin-bottom: 14px;
+    line-height: 1.55;
+    text-wrap: balance;
+  }
+
+  .features {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .features li {
+    font-size: 14px;
+    color: var(--text);
+    padding-left: 16px;
+    position: relative;
+    line-height: 1.5;
+  }
+
+  .features li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 9px;
+    width: 5px;
+    height: 1.5px;
+    background: var(--text-faint);
+  }
+
+  .features li strong {
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  /* ── Footer ───────────────────────────────────────────────── */
+  .footer {
+    margin-top: 64px;
+    padding-top: 24px;
+    border-top: 1px solid var(--rule);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .footer-text {
+    font-size: 12px;
+    color: var(--text-faint);
+  }
+
+  .footer-version {
+    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+    font-size: 11px;
+    color: var(--text-faint);
+    letter-spacing: 0.04em;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .section {
+      animation: fadeUp 0.3s ease both;
+    }
+    .section:nth-child(2) { animation-delay: 0.04s; }
+    .section:nth-child(3) { animation-delay: 0.08s; }
+    .section:nth-child(4) { animation-delay: 0.12s; }
+    .section:nth-child(5) { animation-delay: 0.16s; }
+    .section:nth-child(6) { animation-delay: 0.20s; }
+    .section:nth-child(7) { animation-delay: 0.24s; }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+  }
+</style>
+
+<div class="page">
+
+  <header class="header">
+    <div class="header-eyebrow">
+      <span class="product-name">HATS</span>
+      <span class="version-badge">v0.01</span>
+    </div>
+    <h1>Six thinking agents, one team</h1>
+    <p style="font-size:15px; color:var(--text-muted); margin-top:8px; text-wrap:balance;">
+      The first release of HATS — a multi-agent platform built on De&nbsp;Bono's Six Thinking Hats, where each AI agent holds a distinct cognitive role and the team thinks together.
+    </p>
+    <p class="header-meta" style="margin-top:10px;">
+      <time datetime="2026-07">July 2026</time>
+    </p>
+  </header>
+
+  <hr class="rule">
+
+  <div class="legend">
+    <div class="legend-item"><span class="hat-dot hat-dot--blue"></span><span><span class="legend-label">Blue</span> — process</span></div>
+    <div class="legend-item"><span class="hat-dot hat-dot--white"></span><span><span class="legend-label">White</span> — data</span></div>
+    <div class="legend-item"><span class="hat-dot hat-dot--red"></span><span><span class="legend-label">Red</span> — emotion</span></div>
+    <div class="legend-item"><span class="hat-dot hat-dot--yellow"></span><span><span class="legend-label">Yellow</span> — optimism</span></div>
+    <div class="legend-item"><span class="hat-dot hat-dot--green"></span><span><span class="legend-label">Green</span> — creativity</span></div>
+    <div class="legend-item"><span class="hat-dot hat-dot--black"></span><span><span class="legend-label">Black</span> — critical</span></div>
+  </div>
+
+  <div class="sections">
+
+    <section class="section section--blue">
+      <div class="section-header">
+        <span class="section-hat">Blue Hat</span>
+        <h2>Multi-agent team orchestration</h2>
+      </div>
+      <p class="section-desc">The core of HATS: a structured team of AI agents, each wearing a distinct cognitive hat, working together on shared projects.</p>
+      <ul class="features">
+        <li><strong>Six Thinking Hats personas</strong> — each agent has a distinct thinking style, communication tone, and set of directives drawn from De Bono's framework</li>
+        <li><strong>Randomised team composition</strong> — teams of four agents are assembled with diverse hat roles, preventing groupthink</li>
+        <li><strong>Kanban board</strong> — shared backlog with backlog, ready, in-progress, blocked, review, and closed columns; tickets auto-created on human escalation</li>
+        <li><strong>Task dispatch</strong> — agents pick up tickets and work them autonomously; blocked tickets surface to the human with context</li>
+        <li><strong>Waiting state</strong> — idle agents disengage cleanly rather than generating unsolicited chatter</li>
+        <li><strong>Persistent state</strong> — full team and conversation state saves on shutdown and restores on next launch</li>
+        <li><strong>Multi-project support</strong> — switch between named projects; each has its own team, kanban, and workspace</li>
+        <li><strong>Project goal injection</strong> — a configurable goal statement is woven into every agent's system prompt</li>
+      </ul>
+    </section>
+
+    <section class="section section--white">
+      <div class="section-header">
+        <span class="section-hat">White Hat</span>
+        <h2>AI provider support</h2>
+      </div>
+      <p class="section-desc">Agents are provider-agnostic: run the whole team on Claude, mix providers per-agent, or run entirely locally.</p>
+      <ul class="features">
+        <li><strong>Anthropic Claude</strong> — full model range including Haiku 4.5, Sonnet, and Opus; streaming and tool use</li>
+        <li><strong>OpenAI / GPT</strong> — all chat-completion-compatible models</li>
+        <li><strong>Google Gemini</strong> — via the GenerativeAI SDK</li>
+        <li><strong>Ollama &amp; LM Studio</strong> — local inference; live model list fetched on connect; offline detection</li>
+        <li><strong>Per-agent model selection</strong> — mix providers freely within a team</li>
+        <li><strong>Tool search pattern</strong> — agents fetch rarely-used tools on demand to keep context windows lean</li>
+        <li><strong>Token logging</strong> — every LLM call logs prompt and generated token counts in readable format</li>
+        <li><strong>Hourly cost budget</strong> — per-agent cost cap; agent idles when the limit is reached until the next hour</li>
+      </ul>
+    </section>
+
+    <section class="section section--red">
+      <div class="section-header">
+        <span class="section-hat">Red Hat</span>
+        <h2>Meetings &amp; live collaboration</h2>
+      </div>
+      <p class="section-desc">Agents can meet — and humans can join. Meetings have structure, pacing, and a permanent record.</p>
+      <ul class="features">
+        <li><strong>Hand-based discussion flow</strong> — four-phase meeting structure; agents raise hands to speak, preventing everyone talking at once</li>
+        <li><strong>Human participation</strong> — join any meeting as a participant; interject at any point and agents hear you immediately</li>
+        <li><strong>Broadcast interrupts</strong> — a human message stops all agents' current work and redirects them</li>
+        <li><strong>Meeting minutes</strong> — transcripts auto-saved to <code>outputs/minutes/</code>; viewable from the calendar tab</li>
+        <li><strong>Scheduled meetings</strong> — plan standups, retros, and reviews in advance via the calendar</li>
+        <li><strong>Paced playback</strong> — LLM turns are paced to speech synthesis so meetings feel like real conversations</li>
+        <li><strong>Markdown transcripts</strong> — meeting turns render with full markdown formatting</li>
+      </ul>
+    </section>
+
+    <section class="section section--yellow">
+      <div class="section-header">
+        <span class="section-hat">Yellow Hat</span>
+        <h2>Avatars &amp; voice</h2>
+      </div>
+      <p class="section-desc">Agents have faces and voices. The meeting stage brings the team to life with animated 3D avatars and speech synthesis.</p>
+      <ul class="features">
+        <li><strong>GLB avatar support</strong> — load any GLB or VRM 3D model as an agent's avatar, with spring physics simulation</li>
+        <li><strong>Idle animations</strong> — breathing, head sway, and eye blink idle behaviour; additional idle tracks played from GLB if present</li>
+        <li><strong>Lip sync</strong> — morph-target-based lip sync driven by speech audio; works in both the meeting stage and agent config panel</li>
+        <li><strong>A-pose correction</strong> — VRM models with A-pose arms are automatically adjusted to a natural rest position on load</li>
+        <li><strong>DALL-E 3 backgrounds</strong> — generate a unique background scene for each agent with a single click</li>
+        <li><strong>Auto-assign on load</strong> — avatars and backgrounds are assigned to agents automatically when a project opens</li>
+        <li><strong>Piper TTS voices</strong> — en_GB medium voices downloaded from HuggingFace during setup; streaming sentence-by-sentence so speech starts before the full response is ready</li>
+        <li><strong>Pre-fetched synthesis</strong> — next speaker's audio is synthesised during current playback to eliminate inter-speaker gaps</li>
+      </ul>
+    </section>
+
+    <section class="section section--green">
+      <div class="section-header">
+        <span class="section-hat">Green Hat</span>
+        <h2>Integrations &amp; MCP</h2>
+      </div>
+      <p class="section-desc">Agents connect to the real world through a curated catalogue of MCP servers — and each agent can have its own private connections.</p>
+      <ul class="features">
+        <li><strong>Email (IMAP/SMTP)</strong> — agents read and send email from their own address; allowlist controls who they can contact</li>
+        <li><strong>Google Calendar &amp; Microsoft 365</strong> — calendar awareness and event management</li>
+        <li><strong>Social channels</strong> — WhatsApp, Twitter/X, Threads, and LinkedIn MCP servers</li>
+        <li><strong>Per-agent MCP selection</strong> — choose which shared MCP servers each agent can access; personal MCP credentials per agent</li>
+        <li><strong>Scheduled MCP actions</strong> — trigger MCP tool calls on a timer, with a condition expression and message template</li>
+        <li><strong>MCP catalogue</strong> — curated server list with descriptions, source links, and credential schemas</li>
+        <li><strong>Agent agenda</strong> — recurring and one-off tasks fire automatically; prompt and MCP-tool-call types both supported</li>
+        <li><strong>Email suppression mode</strong> — development flag to intercept outbound email calls and log to console instead of sending</li>
+      </ul>
+    </section>
+
+    <section class="section section--black">
+      <div class="section-header">
+        <span class="section-hat">Black Hat</span>
+        <h2>Web interface &amp; tooling</h2>
+      </div>
+      <p class="section-desc">A full browser-based control panel, plus CLI access — designed to be operated by a human team lead in real time.</p>
+      <ul class="features">
+        <li><strong>Kanban board</strong> — filterable by user and tag; orange border distinguishes human-assigned tickets; review column for sign-off before close</li>
+        <li><strong>Agent cards</strong> — hat badge, live state, talking indicator, cost bar; click to open the agent config modal</li>
+        <li><strong>Agent config modal</strong> — live-updating system prompt preview with section highlighting; model, provider, specialisation, and MCP controls</li>
+        <li><strong>Agent library</strong> — reusable agent definitions shared across projects; built-in Claude Code singleton</li>
+        <li><strong>Requests tab</strong> — human escalations surface here with full context; reply inline and the agent resumes</li>
+        <li><strong>Threaded conversations</strong> — Slack-style thread viewer per agent; one thread per task, readable history preserved across restarts</li>
+        <li><strong>@ mention popup</strong> — autocomplete agent names in the CLI input and web compose box</li>
+        <li><strong>Project files panel</strong> — browse, preview, and download agent outputs directly from the UI</li>
+        <li><strong>Telemetry modal</strong> — hourly cost bar chart, token totals, and provider breakdown</li>
+        <li><strong>External agents</strong> — delegate to any HTTP endpoint or run Claude Code as a subprocess agent with session persistence</li>
+        <li><strong>Node.js setup wizard</strong> — cross-platform first-run wizard handles dependencies, env configuration, and voice downloads</li>
+      </ul>
+    </section>
+
+  </div>
+
+  <footer class="footer">
+    <span class="footer-text">© 2026 Ely House 25 Ltd · Non-commercial licence</span>
+    <span class="footer-version">hat-agents v0.01</span>
+  </footer>
+
+</div>

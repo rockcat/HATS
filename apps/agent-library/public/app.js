@@ -102,7 +102,7 @@ function renderList() {
   ui.empty.hidden = state.templates.length > 0;
   clear(ui.list);
 
-  for (const template of state.templates) {
+  for (const template of state.templates.sort((a, b) => a.name.localeCompare(b.name))) {
     // An avatar that is no longer in the catalogue would just render as an
     // empty stage, so flag it here where it can be found and fixed.
     const avatar = template.identity?.avatar;
