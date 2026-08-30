@@ -51,6 +51,7 @@ await startService({
     `proxying:    /runner/api/embodiment/v1/*`,
     config.apiKey
       ? 'auth:        X-API-Key from HATS_API_KEY'
-      : 'auth:        HATS_API_KEY not set — the runner will answer 401',
+      : 'auth:        HATS_API_KEY not set — the runner will answer 401.'
+        + ' Mint one with: node --env-file=.env scripts/issue-api-key.mjs',
   ],
 });

@@ -74,7 +74,11 @@ async function main(): Promise<void> {
     banner: [
       `templates:   ${config.templatesDir} (${store.size} loaded)`,
       `credentials: ${config.credentialsFile}`,
-      `team runner: ${config.teamRunnerUrl}${config.runnerApiKey ? '' : '  (HATS_API_KEY not set — chat will 401)'}`,
+      `team runner: ${config.teamRunnerUrl}`,
+      ...(config.runnerApiKey ? [] : [
+        'chat:        disabled — the runner authenticates /api/*, so set HATS_API_KEY',
+        '             mint one with: node --env-file=.env scripts/issue-api-key.mjs',
+      ]),
       `OpenAPI:     http://localhost:${config.port}/api/v1/openapi.yaml`,
     ],
   });
