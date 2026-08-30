@@ -174,24 +174,54 @@
       </div>
     </section>
 
-    <!-- ── Live preview ────────────────────────────────────────────────── -->
+    <!-- ── Live preview / MCP / chat ───────────────────────────────────── -->
     <section class="panel" id="preview-panel">
       <header>
-        Preview
+        <nav class="tabs" id="side-tabs">
+          <button data-tab="preview" class="active">Preview</button>
+          <button data-tab="mcp">MCP <span class="tag" id="mcp-count">0</span></button>
+          <button data-tab="chat">Chat <span class="tag" id="chat-status">no template</span></button>
+        </nav>
         <span class="spacer"></span>
         <span class="tag" id="prompt-length"></span>
       </header>
 
-      <div class="panel-body" id="stage-body">
-        <div id="avatar-stage">
-          <img id="stage-background" alt="">
-          <canvas id="avatar-canvas"></canvas>
-          <div class="stage-hint" id="stage-hint">No avatar selected</div>
+      <!-- Preview -->
+      <div class="tab-page" data-tab="preview">
+        <div class="panel-body" id="stage-body">
+          <div id="avatar-stage">
+            <img id="stage-background" alt="">
+            <canvas id="avatar-canvas"></canvas>
+            <div class="stage-hint" id="stage-hint">No avatar selected</div>
+          </div>
+        </div>
+        <div class="panel-body flush scroll" id="prompt-scroll">
+          <pre class="code" id="prompt-text">Select a template to see the system prompt it produces.</pre>
         </div>
       </div>
 
-      <div class="panel-body flush scroll" id="prompt-scroll">
-        <pre class="code" id="prompt-text">Select a template to see the system prompt it produces.</pre>
+      <!-- Personal MCP servers -->
+      <div class="tab-page" data-tab="mcp" hidden>
+        <div class="panel-body flush scroll" id="mcp-scroll">
+          <div class="empty" id="mcp-empty">Select a template to configure its MCP servers.</div>
+          <div id="mcp-list" hidden></div>
+        </div>
+        <div class="panel-body mcp-note">
+          Credentials are stored on this machine, never in the template or a
+          project definition. The Team Runner reads the same file.
+        </div>
+      </div>
+
+      <!-- Chat with a deployed instance -->
+      <div class="tab-page" data-tab="chat" hidden>
+        <div class="panel-body flush scroll" id="chat-log"></div>
+        <div class="panel-body">
+          <div class="empty" id="chat-hint">Select a template to chat with it.</div>
+          <form id="chat-form" class="row" hidden>
+            <input id="chat-input" placeholder="Say something…" autocomplete="off">
+            <button class="primary">Send</button>
+          </form>
+        </div>
       </div>
     </section>
   </main>

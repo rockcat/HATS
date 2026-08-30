@@ -7,18 +7,27 @@
 
 import * as path from 'path';
 import { fileURLToPath } from 'url';
-import { metaRoutes, startService } from '../../../packages/service-kit/src/index.js';
+import { metaRoutes, proxyRoutes, startService } from '../../../packages/service-kit/src/index.js';
 import { uiKitMount } from '../../../packages/ui-kit/index.js';
+import { initCatalogue } from '../../../server/src/mcp/catalogue-store.js';
 import { config } from './config.js';
+import { CredentialStore } from './credential-store.js';
 import { TemplateStore } from './template-store.js';
 import { templateRoutes } from './routes/templates.js';
 import { catalogueRoutes } from './routes/catalogue.js';
+import { mcpRoutes } from './routes/mcp.js';
 
 const PUBLIC_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
 
 async function main(): Promise<void> {
   const store = new TemplateStore(config.templatesDir);
   await store.load();
+
+  // Same catalogue file the runner uses, so both agree on what an MCP server is.
+  await initCatalogue(config.catalogueFile);
+
+  const credentials = new CredentialStore(config.credentialsFile);
+  await credentials.load();
 
   const imported = await store.importLegacy(config.legacyAgentsFile);
   if (imported > 0) console.log(`[${config.name}] imported ${imported} agent(s) from the legacy agents.json`);
@@ -32,7 +41,7 @@ async function main(): Promise<void> {
     publicDir: PUBLIC_DIR,
     mounts: [
       uiKitMount(),
-      // The editor previews the GLB avatar and the background image, so the
+      // The editor previews the GLB/VRM avatar and the background image, so the
       // library serves the same assets the runner does.
       { prefix: '/avatars', dir: config.avatarsDir },
       { prefix: '/backgrounds', dir: config.backgroundsDir },
@@ -51,10 +60,22 @@ async function main(): Promise<void> {
       }),
       ...templateRoutes(store),
       ...catalogueRoutes(config.avatarsDir, config.backgroundsDir),
+      ...mcpRoutes(store, credentials),
+      // Chat needs a *running* agent, which only the Team Runner has. Proxied so
+      // the browser talks to one origin and the API key stays server-side.
+      ...proxyRoutes({
+        prefix: '/runner',
+        target: config.teamRunnerUrl,
+        label: 'Team Runner',
+        timeoutMs: 120_000,
+        ...(config.runnerApiKey && { headers: { 'X-API-Key': config.runnerApiKey } }),
+      }),
     ],
     banner: [
-      `templates: ${config.templatesDir} (${store.size} loaded)`,
-      `OpenAPI:   http://localhost:${config.port}/api/v1/openapi.yaml`,
+      `templates:   ${config.templatesDir} (${store.size} loaded)`,
+      `credentials: ${config.credentialsFile}`,
+      `team runner: ${config.teamRunnerUrl}${config.runnerApiKey ? '' : '  (HATS_API_KEY not set — chat will 401)'}`,
+      `OpenAPI:     http://localhost:${config.port}/api/v1/openapi.yaml`,
     ],
   });
 }

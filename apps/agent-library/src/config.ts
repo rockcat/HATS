@@ -25,4 +25,15 @@ export const config = {
   get backgroundsDir(): string { return path.join(this.avatarsDir, 'backgrounds'); },
   /** three.js and @pixiv/three-vrm are served from here for the avatar preview. */
   nodeModulesDir: path.join(REPO_ROOT, 'node_modules'),
+  /** Shared with the Team Runner so both see the same MCP definitions. */
+  catalogueFile: runtimeDir('config', 'mcp-catalogue.json'),
+  /**
+   * Per-agent MCP credentials. Deliberately the same file the runner reads —
+   * a secret belongs to the machine, not to the shared template document.
+   */
+  credentialsFile: path.join(PROJECTS_ROOT, 'agent-credentials.json'),
+  /** Used by the editor's chat panel to reach a deployed agent. */
+  teamRunnerUrl: process.env['TEAM_RUNNER_URL'] ?? 'http://localhost:3001',
+  /** Credential the chat proxy presents to the runner, which authenticates /api/*. */
+  runnerApiKey: process.env['HATS_API_KEY'] ?? '',
 } as const;

@@ -238,6 +238,109 @@ paths:
                   prompt: { type: string }
         '404': { $ref: '#/components/responses/NotFound' }
 
+  /api/v1/mcp/catalogue:
+    get:
+      tags: [Catalogue]
+      summary: MCP servers available to agents
+      description: |
+        `personal` servers are configured per agent and carry credentials;
+        `shared` servers are attached to a whole team by the Team Runner.
+      operationId: listMcpCatalogue
+      responses:
+        '200':
+          description: The catalogue
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  personal:
+                    type: array
+                    items: { $ref: '#/components/schemas/McpCatalogueEntry' }
+                  shared:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string }
+                        name: { type: string }
+                        category: { type: string }
+
+  /api/v1/agent-templates/{id}/personal-mcp:
+    get:
+      tags: [Templates]
+      summary: Per-agent MCP servers configured for this template
+      description: |
+        Credentials are stored on the machine running the service — never in the
+        template document or a project definition — in the same sidecar the Team
+        Runner reads. Secret-looking fields are returned as the sentinel
+        `__stored__` rather than in the clear.
+      operationId: getTemplatePersonalMcp
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Configured servers
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  servers:
+                    type: array
+                    items: { $ref: '#/components/schemas/PersonalMcpState' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/v1/agent-templates/{id}/personal-mcp/{serverId}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+      - name: serverId
+        in: path
+        required: true
+        schema: { type: string }
+    put:
+      tags: [Templates]
+      summary: Store credentials for one per-agent MCP server
+      description: |
+        Send `__stored__` for a secret field to keep the value already held,
+        which lets a client edit one field without being given the others.
+      operationId: putTemplatePersonalMcp
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [values]
+              properties:
+                values:
+                  type: object
+                  additionalProperties: { type: string }
+                disabled:
+                  type: boolean
+                  description: Keep the credentials but stop the runner starting the server.
+      responses:
+        '200':
+          description: Stored
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PersonalMcpState' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [Templates]
+      summary: Forget a server's credentials for this template
+      operationId: deleteTemplatePersonalMcp
+      responses:
+        '204': { description: Removed }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   /api/v1/personas:
     get:
       tags: [Catalogue]
@@ -424,6 +527,34 @@ components:
         tools: { $ref: '#/components/schemas/ToolAccess' }
         scheduledActionIds: { type: array, items: { type: string } }
         tags: { type: array, items: { type: string } }
+
+    McpCatalogueEntry:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        description: { type: string }
+        category: { type: string }
+        url: { type: string }
+        notes: { type: string }
+        envVars:
+          type: array
+          items:
+            type: object
+            properties:
+              name: { type: string }
+              placeholder: { type: string }
+
+    PersonalMcpState:
+      type: object
+      properties:
+        id: { type: string, description: MCP server id }
+        configured: { type: boolean }
+        disabled: { type: boolean }
+        values:
+          type: object
+          description: Field values, with secrets replaced by `__stored__`.
+          additionalProperties: { type: string }
 
     Persona:
       type: object

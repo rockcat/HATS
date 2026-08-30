@@ -1,10 +1,12 @@
 /** HATS Agent Library — template browser, editor and live preview. */
 
 import {
-  $, clear, debounce, el, guard, hatDots, makeClient, relativeTime, toastError, toastOk, trackHealth,
+  $, $$, clear, debounce, el, guard, hatDots, makeClient, relativeTime, toastError, toastOk, trackHealth,
 } from '/ui-kit/hats-ui.js';
 import { applyPersona, buildHatCheckboxes, emptyTemplate, readForm, writeForm } from '/template-form.js';
 import { clearAvatar, showAvatar } from '/avatar-preview.js';
+import { loadMcpCatalogue, showMcpFor } from '/mcp-panel.js';
+import { initChat, showChatFor } from '/chat-panel.js';
 
 const api = makeClient('/api/v1');
 
@@ -205,6 +207,9 @@ function selectTemplate(id) {
   state.selectedId = id;
   renderEditor(template);
   renderList();
+  // MCP credentials and chat both key off the saved template, not the form.
+  void showMcpFor(id);
+  void showChatFor(template);
 }
 
 function startNewTemplate() {
@@ -215,6 +220,9 @@ function startNewTemplate() {
     ? { provider: defaultProvider.name, model: defaultProvider.models?.[0] ?? '' }
     : undefined), { isNew: true });
   renderList();
+  // Neither panel applies until the template exists on the server.
+  void showMcpFor(null);
+  void showChatFor(null);
   ui.form.elements['name'].focus();
   ui.form.elements['name'].select();
 }
@@ -227,9 +235,13 @@ async function save() {
     const saved = state.selectedId
       ? await api.put(`/agent-templates/${state.selectedId}`, input)
       : await api.post('/agent-templates', input);
+    const isNew = !state.selectedId;
     state.selectedId = saved.id;
     await loadTemplates();
     renderEditor(saved);
+    // A brand new template can now take MCP credentials and resolve for chat.
+    if (isNew) { void showMcpFor(saved.id); }
+    void showChatFor(saved);
     toastOk(`Saved ${saved.name}`);
   });
 }
@@ -253,6 +265,8 @@ async function remove() {
     ui.background.hidden = true;
     ui.stageHint.hidden = false;
     ui.stageHint.textContent = 'No avatar selected';
+    void showMcpFor(null);
+    void showChatFor(null);
     await loadTemplates();
   }, `Deleted ${template.name}`);
 }
@@ -265,6 +279,9 @@ async function duplicate() {
     state.selectedId = copy.id;
     renderEditor(copy);
     renderList();
+    // Credentials are per-agent and are deliberately not copied.
+    void showMcpFor(copy.id);
+    void showChatFor(copy);
   }, 'Duplicated');
 }
 
@@ -306,12 +323,23 @@ function init() {
 
   window.addEventListener('beforeunload', (event) => { if (state.dirty) event.preventDefault(); });
 
+  // Side-panel tabs: preview / MCP / chat.
+  $('#side-tabs').addEventListener('click', (event) => {
+    const button = event.target.closest('button[data-tab]');
+    if (!button) return;
+    const wanted = button.dataset.tab;
+    for (const tab of $$('#side-tabs button')) tab.classList.toggle('active', tab === button);
+    for (const page of $$('.tab-page')) page.hidden = page.dataset.tab !== wanted;
+  });
+
+  initChat();
   trackHealth($('#health-dot'), $('#health-label'), '/api/v1/health');
 }
 
 init();
 try {
   await loadCatalogue();
+  await loadMcpCatalogue();
   await loadTemplates();
   const first = state.templates[0];
   if (first) selectTemplate(first.id);
