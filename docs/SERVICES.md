@@ -1,0 +1,211 @@
+# HATS Services
+
+*Implements `docs/Architecture Update.md` (29 Aug 2026).*
+
+This describes how HATS is split into separable services behind formal APIs.
+For what happens **inside** the Team Runner process — the orchestrator, agents,
+MCP registry and render pipeline — see [ARCHITECTURE.md](ARCHITECTURE.md).
+
+HATS is four applications around three formal contracts. Each application owns
+one thing and reaches the others only through a published API.
+
+```
+┌──────────────────┐   AgentTemplate    ┌──────────────────┐
+│  Agent Library   │───────────────────▶│ Project Designer │
+│  API + UI :3010  │                    │     UI :3030     │
+└──────────────────┘                    └────────┬─────────┘
+                                                 │ ProjectDefinition
+                                                 ▼
+┌──────────────────┐  ProjectDefinition ┌──────────────────┐
+│   Team Runner    │◀──────────────────▶│  Project Server  │
+│  :3001 + dash    │                    │    API :3020     │
+└────────┬─────────┘                    └──────────────────┘
+         │ Embodiment API
+         ▼
+┌──────────────────┐
+│ Embodiment Test  │
+│     UI :3040     │
+└──────────────────┘
+```
+
+## The applications
+
+### Agent Library — `apps/agent-library`, port 3010
+
+Owns agent templates and nothing else: no projects, no orchestration, no running
+agents. Ships its own UI for browsing, authoring and previewing the system prompt
+a template produces.
+
+Storage is one JSON file per template under
+`runtime_data/agent-library/templates/`, so a template is readable, diffable and
+hand-editable. Every write is schema-validated before it reaches disk; a file
+that fails validation is reported at startup and skipped rather than silently
+accepted.
+
+On first start it imports any legacy `projects/agents.json` and renames the
+source to `.migrated` so the import cannot repeat.
+
+### Project Server — `apps/project-server`, port 3020
+
+Owns project definitions: objective, team roster, shared MCP servers, and the
+pointer to which project is *active*. Creating a project also creates its working
+folder (`sources/`, `outputs/`) so the runner has somewhere to work.
+
+Deploying an agent resolves the template from the Agent Library and stores a
+fully-resolved copy, so the runner never needs the library to start a team.
+
+Writes are optimistically concurrent: pass `expectedRevision` and a stale write
+is rejected with 409 rather than clobbering someone else's edit. This is what
+stops the Designer and a running team overwriting each other.
+
+### Project Designer — `apps/project-designer`, port 3030
+
+A UI with no state of its own. It reads templates from the Agent Library, writes
+definitions to the Project Server, and reaches both through its own reverse proxy
+(`/proxy/library`, `/proxy/projects`) so the browser only ever talks to one
+origin.
+
+It shows template **drift** — when the library has moved past the revision a
+deployed agent was built from — and offers a one-click resync.
+
+### Team Runner — `server/src/`, port 3001
+
+Everything it did before, minus what now belongs to the two services above. It
+loads the active project definition from the Project Server, embodies the team,
+runs meetings, tasks, the kanban board and MCP tools, and writes runtime changes
+to the team back into the project definition.
+
+It also serves the **Embodiment API**, the public contract described below.
+
+The operator dashboard is unchanged and still lives at `http://localhost:3001`.
+
+### Embodiment API Test — `apps/embodiment-test`, port 3040
+
+A deliberately minimal client that uses nothing but the Embodiment API: roster,
+live state, conversation, and voice. Its third panel logs every request and every
+stream event, so the API is the visible output. If this app can drive a team, so
+can any third party.
+
+## The contracts
+
+`packages/contracts` holds the JSON Schemas, the OpenAPI documents and the
+TypeScript mirrors. See [its README](../packages/contracts/README.md) for how to
+change one.
+
+| | Schema | Served live at |
+| --- | --- | --- |
+| Agent Template | `agent-template.schema.json` | `:3010/api/v1/schemas/agentTemplate` |
+| Deployed Agent | `deployed-agent.schema.json` | `:3020/api/v1/schemas/deployedAgent` |
+| Project Definition | `project.schema.json` | `:3020/api/v1/schemas/project` |
+
+| API | Spec | Served live at |
+| --- | --- | --- |
+| Agent Library | `agent-library.openapi.yaml` | `:3010/api/v1/openapi.yaml` |
+| Project Server | `project-server.openapi.yaml` | `:3020/api/v1/openapi.yaml` |
+| Embodiment | `embodiment.openapi.yaml` | `:3001/api/embodiment/v1/openapi.yaml` |
+
+## The Embodiment API
+
+The contract between a running team and anything that wants to talk to it.
+"Embodiment" is the whole surface of an agent as a presence: identity and hats,
+live state, conversation threads, its face (GLB avatar, background) and its voice
+(synthesised speech with viseme timings for lip sync).
+
+```
+GET  /api/embodiment/v1/agents                    the roster
+GET  /api/embodiment/v1/agents/{id}               one agent
+GET  /api/embodiment/v1/agents/{id}/threads       conversation threads
+GET  /api/embodiment/v1/agents/{id}/messages      read a thread
+POST /api/embodiment/v1/agents/{id}/messages      say something (202, async)
+POST /api/embodiment/v1/agents/{id}/tasks         assign durable work
+POST /api/embodiment/v1/agents/{id}/speech        speak in the agent's voice
+GET  /api/embodiment/v1/agents/{id}/avatar        the GLB head
+GET  /api/embodiment/v1/events                    SSE — everything, live
+```
+
+`{id}` is the deployed agent's `instanceId`; an agent's name is also accepted.
+
+**Every endpoint is authenticated** — the runner guards all of `/api/*`.
+Third-party clients send a static API key as `X-API-Key`, created in the
+dashboard's Users tab or issued by the mobile pairing flow. A browser client
+already signed into the dashboard may send its session token as a Bearer
+token instead. The test harness reads its key from `HATS_API_KEY` and attaches
+it server-side, so the secret never reaches the browser.
+
+Messaging is asynchronous. `POST .../messages` accepts and returns immediately;
+the reply arrives on `/events` as an `agent_message` and is appended to the
+thread. Clients that prefer polling can read the thread instead, but the stream
+is the intended path.
+
+The stream vocabulary is deliberately narrower than the orchestrator's internal
+event log — `hello`, `agent_state`, `agent_message`, `agent_speech`,
+`project_update`, `heartbeat`. `src/embodiment/event-mapper.ts` translates
+internal events into it, so the runner can grow new internal events without
+changing what external clients see.
+
+## Running it
+
+```bash
+npm run services      # library + project server + designer + embodiment test
+npm start             # the Team Runner, in another terminal
+```
+
+Or everything at once:
+
+```bash
+npm run services:all
+```
+
+Individually: `npm run agent-library`, `npm run project-server`,
+`npm run project-designer`, `npm run embodiment-test`.
+
+### First run
+
+1. Open the Agent Library at <http://localhost:3010> and create a few agents.
+2. Open the Project Designer at <http://localhost:3030>, create a project, set a
+   goal, deploy agents into the team, and click **Set active**.
+3. `npm start` — the runner loads the active project and embodies the team.
+4. Open the Embodiment test harness at <http://localhost:3040> and talk to them.
+
+## Graceful degradation
+
+Nothing in the split is mandatory. The runner probes both services at startup:
+
+- **Project Server unreachable** → reads the project from the local folder, as before.
+- **Agent Library unreachable** → falls back to the local `projects/agents.json`.
+- **`--standalone` or `HATS_STANDALONE=1`** → skips both probes entirely.
+
+So a single-machine install still works with nothing else started, and the split
+is an upgrade rather than a new requirement.
+
+## Where state lives
+
+| State | Owner | Location |
+| --- | --- | --- |
+| Agent templates | Agent Library | `runtime_data/agent-library/templates/` |
+| Project definitions | Project Server | `runtime_data/project-server/definitions/` |
+| Active project pointer | Project Server | `runtime_data/project-server/active-project.json` |
+| Conversation history, tasks, meetings | Team Runner | `<project>/team-state.json` |
+| Users, sessions and API keys | Team Runner | `runtime_data/data/users.json` |
+| Event log | Team Runner | `<project>/team-events.jsonl` |
+| Kanban board | Team Runner | `<project>/kanban-board.json` |
+| Per-agent MCP credentials | Team Runner | `<projects root>/agent-credentials.json` |
+
+Credentials never leave the runner. `LibraryAgentStore` holds them back from the
+Agent Library and keeps them in a local sidecar file, because a shared library is
+the wrong place for a secret.
+
+## Shared packages
+
+| Package | What it is |
+| --- | --- |
+| `packages/contracts` | Schemas, OpenAPI documents, types, validators, factories |
+| `packages/service-kit` | The HTTP shell each service runs in: router, SSE hub, JSON store, proxy, meta routes |
+| `packages/clients` | Typed clients for the Agent Library and Project Server |
+| `packages/ui-kit` | Shared CSS and browser helpers, served at `/ui-kit` by each UI |
+
+These are plain source directories imported by relative path — there is no
+workspace linking. `server/tsconfig.json` compiles the server together with the
+packages it imports, so the built entry point is
+`server/dist/server/src/team-runner.js`. `npm start` and every service run straight
+off TypeScript through `tsx`.
