@@ -88,6 +88,23 @@ export class LibraryAgentStore implements AgentDefinitionStore {
   get isReachable(): boolean { return this.reachable; }
   get libraryUrl(): string { return this.client.baseUrl; }
 
+  /**
+   * Credentials held back from the shared library, for one agent.
+   *
+   * Looked up by the running agent's instance id first, then by the template it
+   * was deployed from: an agent configured before it was ever deployed has its
+   * secrets filed under the template id.
+   */
+  secretsFor(id: string, templateId?: string): LocalAgentSecrets {
+    return this.secrets[id] ?? (templateId ? this.secrets[templateId] : undefined) ?? {};
+  }
+
+  /** Store credentials for an agent without touching the shared library. */
+  async setSecrets(id: string, secrets: LocalAgentSecrets): Promise<void> {
+    this.secrets[id] = secrets;
+    await this.writeSecrets();
+  }
+
   async load(): Promise<void> {
     this.secrets = await this.readSecrets();
     try {

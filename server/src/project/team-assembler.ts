@@ -15,16 +15,23 @@ import { getRandomPersona } from '../hats/personas.js';
 import { toAgentConfig } from '../embodiment/agent-mapper.js';
 import { log } from '../util/logger.js';
 
-/** Register every enabled agent from a project definition. */
+/**
+ * Register every enabled agent from a project definition.
+ *
+ * Per-agent MCP credentials are not part of the definition — they stay on the
+ * runner — so they are pulled from the agent store and re-attached here.
+ */
 export function assembleFromDefinition(
   orchestrator: TeamOrchestrator,
   definition: ProjectDefinition,
   providerFactory: ProviderFactory,
 ): number {
+  const store = orchestrator.getAgentStore();
   const enabled = definition.team.filter((agent) => agent.enabled !== false);
   for (const deployed of enabled) {
     try {
-      orchestrator.registerAgent(toAgentConfig(deployed, providerFactory));
+      const secrets = store?.secretsFor?.(deployed.instanceId, deployed.templateId) ?? {};
+      orchestrator.registerAgent(toAgentConfig(deployed, providerFactory, secrets));
     } catch (err) {
       log.warn(`[Team] Could not embody "${deployed.name}": ${(err as Error).message}`);
     }
