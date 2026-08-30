@@ -166,8 +166,7 @@
               <span>Use every server the team has enabled</span>
             </label>
             <div id="shared-mcp-list" class="server-picker" hidden></div>
-            <small>Shared tools started for the whole team. Per-agent servers
-              with their own credentials live on the MCP tab.</small>
+            <small>Shared tools started for the whole team.</small>
           </label>
 
           <label class="field">
@@ -175,6 +174,21 @@
             <input name="tags" placeholder="facilitator, finance">
           </label>
         </form>
+
+        <!-- Personal MCP servers: this agent's own tools and credentials. -->
+        <section id="personal-mcp-section" hidden>
+          <div class="section-head">
+            <strong>This agent's own MCP servers</strong>
+            <span class="tag" id="mcp-count">0</span>
+          </div>
+          <p class="section-note">
+            Servers this agent connects to on its own account, with its own
+            credentials. Stored on this machine — never in the template or a
+            project definition. The Team Runner reads the same file.
+          </p>
+          <div id="mcp-list"></div>
+        </section>
+        <div class="empty" id="mcp-empty" hidden>Select a template to configure its MCP servers.</div>
       </div>
     </section>
 
@@ -183,7 +197,6 @@
       <header>
         <nav class="tabs" id="side-tabs">
           <button data-tab="preview" class="active">Preview</button>
-          <button data-tab="mcp">MCP <span class="tag" id="mcp-count">0</span></button>
           <button data-tab="chat">Chat <span class="tag" id="chat-status">no template</span></button>
         </nav>
         <span class="spacer"></span>
@@ -201,18 +214,6 @@
         </div>
         <div class="panel-body flush scroll" id="prompt-scroll">
           <pre class="code" id="prompt-text">Select a template to see the system prompt it produces.</pre>
-        </div>
-      </div>
-
-      <!-- Personal MCP servers -->
-      <div class="tab-page" data-tab="mcp" hidden>
-        <div class="panel-body flush scroll" id="mcp-scroll">
-          <div class="empty" id="mcp-empty">Select a template to configure its MCP servers.</div>
-          <div id="mcp-list" hidden></div>
-        </div>
-        <div class="panel-body mcp-note">
-          Credentials are stored on this machine, never in the template or a
-          project definition. The Team Runner reads the same file.
         </div>
       </div>
 

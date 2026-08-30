@@ -144,8 +144,10 @@ async function refresh() {
 /** Point the panel at a template. Pass null to clear it. */
 export async function showMcpFor(id) {
   templateId = id;
+  // The section sits inline under the form, so it is shown or hidden whole
+  // rather than swapping an empty state inside it.
+  $('#personal-mcp-section').hidden = !id;
   $('#mcp-empty').hidden = Boolean(id);
-  $('#mcp-list').hidden = !id;
   if (!id) { clear($('#mcp-list')); $('#mcp-count').textContent = '0'; return; }
   await guard(() => refresh());
 }
