@@ -273,11 +273,14 @@ export class TeamOrchestrator {
         const agent = this.registerAgent(config);
         agent.setHistory(snap.history);
       }
-      // Migrate to global store if available — save defs without history
+      // Migrate to the agent store if available — configs without history.
+      // Goes through syncRunningAgent rather than addOrUpdate: a v1 snapshot id
+      // is a running-agent id, not a library id, so creating a library entry
+      // from it mints a duplicate of whatever template it was deployed from.
       if (this.agentStore) {
         for (const snap of (snapshot as TeamSnapshotV1).agents) {
           if (!this.agentStore.has(snap.id)) {
-            await this.agentStore.addOrUpdate({
+            await this.agentStore.syncRunningAgent({
               id:                    snap.id,
               identity:              snap.identity,
               hatType:               Array.isArray(snap.hatType) ? snap.hatType : [snap.hatType as HatType],

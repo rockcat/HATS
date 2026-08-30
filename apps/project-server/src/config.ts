@@ -1,6 +1,5 @@
 import * as path from 'path';
-
-const REPO_ROOT = path.resolve(process.cwd());
+import { runtimeDir } from '../../../server/src/util/runtime-dir.js';
 
 export const config = {
   name: 'ProjectServer',
@@ -8,10 +7,12 @@ export const config = {
   port: Number(process.env['PROJECT_SERVER_PORT'] ?? 3020),
   /** One JSON file per project definition. */
   definitionsDir: path.resolve(
-    process.env['PROJECT_DEFINITIONS_DIR'] ?? path.join(REPO_ROOT, 'runtime_data', 'project-server', 'definitions'),
+    process.env['PROJECT_DEFINITIONS_DIR'] ?? runtimeDir('project-server', 'definitions'),
   ),
-  /** Where the Team Runner keeps each project's working files. */
-  projectsRoot: path.resolve(process.env['PROJECTS_ROOT'] ?? path.join(REPO_ROOT, 'projects')),
+  /** Where the Team Runner keeps each project's working files — must match the runner. */
+  projectsRoot: process.env['PROJECTS_ROOT']
+    ? path.resolve(process.env['PROJECTS_ROOT'])
+    : runtimeDir('projects'),
   /** Used to resolve templateId when deploying an agent into a project. */
   agentLibraryUrl: process.env['AGENT_LIBRARY_URL'] ?? 'http://localhost:3010',
 } as const;
