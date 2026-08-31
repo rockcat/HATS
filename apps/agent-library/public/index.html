@@ -137,16 +137,15 @@
             </label>
           </div>
 
-          <div class="grid-2">
-            <label class="field">
-              <span>Voice</span>
-              <input name="voice" placeholder="en_GB-cori-high">
-            </label>
-            <label class="field">
-              <span>Speaker</span>
-              <input name="speakerName" placeholder="multi-speaker voices only">
-            </label>
-          </div>
+          <label class="field">
+            <span>Voice</span>
+            <div class="row voice-row">
+              <select name="voice"><option value="">—</option></select>
+              <select name="speakerName" hidden><option value="">(default)</option></select>
+              <button type="button" class="small" id="preview-voice" title="Hear this voice">Preview</button>
+            </div>
+            <small id="voice-hint"></small>
+          </label>
 
           <div class="grid-2">
             <label class="field">

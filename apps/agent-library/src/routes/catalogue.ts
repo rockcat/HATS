@@ -7,6 +7,7 @@ import { hatDefinitions } from '../../../../server/src/hats/definitions.js';
 import { personasByHat } from '../../../../server/src/hats/personas.js';
 import { SPECIALISATION_DIRECTIVES } from '../../../../server/src/prompt/generator.js';
 import { KNOWN_PROVIDERS } from '../../../../server/src/api/providers.js';
+import { listVoices } from '../voices.js';
 
 const BASE = '/api/v1';
 
@@ -18,7 +19,7 @@ interface AvatarCatalogue {
   }>;
 }
 
-export function catalogueRoutes(avatarsDir: string, backgroundsDir: string): Route[] {
+export function catalogueRoutes(avatarsDir: string, backgroundsDir: string, voicesDir: string): Route[] {
   return [
     get(`${BASE}/personas`, ({ res }) => json(res, 200, personasByHat)),
 
@@ -44,6 +45,10 @@ export function catalogueRoutes(avatarsDir: string, backgroundsDir: string): Rou
       } catch {
         json(res, 200, { avatars: [] });
       }
+    }),
+
+    get(`${BASE}/voices`, async ({ res }) => {
+      json(res, 200, { voices: await listVoices(voicesDir) });
     }),
 
     get(`${BASE}/backgrounds`, async ({ res }) => {

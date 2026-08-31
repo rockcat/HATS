@@ -1,6 +1,7 @@
 /** Mapping between the editor form and an AgentTemplate document. */
 
 import { $$, HAT_TYPES, el } from '/ui-kit/hats-ui.js';
+import { refreshSpeakers } from '/voice-picker.js';
 
 const csv = (value) => (value ?? '').split(',').map((s) => s.trim()).filter(Boolean);
 const number = (value) => (value === '' || value === null ? undefined : Number(value));
@@ -108,8 +109,10 @@ export function writeForm(form, template) {
   set('email', template.identity?.email);
   set('avatar', template.identity?.avatar);
   set('background', template.identity?.background);
+  // The speaker list depends on the voice, so it is rebuilt after the voice is
+  // set and the stored speaker re-selected from the rebuilt options.
   set('voice', template.identity?.voice);
-  set('speakerName', template.identity?.speakerName);
+  refreshSpeakers(form, template.identity?.speakerName ?? '');
   set('provider', template.model?.provider ?? 'anthropic');
   set('model', template.model?.model);
   set('maxContextTokens', template.limits?.maxContextTokens);

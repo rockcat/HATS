@@ -59,7 +59,7 @@ async function main(): Promise<void> {
         }),
       }),
       ...templateRoutes(store),
-      ...catalogueRoutes(config.avatarsDir, config.backgroundsDir),
+      ...catalogueRoutes(config.avatarsDir, config.backgroundsDir, config.voicesDir),
       ...mcpRoutes(store, credentials),
       // Chat needs a *running* agent, which only the Team Runner has. Proxied so
       // the browser talks to one origin and the API key stays server-side.

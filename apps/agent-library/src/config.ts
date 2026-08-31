@@ -27,6 +27,8 @@ export const config = {
   nodeModulesDir: path.join(REPO_ROOT, 'node_modules'),
   /** Shared with the Team Runner so both see the same MCP definitions. */
   catalogueFile: runtimeDir('config', 'mcp-catalogue.json'),
+  /** Piper voice models, read for the editor's voice and speaker dropdowns. */
+  voicesDir: path.resolve(process.env['PIPER_VOICES_DIR'] ?? runtimeDir('piper_voices')),
   /**
    * Per-agent MCP credentials. Deliberately the same file the runner reads —
    * a secret belongs to the machine, not to the shared template document.

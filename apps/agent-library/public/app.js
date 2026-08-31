@@ -9,6 +9,7 @@ import {
 import { clearAvatar, showAvatar } from '/avatar-preview.js';
 import { loadMcpCatalogue, showMcpFor } from '/mcp-panel.js';
 import { initChat, showChatFor } from '/chat-panel.js';
+import { initVoicePicker, initVoices } from '/voice-picker.js';
 
 const api = makeClient('/api/v1');
 
@@ -49,13 +50,15 @@ const ui = {
 // ── Loading ──────────────────────────────────────────────────────────────────
 
 async function loadCatalogue() {
-  const [personas, providers, avatars, backgrounds, specialisations, hats] = await Promise.all([
+  const [personas, providers, avatars, backgrounds, specialisations, hats, voices] = await Promise.all([
     api.get('/personas'), api.get('/providers'), api.get('/avatars'),
     api.get('/backgrounds'), api.get('/specialisations'), api.get('/hats'),
+    api.get('/voices'),
   ]);
 
   state.personas = personas ?? {};
   state.providers = providers?.providers ?? [];
+  initVoices(ui.form, voices?.voices ?? []);
   state.avatars = avatars?.avatars ?? [];
 
   const providerSelect = ui.form.elements['provider'];
@@ -360,6 +363,7 @@ function init() {
     for (const page of $$('.tab-page')) page.hidden = page.dataset.tab !== wanted;
   });
 
+  initVoicePicker(ui.form);
   initChat();
   trackHealth($('#health-dot'), $('#health-label'), '/api/v1/health');
 }
