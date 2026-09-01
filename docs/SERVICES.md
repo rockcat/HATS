@@ -167,6 +167,29 @@ Individually: `npm run agent-library`, `npm run project-server`,
 3. `npm start` — the runner loads the active project and embodies the team.
 4. Open the Embodiment test harness at <http://localhost:3040> and talk to them.
 
+## Service independence
+
+Only the Team Runner needs a running team. The other three are independent of
+it and of each other's runtime:
+
+| Service | Depends on |
+| --- | --- |
+| Agent Library | nothing — templates, MCP catalogue, credentials and voice models are all on disk |
+| Project Server | the Agent Library, and only to resolve a templateId when deploying |
+| Project Designer | the Agent Library and Project Server, proxied |
+| Embodiment console | the Team Runner — that is its whole purpose |
+
+Anything that needs a *running* agent — chat, speech synthesis — belongs to the
+runner and is reached through `packages/ui-kit/embodiment-client.js`, the shared
+browser client for the Embodiment API. A front-end that does not need a live
+team simply does not import it, and so cannot acquire a dependency on the
+runner by accident.
+
+Voice and speaker *selection* is not such a case: it only reads the Piper model
+files, so the Agent Library offers it with no service running at all. Hearing a
+voice does need synthesis, and belongs to whichever service owns the Piper
+servers.
+
 ## Graceful degradation
 
 Nothing in the split is mandatory. The runner probes both services at startup:

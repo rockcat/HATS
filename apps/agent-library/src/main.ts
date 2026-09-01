@@ -2,12 +2,15 @@
  * HATS Agent Library service.
  *
  * Owns agent templates and nothing else — no projects, no orchestration, no
- * running agents. Start it with `npm run agent-library`.
+ * running agents. It depends on no other HATS service: everything it needs is
+ * on disk, so it starts and works whether or not a Team Runner exists.
+ *
+ * Start it with `npm run agent-library`.
  */
 
 import * as path from 'path';
 import { fileURLToPath } from 'url';
-import { metaRoutes, proxyRoutes, startService } from '../../../packages/service-kit/src/index.js';
+import { metaRoutes, startService } from '../../../packages/service-kit/src/index.js';
 import { uiKitMount } from '../../../packages/ui-kit/index.js';
 import { initCatalogue } from '../../../server/src/mcp/catalogue-store.js';
 import { config } from './config.js';
@@ -61,24 +64,11 @@ async function main(): Promise<void> {
       ...templateRoutes(store),
       ...catalogueRoutes(config.avatarsDir, config.backgroundsDir, config.voicesDir),
       ...mcpRoutes(store, credentials),
-      // Chat needs a *running* agent, which only the Team Runner has. Proxied so
-      // the browser talks to one origin and the API key stays server-side.
-      ...proxyRoutes({
-        prefix: '/runner',
-        target: config.teamRunnerUrl,
-        label: 'Team Runner',
-        timeoutMs: 120_000,
-        ...(config.runnerApiKey && { headers: { 'X-API-Key': config.runnerApiKey } }),
-      }),
     ],
     banner: [
       `templates:   ${config.templatesDir} (${store.size} loaded)`,
       `credentials: ${config.credentialsFile}`,
-      `team runner: ${config.teamRunnerUrl}`,
-      ...(config.runnerApiKey ? [] : [
-        'chat:        disabled — the runner authenticates /api/*, so set HATS_API_KEY',
-        '             mint one with: node --env-file=.env scripts/issue-api-key.mjs',
-      ]),
+      `voices:      ${config.voicesDir}`,
       `OpenAPI:     http://localhost:${config.port}/api/v1/openapi.yaml`,
     ],
   });

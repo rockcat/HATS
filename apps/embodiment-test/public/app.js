@@ -1,9 +1,15 @@
 /** Embodiment API test harness — talks to nothing but the Embodiment API. */
 
 import { $, clear, el, hatDots, toastError, toastOk, trackHealth } from '/ui-kit/hats-ui.js';
-import { call, clearLog, logEvent } from '/wire-log.js';
+import { clearLog, logEvent, logRequest } from '/wire-log.js';
+import { EmbodimentClient } from '/ui-kit/embodiment-client.js';
 
-const API = '/runner/api/embodiment/v1';
+// The shared client every runner-connected front-end uses; the wire log hooks
+// its onRequest so this harness can show the traffic it generates.
+const runner = new EmbodimentClient({
+  basePath: '/runner/api/embodiment/v1',
+  onRequest: (method, path, status) => logRequest(method, path, status),
+});
 
 const state = {
   agents: [],
@@ -36,7 +42,7 @@ const selected = () => state.agents.find((a) => a.id === state.selectedId);
 
 async function loadProject() {
   try {
-    const project = await call('GET', `${API}/project`);
+    const project = await runner.project();
     ui.projectLine.textContent = project.goal
       ? `${project.name} — ${project.goal}`
       : `${project.name} (${project.agentCount} agents, via ${project.source})`;
@@ -48,8 +54,7 @@ async function loadProject() {
 
 async function loadAgents() {
   try {
-    const result = await call('GET', `${API}/agents`);
-    state.agents = result?.agents ?? [];
+    state.agents = await runner.agents();
   } catch (err) {
     state.agents = [];
     toastError(err);
@@ -60,18 +65,17 @@ async function loadAgents() {
 async function loadThread() {
   const agent = selected();
   if (!agent) return;
-  const result = await call('GET', `${API}/agents/${agent.id}/messages?thread=${encodeURIComponent(state.thread)}&limit=200`);
-  renderTranscript(result?.messages ?? []);
+  renderTranscript(await runner.messages(agent.id, { thread: state.thread, limit: 200 }));
 }
 
 async function loadThreadList() {
   const agent = selected();
   if (!agent) return;
-  const result = await call('GET', `${API}/agents/${agent.id}/threads`);
-  const threads = Object.keys(result?.threads ?? {});
-  if (!threads.includes('general')) threads.unshift('general');
-  ui.threads.replaceChildren(...threads.map((t) =>
-    el('option', { value: t, selected: t === state.thread }, `${t} (${result?.threads?.[t] ?? 0})`)));
+  const threads = await runner.threads(agent.id);
+  const names = Object.keys(threads);
+  if (!names.includes('general')) names.unshift('general');
+  ui.threads.replaceChildren(...names.map((name) =>
+    el('option', { value: name, selected: name === state.thread }, `${name} (${threads[name] ?? 0})`)));
 }
 
 // ── Rendering ────────────────────────────────────────────────────────────────
@@ -156,7 +160,7 @@ async function send(event) {
   const pending = appendBubble('assistant', agent.name, mode === 'task' ? 'task accepted…' : 'thinking…', 'pending');
 
   try {
-    await call('POST', `${API}/agents/${agent.id}/messages`, { content, thread: state.thread, mode });
+    await runner.send(agent.id, content, { thread: state.thread, mode });
     // The reply arrives over the stream; drop the placeholder once it does.
     setTimeout(() => pending.remove(), 800);
   } catch (err) {
@@ -169,7 +173,7 @@ async function speakLast() {
   const agent = selected();
   if (!agent || !state.lastReply) return;
   try {
-    const blob = await call('POST', `${API}/agents/${agent.id}/speech`, { text: state.lastReply.slice(0, 500) });
+    const blob = await runner.speak(agent.id, state.lastReply.slice(0, 500));
     if (!(blob instanceof Blob)) { toastError(new Error('No audio returned')); return; }
     ui.player.src = URL.createObjectURL(blob);
     await ui.player.play();
@@ -182,47 +186,42 @@ async function speakLast() {
 // ── Live stream ──────────────────────────────────────────────────────────────
 
 function openStream() {
-  state.stream?.close();
-  const source = new EventSource(`${API}/events`);
-  state.stream = source;
+  state.stream?.();
+  state.stream = runner.stream({
+    open:  () => { ui.streamState.textContent = 'stream: open';     ui.streamState.className = 'tag ok'; },
+    error: () => { ui.streamState.textContent = 'stream: retrying'; ui.streamState.className = 'tag error'; },
 
-  source.onopen = () => { ui.streamState.textContent = 'stream: open'; ui.streamState.className = 'tag ok'; };
-  source.onerror = () => { ui.streamState.textContent = 'stream: retrying'; ui.streamState.className = 'tag error'; };
+    hello: (payload) => {
+      logEvent('hello', `${payload.agents?.length ?? 0} agents`);
+      state.agents = payload.agents ?? [];
+      renderRoster();
+    },
 
-  source.addEventListener('hello', (event) => {
-    const payload = JSON.parse(event.data);
-    logEvent('hello', `${payload.agents?.length ?? 0} agents`);
-    state.agents = payload.agents ?? [];
-    renderRoster();
+    agent_state: (payload) => {
+      logEvent('agent_state', `${payload.name} → ${payload.state}`);
+      const agent = state.agents.find((a) => a.id === payload.agentId);
+      if (agent) { agent.state = payload.state; agent.activity = payload.activity; }
+      if (payload.agentId === state.selectedId) ui.stateLine.textContent = payload.state;
+      renderRoster();
+    },
+
+    agent_message: (payload) => {
+      logEvent('agent_message', `${payload.name} · ${payload.thread}`);
+      if (payload.agentId !== state.selectedId || payload.thread !== state.thread) return;
+      if (payload.role === 'assistant') {
+        ui.transcript.querySelector('.bubble.pending')?.remove();
+        state.lastReply = payload.content;
+        ui.speak.disabled = !selected()?.hasVoice;
+      }
+      appendBubble(payload.role, payload.role === 'user' ? 'You' : payload.name, payload.content);
+    },
+
+    agent_speech: (payload) => {
+      logEvent('agent_speech', `${payload.name} · ${payload.visemes?.length ?? 0} visemes`);
+    },
+
+    project_update: () => { logEvent('project_update'); void loadProject(); },
   });
-
-  source.addEventListener('agent_state', (event) => {
-    const payload = JSON.parse(event.data);
-    logEvent('agent_state', `${payload.name} → ${payload.state}`);
-    const agent = state.agents.find((a) => a.id === payload.agentId);
-    if (agent) { agent.state = payload.state; agent.activity = payload.activity; }
-    if (payload.agentId === state.selectedId) ui.stateLine.textContent = payload.state;
-    renderRoster();
-  });
-
-  source.addEventListener('agent_message', (event) => {
-    const payload = JSON.parse(event.data);
-    logEvent('agent_message', `${payload.name} · ${payload.thread}`);
-    if (payload.agentId !== state.selectedId || payload.thread !== state.thread) return;
-    if (payload.role === 'assistant') {
-      ui.transcript.querySelector('.bubble.pending')?.remove();
-      state.lastReply = payload.content;
-      ui.speak.disabled = !selected()?.hasVoice;
-    }
-    appendBubble(payload.role, payload.role === 'user' ? 'You' : payload.name, payload.content);
-  });
-
-  source.addEventListener('agent_speech', (event) => {
-    const payload = JSON.parse(event.data);
-    logEvent('agent_speech', `${payload.name} · ${payload.visemes?.length ?? 0} visemes`);
-  });
-
-  source.addEventListener('project_update', () => { logEvent('project_update'); void loadProject(); });
 }
 
 // ── Wiring ───────────────────────────────────────────────────────────────────
@@ -236,7 +235,7 @@ ui.threads.addEventListener('change', () => {
   void loadThread();
 });
 
-trackHealth($('#runner-dot'), $('#runner-label'), `${API}/health`);
+trackHealth($('#runner-dot'), $('#runner-label'), `${runner.basePath}/health`);
 
 await loadProject();
 await loadAgents();

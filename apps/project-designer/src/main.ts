@@ -20,7 +20,6 @@ const config = {
   port: Number(process.env['PROJECT_DESIGNER_PORT'] ?? 3030),
   agentLibraryUrl: process.env['AGENT_LIBRARY_URL'] ?? 'http://localhost:3010',
   projectServerUrl: process.env['PROJECT_SERVER_URL'] ?? 'http://localhost:3020',
-  teamRunnerUrl: process.env['TEAM_RUNNER_URL'] ?? 'http://localhost:3001',
 };
 
 await startService({
@@ -38,7 +37,6 @@ await startService({
     get('/api/v1/config', ({ res }) => json(res, 200, {
       agentLibraryUrl: config.agentLibraryUrl,
       projectServerUrl: config.projectServerUrl,
-      teamRunnerUrl: config.teamRunnerUrl,
     })),
     ...proxyRoutes({ prefix: '/proxy/library', target: config.agentLibraryUrl, label: 'Agent Library' }),
     ...proxyRoutes({ prefix: '/proxy/projects', target: config.projectServerUrl, label: 'Project Server' }),

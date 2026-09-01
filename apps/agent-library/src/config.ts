@@ -34,8 +34,4 @@ export const config = {
    * a secret belongs to the machine, not to the shared template document.
    */
   credentialsFile: path.join(PROJECTS_ROOT, 'agent-credentials.json'),
-  /** Used by the editor's chat panel to reach a deployed agent. */
-  teamRunnerUrl: process.env['TEAM_RUNNER_URL'] ?? 'http://localhost:3001',
-  /** Credential the chat proxy presents to the runner, which authenticates /api/*. */
-  runnerApiKey: process.env['HATS_API_KEY'] ?? '',
 } as const;
