@@ -27,6 +27,12 @@ export interface RunningService {
   stop(): Promise<void>;
 }
 
+/** A path whose last segment carries a file extension is asking for a file. */
+function looksLikeAsset(pathname: string): boolean {
+  const last = pathname.split('/').pop() ?? '';
+  return /\.[a-z0-9]{1,8}$/i.test(last);
+}
+
 export async function startService(options: ServiceOptions): Promise<RunningService> {
   const { name, port, routes, publicDir } = options;
 
@@ -52,8 +58,11 @@ export async function startService(options: ServiceOptions): Promise<RunningServ
       }
       if (publicDir && (req.method === 'GET' || req.method === 'HEAD')) {
         if (await serveStatic(publicDir, url.pathname, res)) return;
-        // Single-page fallback so deep links still load the UI.
-        if (!url.pathname.startsWith('/api/') && await serveStatic(publicDir, '/index.html', res)) return;
+        // Single-page fallback so deep links still load the UI — but only for
+        // navigation. Returning index.html for a missing .js or .css leaves the
+        // browser reporting a MIME error instead of the 404 that explains it.
+        if (!url.pathname.startsWith('/api/') && !looksLikeAsset(url.pathname)
+            && await serveStatic(publicDir, '/index.html', res)) return;
       }
       fail(res, 404, `No route for ${req.method} ${url.pathname}`, 'not_found');
     } catch (err) {

@@ -28,3 +28,10 @@ gltf/
 *.log
 
 users.json
+
+# Flutter build output — the app's sources are tracked, its artefacts are not
+apps/flutter/**/.dart_tool/
+apps/flutter/**/build/
+apps/flutter/**/.idea/
+apps/flutter/**/*.iml
+apps/flutter/**/.flutter-plugins-dependencies
