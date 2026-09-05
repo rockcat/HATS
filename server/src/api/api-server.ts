@@ -8,8 +8,7 @@ import { TeamOrchestrator } from '../orchestrator/orchestrator.js';
 import { StoredEvent } from '../store/event-store.js';
 import { resolveConfig, MCPCatalogueEntry } from '../mcp/mcp-catalogue.js';
 import { getCatalogue } from '../mcp/catalogue-store.js';
-import { isSpeechAvailable } from '../speech/pipeline.js';
-import { VoiceManager } from '../speech/voice-manager.js';
+import { SpeechGateway } from '../speech/speech-gateway.js';
 import { log } from '../util/logger.js';
 import { KanbanManager } from './kanban-manager.js';
 import { MeetingRouter } from './meeting-router.js';
@@ -90,6 +89,8 @@ export interface APIServerConfig {
   projectName?:     string;
   /** Where the loaded project definition came from. */
   projectSource?:   'project-server' | 'local';
+  /** Speech Service base URL. Absent means agents simply do not speak. */
+  speechServiceUrl?: string;
 }
 
 export class APIServer {
@@ -121,8 +122,9 @@ export class APIServer {
   private nudgeScheduler: ReturnType<typeof setInterval> | null = null;
   private autosaveTimer: ReturnType<typeof setTimeout> | null = null;
   private unsubscribeEvents: (() => void) | null = null;
-  private speechInterest = new Map<WebSocket, { agentName: string; voiceUrl: string | null; speakerId: number | null }>();
-  private voiceManager = new VoiceManager();
+  // Voice is stored by name; the Speech Service resolves it to a running model.
+  private speechInterest = new Map<WebSocket, { agentName: string; voiceName?: string; speakerName?: string }>();
+  private speech: SpeechGateway;
   private pendingHumanTurns = new Map<string, (input: string | null) => void>();
   private pendingTurnAcks = new Map<string, () => void>();
 
@@ -159,6 +161,7 @@ export class APIServer {
     this.actionStore    = config.actionStore ?? null;
     this.projectName    = config.projectName ?? config.projectId ?? 'default';
     this.projectSource  = config.projectSource ?? 'local';
+    this.speech = new SpeechGateway(config.speechServiceUrl ?? process.env['SPEECH_SERVICE_URL'] ?? 'http://localhost:3050');
     this.humanRequestStore   = new HumanRequestStore(config.requestsPath ?? null);
     this.emailAllowlistStore = new EmailAllowlistStore(config.allowlistPath ?? null);
 
@@ -184,7 +187,7 @@ export class APIServer {
       resolveAgentName: (n) => self.resolveAgentName(n),
     });
     this.speechRouter = new SpeechRouter({
-      voiceManager: self.voiceManager,
+      speech:         self.speech,
       json: (r, s, b) => self.json(r, s, b),
       readBody,
       readBodyBuffer,
@@ -266,7 +269,7 @@ export class APIServer {
         source:    self.projectSource,
       }),
       activityFor:    (agentId) => self.agentActivity.get(agentId),
-      voiceManager:   self.voiceManager,
+      speech:         self.speech,
       avatarsDir:     AVATARS_DIR,
       backgroundsDir: BACKGROUNDS_DIR,
       version:        '1.0.0',
@@ -308,7 +311,7 @@ export class APIServer {
   }
 
   async start(): Promise<void> {
-    this.voiceManager.start().catch((err: Error) => log.warn('[API] VoiceManager start error:', err.message));
+    this.speech.start().catch((err: Error) => log.warn('[API] Speech Service probe failed:', err.message));
 
     if (this.projectDir) {
       await this.projectManager.ensureProjectFolders(this.projectDir);
@@ -384,8 +387,8 @@ export class APIServer {
       log.info(`[API] REST       http://localhost:${this.port}/api`);
       log.info(`[API] WS         ws://localhost:${this.port}/ws`);
       log.info(`[API] Embodiment http://localhost:${this.port}/api/embodiment/v1  (spec: /api/embodiment/v1/openapi.yaml)`);
-      if (isSpeechAvailable() || this.voiceManager.getVoices().length > 0) {
-        const voices = this.voiceManager.getVoices();
+      if (this.speech.isAvailable()) {
+        const voices = this.speech.getVoices();
         if (voices.length > 0)
           log.info(`[API] Speech TTS — ${voices.length} voice(s): ${voices.map(v => v.name).join(', ')}`);
         else
@@ -402,7 +405,7 @@ export class APIServer {
     if (this.googleRefreshTimer)  { clearInterval(this.googleRefreshTimer);  this.googleRefreshTimer  = null; }
     this.orchestrator.stopAgendaRunner();
     this.embodimentRouter.close();
-    this.voiceManager.stop();
+    this.speech.stop();
     this.wss.close();
     this.server.close();
   }
@@ -422,14 +425,11 @@ export class APIServer {
         const msg = JSON.parse(raw.toString()) as { type: string; name?: string; voice?: string; speakerName?: string };
         if (msg.type === 'set_speech_agent') {
           if (msg.name) {
-            const voice    = this.voiceManager.resolveVoice(msg.voice);
-            const voiceUrl = voice?.url ?? process.env['PIPER_SERVER_URL'] ?? null;
-            let speakerId: number | null = voice?.speakerId ?? null;
-            if (msg.speakerName && voice) {
-              const found = voice.speakers.find(s => s.name === msg.speakerName);
-              if (found) speakerId = found.id;
-            }
-            this.speechInterest.set(ws, { agentName: msg.name, voiceUrl, speakerId });
+            this.speechInterest.set(ws, {
+                agentName: msg.name,
+                ...(msg.voice && { voiceName: msg.voice }),
+                ...(msg.speakerName && { speakerName: msg.speakerName }),
+              });
           } else {
             this.speechInterest.delete(ws);
           }
@@ -497,7 +497,7 @@ export class APIServer {
       getOrchestrator:      () => this.orchestrator,
       agentIdForName:       (n) => this.agentIdForName(n),
       speechInterest:       this.speechInterest,
-      voiceManager:         this.voiceManager,
+      speech:               this.speech,
       sseBroadcast:         (d) => this.sseBroadcast(d),
       buildAgentStatuses:   () => this.buildAgentStatuses(),
     });

@@ -13,9 +13,9 @@ import { promisify } from 'util';
 import { readFile, unlink, writeFile } from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';
-import { VisemeEvent, SpeechChunk } from './types.js';
-import { RHUBARB_TO_ARKIT } from './rhubarb-map.js';
-import { log } from '../util/logger.js';
+import type { VisemeEvent, SpeechChunk } from '../../../packages/speech-core/src/types.js';
+import { RHUBARB_TO_ARKIT } from '../../../packages/speech-core/src/rhubarb-map.js';
+import { log } from '../../../server/src/util/logger.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -112,7 +112,7 @@ async function resolvedSampleRate(modelPath: string): Promise<number> {
  * The server is started with: python -m piper.http_server -m <model> --port <port>
  * Returns a WAV buffer directly — no header construction needed.
  */
-async function runPiperServer(text: string, serverUrl: string, speakerId: number | null): Promise<Buffer> {
+export async function runPiperServer(text: string, serverUrl: string, speakerId: number | null): Promise<Buffer> {
   log.info(`[Speech] Piper server POST ${serverUrl} "${text.slice(0, 60)}"`);
   const payload: Record<string, unknown> = { text };
   if (speakerId !== null) payload['speaker_id'] = speakerId;

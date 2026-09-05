@@ -12,24 +12,14 @@
  *   python -m piper.http_server -m <model_path> --port <port>
  */
 import { spawn, ChildProcess } from 'child_process';
-import { readdir, readFile } from 'fs/promises';
+import { readdir } from 'fs/promises';
 import * as path from 'path';
-import { log } from '../util/logger.js';
+import { log } from '../../../server/src/util/logger.js';
+import { readSpeakers, resolveVoicesDir } from '../../../packages/speech-core/src/voice-models.js';
+import type { RunningVoice } from '../../../packages/speech-core/src/types.js';
 
-export interface PiperSpeaker {
-  name: string;   // human-readable key from speaker_id_map, e.g. "p239" or "03"
-  id: number;     // integer value piper expects as speaker_id
-}
-
-export interface PiperVoice {
-  name: string;       // e.g. "en_GB-cori-high"
-  file: string;       // e.g. "en_GB-cori-high.onnx"
-  modelPath: string;  // full path to .onnx
-  port: number;
-  url: string;        // e.g. "http://localhost:5100"
-  speakerId: number | null;   // integer id of the default speaker; null for single-speaker models
-  speakers: PiperSpeaker[];   // all speakers; empty for single-speaker models
-}
+/** A voice this manager has started, and where to reach it. */
+export type PiperVoice = RunningVoice;
 
 const DEFAULT_PORT_START = 5100;
 const READY_TIMEOUT_MS   = 30_000;
@@ -39,7 +29,7 @@ export class VoiceManager {
   private procs = new Map<string, ChildProcess>();
 
   async start(): Promise<void> {
-    const voicesDir = this.resolveVoicesDir();
+    const voicesDir = resolveVoicesDir();
     if (!voicesDir) return;
 
     const python    = process.env['PYTHON_BIN'] ?? 'python';
@@ -69,7 +59,7 @@ export class VoiceManager {
       const port      = portStart + i;
       const url       = `http://localhost:${port}`;
 
-      const { speakerId, speakers } = await this.resolveSpeakers(modelPath);
+      const { speakerId, speakers } = await readSpeakers(`${modelPath}.json`);
       if (speakers.length > 0)
         log.info(`[VoiceManager] "${name}" is multi-speaker (${speakers.length} speakers) — default: "${speakerId}"`);
       log.info(`[VoiceManager] Starting "${name}" on port ${port}`);
@@ -127,13 +117,7 @@ export class VoiceManager {
 
   // ── Private ─────────────────────────────────────────────────────────────────
 
-  private resolveVoicesDir(): string | null {
-    const explicit = process.env['PIPER_VOICES_DIR'];
-    if (explicit) return explicit;
-    const model = process.env['PIPER_MODEL'];
-    if (model) return path.dirname(model);
-    return null;
-  }
+
 
   private async waitForServer(url: string, name: string): Promise<void> {
     const voice   = this.voices.find(v => v.name === name);
@@ -159,18 +143,5 @@ export class VoiceManager {
     log.warn(`[VoiceManager] "${name}" did not respond within ${READY_TIMEOUT_MS}ms`);
   }
 
-  /** Read the .onnx.json config and return all speakers (empty = single-speaker model). */
-  private async resolveSpeakers(modelPath: string): Promise<{ speakerId: number | null; speakers: PiperSpeaker[] }> {
-    try {
-      const config = JSON.parse(await readFile(modelPath + '.json', 'utf-8'));
-      const map = config?.speaker_id_map as Record<string, number> | undefined;
-      if (map && typeof map === 'object') {
-        const speakers: PiperSpeaker[] = Object.entries(map).map(([name, id]) => ({ name, id }));
-        if (speakers.length > 0) return { speakerId: speakers[0].id, speakers };
-      }
-    } catch {
-      // no config or unreadable — treat as single-speaker
-    }
-    return { speakerId: null, speakers: [] };
-  }
+
 }

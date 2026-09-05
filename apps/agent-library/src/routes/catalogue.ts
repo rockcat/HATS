@@ -2,12 +2,15 @@
 
 import { readFile, readdir } from 'fs/promises';
 import * as path from 'path';
-import { get, json, type Route } from '../../../../packages/service-kit/src/index.js';
+import {
+  badRequest, binary, fail, get, json, post, readJsonBody, type Route,
+} from '../../../../packages/service-kit/src/index.js';
+import { SpeechClient } from '../../../../packages/clients/src/speech-client.js';
 import { hatDefinitions } from '../../../../server/src/hats/definitions.js';
 import { personasByHat } from '../../../../server/src/hats/personas.js';
 import { SPECIALISATION_DIRECTIVES } from '../../../../server/src/prompt/generator.js';
 import { KNOWN_PROVIDERS } from '../../../../server/src/api/providers.js';
-import { listVoices } from '../voices.js';
+import { listVoices } from '../../../../packages/speech-core/src/voice-models.js';
 
 const BASE = '/api/v1';
 
@@ -19,7 +22,14 @@ interface AvatarCatalogue {
   }>;
 }
 
-export function catalogueRoutes(avatarsDir: string, backgroundsDir: string, voicesDir: string): Route[] {
+export function catalogueRoutes(
+  avatarsDir: string,
+  backgroundsDir: string,
+  voicesDir: string,
+  speechServiceUrl: string,
+): Route[] {
+  const speech = new SpeechClient(speechServiceUrl);
+
   return [
     get(`${BASE}/personas`, ({ res }) => json(res, 200, personasByHat)),
 
@@ -49,6 +59,19 @@ export function catalogueRoutes(avatarsDir: string, backgroundsDir: string, voic
 
     get(`${BASE}/voices`, async ({ res }) => {
       json(res, 200, { voices: await listVoices(voicesDir) });
+    }),
+
+    // Hearing a voice needs synthesis, which belongs to the Speech Service.
+    // Listing them does not, which is why the dropdowns work without it.
+    post(`${BASE}/voices/preview`, async ({ req, res }) => {
+      const body = await readJsonBody<{ voice?: string; speakerName?: string }>(req);
+      if (!body?.voice) { badRequest(res, 'voice is required'); return; }
+      const wav = await speech.preview(body.voice, body.speakerName);
+      if (!wav) {
+        fail(res, 503, `No Speech Service at ${speechServiceUrl} — start it to hear a voice`, 'speech_unavailable');
+        return;
+      }
+      binary(res, 200, wav, 'audio/wav');
     }),
 
     get(`${BASE}/backgrounds`, async ({ res }) => {

@@ -13,8 +13,7 @@ import type { IncomingMessage, ServerResponse } from 'http';
 import type { IAgent } from '../agent/iagent.js';
 import type { TeamOrchestrator } from '../orchestrator/orchestrator.js';
 import type { StoredEvent } from '../store/event-store.js';
-import type { VoiceManager } from '../speech/voice-manager.js';
-import { isSpeechAvailable, processSpeech } from '../speech/pipeline.js';
+import type { SpeechGateway } from '../speech/speech-gateway.js';
 import { log } from '../util/logger.js';
 import {
   badRequest, binary, fail, json, notFound, readJsonBody,
@@ -44,7 +43,7 @@ export interface EmbodimentRouterDeps {
   getOrchestrator(): TeamOrchestrator;
   getProjectContext(): EmbodimentProjectContext;
   activityFor(agentId: string): { activity: string; talkingTo?: string } | undefined;
-  voiceManager: VoiceManager;
+  speech: SpeechGateway;
   avatarsDir: string;
   backgroundsDir: string;
   version: string;
@@ -226,7 +225,7 @@ export class EmbodimentRouter {
   }
 
   private speechAvailable(): boolean {
-    return this.deps.voiceManager.getVoices().length > 0 || isSpeechAvailable();
+    return this.deps.speech.isAvailable();
   }
 
   private async sendAsset(res: ServerResponse, dir: string, file: string, mime: string): Promise<void> {
@@ -252,11 +251,10 @@ export class EmbodimentRouter {
       return;
     }
 
-    const voice = this.deps.voiceManager.resolveVoice(agent.config.identity.voice);
-    const speakerId = resolveSpeakerId(voice, agent.config.identity.speakerName);
-
     const chunks: Array<{ audioBase64: string; visemes: unknown[]; duration: number; sentence: string }> = [];
-    await processSpeech(text, agent.name, voice?.url ?? null, speakerId, (chunk) => {
+    // Each sentence is broadcast as it renders, so a listening client can begin
+    // playing before the whole utterance exists.
+    await this.deps.speech.speak(text, agent.name, agent.config.identity.voice, agent.config.identity.speakerName, (chunk) => {
       chunks.push(chunk);
       this.hub.broadcast({
         type: 'agent_speech',
@@ -298,14 +296,3 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, Math.floor(value)));
 }
 
-function resolveSpeakerId(
-  voice: { speakerId: number | null; speakers: Array<{ id: number; name: string }> } | undefined,
-  speakerName: string | undefined,
-): number | null {
-  if (!voice) return null;
-  if (speakerName && voice.speakers.length > 0) {
-    const found = voice.speakers.find((s) => s.name === speakerName);
-    if (found) return found.id;
-  }
-  return voice.speakerId;
-}

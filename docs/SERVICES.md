@@ -6,7 +6,7 @@ This describes how HATS is split into separable services behind formal APIs.
 For what happens **inside** the Team Runner process — the orchestrator, agents,
 MCP registry and render pipeline — see [ARCHITECTURE.md](ARCHITECTURE.md).
 
-HATS is four applications around three formal contracts. Each application owns
+HATS is five applications around three formal contracts. Each application owns
 one thing and reaches the others only through a published API.
 
 ```
@@ -22,10 +22,13 @@ one thing and reaches the others only through a published API.
 └────────┬─────────┘                    └──────────────────┘
          │ Embodiment API
          ▼
-┌──────────────────┐
-│ Embodiment Test  │
-│     UI :3040     │
-└──────────────────┘
+┌──────────────────┐        ┌──────────────────┐
+│ Embodiment Test  │        │  Speech Service  │
+│     UI :3040     │        │    API :3050     │
+└──────────────────┘        └──────────────────┘
+                             owns the Piper TTS
+                             servers; the runner
+                             and library ask it
 ```
 
 ## The applications
@@ -78,6 +81,14 @@ to the team back into the project definition.
 It also serves the **Embodiment API**, the public contract described below.
 
 The operator dashboard is unchanged and still lives at `http://localhost:3001`.
+
+### Speech Service — `apps/speech-service`, port 3050
+
+Owns text-to-speech: it discovers the Piper voice models, spawns one TTS server
+per model, and renders text to audio with Rhubarb viseme timings.
+
+It is a service rather than a library because it runs processes — see
+[Why speech is a service](#why-speech-is-a-service) below.
 
 ### Embodiment API Test — `apps/embodiment-test`, port 3040
 
@@ -146,7 +157,7 @@ changing what external clients see.
 ## Running it
 
 ```bash
-npm run services      # library + project server + designer + embodiment test
+npm run services      # library, project server, designer, embodiment test, speech
 npm start             # the Team Runner, in another terminal
 ```
 
@@ -157,7 +168,7 @@ npm run services:all
 ```
 
 Individually: `npm run agent-library`, `npm run project-server`,
-`npm run project-designer`, `npm run embodiment-test`.
+`npm run project-designer`, `npm run embodiment-test`, `npm run speech-service`.
 
 ### First run
 
@@ -178,6 +189,8 @@ it and of each other's runtime:
 | Project Server | the Agent Library, and only to resolve a templateId when deploying |
 | Project Designer | the Agent Library and Project Server, proxied |
 | Embodiment console | the Team Runner — that is its whole purpose |
+| Speech Service | nothing — it owns the Piper processes |
+| Team Runner | the Project Server, Agent Library and Speech Service, all optional |
 
 Anything that needs a *running* agent — chat, speech synthesis — belongs to the
 runner and is reached through `packages/ui-kit/embodiment-client.js`, the shared
@@ -186,9 +199,23 @@ team simply does not import it, and so cannot acquire a dependency on the
 runner by accident.
 
 Voice and speaker *selection* is not such a case: it only reads the Piper model
-files, so the Agent Library offers it with no service running at all. Hearing a
-voice does need synthesis, and belongs to whichever service owns the Piper
-servers.
+files, so the Agent Library offers it with no service running at all. *Hearing*
+a voice does need synthesis, which is the Speech Service's job.
+
+### Why speech is a service
+
+Piper binds a port per voice model. If both the Team Runner and the Agent
+Library spawned their own, they would collide or double the memory — so exactly
+one process owns them. `apps/speech-service` does, and everything else asks it.
+
+Synthesis streams NDJSON, one chunk per sentence, flushed as each is rendered.
+That preserves the property the avatars depend on: audio and lip movement start
+on the first sentence rather than when the whole utterance is ready.
+
+`packages/speech-core` holds what both sides need — the chunk and viseme types,
+the Rhubarb-to-ARKit map, and voice model discovery — with no process spawning,
+so a consumer that only wants to *name* voices imports it without pulling in
+Piper or Rhubarb.
 
 ## Graceful degradation
 

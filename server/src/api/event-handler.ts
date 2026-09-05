@@ -2,8 +2,7 @@ import { WebSocket } from 'ws';
 import { StoredEvent } from '../store/event-store.js';
 import { TeamOrchestrator } from '../orchestrator/orchestrator.js';
 import { HumanRequest } from '../orchestrator/types.js';
-import { VoiceManager } from '../speech/voice-manager.js';
-import { processSpeech, isSpeechAvailable } from '../speech/pipeline.js';
+import type { SpeechGateway } from '../speech/speech-gateway.js';
 import { AgentStatus } from './project-manager.js';
 import { HumanRequestStore } from './human-request-store.js';
 import { EmailAllowlistStore } from './email-allowlist-store.js';
@@ -23,8 +22,8 @@ export interface OrchestratorEventContext {
   getOrchestrator(): TeamOrchestrator;
   /** Resolve an agent name to its stable UUID (returns name unchanged if not found). */
   agentIdForName(name: string): string;
-  speechInterest: Map<WebSocket, { agentName: string; voiceUrl: string | null; speakerId: number | null }>;
-  voiceManager: VoiceManager;
+  speechInterest: Map<WebSocket, { agentName: string; voiceName?: string; speakerName?: string }>;
+  speech: SpeechGateway;
   sseBroadcast(data: object): void;
   buildAgentStatuses(): AgentStatus[];
 }
@@ -63,26 +62,29 @@ export function handleOrchestratorEvent(ev: StoredEvent, ctx: OrchestratorEventC
         changed = true;
         ctx.sseBroadcast({ type: 'cli_output', kind: 'agent', from, content: content ?? '' });
 
-        const hasSpeech = ctx.voiceManager.getVoices().length > 0 || isSpeechAvailable();
-        if (content && hasSpeech) {
+        if (content && ctx.speech.isAvailable()) {
           const interested = [...ctx.speechInterest.entries()].filter(([, info]) => info.agentName === from);
           if (interested.length > 0) {
-            const byVoice = new Map<string | null, WebSocket[]>();
-            for (const [ws, { voiceUrl }] of interested) {
-              const key = voiceUrl ?? null;
-              if (!byVoice.has(key)) byVoice.set(key, []);
-              byVoice.get(key)!.push(ws);
+            // Listeners wanting the same voice share one synthesis; the key is
+            // the voice/speaker pair, since that is what changes the audio.
+            const byVoice = new Map<string, { voiceName?: string; speakerName?: string; clients: WebSocket[] }>();
+            for (const [ws, info] of interested) {
+              const key = `${info.voiceName ?? ''}|${info.speakerName ?? ''}`;
+              const group = byVoice.get(key)
+                ?? { ...(info.voiceName && { voiceName: info.voiceName }), ...(info.speakerName && { speakerName: info.speakerName }), clients: [] };
+              group.clients.push(ws);
+              byVoice.set(key, group);
             }
-            for (const [voiceUrl, clients] of byVoice) {
-              const speakerId = interested.find(([ws]) => clients.includes(ws))?.[1]?.speakerId ?? null;
-              processSpeech(content, from, voiceUrl, speakerId, (chunk) => {
+
+            for (const { voiceName, speakerName, clients } of byVoice.values()) {
+              // Each sentence is forwarded the moment it is rendered, so audio
+              // and lip movement start before the utterance is finished.
+              ctx.speech.speak(content, from, voiceName, speakerName, (chunk) => {
                 const msg = JSON.stringify({ type: 'speech_chunk', data: chunk });
                 for (const ws of clients) {
                   if (ws.readyState === WebSocket.OPEN) ws.send(msg);
                 }
-              }).catch((err: Error) => {
-                void err; // log.warn not imported here — suppress
-              });
+              }).catch(() => { /* speech is an enhancement — never break the reply */ });
             }
           }
         }

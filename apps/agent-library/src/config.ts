@@ -34,4 +34,9 @@ export const config = {
    * a secret belongs to the machine, not to the shared template document.
    */
   credentialsFile: path.join(PROJECTS_ROOT, 'agent-credentials.json'),
+  /**
+   * Speech Service, used only to *hear* a voice. Listing them needs nothing but
+   * the model files, so the editor's dropdowns work with this absent.
+   */
+  speechServiceUrl: process.env['SPEECH_SERVICE_URL'] ?? 'http://localhost:3050',
 } as const;

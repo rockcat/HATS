@@ -6,11 +6,12 @@
  * than offering a choice that does not exist.
  *
  * Listing voices only needs the model files, which the library reads itself —
- * no TTS process and no other service. Hearing a voice needs real synthesis,
- * which belongs to whichever service owns the Piper servers.
+ * no TTS process and no other service, so the dropdowns always work. Hearing
+ * one needs real synthesis, which belongs to the Speech Service; that button
+ * is the only part of this editor that depends on anything else running.
  */
 
-import { $, el } from '/ui-kit/hats-ui.js';
+import { $, el, toastError } from '/ui-kit/hats-ui.js';
 
 let voices = [];
 
@@ -55,6 +56,47 @@ export function refreshSpeakers(form, preferred = '') {
   speakerSelect.value = speakers.some((s) => s.name === preferred) ? preferred : '';
 }
 
+let audioCtx = null;
+
+/**
+ * Play a sample. Synthesis belongs to the Speech Service; the library asks its
+ * own server, which forwards. With no Speech Service the picker still works —
+ * only the sample is unavailable, and it says so.
+ */
+async function preview(form) {
+  const button = $('#preview-voice');
+  const voice = form.elements['voice'].value;
+  if (!voice) { toastError(new Error('Choose a voice first')); return; }
+
+  const original = button.textContent;
+  button.disabled = true;
+  button.textContent = '…';
+  try {
+    const res = await fetch('/api/v1/voices/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ voice, speakerName: form.elements['speakerName'].value || undefined }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error ?? `Preview failed (${res.status})`);
+    }
+    audioCtx ??= new AudioContext();
+    if (audioCtx.state === 'suspended') await audioCtx.resume();
+    const buffer = await audioCtx.decodeAudioData(await res.arrayBuffer());
+    const source = audioCtx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(audioCtx.destination);
+    source.start();
+  } catch (err) {
+    toastError(err);
+  } finally {
+    button.disabled = false;
+    button.textContent = original;
+  }
+}
+
 export function initVoicePicker(form) {
   form.elements['voice'].addEventListener('change', () => refreshSpeakers(form));
+  $('#preview-voice').addEventListener('click', () => void preview(form));
 }

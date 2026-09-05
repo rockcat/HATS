@@ -62,13 +62,14 @@ async function main(): Promise<void> {
         }),
       }),
       ...templateRoutes(store),
-      ...catalogueRoutes(config.avatarsDir, config.backgroundsDir, config.voicesDir),
+      ...catalogueRoutes(config.avatarsDir, config.backgroundsDir, config.voicesDir, config.speechServiceUrl),
       ...mcpRoutes(store, credentials),
     ],
     banner: [
       `templates:   ${config.templatesDir} (${store.size} loaded)`,
       `credentials: ${config.credentialsFile}`,
       `voices:      ${config.voicesDir}`,
+      `speech:      ${config.speechServiceUrl}  (optional — only needed to hear a voice)`,
       `OpenAPI:     http://localhost:${config.port}/api/v1/openapi.yaml`,
     ],
   });

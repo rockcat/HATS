@@ -27,11 +27,12 @@ const SERVICES = {
   projects:  { label: 'projects ', script: 'apps/project-server/src/main.ts',   port: 3020, colour: '\x1b[35m' },
   designer:  { label: 'designer ', script: 'apps/project-designer/src/main.ts', port: 3030, colour: '\x1b[33m' },
   embodiment:{ label: 'embodied ', script: 'apps/embodiment-test/src/main.ts',  port: 3040, colour: '\x1b[32m' },
+  speech:    { label: 'speech   ', script: 'apps/speech-service/src/main.ts',   port: 3050, colour: '\x1b[31m' },
   runner:    { label: 'runner   ', script: 'team-runner.ts',                    port: 3001, colour: '\x1b[34m' },
 };
 
 const RESET = '\x1b[0m';
-const DEFAULT_SET = ['library', 'projects', 'designer', 'embodiment'];
+const DEFAULT_SET = ['library', 'projects', 'designer', 'embodiment', 'speech'];
 
 function chosenServices(argv) {
   const named = argv.filter((a) => !a.startsWith('--'));
