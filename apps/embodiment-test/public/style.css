@@ -1,7 +1,18 @@
-/* Embodiment API test harness — chat transcript and wire log. */
+/* Embodiment API test harness — avatar stage, chat transcript and wire log. */
 
-#transcript { max-height: calc(100vh - 300px); min-height: 260px; padding: 12px; }
+/* The stage is laid out by /ui-kit/avatar-stage.css; this only frames it. */
+#stage-body { padding: 0; border-bottom: 1px solid var(--border); }
+.avatar-stage { aspect-ratio: 16 / 10; }
+
+.thread-row { border-bottom: 1px solid var(--border); padding: 7px 12px; gap: 8px; }
+
+/* The stage takes the top of the panel, so the transcript gets what is left. */
+#transcript { max-height: calc(100vh - 620px); min-height: 140px; padding: 12px; }
 .composer { border-top: 1px solid var(--border); }
+#composer-note { font-size: 12px; }
+
+.live-only { gap: 5px; font-size: 12px; flex: none; white-space: nowrap; }
+.live-only input { width: auto; }
 
 .bubble {
   max-width: 88%;
@@ -55,4 +66,8 @@
 .wire-entry.sse .verb { color: var(--accent); }
 
 #agent-list li .hats { display: flex; gap: 3px; flex: none; }
-#agent-list li .badges { display: flex; gap: 4px; flex: none; }
+#agent-list li .badges { display: flex; gap: 4px; flex: none; align-items: center; }
+
+/* A library agent is real but has nobody home — dimmed, not hidden. */
+#agent-list li.dormant .name { opacity: 0.75; }
+#agent-list li.dormant .meta { font-style: italic; }

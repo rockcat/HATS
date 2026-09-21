@@ -5,7 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Embodiment API Test</title>
   <link rel="stylesheet" href="/ui-kit/hats-ui.css">
+  <link rel="stylesheet" href="/ui-kit/avatar-stage.css">
   <link rel="stylesheet" href="/style.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "/nm/three/build/three.module.js",
+        "three/addons/": "/nm/three/examples/jsm/",
+        "@pixiv/three-vrm": "/nm/@pixiv/three-vrm/lib/three-vrm.module.js"
+      }
+    }
+  </script>
 </head>
 <body>
   <header class="app-header">
@@ -15,6 +25,8 @@
     <span class="row" style="gap:6px">
       <span class="status-dot" id="runner-dot"></span>
       <span class="muted mono" id="runner-label">runner</span>
+      <span class="status-dot" id="library-dot"></span>
+      <span class="muted mono" id="library-label">library</span>
       <span class="tag" id="stream-state">stream: closed</span>
     </span>
     <a class="btn" href="/runner/api/embodiment/v1/openapi.yaml" target="_blank" rel="noopener">OpenAPI</a>
@@ -29,22 +41,46 @@
         <span class="tag" id="agent-count">0</span>
         <button class="small" id="refresh-agents">Refresh</button>
       </header>
+      <div class="panel-body">
+        <div class="row">
+          <input id="agent-search" type="search" placeholder="Search…" autocomplete="off">
+          <label class="row live-only" title="Only agents the Team Runner has deployed">
+            <input type="checkbox" id="live-only">
+            <span>live only</span>
+          </label>
+        </div>
+      </div>
       <div class="panel-body flush scroll">
         <ul class="list" id="agent-list"></ul>
         <div class="empty" id="agent-empty">
-          No agents. Start the Team Runner, then refresh.
+          No agents. Start the Team Runner or the Agent Library, then refresh.
         </div>
       </div>
     </section>
 
-    <!-- ── Conversation ────────────────────────────────────────────────── -->
+    <!-- ── Embodiment: face, then conversation ─────────────────────────── -->
     <section class="panel" id="chat-panel">
       <header>
         <span id="chat-title">Select an agent</span>
         <span class="spacer"></span>
-        <select id="thread-select" style="max-width:170px" title="Conversation thread"></select>
-        <button class="small" id="speak-last" disabled title="POST /agents/{id}/speech with the last reply">Speak</button>
+        <span class="tag mono" id="stage-source"></span>
+        <button class="small" id="preview-voice" disabled title="Hear this agent">Voice</button>
       </header>
+
+      <div class="panel-body" id="stage-body">
+        <div class="avatar-stage">
+          <img class="stage-background" id="stage-background" alt="">
+          <canvas class="stage-canvas" id="avatar-canvas"></canvas>
+          <div class="stage-hint" id="stage-hint">Select an agent</div>
+        </div>
+      </div>
+
+      <div class="panel-body row thread-row">
+        <select id="thread-select" style="max-width:190px" title="Conversation thread"></select>
+        <span class="spacer"></span>
+        <span class="muted mono" id="agent-state-line"></span>
+        <button class="small" id="speak-last" disabled title="POST /agents/{id}/speech with the last reply">Speak reply</button>
+      </div>
 
       <div class="panel-body flush scroll" id="transcript">
         <div class="empty" id="chat-empty">Pick an agent to start a conversation.</div>
@@ -59,7 +95,7 @@
             <input type="radio" name="mode" value="task" style="width:auto"> task
           </label>
           <span class="spacer"></span>
-          <span class="muted mono" id="agent-state-line"></span>
+          <span class="muted" id="composer-note"></span>
         </div>
         <form id="send-form" class="row">
           <input id="message-input" placeholder="Say something…" autocomplete="off" disabled>
