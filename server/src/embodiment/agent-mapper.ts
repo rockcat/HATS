@@ -12,6 +12,7 @@ import type { AIProvider } from '../providers/types.js';
 import type { HatType } from '../hats/types.js';
 import { createDeployedAgent } from '../../../packages/contracts/src/factories.js';
 import type {
+  AvatarFraming,
   DeployedAgent,
   EmbodiedAgent,
   EmbodiedAgentState,
@@ -24,14 +25,22 @@ function compact<T extends Record<string, unknown>>(obj: T): T {
   return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined && v !== '')) as T;
 }
 
-/** A running agent as the Embodiment API presents it. */
+/**
+ * A running agent as the Embodiment API presents it.
+ *
+ * `appearance` carries the avatar framing from the runner's catalogue. A
+ * client that can only see the model file has no way to work out where the
+ * camera goes, so the runner hands it over with the roster.
+ */
 export function toEmbodiedAgent(
   agent: IAgent,
   activity: { activity: string; talkingTo?: string } | undefined,
+  appearance?: AvatarFraming,
 ): EmbodiedAgent {
   const identity = agent.config.identity as typeof agent.config.identity & { background?: string };
   return compact({
     id: agent.id,
+    templateId: agent.config.templateId,
     name: agent.name,
     hats: agent.hatType as unknown as HatTypeName[],
     state: agent.state as EmbodiedAgentState,
@@ -53,6 +62,7 @@ export function toEmbodiedAgent(
     costIdled: agent.isCostIdled(),
     hasVoice: Boolean(identity.voice),
     hasAvatar: Boolean(identity.avatar),
+    ...(appearance && { appearance }),
   }) as EmbodiedAgent;
 }
 
@@ -62,6 +72,7 @@ export function toDeployedAgent(agent: IAgent, existing?: DeployedAgent): Deploy
   return createDeployedAgent({
     ...(existing ?? {}),
     instanceId: agent.id,
+    ...(agent.config.templateId && { templateId: agent.config.templateId }),
     name: agent.name,
     hats: agent.hatType as unknown as HatTypeName[],
     identity: compact({
@@ -103,6 +114,7 @@ export function toAgentConfig(
 ): AgentConfig {
   return compact({
     id: deployed.instanceId,
+    templateId: deployed.templateId,
     identity: compact({
       name: deployed.name,
       visualDescription: deployed.identity.visualDescription,

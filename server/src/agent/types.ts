@@ -71,6 +71,13 @@ export interface ExternalAgentEndpoint {
 
 export interface AgentConfig {
   id?: string;             // stable UUID — if provided, preserved across save/restore
+  /**
+   * The Agent Library template this instance was deployed from, when it came
+   * from one. A deployed agent is a copy rather than a reference, so this is
+   * only provenance — it lets a client line an instance up with its template
+   * without guessing from the name.
+   */
+  templateId?: string;
   identity: AgentIdentity;
   hatType: HatType[];
   provider: AIProvider;

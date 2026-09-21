@@ -375,6 +375,12 @@ components:
       required: [id, name, hats, state, activity, model, identity, threads]
       properties:
         id: { type: string, description: Deployed agent instanceId }
+        templateId:
+          type: string
+          description: >
+            The Agent Library template this instance was deployed from, when
+            it came from one. A deployed agent is a copy rather than a
+            reference, so this is provenance only.
         name: { type: string }
         hats: { type: array, items: { $ref: '#/components/schemas/HatType' } }
         state: { $ref: '#/components/schemas/AgentState' }
@@ -403,6 +409,32 @@ components:
         costIdled: { type: boolean }
         hasVoice: { type: boolean }
         hasAvatar: { type: boolean }
+        appearance:
+          allOf: [{ $ref: '#/components/schemas/AvatarFraming' }]
+          description: >
+            How to frame the model returned by `/agents/{agentId}/avatar`.
+            Absent when the agent has no avatar, or none the runner can frame.
+
+    AvatarFraming:
+      type: object
+      description: >
+        Camera and model placement for the avatar. Without it a client can
+        fetch the model but has no idea where to put the camera.
+      properties:
+        camera:
+          type: array
+          description: Camera position [x, y, z] in metres
+          items: { type: number }
+          minItems: 3
+          maxItems: 3
+        rotate:
+          type: array
+          description: Model rotation [x, y, z] in degrees
+          items: { type: number }
+          minItems: 3
+          maxItems: 3
+        fov: { type: number, description: Vertical field of view in degrees }
+        scale: { type: number, description: Uniform scale applied to the model }
 
     Message:
       type: object

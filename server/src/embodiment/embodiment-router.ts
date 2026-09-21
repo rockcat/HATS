@@ -22,6 +22,7 @@ import {
 } from '../../../packages/service-kit/src/index.js';
 import { metaRoutes } from '../../../packages/service-kit/src/meta-routes.js';
 import type { SendMessageRequest } from '../../../packages/contracts/src/types.js';
+import { findAvatarByFile, framingOf } from '../render/avatar-catalogue.js';
 import { toEmbodiedAgent } from './agent-mapper.js';
 import { mapOrchestratorEvent } from './event-mapper.js';
 import { eventMatchesFilter, type EmbodimentEvent, type EmbodimentEventFilter } from './types.js';
@@ -111,12 +112,12 @@ export class EmbodimentRouter {
         json(res, 200, { ...ctx, agentCount: this.deps.getOrchestrator().listAgents().length });
       }),
 
-      get(`${B}/agents`, ({ res }) => json(res, 200, { agents: this.roster() })),
+      get(`${B}/agents`, async ({ res }) => json(res, 200, { agents: await this.roster() })),
 
-      get(`${B}/agents/:agentId`, ({ res, params }) => {
+      get(`${B}/agents/:agentId`, async ({ res, params }) => {
         const agent = this.findAgent(params['agentId'] as string);
         if (!agent) { notFound(res, 'Agent'); return; }
-        json(res, 200, toEmbodiedAgent(agent, this.deps.activityFor(agent.id)));
+        json(res, 200, await this.embody(agent));
       }),
 
       get(`${B}/agents/:agentId/threads`, ({ res, params }) => {
@@ -195,13 +196,13 @@ export class EmbodimentRouter {
         await this.sendAsset(res, this.deps.backgroundsDir, file, 'image/png');
       }),
 
-      get(`${B}/events`, ({ res, query }) => {
+      get(`${B}/events`, async ({ res, query }) => {
         const agentId = query.get('agentId');
         const filter = agentId ? { agentId: this.findAgent(agentId)?.id ?? agentId } : null;
         const project = this.deps.getProjectContext();
         this.hub.subscribe(res, filter, {
           type: 'hello',
-          agents: this.roster(),
+          agents: await this.roster(),
           project: { id: project.id, name: project.name, goal: project.goal },
         });
       }),
@@ -210,9 +211,18 @@ export class EmbodimentRouter {
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
 
-  private roster() {
-    return this.deps.getOrchestrator().listAgents()
-      .map((agent) => toEmbodiedAgent(agent, this.deps.activityFor(agent.id)));
+  private async roster() {
+    return Promise.all(this.deps.getOrchestrator().listAgents().map((agent) => this.embody(agent)));
+  }
+
+  /**
+   * One agent in contract form, with its avatar framing attached. The
+   * catalogue lookup is cached against the file mtime, so this stays cheap
+   * even when the whole roster asks for it at once.
+   */
+  private async embody(agent: IAgent) {
+    const entry = await findAvatarByFile(this.deps.avatarsDir, agent.config.identity.avatar);
+    return toEmbodiedAgent(agent, this.deps.activityFor(agent.id), framingOf(entry));
   }
 
   /** Accepts an instance id or, for convenience, an agent name. */
