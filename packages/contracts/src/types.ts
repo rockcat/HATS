@@ -172,9 +172,27 @@ export interface ApiError {
 export type EmbodiedAgentState =
   | 'idle' | 'working' | 'waiting' | 'waiting_for_help' | 'in_discussion';
 
+/**
+ * How to frame the agent's avatar model. Mirrors the runner's avatar
+ * catalogue: without it a client can download the model but has no idea where
+ * to put the camera, which is the difference between a face and a nostril.
+ */
+export interface AvatarFraming {
+  /** Camera position, `[x, y, z]` in metres. */
+  camera?: [number, number, number];
+  /** Model rotation, `[x, y, z]` in degrees. */
+  rotate?: [number, number, number];
+  /** Vertical field of view in degrees. */
+  fov?: number;
+  /** Uniform scale applied to the model. */
+  scale?: number;
+}
+
 /** How an agent appears to a client of the Embodiment API. */
 export interface EmbodiedAgent {
   id: string;
+  /** The Agent Library template this instance was deployed from, if any. */
+  templateId?: string;
   name: string;
   hats: HatTypeName[];
   state: EmbodiedAgentState;
@@ -187,6 +205,8 @@ export interface EmbodiedAgent {
   costIdled: boolean;
   hasVoice: boolean;
   hasAvatar: boolean;
+  /** Absent when the agent has no avatar, or none the runner can frame. */
+  appearance?: AvatarFraming;
 }
 
 export interface EmbodimentMessage {

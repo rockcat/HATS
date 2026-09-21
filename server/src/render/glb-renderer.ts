@@ -8,6 +8,7 @@ import * as path from 'path';
 import { HeadlessRenderer } from '../renderer3d/headless-renderer.js';
 import { RendererConfig } from './canvas-renderer.js';
 import { VisemeId } from '../avatar/types.js';
+import { DEFAULT_CAMERA, findAvatarByName } from './avatar-catalogue.js';
 
 // Shared helpers — same modules imported by browser avatar.js, meeting.js, and Flutter WebView
 import {
@@ -187,17 +188,13 @@ export async function createGlbRenderer(
   avatarsDir: string,
   rendererConfig?: RendererConfig,
 ): Promise<GlbRenderer> {
-  const cataloguePath = path.join(avatarsDir, 'avatars.json');
-  const raw = JSON.parse(await fs.readFile(cataloguePath, 'utf-8'));
-  const entry = (raw.avatars as any[]).find(
-    a => a.name.toLowerCase() === avatarName.toLowerCase(),
-  );
+  const entry = await findAvatarByName(avatarsDir, avatarName);
   if (!entry) throw new Error(`Avatar "${avatarName}" not found in avatars.json`);
 
   const renderer = new GlbRenderer(rendererConfig);
   await renderer.loadAvatar({
     glbPath: path.join(avatarsDir, entry.file),
-    camera:  entry.camera,
+    camera:  entry.camera ?? DEFAULT_CAMERA,
     rotate:  entry.rotate,
     fov:     entry.fov,
     scale:   entry.scale,
@@ -214,11 +211,7 @@ export async function createAvatarRenderer(
   avatarsDir: string,
   rendererConfig?: RendererConfig,
 ): Promise<GlbRenderer | import('./vrm-renderer.js').VrmRenderer> {
-  const cataloguePath = path.join(avatarsDir, 'avatars.json');
-  const raw = JSON.parse(await fs.readFile(cataloguePath, 'utf-8'));
-  const entry = (raw.avatars as any[]).find(
-    a => a.name.toLowerCase() === avatarName.toLowerCase(),
-  );
+  const entry = await findAvatarByName(avatarsDir, avatarName);
   if (!entry) throw new Error(`Avatar "${avatarName}" not found in avatars.json`);
 
   const filePath = path.join(avatarsDir, entry.file);
@@ -226,11 +219,11 @@ export async function createAvatarRenderer(
   if (entry.file.toLowerCase().endsWith('.vrm')) {
     const { VrmRenderer } = await import('./vrm-renderer.js');
     const renderer = new VrmRenderer(rendererConfig);
-    await renderer.loadAvatar(filePath, entry.camera, entry.rotate, entry.fov, entry.scale);
+    await renderer.loadAvatar(filePath, entry.camera ?? DEFAULT_CAMERA, entry.rotate, entry.fov, entry.scale);
     return renderer;
   }
 
   const renderer = new GlbRenderer(rendererConfig);
-  await renderer.loadAvatar({ glbPath: filePath, camera: entry.camera, rotate: entry.rotate, fov: entry.fov, scale: entry.scale });
+  await renderer.loadAvatar({ glbPath: filePath, camera: entry.camera ?? DEFAULT_CAMERA, rotate: entry.rotate, fov: entry.fov, scale: entry.scale });
   return renderer;
 }
