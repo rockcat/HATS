@@ -51,7 +51,7 @@ export class Agent implements IAgent {
   private costIdleTimer: ReturnType<typeof setTimeout> | null = null;
   private toolExecutor: ToolExecutor | null = null;
   private responseHandler: ResponseHandler | null = null;
-  private extraToolsProvider: (() => import('../providers/types.js').ToolDefinition[]) | null = null;
+  private extraToolsProvider: (() => import('./types.js').AgentToolSet) | null = null;
   private llmSemaphore: Semaphore | null = null;
   private telemetryRecorder: TelemetryRecorder | null = null;
 
@@ -82,9 +82,14 @@ export class Agent implements IAgent {
     this.telemetryRecorder = fn;
   }
 
-  /** Provider function that returns extra tools (e.g. MCP) to merge at call time. */
-  setExtraToolsProvider(provider: () => import('../providers/types.js').ToolDefinition[]): void {
+  /** Supplies the agent's MCP tools at call time, split into personal and shared. */
+  setExtraToolsProvider(provider: () => import('./types.js').AgentToolSet): void {
     this.extraToolsProvider = provider;
+  }
+
+  /** The MCP tools available right now; empty when nothing is wired up. */
+  private mcpTools(): import('./types.js').AgentToolSet {
+    return this.extraToolsProvider?.() ?? { shared: [], personal: [] };
   }
 
   /** Rename the agent and rebuild their system prompt. */
@@ -255,9 +260,11 @@ export class Agent implements IAgent {
         : this.activeThreadKey);
 
     const userContent = formatIncomingMessage(message);
-    const mcpTools = this.extraToolsProvider?.() ?? [];
-    const registry = buildToolRegistry([...getAllToolsForHat(this.config.hatType), ...mcpTools]);
-    let tools = [...getToolsForHat(this.config.hatType)]; // core only; on-demand tools injected via get_tool
+    const mcp = this.mcpTools();
+    const registry = buildToolRegistry([...getAllToolsForHat(this.config.hatType), ...mcp.shared, ...mcp.personal]);
+    // Core tools plus this agent's own MCP servers. Team servers are found
+    // with search_tools; a personal server is always in reach.
+    const tools = [...getToolsForHat(this.config.hatType), ...mcp.personal];
 
     // Scheduled tasks start fresh — no history needed for a cron-style trigger
     const history = message.isScheduled ? [] : (this.threads.get(historyKey) ?? []).map(toProviderMessage);
@@ -341,11 +348,16 @@ export class Agent implements IAgent {
   async meetingTurn(transcript: string, extraMeetingTools: import('../providers/types.js').ToolDefinition[] = []): Promise<string> {
     // Strip meeting-management tools — calling them inside a meeting creates duplicate meetings
     const MEETING_TOOLS = new Set(['request_meeting', 'schedule_meeting']);
-    const mcpMeetingTools = (this.extraToolsProvider?.() ?? []).filter(t => !MEETING_TOOLS.has(t.name));
-    const allHatTools = getAllToolsForHat(this.config.hatType).filter(t => !MEETING_TOOLS.has(t.name));
-    const meetingRegistry = buildToolRegistry([...allHatTools, ...mcpMeetingTools, ...extraMeetingTools]);
-    let tools = [
-      ...getToolsForHat(this.config.hatType).filter(t => !MEETING_TOOLS.has(t.name)),
+    const mcp = this.mcpTools();
+    const keep = (t: { name: string }) => !MEETING_TOOLS.has(t.name);
+    const personal = mcp.personal.filter(keep);
+    const allHatTools = getAllToolsForHat(this.config.hatType).filter(keep);
+    const meetingRegistry = buildToolRegistry([
+      ...allHatTools, ...mcp.shared.filter(keep), ...personal, ...extraMeetingTools,
+    ]);
+    const tools = [
+      ...getToolsForHat(this.config.hatType).filter(keep),
+      ...personal,
       ...extraMeetingTools,
     ];
     const working: Message[] = [
@@ -388,7 +400,7 @@ export class Agent implements IAgent {
         const toolName = call.arguments.name as string;
         const found = getTool(toolName, registry);
         result = found.result;
-        if (found.found && found.schema && !tools.some(t => t.name === toolName)) {
+        if (found.found && found.schema && !tools.some(t => t.name === found.schema!.name)) {
           tools.push(found.schema);
         }
       } else {
