@@ -1,0 +1,72 @@
+/* Layout for the shared MCP server picker (`server-picker.js`). */
+
+/* The "use every server" escape hatch that sits above a picker. */
+.all-servers { gap: 7px; margin-bottom: 6px; font-size: 13px; cursor: pointer; }
+.all-servers input { width: auto; }
+.all-servers span { margin: 0; }
+
+.server-picker {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  max-height: 190px;
+  overflow-y: auto;
+  background: var(--bg);
+}
+
+.server-picker.tall { max-height: 320px; }
+
+.server-group {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin: 8px 0 3px;
+}
+.server-group:first-child { margin-top: 0; }
+
+.server-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  padding: 2px 0;
+  cursor: pointer;
+}
+.server-option input { width: auto; flex: none; }
+
+/* The detailed variant carries a description, so the checkbox aligns to the top. */
+.server-option.detailed { align-items: flex-start; padding: 5px 0; }
+.server-option.detailed input { margin-top: 3px; }
+
+.server-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.server-name { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-weight: 500; }
+
+.server-desc {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
+/* Whether this machine has the server's credentials in its environment. */
+.env-badge {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.env-badge.present {
+  color: var(--ok);
+  border-color: color-mix(in srgb, var(--ok) 45%, var(--border));
+  background: color-mix(in srgb, var(--ok) 10%, transparent);
+}
+
+.env-badge.missing {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+}

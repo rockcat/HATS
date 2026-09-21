@@ -34,38 +34,8 @@
 
 /* ── Team MCP server picker ──────────────────────────────────────────────── */
 
-.all-servers { gap: 7px; margin-bottom: 6px; font-size: 13px; cursor: pointer; }
-.all-servers input { width: auto; }
-.all-servers span { margin: 0; }
 
-.server-picker {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 8px 10px;
-  max-height: 190px;
-  overflow-y: auto;
-  background: var(--bg);
-}
-
-.server-group {
-  font-size: 10.5px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--text-muted);
-  margin: 8px 0 3px;
-}
-.server-group:first-child { margin-top: 0; }
-
-.server-option {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12.5px;
-  padding: 2px 0;
-  cursor: pointer;
-}
-.server-option input { width: auto; }
+/* The server picker itself is laid out by /ui-kit/server-picker.css. */
 
 /* ── Side panel tabs ─────────────────────────────────────────────────────── */
 

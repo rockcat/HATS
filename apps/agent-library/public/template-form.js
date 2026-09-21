@@ -1,6 +1,7 @@
 /** Mapping between the editor form and an AgentTemplate document. */
 
-import { $$, HAT_TYPES, el } from '/ui-kit/hats-ui.js';
+import { $, HAT_TYPES, el } from '/ui-kit/hats-ui.js';
+import { selectedServers } from '/ui-kit/server-picker.js';
 import { refreshSpeakers } from '/voice-picker.js';
 
 const csv = (value) => (value ?? '').split(',').map((s) => s.trim()).filter(Boolean);
@@ -19,29 +20,8 @@ export function selectedHats(form) {
   return $$('input[name="hats"]:checked', form).map((input) => input.value);
 }
 
-/**
- * Render the shared team MCP servers as a checkable list, grouped by category.
- * A free-text field gave no way to know what was valid.
- */
-export function buildServerPicker(container, servers) {
-  const byCategory = new Map();
-  for (const server of servers) {
-    const key = server.category ?? 'other';
-    if (!byCategory.has(key)) byCategory.set(key, []);
-    byCategory.get(key).push(server);
-  }
-
-  container.replaceChildren(...[...byCategory].flatMap(([category, list]) => [
-    el('div', { class: 'server-group' }, category),
-    ...list.map((server) => el('label', { class: 'server-option', title: server.id },
-      el('input', { type: 'checkbox', name: 'mcpServer', value: server.id }),
-      server.name ?? server.id)),
-  ]));
-}
-
-export function selectedServers(form) {
-  return $$('input[name="mcpServer"]:checked', form).map((input) => input.value);
-}
+// The picker itself is shared with the Project Designer: /ui-kit/server-picker.js.
+export { buildServerPicker, selectedServers } from '/ui-kit/server-picker.js';
 
 /** Form fields → the AgentTemplateInput accepted by the API. */
 export function readForm(form) {

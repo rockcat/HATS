@@ -48,7 +48,20 @@ export function mcpRoutes(templates: TemplateStore, credentials: CredentialStore
       const all = getCatalogue();
       json(res, 200, {
         personal: all.filter(isAgentMcp).map(describe),
-        shared: all.filter(isHumanMcp).map((e) => ({ id: e.id, name: e.name, category: e.category })),
+        // A team server's env vars come from this machine's environment, not
+        // from the agent, so the editor can say up front which will actually
+        // start. A personal server's credentials are the agent's own and are
+        // reported separately, masked.
+        shared: all.filter(isHumanMcp).map((e) => ({
+          ...describe(e),
+          envVars: (e.envVars ?? [])
+            .map((v) => ({
+              name: envVarName(v),
+              placeholder: envVarPlaceholder(v),
+              present: Boolean(process.env[envVarName(v)]),
+            }))
+            .filter((v) => v.name),
+        })),
       });
     }),
 
