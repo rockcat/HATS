@@ -92,10 +92,23 @@ It is a service rather than a library because it runs processes — see
 
 ### Embodiment API Test — `apps/embodiment-test`, port 3040
 
-A deliberately minimal client that uses nothing but the Embodiment API: roster,
-live state, conversation, and voice. Its third panel logs every request and every
-stream event, so the API is the visible output. If this app can drive a team, so
-can any third party.
+A deliberately minimal client that drives a team through the Embodiment API and
+nothing else: roster, live state, conversation, voice and face. Its third panel
+logs every request and every stream event, so the API is the visible output. If
+this app can drive a team, so can any third party.
+
+It reads the Agent Library for one thing only — so the roster lists every agent
+that exists rather than just the handful the current project is running. A row
+the runner has deployed is marked **live** and can be talked to; the rest still
+show their avatar and play their voice. Both upstreams are optional, and neither
+knows the other exists: the merge happens in the browser, on `templateId` where
+the runner reports one and on the agent name otherwise.
+
+Rendering an agent needs more than the model file. `/agents/{id}/avatar` returns
+a GLB or VRM with no camera in it, so the roster carries an `appearance` block —
+camera, rotation, field of view and scale, from the runner's avatar catalogue.
+Without it a client can download the model and still have no idea where to put
+the camera.
 
 ## The contracts
 
@@ -130,7 +143,8 @@ GET  /api/embodiment/v1/agents/{id}/messages      read a thread
 POST /api/embodiment/v1/agents/{id}/messages      say something (202, async)
 POST /api/embodiment/v1/agents/{id}/tasks         assign durable work
 POST /api/embodiment/v1/agents/{id}/speech        speak in the agent's voice
-GET  /api/embodiment/v1/agents/{id}/avatar        the GLB head
+GET  /api/embodiment/v1/agents/{id}/avatar        the GLB or VRM model
+GET  /api/embodiment/v1/agents/{id}/background    the scene behind it
 GET  /api/embodiment/v1/events                    SSE — everything, live
 ```
 
@@ -188,7 +202,7 @@ it and of each other's runtime:
 | Agent Library | nothing — templates, MCP catalogue, credentials and voice models are all on disk |
 | Project Server | the Agent Library, and only to resolve a templateId when deploying |
 | Project Designer | the Agent Library and Project Server, proxied |
-| Embodiment console | the Team Runner — that is its whole purpose |
+| Embodiment API Test | the Team Runner — that is its whole purpose. It also reads the Agent Library, so the roster shows every agent and not just the deployed team; without it the roster is simply the live team |
 | Speech Service | nothing — it owns the Piper processes |
 | Team Runner | the Project Server, Agent Library and Speech Service, all optional |
 
