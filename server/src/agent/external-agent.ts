@@ -68,7 +68,7 @@ export class ExternalAgent implements IAgent {
 
   setResponseHandler(handler: ResponseHandler): void { this.responseHandler = handler; }
   setToolExecutor(_executor: ToolExecutor): void {}
-  setExtraToolsProvider(_fn: () => ToolDefinition[]): void {}
+  setExtraToolsProvider(_fn: () => import('./types.js').AgentToolSet): void {}
   setLLMSemaphore(_semaphore: Semaphore): void {}
   setTelemetryRecorder(_fn: unknown): void {}
 

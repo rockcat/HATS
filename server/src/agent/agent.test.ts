@@ -140,6 +140,67 @@ describe('Agent', () => {
   });
 });
 
+const mcpTool = (name: string, description: string) => ({
+  name, description, parameters: { type: 'object' as const, properties: {} },
+});
+
+describe('Personal MCP tools', () => {
+  it('sends the agent its own MCP tools without making it search first', async () => {
+    // Somebody configured this agent a mailbox on purpose. Making it discover
+    // that for itself is how an agent ends up reporting it cannot read mail.
+    const provider = new MockProvider({ content: 'ok' });
+    const agent = makeAgent({ provider });
+    agent.setExtraToolsProvider(() => ({
+      shared: [mcpTool('mcp__kanban__create_ticket', 'Create a kanban ticket.')],
+      personal: [mcpTool('mcp__email-imap__get_email', 'Get the full content of an email by ID.')],
+    }));
+    agent.setResponseHandler(async () => {});
+    agent.receive(makeDirectMessage('Read my mail'));
+    await waitForProcessing();
+
+    const toolNames = provider.calls[0]?.tools?.map(t => t.name) ?? [];
+    expect(toolNames).toContain('mcp__email-imap__get_email');
+    // A team server can run to hundreds of tools, so those still stay behind
+    // search_tools.
+    expect(toolNames).not.toContain('mcp__kanban__create_ticket');
+  });
+
+  it('still lets the agent find a shared MCP tool by searching', async () => {
+    const provider = new MockProvider([
+      { content: '', toolCalls: [{ id: 'tc1', name: 'search_tools', arguments: { query: 'create a ticket' } }] },
+      { content: 'Done.' },
+    ]);
+    const agent = makeAgent({ provider });
+    agent.setExtraToolsProvider(() => ({
+      shared: [mcpTool('mcp__kanban__create_ticket', 'Create a kanban ticket.')],
+      personal: [],
+    }));
+    agent.setResponseHandler(async () => {});
+    agent.receive(makeDirectMessage('Raise a ticket'));
+    await waitForProcessing();
+
+    const toolMsg = provider.calls[1]?.messages.find(m => m.role === 'tool');
+    expect(toolMsg?.content).toContain('mcp__kanban__create_ticket');
+  });
+
+  it('does not duplicate a personal tool the model also asks get_tool for', async () => {
+    const provider = new MockProvider([
+      { content: '', toolCalls: [{ id: 'tc1', name: 'get_tool', arguments: { name: 'get_email' } }] },
+      { content: 'Done.' },
+    ]);
+    const agent = makeAgent({ provider });
+    agent.setExtraToolsProvider(() => ({
+      shared: [], personal: [mcpTool('mcp__email-imap__get_email', 'Get the full content of an email by ID.')],
+    }));
+    agent.setResponseHandler(async () => {});
+    agent.receive(makeDirectMessage('Read my mail'));
+    await waitForProcessing();
+
+    const names = provider.calls[1]?.tools?.map(t => t.name).filter(n => n === 'mcp__email-imap__get_email') ?? [];
+    expect(names).toHaveLength(1);
+  });
+});
+
 describe('Tool search pattern', () => {
   it('only passes core tools in initial LLM call', async () => {
     const provider = new MockProvider({ content: 'ok' });

@@ -47,6 +47,9 @@ export interface OrchestratorConfig {
   llmCallIntervalMs?: number;
 }
 
+/** Above this, a personal MCP server is worth warning the operator about. */
+const LARGE_PERSONAL_SERVER = 40;
+
 export class TeamOrchestrator {
   private agents: Map<string, IAgent> = new Map();
   private tasks: Map<string, Task> = new Map();
@@ -133,6 +136,11 @@ export class TeamOrchestrator {
 
   hasMCPServer(name: string): boolean {
     return this.mcp.has(name);
+  }
+
+  /** Names of the shared MCP servers currently connected for the team. */
+  mcpServerNames(): string[] {
+    return this.mcp.serverNames();
   }
 
   clearTeam(): void {
@@ -463,7 +471,12 @@ export class TeamOrchestrator {
     const credKeys = Object.keys(credentials);
     log.info(`[Team] Personal MCP "${serverId}" starting for ${agentName} — credential keys: [${credKeys.join(', ')}]`);
     await personalMcp.add({ name: serverId, config, toolArgMappings: entry.toolArgMappings });
-    log.info(`[Team] Personal MCP "${serverId}" started for ${agentName}`);
+    const toolCount = personalMcp.getToolsForServers([serverId]).length;
+    log.info(`[Team] Personal MCP "${serverId}" started for ${agentName} — ${toolCount} tool(s), sent in every call`);
+    if (toolCount > LARGE_PERSONAL_SERVER) {
+      log.warn(`[Team] "${serverId}" is large: ${toolCount} tool schemas ride on every one of ${agentName}'s requests.`
+        + ' Trim it in the catalogue if that is more context than the agent needs.');
+    }
   }
 
   setProjectDir(dir: string | null): void {
@@ -504,10 +517,11 @@ export class TeamOrchestrator {
         const ids         = agent.config.enabledMcpServers;
         const sharedTools = ids == null ? this.mcp.getAllTools() : this.mcp.getToolsForServers(ids);
         const personalMcp = this.personalMcpByAgent.get(agent.name.toLowerCase());
-        if (!personalMcp) return sharedTools;
-        const personalTools   = personalMcp.getAllTools();
-        const personalToolNames = new Set(personalTools.map(t => t.name));
-        return [...sharedTools.filter(t => !personalToolNames.has(t.name)), ...personalTools];
+        if (!personalMcp) return { shared: sharedTools, personal: [] };
+        // A personal server wins a name clash: it is this agent's own account.
+        const personal = personalMcp.getAllTools();
+        const personalNames = new Set(personal.map(t => t.name));
+        return { shared: sharedTools.filter(t => !personalNames.has(t.name)), personal };
       });
       agent.setLLMSemaphore(this.llmSemaphore);
       if (this.telemetryRecorder) agent.setTelemetryRecorder(this.telemetryRecorder);

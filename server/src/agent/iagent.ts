@@ -2,7 +2,7 @@ import { HatType } from '../hats/types.js';
 import { AIProvider, ToolDefinition } from '../providers/types.js';
 import { TeamMessage } from '../orchestrator/types.js';
 import { Semaphore } from '../providers/semaphore.js';
-import { AgentConfig, AgentMessage, AgentState, ToolExecutor, ResponseHandler } from './types.js';
+import { AgentConfig, AgentMessage, AgentState, AgentToolSet, ToolExecutor, ResponseHandler } from './types.js';
 
 type TelemetryEntry = {
   agent: string; provider: string; model: string;
@@ -43,7 +43,7 @@ export interface IAgent {
   // ── Wiring (may be no-ops for non-LLM agents) ────────────────────────────
   setToolExecutor(executor: ToolExecutor): void;
   setResponseHandler(handler: ResponseHandler): void;
-  setExtraToolsProvider(fn: () => ToolDefinition[]): void;
+  setExtraToolsProvider(fn: () => AgentToolSet): void;
   setLLMSemaphore(semaphore: Semaphore): void;
   setTelemetryRecorder(fn: (entry: TelemetryEntry) => void): void;
 
