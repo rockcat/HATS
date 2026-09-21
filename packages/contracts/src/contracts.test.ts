@@ -183,6 +183,22 @@ describe('projects', () => {
     expect(reviseProject(project, { team: [] }).team).toEqual([]);
   });
 
+  it('turns the shared MCP servers off when the last one is unticked', () => {
+    // An empty list here means "this team runs no shared servers", which is
+    // not the same as "I did not mention them".
+    const project = createProject({
+      id: 'acme', name: 'Acme',
+      mcpServers: [{ name: 'kanban', config: { transport: 'stdio', command: 'node', args: ['k.js'] } }],
+    });
+    expect(reviseProject(project, { mcpServers: [] }).mcpServers).toEqual([]);
+  });
+
+  it('leaves the shared MCP servers alone when a revision does not mention them', () => {
+    const servers = [{ name: 'kanban', config: { transport: 'stdio' as const, command: 'node', args: ['k.js'] } }];
+    const project = createProject({ id: 'acme', name: 'Acme', mcpServers: servers });
+    expect(reviseProject(project, { goal: 'Ship it' }).mcpServers).toEqual(servers);
+  });
+
   it('summarises without leaking the team', () => {
     const deployed = deployTemplate(createAgentTemplate(MINIMAL_TEMPLATE));
     const summary = summariseProject(createProject({ id: 'acme', name: 'Acme', team: [deployed] }), true);

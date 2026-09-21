@@ -71,6 +71,18 @@ origin.
 It shows template **drift** — when the library has moved past the revision a
 deployed agent was built from — and offers a one-click resync.
 
+It also sets the team's **shared MCP servers**, which the old operator
+dashboard used to own. The browser picks catalogue ids; the Project Server
+expands them into the `mcpServers` list the runner starts, so a transport
+config never reaches a page and a catalogue change reaches every project
+without editing a stored document. Each entry shows whether this machine has
+the environment variables the server needs, because a server with a missing
+key starts and then fails.
+
+Which of those servers a given agent may use is picked from the same list in
+the agent dialog. Both were free-text boxes, which meant typing ids that had
+to match exactly and gave no way to see that they did.
+
 ### Team Runner — `server/src/`, port 3001
 
 Everything it did before, minus what now belongs to the two services above. It
@@ -200,7 +212,7 @@ it and of each other's runtime:
 | Service | Depends on |
 | --- | --- |
 | Agent Library | nothing — templates, MCP catalogue, credentials and voice models are all on disk |
-| Project Server | the Agent Library, and only to resolve a templateId when deploying |
+| Project Server | the Agent Library, and only to resolve a templateId when deploying. It reads the MCP catalogue file, as the runner and the library do |
 | Project Designer | the Agent Library and Project Server, proxied |
 | Embodiment API Test | the Team Runner — that is its whole purpose. It also reads the Agent Library, so the roster shows every agent and not just the deployed team; without it the roster is simply the live team |
 | Speech Service | nothing — it owns the Piper processes |

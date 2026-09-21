@@ -7,11 +7,13 @@
  */
 
 import { metaRoutes, startService } from '../../../packages/service-kit/src/index.js';
+import { initCatalogue } from '../../../server/src/mcp/catalogue-store.js';
 import { AgentLibraryClient } from '../../../packages/clients/src/agent-library-client.js';
 import { activeFilePath, config } from './config.js';
 import { ProjectStore } from './project-store.js';
 import { projectRoutes } from './routes/projects.js';
 import { teamRoutes } from './routes/team.js';
+import { mcpRoutes } from './routes/mcp.js';
 
 async function main(): Promise<void> {
   const store = new ProjectStore({
@@ -24,6 +26,10 @@ async function main(): Promise<void> {
   for (const bad of store.invalidRecords) {
     console.warn(`[${config.name}] ignoring invalid project ${bad.file}: ${bad.reason}`);
   }
+
+  // The same catalogue file the runner and the library read, so all three
+  // agree on what an MCP server is.
+  await initCatalogue(config.catalogueFile);
 
   const library = new AgentLibraryClient(config.agentLibraryUrl);
 
@@ -43,11 +49,13 @@ async function main(): Promise<void> {
       }),
       ...projectRoutes(store),
       ...teamRoutes(store, library),
+      ...mcpRoutes(),
     ],
     banner: [
       `definitions:   ${config.definitionsDir} (${store.size} loaded)`,
       `projects root: ${config.projectsRoot}`,
       `agent library: ${config.agentLibraryUrl}`,
+      `mcp catalogue: ${config.catalogueFile}`,
       `active:        ${store.activeProjectId ?? '(none)'}`,
       `OpenAPI:       http://localhost:${config.port}/api/v1/openapi.yaml`,
     ],

@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>HATS Project Designer</title>
   <link rel="stylesheet" href="/ui-kit/hats-ui.css">
+  <link rel="stylesheet" href="/ui-kit/server-picker.css">
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
@@ -72,6 +73,18 @@
           </label>
         </form>
 
+        <section id="mcp-section" hidden>
+          <div class="row" style="margin: 4px 0 8px">
+            <strong>Team MCP servers</strong>
+            <span class="tag" id="mcp-count">0</span>
+            <span class="spacer"></span>
+            <span class="muted" style="font-size:12px">Started for the whole team when the project runs</span>
+          </div>
+          <div id="mcp-picker" class="server-picker tall"></div>
+          <small id="mcp-unknown" class="mcp-unknown" hidden></small>
+          <div class="empty" id="mcp-empty" hidden>No shared servers in the MCP catalogue.</div>
+        </section>
+
         <section id="team-section" hidden>
           <div class="row" style="margin: 4px 0 10px">
             <strong>Team</strong>
@@ -134,16 +147,20 @@
         </label>
       </div>
 
-      <div class="grid-2">
-        <label class="field">
-          <span>Max cost per hour (USD)</span>
-          <input name="maxCostPerHour" type="number" min="0" step="0.25" placeholder="unlimited">
+      <label class="field">
+        <span>Max cost per hour (USD)</span>
+        <input name="maxCostPerHour" type="number" min="0" step="0.25" placeholder="unlimited">
+      </label>
+
+      <label class="field">
+        <span>Team MCP servers this agent may use</span>
+        <label class="row all-servers">
+          <input type="checkbox" name="allMcpServers" checked>
+          <span>Use every server the team has enabled</span>
         </label>
-        <label class="field">
-          <span>Enabled MCP servers</span>
-          <input name="enabledMcpServers" placeholder="kanban, filesystem">
-        </label>
-      </div>
+        <div id="agent-mcp-picker" class="server-picker" hidden></div>
+        <small id="agent-mcp-hint"></small>
+      </label>
 
       <label class="field row" style="gap:8px; align-items:center">
         <input type="checkbox" name="enabled" style="width:auto">

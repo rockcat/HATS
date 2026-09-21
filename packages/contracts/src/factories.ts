@@ -196,7 +196,12 @@ export function reviseProject(current: ProjectDefinition, next: Partial<ProjectD
   return {
     ...current,
     ...compact(next as Record<string, unknown>),
+    // `compact` drops empty arrays, but for these two an empty list is an
+    // instruction, not an omission: a team with nobody on it, and a project
+    // that runs no shared MCP servers. Without this, unticking the last server
+    // in the Designer silently left it enabled.
     ...(next.team !== undefined && { team: next.team }),
+    ...(next.mcpServers !== undefined && { mcpServers: next.mcpServers }),
     schemaVersion: SCHEMA_VERSION,
     id: current.id,
     revision: current.revision + 1,

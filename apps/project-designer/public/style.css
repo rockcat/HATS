@@ -38,3 +38,6 @@ li.disabled-agent .name { text-decoration: line-through; opacity: 0.6; }
 }
 
 .dirty-marker { color: var(--warn); font-weight: 700; }
+
+#mcp-section { margin-bottom: 18px; }
+.mcp-unknown { display: block; margin-top: 6px; color: var(--warn); }

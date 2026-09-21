@@ -4,6 +4,9 @@ import {
   $, clear, debounce, el, guard, hatDots, makeClient, relativeTime, toastOk, trackHealth,
 } from '/ui-kit/hats-ui.js';
 import { openAgentDialog, setProviderCatalogue } from '/agent-dialog.js';
+import {
+  enabledIds, loadTeamMcpCatalogue, renderTeamMcp, selected as selectedTeamServers, teamMcpCatalogue,
+} from '/team-mcp.js';
 
 const library = makeClient('/proxy/library/api/v1');
 const projects = makeClient('/proxy/projects/api/v1');
@@ -26,6 +29,7 @@ const ui = {
   save:          $('#save-project'),
   del:           $('#delete-project'),
   activate:      $('#activate-project'),
+  mcpSection:    $('#mcp-section'),
   teamSection:   $('#team-section'),
   teamList:      $('#team-list'),
   teamEmpty:     $('#team-empty'),
@@ -84,6 +88,7 @@ function renderProject() {
   ui.designEmpty.hidden = true;
   ui.form.hidden = false;
   ui.teamSection.hidden = false;
+  renderTeamMcp(project, () => setDirty(true));
 
   ui.form.elements['name'].value = project.name ?? '';
   ui.form.elements['humanName'].value = project.humanName ?? '';
@@ -178,6 +183,8 @@ async function saveProject() {
       humanName: form['humanName'].value.trim() || 'Human',
       goal: form['goal'].value.trim(),
       description: form['description'].value.trim(),
+      // Catalogue ids; the Project Server expands them into definitions.
+      mcpServerIds: selectedTeamServers(),
       expectedRevision: state.current.revision,
     });
     state.current = updated;
@@ -196,6 +203,7 @@ async function deleteProject() {
     state.dirty = false;
     ui.form.hidden = true;
     ui.teamSection.hidden = true;
+    ui.mcpSection.hidden = true;
     ui.designEmpty.hidden = false;
     ui.revision.hidden = true;
     ui.designTitle.textContent = 'Select a project';
@@ -233,7 +241,8 @@ async function removeAgent(agent) {
 }
 
 async function editAgent(agent) {
-  const patch = await openAgentDialog(agent);
+  const ids = new Set(enabledIds(state.current));
+  const patch = await openAgentDialog(agent, teamMcpCatalogue().filter((s) => ids.has(s.id)));
   if (!patch) return;
   await guard(async () => {
     await projects.patch(`/projects/${state.current.id}/team/${agent.instanceId}`, patch);
@@ -289,6 +298,7 @@ async function init() {
   await guard(async () => {
     const providers = await library.get('/providers');
     setProviderCatalogue(providers?.providers ?? []);
+    await loadTeamMcpCatalogue(projects);
     await loadTemplates();
     await loadProjects();
     const active = state.projects.find((p) => p.id === state.activeProjectId) ?? state.projects[0];

@@ -671,7 +671,17 @@ export class APIServer {
     }
   }
 
+  /**
+   * Reconcile the dashboard's enabled set with what is actually connected.
+   *
+   * Team MCP servers now arrive two ways: from the project definition, which
+   * the Project Designer edits, and from this file, which the dashboard's
+   * toggles write. Without this the dashboard showed a definition-started
+   * server as off while it was plainly running, and a later toggle would
+   * write a list that left it out.
+   */
   private async loadMCPEnabled(): Promise<void> {
+    for (const name of this.orchestrator.mcpServerNames()) this.enabledMCPIds.add(name);
     try {
       const raw  = await readFile(this.mcpEnabledPath, 'utf-8');
       const data = JSON.parse(raw) as { ids: string[] };

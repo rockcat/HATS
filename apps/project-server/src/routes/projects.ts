@@ -7,10 +7,19 @@ import {
 import { isValidProjectId, slugifyProjectId } from '../../../../packages/contracts/src/factories.js';
 import type { ProjectDefinition } from '../../../../packages/contracts/src/types.js';
 import { ProjectStore, RevisionConflictError, ValidationError } from '../project-store.js';
+import { resolveServerIds } from './mcp.js';
 
 const BASE = '/api/v1';
 
-type ProjectWrite = Partial<ProjectDefinition> & { expectedRevision?: number };
+/**
+ * `mcpServerIds` is the Designer's way of setting the team's shared servers:
+ * catalogue ids in, full definitions stored. `mcpServers` is still accepted
+ * whole, which is how the runner writes back what it actually started.
+ */
+type ProjectWrite = Partial<ProjectDefinition> & {
+  expectedRevision?: number;
+  mcpServerIds?: string[];
+};
 
 /** Translate store errors into the uniform error contract. */
 export async function withStoreErrors(ctx: RequestContext, action: () => Promise<void>): Promise<void> {
@@ -29,7 +38,7 @@ export function projectRoutes(store: ProjectStore): Route[] {
       json(res, 200, { projects: store.listSummaries(), activeProjectId: store.activeProjectId })),
 
     post(`${BASE}/projects`, async (ctx) => {
-      const body = await readJsonBody<{ id?: string; name?: string } & Partial<ProjectDefinition>>(ctx.req);
+      const body = await readJsonBody<{ id?: string; name?: string } & ProjectWrite>(ctx.req);
       if (!body?.name?.trim()) { badRequest(ctx.res, 'name is required'); return; }
       const id = (body.id?.trim() || slugifyProjectId(body.name));
       if (!isValidProjectId(id)) {
@@ -46,6 +55,7 @@ export function projectRoutes(store: ProjectStore): Route[] {
           ...(body.humanName !== undefined && { humanName: body.humanName }),
           ...(body.team !== undefined && { team: body.team }),
           ...(body.mcpServers !== undefined && { mcpServers: body.mcpServers }),
+          ...(body.mcpServerIds !== undefined && { mcpServers: resolveServerIds(body.mcpServerIds).servers }),
           ...(body.settings !== undefined && { settings: body.settings }),
         });
         json(ctx.res, 201, created);
@@ -92,7 +102,16 @@ export function projectRoutes(store: ProjectStore): Route[] {
 }
 
 async function applyUpdate(ctx: RequestContext, store: ProjectStore, body: ProjectWrite): Promise<void> {
-  const { expectedRevision, ...rest } = body;
+  const { expectedRevision, mcpServerIds, ...rest } = body;
+
+  if (mcpServerIds !== undefined) {
+    const { servers, unknown } = resolveServerIds(mcpServerIds);
+    if (unknown.length) {
+      badRequest(ctx.res, `Not shared MCP servers in the catalogue: ${unknown.join(', ')}`);
+      return;
+    }
+    rest.mcpServers = servers;
+  }
   // These are server-owned; a client echoing a whole document back must not move them.
   delete (rest as Record<string, unknown>)['id'];
   delete (rest as Record<string, unknown>)['revision'];
