@@ -1,0 +1,45 @@
+/*
+ * Layout for the shared avatar stage (`avatar-stage.js`).
+ *
+ * Markup it expects:
+ *   <div class="avatar-stage">
+ *     <img class="stage-background" alt="">
+ *     <canvas class="stage-canvas"></canvas>
+ *     <div class="stage-hint">…</div>
+ *   </div>
+ */
+
+.avatar-stage {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  width: 100%;
+  background: var(--surface-2);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.avatar-stage .stage-background {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Sits above the background, so the model is composited onto the scene. */
+.avatar-stage .stage-canvas {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.avatar-stage .stage-hint {
+  position: relative;
+  color: var(--text-muted);
+  font-size: 12px;
+  text-align: center;
+  padding: 0 16px;
+}

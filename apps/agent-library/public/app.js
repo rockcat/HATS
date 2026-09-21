@@ -6,7 +6,7 @@ import {
 import {
   applyPersona, buildHatCheckboxes, buildServerPicker, emptyTemplate, readForm, writeForm,
 } from '/template-form.js';
-import { clearAvatar, showAvatar } from '/avatar-preview.js';
+import { clearAvatar, showAvatar } from '/ui-kit/avatar-stage.js';
 import { loadMcpCatalogue, showMcpFor } from '/mcp-panel.js';
 import { initVoicePicker, initVoices } from '/voice-picker.js';
 
@@ -214,7 +214,7 @@ function renderStage(force = false) {
 
   ui.canvas.hidden = false;
   ui.stageHint.hidden = true;
-  showAvatar(ui.canvas, entry).catch((err) => {
+  showAvatar(ui.canvas, { ...entry, url: `/avatars/${encodeURIComponent(entry.file)}` }).catch((err) => {
     ui.canvas.hidden = true;
     ui.stageHint.hidden = false;
     ui.stageHint.textContent = `Could not load ${entry.file}: ${err.message}`;

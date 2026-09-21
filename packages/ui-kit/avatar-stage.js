@@ -1,9 +1,15 @@
 /**
- * A GLB / VRM avatar preview for the template editor.
+ * A GLB / VRM avatar stage, shared by every HATS front-end that shows a face.
  *
  * Deliberately simpler than the runner's renderer — no lipsync — but it loads
- * the same files the runner does, framed the way `avatars.json` says, so the
- * librarian sees the agent they are actually configuring.
+ * the same models, framed the way the avatar catalogue says, so an agent looks
+ * the same in the library editor as it does when it is running.
+ *
+ * The model is addressed by URL rather than by filename, because the callers
+ * fetch it from different places: the Agent Library serves `/avatars/<file>`,
+ * while an Embodiment API client gets `/agents/<id>/avatar`.
+ *
+ * Pair it with `avatar-stage.css`, which lays out the background and canvas.
  */
 
 import * as THREE from 'three';
@@ -90,17 +96,21 @@ function applyRestPose(loaded) {
 }
 
 /**
- * Show `entry.file`, framed by the catalogue metadata.
- * Passing an entry without a file clears the stage.
+ * Show the model at `spec.url`, framed by `camera` / `rotate` / `fov` / `scale`.
+ * Passing a spec without a URL clears the stage.
+ *
+ * @param {HTMLCanvasElement} canvas
+ * @param {{url?: string, camera?: number[], rotate?: number[], fov?: number, scale?: number}} [spec]
+ * @returns {Promise<boolean>} true when a model is now on the stage
  */
-export async function showAvatar(canvas, entry) {
+export async function showAvatar(canvas, spec) {
   if (!renderer) { init(canvas); startLoop(canvas); }
 
   const token = ++loadToken;
   disposeModel();
-  if (!entry?.file) return false;
+  if (!spec?.url) return false;
 
-  const gltf = await loader.loadAsync(`/avatars/${encodeURIComponent(entry.file)}`);
+  const gltf = await loader.loadAsync(spec.url);
   // A newer request landed while this one was loading — drop this result.
   if (token !== loadToken) return false;
 
@@ -116,9 +126,9 @@ export async function showAvatar(canvas, entry) {
     model = gltf.scene;
   }
 
-  model.scale.setScalar(entry.scale ?? 1);
-  // `rotate` in avatars.json is degrees, matching the runner's renderer.
-  const [rx = 0, ry = 0, rz = 0] = entry.rotate ?? [];
+  model.scale.setScalar(spec.scale ?? 1);
+  // `rotate` in the catalogue is degrees, matching the runner's renderer.
+  const [rx = 0, ry = 0, rz = 0] = spec.rotate ?? [];
   model.rotation.set(rx * DEG, ry * DEG, rz * DEG);
   scene.add(model);
 
@@ -127,8 +137,8 @@ export async function showAvatar(canvas, entry) {
     mixer.clipAction(gltf.animations[0]).play();
   }
 
-  const [cx, cy, cz] = entry.camera ?? DEFAULT_CAMERA;
-  camera.fov = entry.fov ?? DEFAULT_FOV;
+  const [cx, cy, cz] = spec.camera ?? DEFAULT_CAMERA;
+  camera.fov = spec.fov ?? DEFAULT_FOV;
   camera.position.set(cx, cy, cz);
   camera.lookAt(cx, cy - 0.08, 0);
   camera.updateProjectionMatrix();
