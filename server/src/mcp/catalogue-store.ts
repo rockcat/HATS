@@ -1,7 +1,7 @@
 import { readFile, writeFile, mkdir } from 'fs/promises';
 import { existsSync } from 'fs';
 import path from 'path';
-import { MCPCatalogueEntry } from './mcp-catalogue.js';
+import { DiscoveredTool, MCPCatalogueEntry } from './mcp-catalogue.js';
 
 // All built-in entries serialised as plain JSON-compatible objects.
 // Uses ~/ prefix for home-directory paths (expanded by resolveConfig at connect time).
@@ -441,7 +441,17 @@ export async function initCatalogue(filePath: string): Promise<void> {
       // Refresh built-in entries so changes to BUILTIN_CATALOGUE are always picked up.
       // User-added entries (IDs not in BUILTIN_CATALOGUE) are preserved as-is.
       const builtinById = new Map(BUILTIN_CATALOGUE.map(e => [e.id, e]));
-      _catalogue = _catalogue.map(e => builtinById.get(e.id) ?? e);
+      _catalogue = _catalogue.map(e => {
+        const builtin = builtinById.get(e.id);
+        if (!builtin) return e;
+        // Discovered tools are observed, not declared, so they survive the
+        // refresh — the code has no way to regenerate them.
+        return {
+          ...builtin,
+          ...(e.knownTools && { knownTools: e.knownTools }),
+          ...(e.toolsDiscoveredAt && { toolsDiscoveredAt: e.toolsDiscoveredAt }),
+        };
+      });
       // Append any built-in entries that are missing from the persisted file (new additions).
       for (const b of BUILTIN_CATALOGUE) {
         if (!_catalogue.some(e => e.id === b.id)) _catalogue.push(b);
@@ -456,6 +466,23 @@ export async function initCatalogue(filePath: string): Promise<void> {
 
 export function getCatalogue(): MCPCatalogueEntry[] {
   return _catalogue;
+}
+
+/**
+ * Record what a server offered when the runner connected to it.
+ *
+ * Written back to the shared catalogue file so the Agent Library — which
+ * never starts an MCP server — can still list a server's tools. Unchanged
+ * lists are not rewritten, so a restart does not churn the file.
+ */
+export async function recordDiscoveredTools(id: string, tools: DiscoveredTool[]): Promise<void> {
+  const entry = _catalogue.find(e => e.id === id);
+  if (!entry || tools.length === 0) return;
+  const sorted = [...tools].sort((a, b) => a.name.localeCompare(b.name));
+  if (JSON.stringify(entry.knownTools ?? []) === JSON.stringify(sorted)) return;
+  entry.knownTools = sorted;
+  entry.toolsDiscoveredAt = new Date().toISOString();
+  await _persist();
 }
 
 export async function addEntry(entry: MCPCatalogueEntry): Promise<void> {

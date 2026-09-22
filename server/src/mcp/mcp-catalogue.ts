@@ -48,6 +48,24 @@ export interface MCPCatalogueEntry {
   /** Argument key renames applied before calling the server, per tool.
    *  Use when the server's advertised schema doesn't match its internal validator. */
   toolArgMappings?: Record<string, Record<string, string>>;
+  /**
+   * What this server offered the last time the runner connected to it.
+   *
+   * Only the runner can know — it is the only process that starts MCP
+   * servers. Recording it here is how the Agent Library, which starts
+   * nothing, can offer a real list of tools to choose from instead of a text
+   * box. Absent until the server has run at least once.
+   */
+  knownTools?: DiscoveredTool[];
+  /** When `knownTools` was last refreshed. */
+  toolsDiscoveredAt?: string;
+}
+
+/** One tool a server advertised, as the pickers need it. */
+export interface DiscoveredTool {
+  /** Bare name, without the `mcp__server__` prefix. */
+  name: string;
+  description: string;
 }
 
 /** Returns true if this entry appears in the per-agent personal MCP section. */
