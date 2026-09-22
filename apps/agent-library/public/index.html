@@ -171,6 +171,22 @@
           </label>
 
           <label class="field">
+            <span>Tools sent to the model</span>
+            <div class="row upfront-modes">
+              <label class="row">
+                <input type="radio" name="upfrontMode" value="all" checked>
+                <span>All of this agent's own servers</span>
+              </label>
+              <label class="row">
+                <input type="radio" name="upfrontMode" value="choose">
+                <span>Choose exactly which</span>
+              </label>
+            </div>
+            <div id="upfront-picker" class="tool-picker" hidden></div>
+            <small id="upfront-hint"></small>
+          </label>
+
+          <label class="field">
             <span>Tags</span>
             <input name="tags" placeholder="facilitator, finance">
           </label>

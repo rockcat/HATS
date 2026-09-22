@@ -83,6 +83,31 @@ Which of those servers a given agent may use is picked from the same list in
 the agent dialog. Both were free-text boxes, which meant typing ids that had
 to match exactly and gave no way to see that they did.
 
+## What the model is shown, and what it has to look for
+
+Every tool an agent can reach is either **upfront** — in the tool list of
+every request — or **searchable**, found with `search_tools` and loaded with
+`get_tool`. It is a straight trade: upfront costs a schema on every call,
+searchable costs a round trip and the risk of a query that misses.
+
+By default an agent gets all of its own personal servers upfront and the
+team's servers by search. That default exists because the alternative failed
+in practice: an agent with a mailbox it had to discover reported that it could
+not read mail.
+
+It is only a default. A template's `tools.upfrontTools` names exactly what
+goes in front of the model — a whole server (`email-imap`) or one tool
+(`email-imap:get_email`), personal or shared alike. An empty list sends
+nothing upfront; an absent one keeps the default. This matters because a
+server can be much larger than an agent needs: the IMAP one offers around
+fifty tools, of which an assistant uses perhaps five.
+
+The Agent Library edits this as a checkbox list of real tool names. It starts
+no MCP servers, so it cannot ask one what it offers — instead the runner
+records each server's tools into the shared MCP catalogue when it connects,
+and the library reads them from there. A server that has never run shows no
+tool list, and only the whole server can be chosen until it has.
+
 ### Team Runner — `server/src/`, port 3001
 
 Everything it did before, minus what now belongs to the two services above. It

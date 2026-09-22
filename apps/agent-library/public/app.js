@@ -4,10 +4,12 @@ import {
   $, $$, clear, debounce, el, guard, hatDots, makeClient, relativeTime, toastError, toastOk, trackHealth,
 } from '/ui-kit/hats-ui.js';
 import {
-  applyPersona, buildHatCheckboxes, buildServerPicker, emptyTemplate, readForm, writeForm,
+  applyPersona, buildHatCheckboxes, buildServerPicker, emptyTemplate, readForm,
+  selectedServers, writeForm,
 } from '/template-form.js';
 import { clearAvatar, showAvatar } from '/ui-kit/avatar-stage.js';
-import { loadMcpCatalogue, showMcpFor } from '/mcp-panel.js';
+import { configuredPersonalServers, loadMcpCatalogue, showMcpFor } from '/mcp-panel.js';
+import { readUpfront, setToolSources, syncMode, writeUpfront } from '/upfront-tools.js';
 import { initVoicePicker, initVoices } from '/voice-picker.js';
 
 const api = makeClient('/api/v1');
@@ -18,6 +20,7 @@ const state = {
   personas: {},
   providers: [],
   avatars: [],
+  mcp: { personal: [], shared: [] },
   dirty: false,
   // What the stage is currently showing, so an unrelated keystroke does not
   // trigger a multi-megabyte model reload.
@@ -230,8 +233,20 @@ function selectTemplate(id) {
   state.selectedId = id;
   renderEditor(template);
   renderList();
-  // MCP credentials key off the saved template, not the form.
-  void showMcpFor(id);
+  // MCP credentials key off the saved template, not the form. The upfront
+  // picker can only be built once we know which servers this agent has.
+  void showMcpFor(id).then(() => refreshToolSources());
+}
+
+/**
+ * Rebuild the "tools sent to the model" picker from what this agent can
+ * currently reach: its own configured servers, plus the team servers its
+ * allow-list lets through.
+ */
+function refreshToolSources() {
+  const useAll = ui.form.elements['allMcpServers']?.checked ?? true;
+  setToolSources(state.mcp, configuredPersonalServers(), useAll ? undefined : selectedServers(ui.form));
+  writeUpfront(ui.form, readUpfront(ui.form));
 }
 
 function startNewTemplate() {
@@ -243,7 +258,7 @@ function startNewTemplate() {
     : undefined), { isNew: true });
   renderList();
   // Neither panel applies until the template exists on the server.
-  void showMcpFor(null);
+  void showMcpFor(null).then(() => refreshToolSources());
   ui.form.elements['name'].focus();
   ui.form.elements['name'].select();
 }
@@ -332,6 +347,9 @@ function init() {
     if (event.target.name === 'allMcpServers') {
       $('#shared-mcp-list').hidden = event.target.checked;
     }
+    if (event.target.name === 'upfrontMode') syncMode(ui.form);
+    // Changing which servers the agent may use changes what it can be given.
+    if (['allMcpServers', 'mcpServer'].includes(event.target.name)) refreshToolSources();
     setDirty(true);
     refreshPreview();
   });
@@ -357,6 +375,7 @@ init();
 try {
   await loadCatalogue();
   const mcp = await loadMcpCatalogue();
+  state.mcp = mcp;
   buildServerPicker($('#shared-mcp-list'), mcp.shared ?? []);
   await loadTemplates();
   const first = state.templates[0];

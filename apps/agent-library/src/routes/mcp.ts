@@ -33,6 +33,10 @@ function describe(entry: MCPCatalogueEntry) {
     envVars: (entry.envVars ?? [])
       .map((v) => ({ name: envVarName(v), placeholder: envVarPlaceholder(v) }))
       .filter((v) => v.name),
+    // What the server offered the last time the runner connected to it. The
+    // library starts no MCP servers, so without this it has nothing to list.
+    knownTools: entry.knownTools ?? [],
+    toolsDiscoveredAt: entry.toolsDiscoveredAt,
   };
 }
 

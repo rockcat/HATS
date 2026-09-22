@@ -15,6 +15,11 @@ const FEATURE_VAR = /FEATURE_OVERRIDES$/;
 
 let catalogue = { personal: [], shared: [] };
 let templateId = null;
+/** Personal server ids this template has credentials for. */
+let configuredIds = [];
+
+/** Which personal servers this agent actually has, for the upfront picker. */
+export function configuredPersonalServers() { return configuredIds; }
 
 export async function loadMcpCatalogue() {
   catalogue = (await api.get('/mcp/catalogue')) ?? { personal: [], shared: [] };
@@ -133,6 +138,7 @@ async function refresh() {
 
   const result = await api.get(`/agent-templates/${templateId}/personal-mcp`);
   const byId = new Map((result?.servers ?? []).map((s) => [s.id, s]));
+  configuredIds = (result?.servers ?? []).filter((s) => !s.disabled).map((s) => s.id);
 
   clear(list);
   for (const entry of catalogue.personal) list.append(buildServerCard(entry, byId.get(entry.id)));
@@ -148,7 +154,7 @@ export async function showMcpFor(id) {
   // rather than swapping an empty state inside it.
   $('#personal-mcp-section').hidden = !id;
   $('#mcp-empty').hidden = Boolean(id);
-  if (!id) { clear($('#mcp-list')); $('#mcp-count').textContent = '0'; return; }
+  if (!id) { configuredIds = []; clear($('#mcp-list')); $('#mcp-count').textContent = '0'; return; }
   await guard(() => refresh());
 }
 

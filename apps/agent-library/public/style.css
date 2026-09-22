@@ -149,3 +149,44 @@
 }
 
 .dirty-marker { color: var(--warn); font-weight: 700; }
+
+/* ── Which tools go in front of the model ────────────────────────────────── */
+
+.upfront-modes { gap: 16px; margin-bottom: 6px; font-size: 13px; }
+.upfront-modes label { gap: 5px; cursor: pointer; }
+.upfront-modes input { width: auto; }
+.upfront-modes span { margin: 0; }
+
+.tool-picker {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  max-height: 300px;
+  overflow-y: auto;
+  background: var(--bg);
+}
+
+.tool-server { border-bottom: 1px solid var(--border); padding: 8px 10px; }
+.tool-server:last-child { border-bottom: none; }
+
+.tool-server-head { display: flex; align-items: center; gap: 7px; cursor: pointer; }
+.tool-server-head input { width: auto; flex: none; }
+.tool-server-name { display: flex; align-items: center; gap: 7px; font-weight: 600; font-size: 13px; }
+
+.tool-list { margin: 6px 0 0 22px; }
+
+.tool-option { display: flex; align-items: flex-start; gap: 6px; padding: 2px 0; cursor: pointer; }
+.tool-option input { width: auto; flex: none; margin-top: 3px; }
+.tool-option:has(input:disabled) { opacity: 0.45; cursor: default; }
+
+.tool-text { display: flex; gap: 8px; min-width: 0; align-items: baseline; }
+.tool-text code { font-size: 11.5px; flex: none; }
+
+.tool-desc {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tool-unknown { font-size: 11.5px; color: var(--text-muted); padding: 6px 10px; line-height: 1.4; }

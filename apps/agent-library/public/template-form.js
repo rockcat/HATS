@@ -2,6 +2,7 @@
 
 import { $$, HAT_TYPES, el } from '/ui-kit/hats-ui.js';
 import { selectedServers } from '/ui-kit/server-picker.js';
+import { readUpfront, writeUpfront } from '/upfront-tools.js';
 import { refreshSpeakers } from '/voice-picker.js';
 
 const csv = (value) => (value ?? '').split(',').map((s) => s.trim()).filter(Boolean);
@@ -62,7 +63,11 @@ export function readForm(form) {
   // Omit empty optional objects entirely — the schema forbids stray nulls.
   const definedLimits = Object.fromEntries(Object.entries(limits).filter(([, v]) => v !== undefined));
   if (Object.keys(definedLimits).length) input.limits = definedLimits;
+  const upfrontTools = readUpfront(form);
   if (!useAllServers) input.tools = { enabledMcpServers };
+  // Which tools go in front of the model is independent of which servers the
+  // agent may reach, so it can be set without an allow-list.
+  if (upfrontTools !== undefined) input.tools = { ...(input.tools ?? {}), upfrontTools };
   if (tags.length) input.tags = tags;
 
   for (const key of Object.keys(input.identity)) {
@@ -106,6 +111,7 @@ export function writeForm(form, template) {
   if (picker) picker.hidden = useAll;
   const chosen = new Set(allowList ?? []);
   for (const input of $$('input[name="mcpServer"]', form)) input.checked = chosen.has(input.value);
+  writeUpfront(form, template.tools?.upfrontTools);
   set('tags', (template.tags ?? []).join(', '));
   set('persona', '');
 
