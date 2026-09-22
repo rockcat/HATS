@@ -89,7 +89,7 @@ export class Agent implements IAgent {
 
   /** The MCP tools available right now; empty when nothing is wired up. */
   private mcpTools(): import('./types.js').AgentToolSet {
-    return this.extraToolsProvider?.() ?? { shared: [], personal: [] };
+    return this.extraToolsProvider?.() ?? { upfront: [], searchable: [] };
   }
 
   /** Rename the agent and rebuild their system prompt. */
@@ -261,10 +261,10 @@ export class Agent implements IAgent {
 
     const userContent = formatIncomingMessage(message);
     const mcp = this.mcpTools();
-    const registry = buildToolRegistry([...getAllToolsForHat(this.config.hatType), ...mcp.shared, ...mcp.personal]);
-    // Core tools plus this agent's own MCP servers. Team servers are found
-    // with search_tools; a personal server is always in reach.
-    const tools = [...getToolsForHat(this.config.hatType), ...mcp.personal];
+    const registry = buildToolRegistry([...getAllToolsForHat(this.config.hatType), ...mcp.upfront, ...mcp.searchable]);
+    // Core tools plus whatever the template put in front of the model. The
+    // rest is in the registry, reachable through search_tools.
+    const tools = [...getToolsForHat(this.config.hatType), ...mcp.upfront];
 
     // Scheduled tasks start fresh — no history needed for a cron-style trigger
     const history = message.isScheduled ? [] : (this.threads.get(historyKey) ?? []).map(toProviderMessage);
@@ -350,14 +350,14 @@ export class Agent implements IAgent {
     const MEETING_TOOLS = new Set(['request_meeting', 'schedule_meeting']);
     const mcp = this.mcpTools();
     const keep = (t: { name: string }) => !MEETING_TOOLS.has(t.name);
-    const personal = mcp.personal.filter(keep);
+    const upfront = mcp.upfront.filter(keep);
     const allHatTools = getAllToolsForHat(this.config.hatType).filter(keep);
     const meetingRegistry = buildToolRegistry([
-      ...allHatTools, ...mcp.shared.filter(keep), ...personal, ...extraMeetingTools,
+      ...allHatTools, ...upfront, ...mcp.searchable.filter(keep), ...extraMeetingTools,
     ]);
     const tools = [
       ...getToolsForHat(this.config.hatType).filter(keep),
-      ...personal,
+      ...upfront,
       ...extraMeetingTools,
     ];
     const working: Message[] = [

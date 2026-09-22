@@ -6,6 +6,7 @@ import { MockProvider } from '../providers/mock.js';
 import { TeamMessage } from '../orchestrator/types.js';
 import { searchTools, getTool, buildToolRegistry } from '../tools/tool-search.js';
 import { getAllToolsForHat, SEARCH_TOOLS, GET_TOOL } from '../tools/definitions.js';
+import { splitToolSet } from '../tools/tool-exposure.js';
 
 function makeAgent(overrides: Partial<ConstructorParameters<typeof Agent>[0]> = {}): Agent {
   return new Agent({
@@ -144,37 +145,69 @@ const mcpTool = (name: string, description: string) => ({
   name, description, parameters: { type: 'object' as const, properties: {} },
 });
 
-describe('Personal MCP tools', () => {
+const EMAIL_GET = mcpTool('mcp__email-imap__get_email', 'Get the full content of an email by ID.');
+const EMAIL_LABEL = mcpTool('mcp__email-imap__create_label', 'Create a mailbox label.');
+const KANBAN = mcpTool('mcp__kanban__create_ticket', 'Create a kanban ticket.');
+
+/** Wire the agent up the way the orchestrator does, through the real splitter. */
+const withTools = (agent: Agent, upfrontTools?: string[]) =>
+  agent.setExtraToolsProvider(() =>
+    splitToolSet({ personal: [EMAIL_GET, EMAIL_LABEL], shared: [KANBAN] }, upfrontTools));
+
+const toolsSent = (provider: MockProvider, call = 0) =>
+  provider.calls[call]?.tools?.map(t => t.name) ?? [];
+
+describe('Which tools reach the model', () => {
   it('sends the agent its own MCP tools without making it search first', async () => {
     // Somebody configured this agent a mailbox on purpose. Making it discover
     // that for itself is how an agent ends up reporting it cannot read mail.
     const provider = new MockProvider({ content: 'ok' });
     const agent = makeAgent({ provider });
-    agent.setExtraToolsProvider(() => ({
-      shared: [mcpTool('mcp__kanban__create_ticket', 'Create a kanban ticket.')],
-      personal: [mcpTool('mcp__email-imap__get_email', 'Get the full content of an email by ID.')],
-    }));
+    withTools(agent);
     agent.setResponseHandler(async () => {});
     agent.receive(makeDirectMessage('Read my mail'));
     await waitForProcessing();
 
-    const toolNames = provider.calls[0]?.tools?.map(t => t.name) ?? [];
-    expect(toolNames).toContain('mcp__email-imap__get_email');
-    // A team server can run to hundreds of tools, so those still stay behind
+    expect(toolsSent(provider)).toContain('mcp__email-imap__get_email');
+    // A team server can run to hundreds of tools, so those stay behind
     // search_tools.
-    expect(toolNames).not.toContain('mcp__kanban__create_ticket');
+    expect(toolsSent(provider)).not.toContain('mcp__kanban__create_ticket');
   });
 
-  it('still lets the agent find a shared MCP tool by searching', async () => {
+  it('sends only the tools a template asks for upfront', async () => {
+    const provider = new MockProvider({ content: 'ok' });
+    const agent = makeAgent({ provider });
+    withTools(agent, ['email-imap:get_email', 'kanban']);
+    agent.setResponseHandler(async () => {});
+    agent.receive(makeDirectMessage('Read my mail'));
+    await waitForProcessing();
+
+    const names = toolsSent(provider);
+    expect(names).toContain('mcp__email-imap__get_email');
+    // A team server can be put in front of the model too.
+    expect(names).toContain('mcp__kanban__create_ticket');
+    // The rest of what the mail server offers is not worth the context.
+    expect(names).not.toContain('mcp__email-imap__create_label');
+  });
+
+  it('sends no MCP tools at all when a template asks for none', async () => {
+    const provider = new MockProvider({ content: 'ok' });
+    const agent = makeAgent({ provider });
+    withTools(agent, []);
+    agent.setResponseHandler(async () => {});
+    agent.receive(makeDirectMessage('Hello'));
+    await waitForProcessing();
+
+    expect(toolsSent(provider).filter(n => n.startsWith('mcp__'))).toEqual([]);
+  });
+
+  it('still lets the agent find a tool it was not given', async () => {
     const provider = new MockProvider([
       { content: '', toolCalls: [{ id: 'tc1', name: 'search_tools', arguments: { query: 'create a ticket' } }] },
       { content: 'Done.' },
     ]);
     const agent = makeAgent({ provider });
-    agent.setExtraToolsProvider(() => ({
-      shared: [mcpTool('mcp__kanban__create_ticket', 'Create a kanban ticket.')],
-      personal: [],
-    }));
+    withTools(agent, []);
     agent.setResponseHandler(async () => {});
     agent.receive(makeDirectMessage('Raise a ticket'));
     await waitForProcessing();
@@ -183,21 +216,18 @@ describe('Personal MCP tools', () => {
     expect(toolMsg?.content).toContain('mcp__kanban__create_ticket');
   });
 
-  it('does not duplicate a personal tool the model also asks get_tool for', async () => {
+  it('does not duplicate a tool the model also asks get_tool for', async () => {
     const provider = new MockProvider([
       { content: '', toolCalls: [{ id: 'tc1', name: 'get_tool', arguments: { name: 'get_email' } }] },
       { content: 'Done.' },
     ]);
     const agent = makeAgent({ provider });
-    agent.setExtraToolsProvider(() => ({
-      shared: [], personal: [mcpTool('mcp__email-imap__get_email', 'Get the full content of an email by ID.')],
-    }));
+    withTools(agent);
     agent.setResponseHandler(async () => {});
     agent.receive(makeDirectMessage('Read my mail'));
     await waitForProcessing();
 
-    const names = provider.calls[1]?.tools?.map(t => t.name).filter(n => n === 'mcp__email-imap__get_email') ?? [];
-    expect(names).toHaveLength(1);
+    expect(toolsSent(provider, 1).filter(n => n === 'mcp__email-imap__get_email')).toHaveLength(1);
   });
 });
 

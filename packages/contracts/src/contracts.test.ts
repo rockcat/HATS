@@ -199,6 +199,22 @@ describe('projects', () => {
     expect(reviseProject(project, { goal: 'Ship it' }).mcpServers).toEqual(servers);
   });
 
+  it('carries a curated upfront tool list from template to deployment', () => {
+    // Which tools go in front of the model is a property of the agent, so it
+    // travels with it into a project.
+    const upfrontTools = ['email-imap:get_email', 'kanban'];
+    const template = createAgentTemplate({ ...MINIMAL_TEMPLATE, tools: { upfrontTools } });
+    const deployed = deployTemplate(template);
+    expect(deployed.tools?.upfrontTools).toEqual(upfrontTools);
+    expect(validateDeployedAgent(deployed).errors).toEqual([]);
+  });
+
+  it('keeps an empty upfront list, which means "send nothing"', () => {
+    const template = createAgentTemplate({ ...MINIMAL_TEMPLATE, tools: { upfrontTools: [] } });
+    expect(template.tools?.upfrontTools).toEqual([]);
+    expect(validateAgentTemplate(template).errors).toEqual([]);
+  });
+
   it('summarises without leaking the team', () => {
     const deployed = deployTemplate(createAgentTemplate(MINIMAL_TEMPLATE));
     const summary = summariseProject(createProject({ id: 'acme', name: 'Acme', team: [deployed] }), true);

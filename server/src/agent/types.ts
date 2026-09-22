@@ -1,5 +1,5 @@
 import { HatType } from '../hats/types.js';
-import { AIProvider, ToolCall, ToolDefinition } from '../providers/types.js';
+import { AIProvider, ToolCall } from '../providers/types.js';
 import { TeamMessage } from '../orchestrator/types.js';
 
 export enum AgentState {
@@ -90,6 +90,11 @@ export interface AgentConfig {
   personalMcpCredentials?: Record<string, Record<string, string>>;
   /** IDs of personal MCP servers that have credentials saved but are currently stopped. */
   disabledPersonalMcpServers?: string[];
+  /**
+   * MCP tools shown to the model in every call rather than found with
+   * search_tools. See `ToolAccess.upfrontTools` in the contracts.
+   */
+  upfrontTools?: string[];
   /** Max conversation history size in tokens (estimated). Defaults to model context window. */
   maxContextTokens?: number;
   /** If set, agent idles until the next hour when hourly spend exceeds this value (USD). */
@@ -98,22 +103,8 @@ export interface AgentConfig {
   externalEndpoint?: ExternalAgentEndpoint;
 }
 
-/**
- * The MCP tools an agent can reach, split by where they came from.
- *
- * A personal server is configured for this one agent, with its own
- * credentials — somebody deliberately gave this agent a mailbox or a
- * calendar. Its tools go to the model in every call, because an agent that
- * has to discover its own mailbox will sometimes fail to and then report,
- * wrongly, that it cannot read mail.
- *
- * Shared servers belong to the whole team and can run to hundreds of tools,
- * so those stay behind `search_tools` / `get_tool`.
- */
-export interface AgentToolSet {
-  shared: ToolDefinition[];
-  personal: ToolDefinition[];
-}
+// Which tools the model is shown without asking is decided in one place.
+export type { AgentToolSet } from '../tools/tool-exposure.js';
 
 export interface AgentMessage {
   role: 'user' | 'assistant' | 'tool';

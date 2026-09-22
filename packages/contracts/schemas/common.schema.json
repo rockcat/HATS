@@ -117,6 +117,12 @@
           "description": "Personal MCP servers that have credentials stored but are currently stopped.",
           "items": { "type": "string", "minLength": 1 },
           "uniqueItems": true
+        },
+        "upfrontTools": {
+          "type": "array",
+          "description": "MCP tools shown to the model in every call instead of being found with search_tools. An entry is a server id ('email-imap') or one tool ('email-imap:get_email'). Absent means every personal server; an empty list means none.",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
         }
       },
       "additionalProperties": false
