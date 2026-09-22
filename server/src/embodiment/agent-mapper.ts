@@ -93,6 +93,7 @@ export function toDeployedAgent(agent: IAgent, existing?: DeployedAgent): Deploy
     tools: compact({
       enabledMcpServers: agent.config.enabledMcpServers,
       disabledPersonalMcpServers: agent.config.disabledPersonalMcpServers,
+      upfrontTools: agent.config.upfrontTools,
     }),
     enabled: true,
     ...(existing?.deployedAt && { deployedAt: existing.deployedAt }),
@@ -132,6 +133,7 @@ export function toAgentConfig(
     teamContext: deployed.teamContext,
     enabledMcpServers: deployed.tools?.enabledMcpServers,
     disabledPersonalMcpServers: deployed.tools?.disabledPersonalMcpServers,
+    upfrontTools: deployed.tools?.upfrontTools,
     personalMcpCredentials: secrets.personalMcpCredentials,
     maxContextTokens: deployed.limits?.maxContextTokens,
     maxCostPerHour: deployed.limits?.maxCostPerHour,

@@ -10,6 +10,7 @@ import { getToolsForHat } from '../tools/definitions.js';
 import { AIProvider } from '../providers/types.js';
 import { EventStore } from '../store/event-store.js';
 import { MCPRegistry } from '../mcp/mcp-registry.js';
+import { splitToolSet, unmatchedSelectors } from '../tools/tool-exposure.js';
 import { MCPServerDef } from '../mcp/mcp-client.js';
 import { Semaphore } from '../providers/semaphore.js';
 import { TeamSnapshot, TeamSnapshotV1, TeamSnapshotV2, AgentSnapshot, AgentDefinition, HistoryEntry } from '../store/team-snapshot.js';
@@ -29,7 +30,7 @@ import { EmailAllowlistStore } from '../api/email-allowlist-store.js';
 import { AgendaStore } from '../api/agenda-store.js';
 import { AgendaRunner } from './agenda-runner.js';
 import { resolvePersonalConfig, isAgentMcp } from '../mcp/mcp-catalogue.js';
-import { getCatalogue } from '../mcp/catalogue-store.js';
+import { getCatalogue, recordDiscoveredTools } from '../mcp/catalogue-store.js';
 import {
   startMeeting as startMeetingFn,
   makeResponseHandler as makeResponseHandlerFn,
@@ -125,8 +126,25 @@ export class TeamOrchestrator {
 
   async addMCPServer(def: MCPServerDef): Promise<void> {
     await this.mcp.add(def);
+    await this.noteDiscoveredTools(def.name, this.mcp.getToolsForServers([def.name]));
     await this.store.append('mcp_server_added', { name: def.name });
     this.rebuildTeamContext();
+  }
+
+  /**
+   * Write a server's tool list back to the shared MCP catalogue.
+   *
+   * The runner is the only process that starts MCP servers, so it is the
+   * only one that can know what they offer. The Agent Library reads the same
+   * file, which is how its "what goes in the prompt" picker can list real
+   * tools without starting anything.
+   */
+  private async noteDiscoveredTools(serverId: string, tools: { name: string; description: string }[]): Promise<void> {
+    const prefix = `mcp__${serverId}__`;
+    await recordDiscoveredTools(serverId, tools.map(t => ({
+      name: t.name.startsWith(prefix) ? t.name.slice(prefix.length) : t.name,
+      description: t.description,
+    }))).catch((err: Error) => log.warn(`[MCP] Could not record tools for "${serverId}": ${err.message}`));
   }
 
   async removeMCPServer(name: string): Promise<void> {
@@ -471,11 +489,14 @@ export class TeamOrchestrator {
     const credKeys = Object.keys(credentials);
     log.info(`[Team] Personal MCP "${serverId}" starting for ${agentName} — credential keys: [${credKeys.join(', ')}]`);
     await personalMcp.add({ name: serverId, config, toolArgMappings: entry.toolArgMappings });
-    const toolCount = personalMcp.getToolsForServers([serverId]).length;
-    log.info(`[Team] Personal MCP "${serverId}" started for ${agentName} — ${toolCount} tool(s), sent in every call`);
-    if (toolCount > LARGE_PERSONAL_SERVER) {
+    const discovered = personalMcp.getToolsForServers([serverId]);
+    await this.noteDiscoveredTools(serverId, discovered);
+    const toolCount = discovered.length;
+    const curated = this.findByName(agentName)?.config.upfrontTools !== undefined;
+    log.info(`[Team] Personal MCP "${serverId}" started for ${agentName} — ${toolCount} tool(s)`);
+    if (!curated && toolCount > LARGE_PERSONAL_SERVER) {
       log.warn(`[Team] "${serverId}" is large: ${toolCount} tool schemas ride on every one of ${agentName}'s requests.`
-        + ' Trim it in the catalogue if that is more context than the agent needs.');
+        + ' Set "tools sent to the model" on the agent template to send only the ones it uses.');
     }
   }
 
@@ -513,15 +534,23 @@ export class TeamOrchestrator {
 
     if (!config.externalEndpoint) {
       agent.setToolExecutor(buildToolExecutor(this.makeToolCallContext(), this.mcp));
+      let warnedSelectors = false;
       agent.setExtraToolsProvider(() => {
-        const ids         = agent.config.enabledMcpServers;
-        const sharedTools = ids == null ? this.mcp.getAllTools() : this.mcp.getToolsForServers(ids);
-        const personalMcp = this.personalMcpByAgent.get(agent.name.toLowerCase());
-        if (!personalMcp) return { shared: sharedTools, personal: [] };
-        // A personal server wins a name clash: it is this agent's own account.
-        const personal = personalMcp.getAllTools();
-        const personalNames = new Set(personal.map(t => t.name));
-        return { shared: sharedTools.filter(t => !personalNames.has(t.name)), personal };
+        const ids    = agent.config.enabledMcpServers;
+        const shared = ids == null ? this.mcp.getAllTools() : this.mcp.getToolsForServers(ids);
+        const personal = this.personalMcpByAgent.get(agent.name.toLowerCase())?.getAllTools() ?? [];
+
+        // Checked here rather than at registration because this is the first
+        // point where the servers have actually connected and reported.
+        if (!warnedSelectors && (personal.length || shared.length)) {
+          warnedSelectors = true;
+          const missing = unmatchedSelectors({ personal, shared }, agent.config.upfrontTools);
+          if (missing.length) {
+            log.warn(`[Team] ${agent.name} asks for tools that do not exist: ${missing.join(', ')}.`
+              + ' They will never be sent to the model.');
+          }
+        }
+        return splitToolSet({ personal, shared }, agent.config.upfrontTools);
       });
       agent.setLLMSemaphore(this.llmSemaphore);
       if (this.telemetryRecorder) agent.setTelemetryRecorder(this.telemetryRecorder);

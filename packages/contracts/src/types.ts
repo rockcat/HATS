@@ -57,6 +57,17 @@ export interface AgentLimits {
 export interface ToolAccess {
   enabledMcpServers?: string[];
   disabledPersonalMcpServers?: string[];
+  /**
+   * Which MCP tools the model is shown in every call, instead of having to
+   * find them with `search_tools`.
+   *
+   * An entry is a server id — `email-imap`, meaning all of its tools — or
+   * one tool, `email-imap:get_email`. Absent means every personal server,
+   * because an agent given its own mailbox should not have to discover it.
+   * An empty list means nothing is sent upfront and everything is searched
+   * for, which is the cheapest option for a server with many tools.
+   */
+  upfrontTools?: string[];
 }
 
 export interface McpServerDefinition {

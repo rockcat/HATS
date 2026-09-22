@@ -2,20 +2,21 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { mkdtemp, rm, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import * as path from 'path';
-import { toEmbodiedAgent } from './agent-mapper.js';
+import { toAgentConfig, toDeployedAgent, toEmbodiedAgent } from './agent-mapper.js';
 import { findAvatarByFile, framingOf } from '../render/avatar-catalogue.js';
 import type { IAgent } from '../agent/iagent.js';
 
 /** Only the fields the mapper reads; the rest of IAgent is irrelevant here. */
-const fakeAgent = (identity: Record<string, unknown>): IAgent => ({
+const fakeAgent = (identity: Record<string, unknown>, config: Record<string, unknown> = {}): IAgent => ({
   id: 'inst-1',
   name: 'Poppy',
   hatType: ['white'],
   state: 'idle',
   config: {
-    identity: { name: 'Poppy', ...identity },
+    identity: { name: 'Poppy', visualDescription: 'calm', ...identity },
     provider: { name: 'anthropic' },
     model: 'claude-haiku-4-5-20251001',
+    ...config,
   },
   getThreadSummary: () => ({ general: 3 }),
   getHourlyCost: () => 0.42,
@@ -32,6 +33,26 @@ beforeAll(async () => {
 });
 
 afterAll(async () => { await rm(dir, { recursive: true, force: true }); });
+
+describe('tool exposure round trip', () => {
+  it('survives the trip through a deployed agent and back', async () => {
+    // The runner reads it from the project definition and writes it back
+    // when the team is snapshotted, so a loss either way is silent.
+    const upfrontTools = ['email-imap:get_email', 'kanban'];
+    const deployed = toDeployedAgent(
+      fakeAgent({ avatar: 'max.glb' }, { upfrontTools }),
+    );
+    expect(deployed.tools?.upfrontTools).toEqual(upfrontTools);
+
+    const config = toAgentConfig(deployed, () => ({ name: 'anthropic' } as never));
+    expect(config.upfrontTools).toEqual(upfrontTools);
+  });
+
+  it('leaves it absent when nobody chose, so the default applies', () => {
+    const deployed = toDeployedAgent(fakeAgent({ avatar: 'max.glb' }));
+    expect(deployed.tools?.upfrontTools).toBeUndefined();
+  });
+});
 
 describe('toEmbodiedAgent', () => {
   it('reports what the agent has, so a client knows what it can render', () => {
