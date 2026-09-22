@@ -1,6 +1,6 @@
 /** Mapping between the editor form and an AgentTemplate document. */
 
-import { $, HAT_TYPES, el } from '/ui-kit/hats-ui.js';
+import { $$, HAT_TYPES, el } from '/ui-kit/hats-ui.js';
 import { selectedServers } from '/ui-kit/server-picker.js';
 import { refreshSpeakers } from '/voice-picker.js';
 
