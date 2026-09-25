@@ -1,86 +1,32 @@
-import 'dart:async';
 import 'dart:convert';
-import 'dart:io' show Platform;
-import 'package:flutter/material.dart';
-import 'package:webview_flutter/webview_flutter.dart';
-import 'package:webview_flutter_android/webview_flutter_android.dart';
-import '../models/avatar_config.dart';
 
-class AvatarView extends StatefulWidget {
-  final String src;
-  final AvatarConfig? config;
+import 'avatar_config.dart';
 
-  const AvatarView({super.key, required this.src, this.config});
+/// The page the avatar WebView runs.
+///
+/// Kept as a pure function of its inputs so it can be diffed and tested
+/// without a WebView. Two things it pulls from the server rather than
+/// bundling:
+///
+///  * `avatar-core.js` and `morph-lipsync.js` — the viseme mapping, rest pose,
+///    blink and idle motion, shared with the browser dashboard so a fix to lip
+///    sync lands in both at once.
+///  * three.js and `@pixiv/three-vrm` from a CDN, which is why the avatar needs
+///    a connection even for a model it has already downloaded.
+String buildAvatarHtml({
+  required String src,
+  AvatarConfig? config,
+  String? moduleOrigin,
+}) {
+  final cfg = config ?? const AvatarConfig();
+  final srcEsc = jsonEncode(src);
+  final origin = moduleOrigin ?? Uri.parse(src).origin;
+  final targetY = cfg.cameraY;
+  final orbitZ = cfg.cameraZ;
+  final fov = cfg.fov;
+  final rotY = (cfg.rotateY * 3.14159265 / 180.0).toStringAsFixed(6);
 
-  @override
-  State<AvatarView> createState() => AvatarViewState();
-}
-
-class AvatarViewState extends State<AvatarView> {
-  late final WebViewController _ctrl;
-  Completer<void> _vrmReady = Completer<void>();
-
-  /// Completes when the current model has finished loading in the WebView.
-  /// Awaiting this before playing audio ensures lip sync can start on time.
-  Future<void> get vrmReady => _vrmReady.future;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setBackgroundColor(Colors.transparent)
-      ..addJavaScriptChannel(
-        'AvatarBridge',
-        onMessageReceived: (_) {
-          if (!_vrmReady.isCompleted) _vrmReady.complete();
-        },
-      );
-
-    if (Platform.isAndroid) {
-      final android = _ctrl.platform as AndroidWebViewController;
-      // Enable WebView debugging (inspect via chrome://inspect on desktop).
-      AndroidWebViewController.enableDebugging(true);
-      // Allow audio/video to play without a user gesture (needed for lipsync audio).
-      android.setMediaPlaybackRequiresUserGesture(false);
-    }
-
-    _ctrl.loadHtmlString(_buildHtml(), baseUrl: 'http://localhost/');
-  }
-
-  /// Called after audio playback starts for each chunk.
-  /// [visemes] may be empty — WebView falls back to a simple animation.
-  Future<void> applyLipSync(List<dynamic> visemes) async {
-    if (!mounted) return;
-    final json = jsonEncode(visemes);
-    await _ctrl.runJavaScript('window._queueLipSync && window._queueLipSync($json)');
-  }
-
-  @override
-  void didUpdateWidget(AvatarView old) {
-    super.didUpdateWidget(old);
-    // Reuse the live WebView — just swap the model, skipping full HTML reload.
-    if (widget.src != old.src) {
-      _vrmReady = Completer<void>(); // fresh gate for the new model
-      final srcEsc = jsonEncode(widget.src);
-      _ctrl.runJavaScript('window.loadModel && window.loadModel($srcEsc)');
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) => WebViewWidget(controller: _ctrl);
-
-  String _buildHtml() {
-    final cfg     = widget.config;
-    final srcEsc  = jsonEncode(widget.src);
-    final origin  = Uri.parse(widget.src).origin;
-    final targetY = cfg?.cameraY ?? 1.65;
-    final orbitZ  = cfg?.cameraZ ?? 0.6;
-    final fov     = cfg?.fov ?? 50.0;
-    final rotY    = ((cfg?.rotateY ?? 0.0) * 3.14159265 / 180.0)
-        .toStringAsFixed(6);
-
-    return '''<!DOCTYPE html>
+  return '''<!DOCTYPE html>
 <html>
 <head>
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
@@ -285,5 +231,4 @@ animate();
 </script>
 </body>
 </html>''';
-  }
 }

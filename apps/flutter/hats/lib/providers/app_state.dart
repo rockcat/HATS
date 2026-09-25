@@ -4,6 +4,7 @@ import '../models/agent.dart';
 import '../models/chat_message.dart';
 import '../models/ticket.dart';
 import '../services/api_service.dart';
+import 'package:hats_avatar_view/hats_avatar_view.dart';
 import '../services/auth_service.dart';
 
 class AppState extends ChangeNotifier {
@@ -20,6 +21,29 @@ class AppState extends ChangeNotifier {
 
   ApiService? _api;
   StreamSubscription<Map<String, dynamic>>? _sseSub;
+
+  /// Live avatar views, by agent name.
+  ///
+  /// A card registers its face when it mounts so speech can be routed to the
+  /// right one: the runner tells us who is speaking, not which widget.
+  final Map<String, AvatarViewState> _avatarViews = {};
+
+  void registerAvatarView(String agentName, AvatarViewState view) {
+    _avatarViews[agentName.toLowerCase()] = view;
+  }
+
+  void unregisterAvatarView(String agentName) {
+    _avatarViews.remove(agentName.toLowerCase());
+  }
+
+  /// The face for an agent, if one is on screen.
+  AvatarViewState? avatarViewFor(String agentName) => _avatarViews[agentName.toLowerCase()];
+
+  /// Drive one agent's lip sync. Silently does nothing when its card is not
+  /// mounted, which is the common case on a small screen.
+  Future<void> applyLipSync(String agentName, List<dynamic> visemes) async {
+    await avatarViewFor(agentName)?.applyLipSync(visemes);
+  }
 
   ApiService get api {
     assert(_api != null, 'ApiService not initialised — call initFromStorage first');

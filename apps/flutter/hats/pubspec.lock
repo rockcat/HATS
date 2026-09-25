@@ -195,6 +195,13 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
+  hats_avatar_view:
+    dependency: "direct main"
+    description:
+      path: "../avatar_view"
+      relative: true
+    source: path
+    version: "1.0.0"
   http:
     dependency: "direct main"
     description:

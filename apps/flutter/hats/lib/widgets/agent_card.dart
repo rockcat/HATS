@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/agent.dart';
-import '../models/avatar_config.dart';
 import '../providers/app_state.dart';
-import 'avatar_view.dart';
+import 'package:hats_avatar_view/hats_avatar_view.dart';
 
 class AgentCard extends StatefulWidget {
   final Agent agent;

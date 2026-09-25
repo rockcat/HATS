@@ -20,6 +20,9 @@ dependencies:
   flutter_tts: ^4.2.0
   webview_flutter: ^4.0.0
   webview_flutter_android: ^3.0.0
+  # The avatar renderer, shared with apps/poppyinyourpocket.
+  hats_avatar_view:
+    path: ../avatar_view
 
 flutter:
   uses-material-design: true
