@@ -1,6 +1,9 @@
 import { readFile, writeFile } from 'fs/promises';
 import { HumanRequest } from '../orchestrator/types.js';
 
+/** When a request stopped needing attention, however it was settled. */
+const settledAt = (r: HumanRequest): string => r.answeredAt ?? r.dismissedAt ?? r.createdAt;
+
 export class HumanRequestStore {
   filePath: string | null;
   private requests = new Map<string, HumanRequest>();
@@ -34,10 +37,11 @@ export class HumanRequestStore {
         (b.urgency === 'high' ? 1 : 0) - (a.urgency === 'high' ? 1 : 0) ||
         a.createdAt.localeCompare(b.createdAt),
       );
-    const answered = all
-      .filter(r => r.status === 'answered')
-      .sort((a, b) => (b.answeredAt ?? '').localeCompare(a.answeredAt ?? ''));
-    return [...pending, ...answered];
+    // Answered and dismissed are both settled; they sort together by when.
+    const resolved = all
+      .filter(r => r.status !== 'pending')
+      .sort((a, b) => settledAt(b).localeCompare(settledAt(a)));
+    return [...pending, ...resolved];
   }
 
   get(id: string): HumanRequest | undefined {
@@ -60,15 +64,32 @@ export class HumanRequestStore {
     return request;
   }
 
+  /**
+   * Close a request without answering it.
+   *
+   * Kept rather than deleted so the panel can show that it was dealt with,
+   * and so the agent's side of it is auditable.
+   */
+  async dismiss(id: string, note?: string): Promise<HumanRequest | undefined> {
+    const request = this.requests.get(id);
+    if (!request) return undefined;
+    request.status      = 'dismissed';
+    request.dismissedAt = new Date().toISOString();
+    if (note?.trim()) request.dismissalNote = note.trim();
+    await this.save();
+    return request;
+  }
+
   async remove(id: string): Promise<boolean> {
     const deleted = this.requests.delete(id);
     if (deleted) await this.save();
     return deleted;
   }
 
-  async clearAnswered(): Promise<void> {
+  /** Drop everything settled — answered or dismissed — leaving what still needs an answer. */
+  async clearResolved(): Promise<void> {
     for (const [id, r] of this.requests) {
-      if (r.status === 'answered') this.requests.delete(id);
+      if (r.status !== 'pending') this.requests.delete(id);
     }
     await this.save();
   }

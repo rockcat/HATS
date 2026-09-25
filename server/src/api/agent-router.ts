@@ -492,9 +492,44 @@ export class AgentRouter {
       return true;
     }
 
+    // `/answered` kept as the path so an older dashboard build still works.
     if (pathname === '/api/human-requests/answered' && method === 'DELETE') {
-      await humanRequestStore.clearAnswered();
+      await humanRequestStore.clearResolved();
       sseBroadcast({ type: 'requests_update', requests: this.deps.buildRequestsList() });
+      json(res, 200, { ok: true });
+      return true;
+    }
+
+    /**
+     * Close a request without answering it.
+     *
+     * The agent is told, because escalating puts it in `waiting_for_help` and
+     * it stays there until it hears something. Deleting the row on its own
+     * cleared the panel and left the agent stuck for good.
+     */
+    if (pathname.match(/^\/api\/human-requests\/[^/]+\/dismiss$/) && method === 'POST') {
+      const reqId   = decodeURIComponent(pathname.slice('/api/human-requests/'.length, -'/dismiss'.length));
+      const request = humanRequestStore.get(reqId);
+      if (!request) { json(res, 404, { error: 'Request not found' }); return true; }
+      if (request.status !== 'pending') { json(res, 409, { error: 'Already resolved' }); return true; }
+
+      const body = await readBody(req);
+      const { note } = (body ? JSON.parse(body) : {}) as { note?: string };
+      await humanRequestStore.dismiss(reqId, note);
+
+      const reason = note?.trim()
+        ? `The human will not be answering. They said: ${note.trim()}`
+        : 'The human will not be answering this one.';
+      const replyContent = `You asked: "${request.message}"\n\n${reason}\n\n`
+        + 'Carry on without an answer: use your own judgement, state the assumption you '
+        + 'are making, and do not escalate the same question again. If you genuinely '
+        + 'cannot proceed, say so and stop rather than waiting.';
+      await orch.humanReply(request.agentName, replyContent);
+
+      const ticketId = request.relatedTicketId ?? agentTicketMap.get(orch.agentIdForName(request.agentName) ?? request.agentName);
+      if (ticketId) this.deps.updateKanbanColumn(ticketId, 'in_progress').catch(() => {});
+      sseBroadcast({ type: 'requests_update', requests: this.deps.buildRequestsList() });
+      sseBroadcast({ type: 'agent_update',   agents:   this.deps.buildAgentStatuses() });
       json(res, 200, { ok: true });
       return true;
     }

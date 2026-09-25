@@ -2920,7 +2920,8 @@ main {
 .request-item--pending:hover { border-color: var(--border-hover); border-left-color: var(--state-waiting); }
 .request-item--high.request-item--pending { border-left-color: var(--hat-red); }
 .request-item--high.request-item--pending:hover { border-left-color: var(--hat-red); }
-.request-item--answered { opacity: 0.6; }
+.request-item--answered,
+.request-item--dismissed { opacity: 0.6; }
 
 .request-header {
   display: flex;
@@ -2942,6 +2943,11 @@ main {
 .request-done-badge {
   font-size: 8px; font-weight: 700; padding: 1px 5px; border-radius: 3px;
   background: rgba(63,185,80,0.12); color: var(--hat-green);
+}
+
+.request-dismissed-badge {
+  font-size: 8px; font-weight: 700; padding: 1px 5px; border-radius: 3px;
+  background: rgba(210,153,34,0.14); color: var(--hat-yellow, #d29922);
 }
 
 .request-ticket-ref {
@@ -2983,15 +2989,29 @@ main {
 }
 .request-reply-submit:hover { filter: brightness(1.1); }
 .request-reply-submit:disabled { opacity: 0.5; cursor: wait; }
-.request-cancel-btn {
+.request-close-btn,
+.request-dismiss-btn {
   font-size: 10px; font-weight: 600; padding: 4px 12px;
   border-radius: 5px; border: 1px solid var(--border);
   background: var(--surface-2); color: var(--text-muted); cursor: pointer;
 }
-.request-cancel-btn:hover { color: var(--text); border-color: var(--border-hover); }
+.request-close-btn:hover { color: var(--text); border-color: var(--border-hover); }
+
+/* Settling a request without answering is a real decision, so it reads as one. */
+.request-dismiss-btn {
+  color: var(--hat-yellow, #d29922);
+  border-color: color-mix(in srgb, var(--hat-yellow, #d29922) 40%, var(--border));
+}
+.request-dismiss-btn:hover {
+  background: color-mix(in srgb, var(--hat-yellow, #d29922) 14%, var(--surface-2));
+}
+.request-dismiss-btn:disabled { opacity: 0.5; cursor: default; }
 
 .request-response-display {
   margin-top: 8px; padding: 6px 10px; background: var(--bg-2); border-radius: 5px;
+}
+.request-response-display--dismissed {
+  border-left: 2px solid color-mix(in srgb, var(--hat-yellow, #d29922) 55%, transparent);
 }
 .request-response-label {
   font-size: 8px; text-transform: uppercase; letter-spacing: 0.06em;
