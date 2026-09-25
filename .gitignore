@@ -41,3 +41,5 @@ apps/flutter/avatar_view/pubspec.lock
 
 # Discovered MCP tool lists are one machine's observations, not configuration.
 runtime_data/config/mcp-discovered-tools.json
+apps/flutter/**/ios/
+apps/poppyinyourpocket/ios/
