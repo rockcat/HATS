@@ -33,10 +33,18 @@ export interface HumanRequest {
   message: string;
   urgency: 'low' | 'high';
   relatedTicketId?: string;
-  status: 'pending' | 'answered';
+  /**
+   * `dismissed` is a decision, not a deletion: the human is not going to answer
+   * and the agent has been told so. An escalated agent waits until it hears
+   * something, so clearing a request without telling it strands it.
+   */
+  status: 'pending' | 'answered' | 'dismissed';
   response?: string;
   createdAt: string;
   answeredAt?: string;
+  dismissedAt?: string;
+  /** Optional note shown to the agent in place of an answer. */
+  dismissalNote?: string;
 }
 
 export type TaskStatus = 'pending' | 'active' | 'complete' | 'blocked';
