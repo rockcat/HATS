@@ -38,3 +38,6 @@ apps/flutter/**/.flutter-plugins-dependencies
 
 # A shared package should not pin its consumers.
 apps/flutter/avatar_view/pubspec.lock
+
+# Discovered MCP tool lists are one machine's observations, not configuration.
+runtime_data/config/mcp-discovered-tools.json
