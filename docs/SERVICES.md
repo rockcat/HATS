@@ -147,6 +147,45 @@ camera, rotation, field of view and scale, from the runner's avatar catalogue.
 Without it a client can download the model and still have no idea where to put
 the camera.
 
+## Two places a voice can come from
+
+An Embodiment client can let the server speak, or speak for itself. Both are
+supported today and **neither needs a server change**, because speech over
+this API is something a client asks for rather than something the runner
+pushes: `agent_speech` is only broadcast in response to
+`POST /agents/{id}/speech`. A client that wants the platform voice simply
+never calls it, and reads the text off `agent_message` instead.
+
+| | Server (Piper) | Device (Android / iOS) |
+| --- | --- | --- |
+| Lip sync | Real phoneme timings from Rhubarb | Approximate — see below |
+| Latency | A round trip per sentence | Immediate |
+| Offline | No | Yes |
+| Voice | The one the operator configured, same on every client | Whatever the handset has |
+| Cost | Server CPU and audio over the wire | Free |
+
+The catch is lip sync, and it is worth being plain about. Piper gives audio
+*and* phoneme timings. `AVSpeechSynthesizer` and Android's `TextToSpeech`
+give audio and, at best, **word boundaries as they are spoken** —
+`willSpeakRangeOfSpeechString` and `onRangeStart` respectively. Nothing
+phoneme-level, and no way to get it.
+
+So a device-speaking client has three options, in ascending order of effort:
+
+1. **Send no visemes.** The renderer already falls back to a simple
+   open-and-close oscillation, which reads as talking without matching.
+2. **Drive the mouth from word boundaries**, opening on each word.
+3. **Estimate mouth shapes from spelling** — which letters a word contains,
+   spread across the time it takes to say it. `apps/poppyinyourpocket`
+   does this in `lib/services/viseme_estimator.dart`: vowels hold the shape,
+   consonants pass through, digraphs count once. English spelling is a poor
+   guide to English sound, so it looks like an approximation under scrutiny —
+   but it is markedly better than a mouth flapping at a fixed rate.
+
+Whichever a client picks, the viseme format is the same one
+`/agents/{id}/speech` returns, so the renderer does not care where the
+timings came from.
+
 ## The contracts
 
 `packages/contracts` holds the JSON Schemas, the OpenAPI documents and the
