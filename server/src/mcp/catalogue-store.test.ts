@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterAll } from 'vitest';
 import { mkdtemp, readFile, rm, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import * as path from 'path';
-import { getCatalogue, initCatalogue, recordDiscoveredTools } from './catalogue-store.js';
+import { getCatalogue, initCatalogue, recordDiscoveredTools, updateEntry } from './catalogue-store.js';
 import type { MCPCatalogueEntry } from './mcp-catalogue.js';
 
 /** A built-in id, so the refresh-from-code path is the one under test. */
@@ -88,5 +88,66 @@ describe('recordDiscoveredTools', () => {
 
   it('ignores a server that is not in the catalogue', async () => {
     await expect(recordDiscoveredTools('nonsense', TOOLS)).resolves.toBeUndefined();
+  });
+});
+
+describe('sharing the file with another process', () => {
+  // The runner writes tool lists; the library and Project Server read them and
+  // the dashboard edits entries. Each holds its own copy, so a snapshot taken
+  // at startup goes stale and a blind write-back destroys the other's work.
+
+  /** Write the file behind this process's back, as another process would. */
+  const otherProcessWrites = async (mutate: (entries: MCPCatalogueEntry[]) => void) => {
+    const entries = JSON.parse(await readFile(file, 'utf-8')) as MCPCatalogueEntry[];
+    mutate(entries);
+    // Nudge past mtime granularity so the change is unambiguous.
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    await writeFile(file, JSON.stringify(entries, null, 2));
+  };
+
+  it('picks up a tool list recorded after this process started', async () => {
+    // What the Agent Library saw: the runner recorded 49 tools and the library
+    // went on reporting none until it was restarted.
+    expect(entry(BUILTIN)?.knownTools).toBeUndefined();
+
+    await otherProcessWrites((entries) => {
+      const e = entries.find((x) => x.id === BUILTIN);
+      if (e) { e.knownTools = TOOLS; e.toolsDiscoveredAt = new Date().toISOString(); }
+    });
+
+    expect(entry(BUILTIN)?.knownTools).toHaveLength(2);
+  });
+
+  it('does not overwrite a tool list it never knew about', async () => {
+    await otherProcessWrites((entries) => {
+      const e = entries.find((x) => x.id === BUILTIN);
+      if (e) e.knownTools = TOOLS;
+    });
+
+    // An unrelated edit here used to write out the stale snapshot whole.
+    await updateEntry(CUSTOM, { description: 'Edited in the dashboard.' });
+
+    expect((await onDisk(BUILTIN))?.knownTools).toHaveLength(2);
+    expect((await onDisk(CUSTOM))?.description).toBe('Edited in the dashboard.');
+  });
+
+  it('does not overwrite an edit made while it was recording tools', async () => {
+    await otherProcessWrites((entries) => {
+      const e = entries.find((x) => x.id === CUSTOM);
+      if (e) e.description = 'Renamed elsewhere.';
+    });
+
+    await recordDiscoveredTools(BUILTIN, TOOLS);
+
+    expect((await onDisk(CUSTOM))?.description).toBe('Renamed elsewhere.');
+    expect((await onDisk(BUILTIN))?.knownTools).toHaveLength(2);
+  });
+
+  it('keeps serving what it has when the file goes unreadable', async () => {
+    await recordDiscoveredTools(BUILTIN, TOOLS);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    await writeFile(file, 'not json at all');
+    // Better a slightly old catalogue than none.
+    expect(entry(BUILTIN)?.knownTools).toHaveLength(2);
   });
 });

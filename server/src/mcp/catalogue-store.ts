@@ -1,5 +1,5 @@
-import { readFile, writeFile, mkdir } from 'fs/promises';
-import { existsSync } from 'fs';
+import { writeFile, mkdir, rename } from 'fs/promises';
+import { existsSync, readFileSync, statSync } from 'fs';
 import path from 'path';
 import { DiscoveredTool, MCPCatalogueEntry } from './mcp-catalogue.js';
 
@@ -429,42 +429,84 @@ export const BUILTIN_CATALOGUE: MCPCatalogueEntry[] = [
   },
 ];
 
+/**
+ * The catalogue is one file shared by several processes.
+ *
+ * The Team Runner writes to it — it is the only process that starts MCP
+ * servers, so it is the only one that can record what they offer. The Agent
+ * Library and Project Server read it, and the dashboard edits it. So a copy
+ * held in memory from startup goes stale the moment another process writes,
+ * and a blind write-back destroys what that process recorded.
+ *
+ * Hence: reads check the file's mtime, and every write re-reads first.
+ */
 let _catalogue: MCPCatalogueEntry[] = [];
 let _filePath = '';
+/** mtime of the file as this process last read it. */
+let _loadedMtimeMs = 0;
+
+/**
+ * Built-in definitions win on everything a human declares, so a change in code
+ * reaches every machine. What was observed at runtime survives, because
+ * nothing in the code could regenerate it.
+ */
+function normalise(entries: MCPCatalogueEntry[]): MCPCatalogueEntry[] {
+  const builtinById = new Map(BUILTIN_CATALOGUE.map(e => [e.id, e]));
+  const merged = entries.map(e => {
+    const builtin = builtinById.get(e.id);
+    if (!builtin) return e;
+    return {
+      ...builtin,
+      ...(e.knownTools && { knownTools: e.knownTools }),
+      ...(e.toolsDiscoveredAt && { toolsDiscoveredAt: e.toolsDiscoveredAt }),
+    };
+  });
+  // Built-in entries added since the file was written. Copied, because the
+  // catalogue is mutated in place — pushing the constant itself meant recording
+  // a server's tools wrote them onto BUILTIN_CATALOGUE, where they then leaked
+  // into every catalogue this process loaded afterwards.
+  for (const b of BUILTIN_CATALOGUE) {
+    if (!merged.some(e => e.id === b.id)) merged.push({ ...b });
+  }
+  return merged;
+}
+
+/** Read and normalise the file, or null if it is missing or unreadable. */
+function readFromDisk(): MCPCatalogueEntry[] | null {
+  try {
+    const parsed = JSON.parse(readFileSync(_filePath, 'utf-8')) as MCPCatalogueEntry[];
+    return Array.isArray(parsed) ? normalise(parsed) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Pick up a write by another process. Cheap enough to do on every read — the
+ * file is small and no caller is in a hot loop — and it is the difference
+ * between the library listing a server's tools and claiming it has none.
+ */
+function reloadIfChanged(): void {
+  if (!_filePath) return;
+  try {
+    const { mtimeMs } = statSync(_filePath);
+    if (mtimeMs === _loadedMtimeMs) return;
+    const fresh = readFromDisk();
+    if (fresh) { _catalogue = fresh; _loadedMtimeMs = mtimeMs; }
+  } catch {
+    // The file has gone; keep serving what we already have.
+  }
+}
 
 export async function initCatalogue(filePath: string): Promise<void> {
   _filePath = filePath;
-  if (existsSync(filePath)) {
-    try {
-      const raw = await readFile(filePath, 'utf-8');
-      _catalogue = JSON.parse(raw) as MCPCatalogueEntry[];
-      // Refresh built-in entries so changes to BUILTIN_CATALOGUE are always picked up.
-      // User-added entries (IDs not in BUILTIN_CATALOGUE) are preserved as-is.
-      const builtinById = new Map(BUILTIN_CATALOGUE.map(e => [e.id, e]));
-      _catalogue = _catalogue.map(e => {
-        const builtin = builtinById.get(e.id);
-        if (!builtin) return e;
-        // Discovered tools are observed, not declared, so they survive the
-        // refresh — the code has no way to regenerate them.
-        return {
-          ...builtin,
-          ...(e.knownTools && { knownTools: e.knownTools }),
-          ...(e.toolsDiscoveredAt && { toolsDiscoveredAt: e.toolsDiscoveredAt }),
-        };
-      });
-      // Append any built-in entries that are missing from the persisted file (new additions).
-      for (const b of BUILTIN_CATALOGUE) {
-        if (!_catalogue.some(e => e.id === b.id)) _catalogue.push(b);
-      }
-      await _persist();
-      return;
-    } catch { /* fall through to defaults */ }
-  }
-  _catalogue = JSON.parse(JSON.stringify(BUILTIN_CATALOGUE)) as MCPCatalogueEntry[];
-  await _persist();
+  const onDisk = existsSync(filePath) ? readFromDisk() : null;
+  _catalogue = onDisk ?? (JSON.parse(JSON.stringify(BUILTIN_CATALOGUE)) as MCPCatalogueEntry[]);
+  await persist();
 }
 
 export function getCatalogue(): MCPCatalogueEntry[] {
+  reloadIfChanged();
   return _catalogue;
 }
 
@@ -476,37 +518,64 @@ export function getCatalogue(): MCPCatalogueEntry[] {
  * lists are not rewritten, so a restart does not churn the file.
  */
 export async function recordDiscoveredTools(id: string, tools: DiscoveredTool[]): Promise<void> {
-  const entry = _catalogue.find(e => e.id === id);
-  if (!entry || tools.length === 0) return;
+  if (tools.length === 0) return;
   const sorted = [...tools].sort((a, b) => a.name.localeCompare(b.name));
-  if (JSON.stringify(entry.knownTools ?? []) === JSON.stringify(sorted)) return;
-  entry.knownTools = sorted;
-  entry.toolsDiscoveredAt = new Date().toISOString();
-  await _persist();
+  await mutate(entries => {
+    const entry = entries.find(e => e.id === id);
+    if (!entry) return false;
+    if (JSON.stringify(entry.knownTools ?? []) === JSON.stringify(sorted)) return false;
+    entry.knownTools = sorted;
+    entry.toolsDiscoveredAt = new Date().toISOString();
+    return true;
+  });
 }
 
 export async function addEntry(entry: MCPCatalogueEntry): Promise<void> {
-  if (_catalogue.some(e => e.id === entry.id)) throw new Error(`ID "${entry.id}" already exists in catalogue`);
-  _catalogue.push(entry);
-  await _persist();
+  await mutate(entries => {
+    if (entries.some(e => e.id === entry.id)) throw new Error(`ID "${entry.id}" already exists in catalogue`);
+    entries.push(entry);
+    return true;
+  });
 }
 
 export async function updateEntry(id: string, patch: Partial<MCPCatalogueEntry>): Promise<void> {
-  const idx = _catalogue.findIndex(e => e.id === id);
-  if (idx < 0) throw new Error(`Catalogue entry "${id}" not found`);
-  _catalogue[idx] = { ..._catalogue[idx], ...patch };
-  await _persist();
+  await mutate(entries => {
+    const idx = entries.findIndex(e => e.id === id);
+    if (idx < 0) throw new Error(`Catalogue entry "${id}" not found`);
+    entries[idx] = { ...entries[idx], ...patch } as MCPCatalogueEntry;
+    return true;
+  });
 }
 
 export async function removeEntry(id: string): Promise<void> {
-  const idx = _catalogue.findIndex(e => e.id === id);
-  if (idx < 0) throw new Error(`Catalogue entry "${id}" not found`);
-  _catalogue.splice(idx, 1);
-  await _persist();
+  await mutate(entries => {
+    const idx = entries.findIndex(e => e.id === id);
+    if (idx < 0) throw new Error(`Catalogue entry "${id}" not found`);
+    entries.splice(idx, 1);
+    return true;
+  });
 }
 
-async function _persist(): Promise<void> {
+/**
+ * Apply a change to the freshest copy of the catalogue and write it back.
+ *
+ * Re-reading first is what stops one process overwriting another's work: the
+ * library saving a catalogue edit used to wipe every tool list the runner had
+ * recorded, because it wrote out the snapshot it booted with.
+ */
+async function mutate(apply: (entries: MCPCatalogueEntry[]) => boolean): Promise<void> {
+  reloadIfChanged();
+  if (!apply(_catalogue)) return;
+  await persist();
+}
+
+/** Write via a temp file, so a reader never sees a half-written catalogue. */
+async function persist(): Promise<void> {
   if (!_filePath) return;
   await mkdir(path.dirname(_filePath), { recursive: true });
-  await writeFile(_filePath, JSON.stringify(_catalogue, null, 2), 'utf-8');
+  const temp = `${_filePath}.tmp`;
+  await writeFile(temp, JSON.stringify(_catalogue, null, 2), 'utf-8');
+  await rename(temp, _filePath);
+  // Our own write must not look like somebody else's.
+  try { _loadedMtimeMs = statSync(_filePath).mtimeMs; } catch { _loadedMtimeMs = 0; }
 }
