@@ -16,10 +16,12 @@ const TOOLS = [
 
 let dir = '';
 let file = '';
+let toolsFile = '';
 
 async function freshCatalogue(): Promise<void> {
   dir = await mkdtemp(path.join(tmpdir(), 'hats-cat-'));
   file = path.join(dir, 'mcp-catalogue.json');
+  toolsFile = path.join(dir, 'mcp-discovered-tools.json');
   await writeFile(file, JSON.stringify([{
     id: CUSTOM, name: 'Custom', description: 'Hand-added.', category: 'productivity',
     users: ['human'], config: { transport: 'stdio', command: 'node', args: ['c.js'] },
@@ -31,6 +33,15 @@ const entry = (id: string): MCPCatalogueEntry | undefined => getCatalogue().find
 const onDisk = async (id: string) =>
   (JSON.parse(await readFile(file, 'utf-8')) as MCPCatalogueEntry[]).find((e) => e.id === id);
 
+/** The sidecar, which is where an observation is actually stored. */
+const sidecar = async (): Promise<Record<string, { tools: unknown[]; at: string }>> => {
+  try {
+    return JSON.parse(await readFile(toolsFile, 'utf-8'));
+  } catch {
+    return {};
+  }
+};
+
 beforeEach(freshCatalogue);
 afterAll(async () => { await rm(dir, { recursive: true, force: true }); });
 
@@ -41,9 +52,17 @@ describe('recordDiscoveredTools', () => {
     expect(entry(BUILTIN)?.toolsDiscoveredAt).toBeTypeOf('string');
   });
 
-  it('writes through to the shared file, which is how the library sees it', async () => {
+  it('writes to the sidecar, not into the tracked catalogue', async () => {
     await recordDiscoveredTools(BUILTIN, TOOLS);
-    expect((await onDisk(BUILTIN))?.knownTools).toHaveLength(2);
+    // An observation of one machine has no business in checked-in config:
+    // it produced a diff on every runner start.
+    expect((await sidecar())[BUILTIN]?.tools).toHaveLength(2);
+    expect((await onDisk(BUILTIN))?.knownTools).toBeUndefined();
+  });
+
+  it('still reports it through getCatalogue, which is how the library reads it', async () => {
+    await recordDiscoveredTools(BUILTIN, TOOLS);
+    expect(entry(BUILTIN)?.knownTools).toHaveLength(2);
   });
 
   it('survives a catalogue reload, which refreshes built-ins from code', async () => {
@@ -51,6 +70,13 @@ describe('recordDiscoveredTools', () => {
     await recordDiscoveredTools(BUILTIN, TOOLS);
     await initCatalogue(file);
     expect(entry(BUILTIN)?.knownTools?.map((t) => t.name)).toEqual(['create_label', 'get_email']);
+  });
+
+  it('keeps the catalogue itself free of observations', async () => {
+    await recordDiscoveredTools(BUILTIN, TOOLS);
+    await initCatalogue(file);
+    const written = JSON.parse(await readFile(file, 'utf-8')) as MCPCatalogueEntry[];
+    expect(written.every((e) => e.knownTools === undefined)).toBe(true);
   });
 
   it('keeps the built-in definition authoritative apart from the tool list', async () => {
@@ -110,25 +136,20 @@ describe('sharing the file with another process', () => {
     // went on reporting none until it was restarted.
     expect(entry(BUILTIN)?.knownTools).toBeUndefined();
 
-    await otherProcessWrites((entries) => {
-      const e = entries.find((x) => x.id === BUILTIN);
-      if (e) { e.knownTools = TOOLS; e.toolsDiscoveredAt = new Date().toISOString(); }
-    });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    await writeFile(toolsFile, JSON.stringify({
+      [BUILTIN]: { tools: TOOLS, at: new Date().toISOString() },
+    }));
 
     expect(entry(BUILTIN)?.knownTools).toHaveLength(2);
   });
 
-  it('does not overwrite a tool list it never knew about', async () => {
-    await otherProcessWrites((entries) => {
-      const e = entries.find((x) => x.id === BUILTIN);
-      if (e) e.knownTools = TOOLS;
-    });
-
-    // An unrelated edit here used to write out the stale snapshot whole.
-    await updateEntry(CUSTOM, { description: 'Edited in the dashboard.' });
-
-    expect((await onDisk(BUILTIN))?.knownTools).toHaveLength(2);
-    expect((await onDisk(CUSTOM))?.description).toBe('Edited in the dashboard.');
+  it('picks up a tool list another process discovered', async () => {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    await writeFile(toolsFile, JSON.stringify({
+      [BUILTIN]: { tools: TOOLS, at: new Date().toISOString() },
+    }));
+    expect(entry(BUILTIN)?.knownTools).toHaveLength(2);
   });
 
   it('does not overwrite an edit made while it was recording tools', async () => {
@@ -140,7 +161,26 @@ describe('sharing the file with another process', () => {
     await recordDiscoveredTools(BUILTIN, TOOLS);
 
     expect((await onDisk(CUSTOM))?.description).toBe('Renamed elsewhere.');
-    expect((await onDisk(BUILTIN))?.knownTools).toHaveLength(2);
+    expect((await sidecar())[BUILTIN]?.tools).toHaveLength(2);
+  });
+
+  it('lifts observations an older build left in the catalogue, once', async () => {
+    // The tracked file arrives with knownTools in it; after a load it should
+    // be clean and the sidecar should hold them.
+    const scratch = await mkdtemp(path.join(tmpdir(), 'hats-lift-'));
+    const cat = path.join(scratch, 'mcp-catalogue.json');
+    await writeFile(cat, JSON.stringify([{
+      id: CUSTOM, name: 'Custom', description: 'Hand-added.', category: 'productivity',
+      users: ['human'], config: { transport: 'stdio', command: 'node', args: ['c.js'] },
+      knownTools: TOOLS, toolsDiscoveredAt: '2026-09-01T00:00:00.000Z',
+    }]));
+
+    await initCatalogue(cat);
+
+    const written = JSON.parse(await readFile(cat, 'utf-8')) as MCPCatalogueEntry[];
+    expect(written.find((e) => e.id === CUSTOM)?.knownTools).toBeUndefined();
+    expect(entry(CUSTOM)?.knownTools).toHaveLength(2);
+    await rm(scratch, { recursive: true, force: true });
   });
 
   it('keeps serving what it has when the file goes unreadable', async () => {

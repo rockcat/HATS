@@ -446,6 +446,21 @@ let _filePath = '';
 let _loadedMtimeMs = 0;
 
 /**
+ * Discovered tools live beside the catalogue, not in it.
+ *
+ * The catalogue is checked-in configuration: what a server *is*. What it
+ * turned out to offer is an observation of one machine at one moment, and
+ * writing it into the tracked file meant every runner start produced a diff
+ * and threatened to push one machine's findings to everybody.
+ */
+let _toolsPath = '';
+let _toolsMtimeMs = 0;
+let _discovered: Record<string, { tools: DiscoveredTool[]; at: string }> = {};
+
+const toolsFileFor = (cataloguePath: string): string =>
+  path.join(path.dirname(cataloguePath), 'mcp-discovered-tools.json');
+
+/**
  * Built-in definitions win on everything a human declares, so a change in code
  * reaches every machine. What was observed at runtime survives, because
  * nothing in the code could regenerate it.
@@ -454,12 +469,10 @@ function normalise(entries: MCPCatalogueEntry[]): MCPCatalogueEntry[] {
   const builtinById = new Map(BUILTIN_CATALOGUE.map(e => [e.id, e]));
   const merged = entries.map(e => {
     const builtin = builtinById.get(e.id);
-    if (!builtin) return e;
-    return {
-      ...builtin,
-      ...(e.knownTools && { knownTools: e.knownTools }),
-      ...(e.toolsDiscoveredAt && { toolsDiscoveredAt: e.toolsDiscoveredAt }),
-    };
+    // Strip any observation an older build wrote into the catalogue; it has
+    // already been lifted into the sidecar by then.
+    const { knownTools: _k, toolsDiscoveredAt: _t, ...declared } = e;
+    return builtin ? { ...builtin } : (declared as MCPCatalogueEntry);
   });
   // Built-in entries added since the file was written. Copied, because the
   // catalogue is mutated in place — pushing the constant itself meant recording
@@ -468,7 +481,10 @@ function normalise(entries: MCPCatalogueEntry[]): MCPCatalogueEntry[] {
   for (const b of BUILTIN_CATALOGUE) {
     if (!merged.some(e => e.id === b.id)) merged.push({ ...b });
   }
-  return merged;
+  return merged.map(e => {
+    const seen = _discovered[e.id];
+    return seen ? { ...e, knownTools: seen.tools, toolsDiscoveredAt: seen.at } : e;
+  });
 }
 
 /** Read and normalise the file, or null if it is missing or unreadable. */
@@ -488,9 +504,22 @@ function readFromDisk(): MCPCatalogueEntry[] | null {
  */
 function reloadIfChanged(): void {
   if (!_filePath) return;
+
+  // The sidecar changes far more often than the catalogue — it is what the
+  // runner writes on every connect — so it is checked first and separately.
+  let toolsMoved = false;
+  try {
+    if (statSync(_toolsPath).mtimeMs !== _toolsMtimeMs) {
+      _discovered = readDiscovered();
+      toolsMoved = true;
+    }
+  } catch {
+    // No sidecar yet; nothing has been discovered on this machine.
+  }
+
   try {
     const { mtimeMs } = statSync(_filePath);
-    if (mtimeMs === _loadedMtimeMs) return;
+    if (mtimeMs === _loadedMtimeMs && !toolsMoved) return;
     const fresh = readFromDisk();
     if (fresh) { _catalogue = fresh; _loadedMtimeMs = mtimeMs; }
   } catch {
@@ -500,9 +529,53 @@ function reloadIfChanged(): void {
 
 export async function initCatalogue(filePath: string): Promise<void> {
   _filePath = filePath;
-  const onDisk = existsSync(filePath) ? readFromDisk() : null;
+  _toolsPath = toolsFileFor(filePath);
+  _discovered = readDiscovered();
+
+  // Lift anything an older build left in the catalogue into the sidecar, so
+  // the tracked file loses its observations exactly once.
+  const raw = existsSync(filePath) ? rawEntries() : null;
+  let lifted = false;
+  for (const e of raw ?? []) {
+    if (!e.knownTools?.length || _discovered[e.id]) continue;
+    _discovered[e.id] = { tools: e.knownTools, at: e.toolsDiscoveredAt ?? new Date().toISOString() };
+    lifted = true;
+  }
+  if (lifted) await writeDiscovered();
+
+  const onDisk = raw ? normalise(raw) : null;
   _catalogue = onDisk ?? (JSON.parse(JSON.stringify(BUILTIN_CATALOGUE)) as MCPCatalogueEntry[]);
   await persist();
+}
+
+/** The catalogue file exactly as written, before the built-in refresh. */
+function rawEntries(): MCPCatalogueEntry[] | null {
+  try {
+    const parsed = JSON.parse(readFileSync(_filePath, 'utf-8')) as MCPCatalogueEntry[];
+    return Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function readDiscovered(): Record<string, { tools: DiscoveredTool[]; at: string }> {
+  if (!_toolsPath) return {};
+  try {
+    _toolsMtimeMs = statSync(_toolsPath).mtimeMs;
+    const parsed = JSON.parse(readFileSync(_toolsPath, 'utf-8')) as Record<string, unknown>;
+    return (parsed && typeof parsed === 'object' ? parsed : {}) as typeof _discovered;
+  } catch {
+    return {};
+  }
+}
+
+async function writeDiscovered(): Promise<void> {
+  if (!_toolsPath) return;
+  await mkdir(path.dirname(_toolsPath), { recursive: true });
+  const temp = `${_toolsPath}.tmp`;
+  await writeFile(temp, JSON.stringify(_discovered, null, 2), 'utf-8');
+  await rename(temp, _toolsPath);
+  try { _toolsMtimeMs = statSync(_toolsPath).mtimeMs; } catch { _toolsMtimeMs = 0; }
 }
 
 export function getCatalogue(): MCPCatalogueEntry[] {
@@ -513,21 +586,24 @@ export function getCatalogue(): MCPCatalogueEntry[] {
 /**
  * Record what a server offered when the runner connected to it.
  *
- * Written back to the shared catalogue file so the Agent Library — which
- * never starts an MCP server — can still list a server's tools. Unchanged
- * lists are not rewritten, so a restart does not churn the file.
+ * Goes to the sidecar beside the catalogue, so the Agent Library — which
+ * never starts an MCP server — can list a server's tools without the tracked
+ * configuration gaining a diff every time the runner boots. Unchanged lists
+ * are not rewritten, so a restart does not churn the file either.
  */
 export async function recordDiscoveredTools(id: string, tools: DiscoveredTool[]): Promise<void> {
-  if (tools.length === 0) return;
+  if (tools.length === 0 || !_toolsPath) return;
+  reloadIfChanged();
+  if (!_catalogue.some(e => e.id === id)) return;
+
   const sorted = [...tools].sort((a, b) => a.name.localeCompare(b.name));
-  await mutate(entries => {
-    const entry = entries.find(e => e.id === id);
-    if (!entry) return false;
-    if (JSON.stringify(entry.knownTools ?? []) === JSON.stringify(sorted)) return false;
-    entry.knownTools = sorted;
-    entry.toolsDiscoveredAt = new Date().toISOString();
-    return true;
-  });
+  if (JSON.stringify(_discovered[id]?.tools ?? []) === JSON.stringify(sorted)) return;
+
+  _discovered[id] = { tools: sorted, at: new Date().toISOString() };
+  await writeDiscovered();
+  // Reflect it immediately; the next read would pick it up anyway.
+  const entry = _catalogue.find(e => e.id === id);
+  if (entry) { entry.knownTools = sorted; entry.toolsDiscoveredAt = _discovered[id]!.at; }
 }
 
 export async function addEntry(entry: MCPCatalogueEntry): Promise<void> {
@@ -574,7 +650,11 @@ async function persist(): Promise<void> {
   if (!_filePath) return;
   await mkdir(path.dirname(_filePath), { recursive: true });
   const temp = `${_filePath}.tmp`;
-  await writeFile(temp, JSON.stringify(_catalogue, null, 2), 'utf-8');
+  // The catalogue file holds what a server *is*, never what it turned out to
+  // offer. Observations are attached in memory for callers and stripped here,
+  // so the tracked file cannot pick them up by a side door.
+  const declared = _catalogue.map(({ knownTools: _k, toolsDiscoveredAt: _t, ...rest }) => rest);
+  await writeFile(temp, JSON.stringify(declared, null, 2), 'utf-8');
   await rename(temp, _filePath);
   // Our own write must not look like somebody else's.
   try { _loadedMtimeMs = statSync(_filePath).mtimeMs; } catch { _loadedMtimeMs = 0; }
