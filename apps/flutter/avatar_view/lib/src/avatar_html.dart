@@ -17,9 +17,11 @@ String buildAvatarHtml({
   required String src,
   AvatarConfig? config,
   String? moduleOrigin,
+  Map<String, String> headers = const {},
 }) {
   final cfg = config ?? const AvatarConfig();
   final srcEsc = jsonEncode(src);
+  final headersEsc = jsonEncode(headers);
   final origin = moduleOrigin ?? Uri.parse(src).origin;
   final targetY = cfg.cameraY;
   final orbitZ = cfg.cameraZ;
@@ -110,6 +112,9 @@ let modelLoaded = false;
 // ── Model load ────────────────────────────────────────────────────────────
 const loader = new GLTFLoader();
 loader.register(p => new VRMLoaderPlugin(p));
+// The Embodiment API authenticates /api/*, and the avatar lives there. The
+// WebView carries no cookie, so the key has to ride on the request itself.
+loader.setRequestHeader($headersEsc);
 
 function _unloadModel() {
   scene.children.filter(c => !c.isLight).forEach(c => scene.remove(c));

@@ -32,7 +32,18 @@ class AvatarView extends StatefulWidget {
   /// own origin, which is the runner in every current caller.
   final String? moduleOrigin;
 
-  const AvatarView({super.key, required this.src, this.config, this.moduleOrigin});
+  /// Sent with the model request. The Embodiment API authenticates `/api/*`
+  /// and the avatar endpoint is under it, so a client that needs a key must
+  /// pass it here — the WebView has no cookie of its own.
+  final Map<String, String> headers;
+
+  const AvatarView({
+    super.key,
+    required this.src,
+    this.config,
+    this.moduleOrigin,
+    this.headers = const {},
+  });
 
   @override
   State<AvatarView> createState() => AvatarViewState();
@@ -72,6 +83,7 @@ class AvatarViewState extends State<AvatarView> {
         src: widget.src,
         config: widget.config,
         moduleOrigin: widget.moduleOrigin,
+        headers: widget.headers,
       ),
       baseUrl: 'http://localhost/',
     );
