@@ -1,4 +1,5 @@
 import { randomBytes } from 'crypto';
+import { hostOf, isLoopback, lanAddresses } from '../util/lan-addresses.js';
 import type { IncomingMessage, ServerResponse } from 'http';
 import type { UserStore } from './user-store.js';
 import {
@@ -76,23 +77,54 @@ export class AuthRouter {
       pairingTokens.set(token, { userId: session.userId, expiresAt: expires });
 
       const publicUrl = process.env['HATS_PUBLIC_URL']?.replace(/\/$/, '');
-      const host      = req.headers['host'] ?? `localhost:${this.port}`;
-      const pairUrl   = publicUrl
-        ? `${publicUrl}/api/auth/pair/${token}`
-        : `http://${host}/api/auth/pair/${token}`;
+      const host      = hostOf(req.headers['host'], this.port);
+      const link      = (base: string) => `${base}/api/auth/pair/${token}`;
 
-      let qrSvg = '';
+      /**
+       * Every address this token could be redeemed at.
+       *
+       * One QR encodes one URL, but a machine on both wired and wireless has
+       * two right answers and only the phone knows which. So all of them are
+       * offered and the operator picks. The address the dashboard was opened
+       * on comes first — it is the one demonstrably working — unless that is
+       * loopback, which no phone can reach.
+       */
+      const candidates: Array<{ url: string; label: string; qrSvg: string }> = [];
+      const seen = new Set<string>();
+      const add = (url: string, label: string) => {
+        if (seen.has(url)) return;
+        seen.add(url);
+        candidates.push({ url, label, qrSvg: '' });
+      };
+
+      if (publicUrl) add(link(publicUrl), 'HATS_PUBLIC_URL');
+      if (!isLoopback(host)) add(link(`http://${host}`), 'this page');
+      for (const lan of lanAddresses()) {
+        add(link(`http://${lan.address}:${this.port}`),
+          lan.likelyReachable ? lan.label : `${lan.label} (virtual)`);
+      }
+      if (candidates.length === 0) add(link(`http://${host}`), 'this page');
+
       try {
         const QRCode = (await import('qrcode')).default;
         // width:2048 → 2048-unit SVG viewBox; displayed size is controlled by CSS
-        qrSvg = await QRCode.toString(pairUrl, {
-          type: 'svg', width: 2048, margin: 2, errorCorrectionLevel: 'M',
-        });
+        for (const candidate of candidates) {
+          candidate.qrSvg = await QRCode.toString(candidate.url, {
+            type: 'svg', width: 2048, margin: 2, errorCorrectionLevel: 'M',
+          });
+        }
       } catch {
         json(res, 500, { error: 'QR generation failed' }); return true;
       }
 
-      json(res, 200, { token, url: pairUrl, qrSvg, expiresIn: PAIR_TTL / 1000 });
+      const first = candidates[0]!;
+      json(res, 200, {
+        token,
+        url: first.url,
+        qrSvg: first.qrSvg,
+        candidates,
+        expiresIn: PAIR_TTL / 1000,
+      });
       return true;
     }
 

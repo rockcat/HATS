@@ -278,6 +278,7 @@ async function renderUsersTab() {
       <p class="qr-title">Scan to pair a mobile device</p>
       <div id="qr-image" class="qr-image"></div>
       <p id="qr-url"  class="qr-url"></p>
+      <div id="qr-addresses" class="qr-addresses"></div>
       <p id="qr-timer" class="qr-timer"></p>
     </div>
   </div>`;
@@ -361,6 +362,10 @@ async function openQrPanel(userId) {
   urlEl.textContent = data.url;
   panel.hidden      = false;
 
+  // One QR encodes one address, and a machine with wired and wireless has
+  // two right answers. Only the phone knows which, so show them all.
+  renderPairAddresses(body, data);
+
   let remaining = data.expiresIn;
   clearInterval(body._qrInterval);
   body._qrInterval = setInterval(() => {
@@ -370,6 +375,36 @@ async function openQrPanel(userId) {
     timer.textContent = remaining > 0 ? `Expires in ${m}:${s}` : 'Expired';
     if (remaining <= 0) { clearInterval(body._qrInterval); img.innerHTML = '<p>QR code expired — click Pair mobile to generate a new one.</p>'; }
   }, 1000);
+}
+
+/**
+ * Let the operator switch the QR between the addresses this machine has.
+ *
+ * The token is the same in every one — only the host differs — so switching
+ * costs nothing and does not consume the pairing.
+ */
+function renderPairAddresses(body, data) {
+  const list = body.querySelector('#qr-addresses');
+  const img  = body.querySelector('#qr-image');
+  const url  = body.querySelector('#qr-url');
+  if (!list) return;
+
+  const candidates = data.candidates ?? [];
+  if (candidates.length < 2) { list.innerHTML = ''; return; }
+
+  list.innerHTML = '<span class="qr-addresses-label">Reachable at</span>'
+    + candidates.map((c, i) =>
+        `<button class="qr-address${i === 0 ? ' active' : ''}" data-i="${i}" title="${esc(c.url)}">`
+        + `${esc(new URL(c.url).host)}<span class="qr-address-label">${esc(c.label)}</span></button>`).join('');
+
+  list.querySelectorAll('.qr-address').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const chosen = candidates[Number(btn.dataset.i)];
+      img.innerHTML   = chosen.qrSvg;
+      url.textContent = chosen.url;
+      list.querySelectorAll('.qr-address').forEach((b) => b.classList.toggle('active', b === btn));
+    });
+  });
 }
 
 export function saveSettings() {
