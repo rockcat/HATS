@@ -17,12 +17,13 @@ import type { SpeechGateway } from '../speech/speech-gateway.js';
 import { log } from '../util/logger.js';
 import {
   badRequest, binary, fail, json, notFound, readJsonBody,
-  matchRoute, MethodNotAllowed, get, post, type Route,
+  matchRoute, MethodNotAllowed, get, post, put, del, noContent, type Route,
   SseHub, sendError,
 } from '../../../packages/service-kit/src/index.js';
 import { metaRoutes } from '../../../packages/service-kit/src/meta-routes.js';
 import type { SendMessageRequest } from '../../../packages/contracts/src/types.js';
 import { findAvatarByFile, framingOf } from '../render/avatar-catalogue.js';
+import type { DeviceToolBridge, DeviceToolSpec, DeviceResult } from '../device/device-tool-bridge.js';
 import { toEmbodiedAgent } from './agent-mapper.js';
 import { mapOrchestratorEvent } from './event-mapper.js';
 import { eventMatchesFilter, type EmbodimentEvent, type EmbodimentEventFilter } from './types.js';
@@ -48,6 +49,8 @@ export interface EmbodimentRouterDeps {
   avatarsDir: string;
   backgroundsDir: string;
   version: string;
+  /** Tools that run on a connected device rather than on this machine. */
+  devices: DeviceToolBridge;
 }
 
 export class EmbodimentRouter {
@@ -196,10 +199,54 @@ export class EmbodimentRouter {
         await this.sendAsset(res, this.deps.backgroundsDir, file, 'image/png');
       }),
 
+      /**
+       * A device declares what it can do.
+       *
+       * Only the device knows — whether it has a camera, whether the user
+       * granted it. Re-declaring replaces the list, so permission revoked is
+       * permission withdrawn rather than a tool that fails for ever.
+       */
+      put(`${B}/devices/:deviceId`, async ({ req, res, params }) => {
+        const deviceId = params['deviceId'] as string;
+        const body = await readJsonBody<{ tools?: DeviceToolSpec[]; label?: string }>(req);
+        if (!Array.isArray(body?.tools)) { badRequest(res, 'tools must be an array'); return; }
+        this.deps.devices.register(deviceId, body.tools, body.label?.trim() || deviceId);
+        json(res, 200, { deviceId, tools: body.tools.map((t) => t.name) });
+      }),
+
+      del(`${B}/devices/:deviceId`, ({ res, params }) => {
+        this.deps.devices.unregister(params['deviceId'] as string);
+        noContent(res);
+      }),
+
+      get(`${B}/devices`, ({ res }) => json(res, 200, { devices: this.deps.devices.connected() })),
+
+      /** A device answering something it was asked. */
+      post(`${B}/device-results/:requestId`, async ({ req, res, params }) => {
+        const body = await readJsonBody<DeviceResult>(req);
+        if (typeof body?.ok !== 'boolean') { badRequest(res, 'ok is required'); return; }
+        const settled = this.deps.devices.settleResult(params['requestId'] as string, body);
+        // A late answer is not an error on the device's part — it raced a
+        // timeout — so it is reported rather than rejected.
+        json(res, 200, { settled });
+      }),
+
       get(`${B}/events`, async ({ res, query }) => {
         const agentId = query.get('agentId');
-        const filter = agentId ? { agentId: this.findAgent(agentId)?.id ?? agentId } : null;
+        const deviceId = query.get('deviceId');
+        const filter = agentId || deviceId
+          ? {
+              ...(agentId && { agentId: this.findAgent(agentId)?.id ?? agentId }),
+              ...(deviceId && { deviceId }),
+            }
+          : null;
         const project = this.deps.getProjectContext();
+
+        // A device that drops its stream has gone, whatever it declared.
+        // Leaving its tools on offer would hand the agent a camera that is
+        // no longer there.
+        if (deviceId) res.on('close', () => this.deps.devices.unregister(deviceId));
+
         this.hub.subscribe(res, filter, {
           type: 'hello',
           agents: await this.roster(),

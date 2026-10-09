@@ -11,6 +11,7 @@ import { AIProvider } from '../providers/types.js';
 import { EventStore } from '../store/event-store.js';
 import { MCPRegistry } from '../mcp/mcp-registry.js';
 import { splitToolSet, unmatchedSelectors } from '../tools/tool-exposure.js';
+import type { DeviceToolBridge } from '../device/device-tool-bridge.js';
 import { MCPServerDef } from '../mcp/mcp-client.js';
 import { Semaphore } from '../providers/semaphore.js';
 import { TeamSnapshot, TeamSnapshotV1, TeamSnapshotV2, AgentSnapshot, AgentDefinition, HistoryEntry } from '../store/team-snapshot.js';
@@ -78,6 +79,8 @@ export class TeamOrchestrator {
   private agentTicketIdResolver: ((agentName: string) => string | undefined) | null = null;
   private agentTicketClearer: ((agentName: string) => void) | null = null;
   private mcp = new MCPRegistry();
+  /** Tools that run on a connected device. Absent until a client registers one. */
+  private deviceTools: DeviceToolBridge | null = null;
   private llmSemaphore: Semaphore;
   private lastSenderByAgent = new Map<string, string>();
   private telemetryRecorder: ((entry: { agent: string; provider: string; model: string; promptLength: number; inputTokens: number; outputTokens: number; cost: number }) => void) | null = null;
@@ -155,6 +158,9 @@ export class TeamOrchestrator {
   hasMCPServer(name: string): boolean {
     return this.mcp.has(name);
   }
+
+  setDeviceTools(bridge: DeviceToolBridge): void { this.deviceTools = bridge; }
+  getDeviceTools(): DeviceToolBridge | null { return this.deviceTools; }
 
   /** Names of the shared MCP servers currently connected for the team. */
   mcpServerNames(): string[] {
@@ -538,7 +544,13 @@ export class TeamOrchestrator {
       agent.setExtraToolsProvider(() => {
         const ids    = agent.config.enabledMcpServers;
         const shared = ids == null ? this.mcp.getAllTools() : this.mcp.getToolsForServers(ids);
-        const personal = this.personalMcpByAgent.get(agent.name.toLowerCase())?.getAllTools() ?? [];
+        // A device tool counts as personal: it belongs to this user's own
+        // phone, there are few of them, and an agent that has to discover
+        // the camera will not think to look.
+        const personal = [
+          ...(this.personalMcpByAgent.get(agent.name.toLowerCase())?.getAllTools() ?? []),
+          ...(this.deviceTools?.toolDefinitions() ?? []),
+        ];
 
         // Checked here rather than at registration because this is the first
         // point where the servers have actually connected and reported.
@@ -897,6 +909,7 @@ export class TeamOrchestrator {
       onHumanEscalation: this.onHumanEscalation,
       emailAllowlistRef: this.emailAllowlistRef,
       getPersonalMcp: (agentName) => this.personalMcpByAgent.get(agentName.toLowerCase()) ?? null,
+      getDeviceTools: () => this.deviceTools,
       agendaStore: this.agendaStoreRef,
       findByName: (name) => this.findByName(name),
       findBlueHat: () => this.findBlueHat(),

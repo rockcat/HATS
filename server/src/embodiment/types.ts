@@ -54,18 +54,45 @@ export interface ProjectUpdateEvent {
 
 export interface HeartbeatEvent { type: 'heartbeat' }
 
+/**
+ * The runner asking a device to run one of the tools it declared.
+ *
+ * Goes only to the device it is addressed to — every other subscriber would
+ * answer a question it was not asked.
+ */
+export interface DeviceRequestEvent {
+  type: 'device_request';
+  deviceId: string;
+  id: string;
+  tool: string;
+  arguments: Record<string, unknown>;
+  expiresAt: string;
+}
+
 export type EmbodimentEvent =
   | HelloEvent
   | AgentStateEvent
   | AgentMessageEvent
   | AgentSpeechEvent
   | ProjectUpdateEvent
+  | DeviceRequestEvent
   | HeartbeatEvent;
 
-/** Clients may narrow the stream to a single agent. */
-export interface EmbodimentEventFilter { agentId: string }
+/**
+ * Clients may narrow the stream to a single agent, and identify themselves
+ * as a device so work meant for them reaches them and nobody else.
+ */
+export interface EmbodimentEventFilter {
+  agentId?: string;
+  deviceId?: string;
+}
 
 export function eventMatchesFilter(event: EmbodimentEvent, filter: EmbodimentEventFilter): boolean {
-  if (event.type === 'hello' || event.type === 'heartbeat' || event.type === 'project_update') return true;
-  return event.agentId === filter.agentId;
+  if (event.type === 'heartbeat' || event.type === 'hello' || event.type === 'project_update') return true;
+
+  // A request addressed to one device must never reach another: it would
+  // take a photo nobody asked it for, and answer a call it does not own.
+  if (event.type === 'device_request') return event.deviceId === filter.deviceId;
+
+  return filter.agentId === undefined || event.agentId === filter.agentId;
 }

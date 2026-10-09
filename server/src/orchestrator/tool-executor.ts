@@ -1,6 +1,7 @@
 import * as path from 'path';
 import { readFile, writeFile, mkdir, readdir } from 'fs/promises';
 import { MCPRegistry } from '../mcp/mcp-registry.js';
+import type { DeviceToolBridge } from '../device/device-tool-bridge.js';
 import { EventStore } from '../store/event-store.js';
 import { ToolCall } from '../providers/types.js';
 import { AgendaStore } from '../api/agenda-store.js';
@@ -34,6 +35,8 @@ export interface ToolCallContext {
   emailAllowlistRef: { store: EmailAllowlistStore | null };
   /** Returns the personal MCPRegistry for the given agent, or null if they have none. */
   getPersonalMcp(agentName: string): MCPRegistry | null;
+  /** Tools that run on the user's device. Null when nothing is connected. */
+  getDeviceTools?(): DeviceToolBridge | null;
   /** Mutable ref so the store stays live after context creation. */
   agendaStore: { store: AgendaStore | null };
   findByName(name: string): IAgent | undefined;
@@ -159,7 +162,17 @@ export function buildToolExecutor(ctx: ToolCallContext, mcp: MCPRegistry) {
     try {
       let result: string;
       const personalMcp = ctx.getPersonalMcp(agentName);
+      const devices     = ctx.getDeviceTools?.() ?? null;
       const isMcpTool   = (personalMcp && personalMcp.isMCPTool(call.name)) || mcp.isMCPTool(call.name);
+
+      // Checked first: a device tool never reaches an MCP server or a
+      // built-in, and the bridge answers for itself when no device has it.
+      if (devices?.isDeviceTool(call.name)) {
+        result = await devices.call(call.name, call.arguments ?? {});
+        await ctx.store.append('tool_result', { agent: agentName, tool: call.name, result });
+        return result;
+      }
+
       if (isMcpTool) {
         const allowlist = ctx.emailAllowlistRef.store;
         if (allowlist) {
