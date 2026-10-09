@@ -12,6 +12,7 @@ import { EmbodimentRouter, EMBODIMENT_BASE } from './embodiment-router.js';
 import type { TeamOrchestrator } from '../orchestrator/orchestrator.js';
 import type { SpeechGateway } from '../speech/speech-gateway.js';
 import type { IAgent } from '../agent/iagent.js';
+import { DeviceToolBridge } from '../device/device-tool-bridge.js';
 
 const agent = (name: string, avatar: string | undefined, templateId?: string): IAgent => ({
   id: `inst-${name}`,
@@ -49,6 +50,9 @@ function capture() {
 
 let dir = '';
 let router: EmbodimentRouter;
+let devices: DeviceToolBridge;
+/** What the bridge tried to send to a device, so delivery can be asserted. */
+let delivered: Array<{ deviceId: string; tool: string; id: string }>;
 
 beforeAll(async () => {
   dir = await mkdtemp(path.join(tmpdir(), 'hats-router-'));
@@ -57,6 +61,16 @@ beforeAll(async () => {
   }));
 
   const agents = [agent('Poppy', 'max.glb', 'tpl-poppy'), agent('Amara', 'dave.glb'), agent('Blake', undefined)];
+
+  delivered = [];
+  devices = new DeviceToolBridge({
+    timeoutMs: 500,
+    deliver: (deviceId, request) => {
+      delivered.push({ deviceId, tool: request.tool, id: request.id });
+      return true;
+    },
+  });
+
   router = new EmbodimentRouter({
     getOrchestrator: () => ({
       listAgents: () => agents,
@@ -69,6 +83,7 @@ beforeAll(async () => {
     avatarsDir: dir,
     backgroundsDir: dir,
     version: 'test',
+    devices,
   });
 });
 
@@ -111,5 +126,64 @@ describe('GET /agents/{id}', () => {
 
   it('resolves an agent by name as well as by instance id', async () => {
     expect((await call(`${EMBODIMENT_BASE}/agents/poppy`)).body().id).toBe('inst-Poppy');
+  });
+});
+
+describe('device tools', () => {
+  /** POST/PUT through the router the way a device would. */
+  const send = async (method: string, pathname: string, body?: unknown) => {
+    const c = capture();
+    const chunks = body === undefined ? [] : [Buffer.from(JSON.stringify(body))];
+    const req = Object.assign(
+      (async function* () { yield* chunks; })(),
+      { url: pathname, method, headers: {} },
+    ) as unknown as IncomingMessage;
+    const handled = await router.handleRoutes(pathname, method, req, c.res);
+    expect(handled).toBe(true);
+    return c;
+  };
+
+  it('accepts a declaration and lists what is connected', async () => {
+    await send('PUT', `${EMBODIMENT_BASE}/devices/phone`, {
+      label: "Paul's phone",
+      tools: [{ name: 'take_photo', description: 'Take a photo.' }],
+    });
+    const { devices: listed } = (await call(`${EMBODIMENT_BASE}/devices`)).body();
+    expect(listed).toEqual([{ deviceId: 'phone', label: "Paul's phone", tools: ['take_photo'] }]);
+  });
+
+  it('refuses a declaration with no tool list', async () => {
+    const c = await send('PUT', `${EMBODIMENT_BASE}/devices/phone`, { label: 'no tools' });
+    expect(c.status()).toBe(400);
+  });
+
+  it('carries a call to the device and back', async () => {
+    // The whole point: the agent calls a tool that runs somewhere else.
+    await send('PUT', `${EMBODIMENT_BASE}/devices/phone`, {
+      tools: [{ name: 'get_device_time', description: 'Local time on the device.' }],
+    });
+
+    const answer = devices.call('device__get_device_time');
+    expect(delivered).toHaveLength(1);
+
+    await send('POST', `${EMBODIMENT_BASE}/device-results/${delivered[0]!.id}`,
+      { ok: true, result: 'half past three' });
+    expect(await answer).toBe('half past three');
+  });
+
+  it('reports a result nobody was waiting for, rather than failing', async () => {
+    // A device answering after a timeout raced and lost; that is not its fault.
+    const c = await send('POST', `${EMBODIMENT_BASE}/device-results/made-up`, { ok: true, result: 'x' });
+    expect(c.body()).toEqual({ settled: false });
+  });
+
+  it('stops offering the tools when a device unregisters', async () => {
+    await send('PUT', `${EMBODIMENT_BASE}/devices/phone`, {
+      tools: [{ name: 'take_photo', description: 'Take a photo.' }],
+    });
+    expect(devices.toolDefinitions()).toHaveLength(1);
+
+    await send('DELETE', `${EMBODIMENT_BASE}/devices/phone`);
+    expect(devices.toolDefinitions()).toEqual([]);
   });
 });

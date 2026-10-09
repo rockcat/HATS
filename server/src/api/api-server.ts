@@ -34,6 +34,7 @@ import { AuthRouter } from './auth-router.js';
 import { UserManagementRouter } from './user-management-router.js';
 import { parseRequestAuth } from './auth-middleware.js';
 import { EmbodimentRouter } from '../embodiment/embodiment-router.js';
+import { DeviceToolBridge } from '../device/device-tool-bridge.js';
 
 const __dirname  = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(__dirname, '..', '..', '..', 'apps', 'web');
@@ -142,6 +143,7 @@ export class APIServer {
   private authRouter: AuthRouter;
   private userManagementRouter: UserManagementRouter;
   private embodimentRouter: EmbodimentRouter;
+  private deviceTools: DeviceToolBridge;
   private projectName: string;
   private projectSource: 'project-server' | 'local';
   private googleRefreshTimer: ReturnType<typeof setInterval> | null = null;
@@ -259,6 +261,17 @@ export class APIServer {
       },
     });
 
+    // Delivery goes out over the embodiment event stream, which the router
+    // owns — so the bridge is given a late binding to it rather than the
+    // router being constructed first.
+    this.deviceTools = new DeviceToolBridge({
+      deliver: (deviceId, request) => {
+        self.embodimentRouter.publish({ type: 'device_request', deviceId, ...request });
+        return true;
+      },
+    });
+    this.orchestrator.setDeviceTools(this.deviceTools);
+
     this.embodimentRouter = new EmbodimentRouter({
       getOrchestrator:   () => self.orchestrator,
       getProjectContext: () => ({
@@ -273,6 +286,7 @@ export class APIServer {
       avatarsDir:     AVATARS_DIR,
       backgroundsDir: BACKGROUNDS_DIR,
       version:        '1.0.0',
+      devices:        self.deviceTools,
     });
 
     const tokensPath = config.googleTokensPath ?? runtimeDir('data', 'google-tokens.json');
