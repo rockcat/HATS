@@ -168,7 +168,7 @@ describe('device tools', () => {
 
     await send('POST', `${EMBODIMENT_BASE}/device-results/${delivered[0]!.id}`,
       { ok: true, result: 'half past three' });
-    expect(await answer).toBe('half past three');
+    expect((await answer).text).toBe('half past three');
   });
 
   it('reports a result nobody was waiting for, rather than failing', async () => {

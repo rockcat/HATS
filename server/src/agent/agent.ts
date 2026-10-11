@@ -3,7 +3,7 @@ import { log } from '../util/logger.js';
 import { HatType } from '../hats/types.js';
 import { mergeHatDefinitions } from '../hats/definitions.js';
 import { generateSystemPrompt } from '../prompt/generator.js';
-import { AIProvider, CompletionRequest, Message, ProviderError, ToolCall } from '../providers/types.js';
+import { AIProvider, CompletionRequest, Message, ProviderError, ToolCall, type ToolOutcome } from '../providers/types.js';
 import { getToolsForHat, getAllToolsForHat } from '../tools/definitions.js';
 import { buildToolRegistry, searchTools, getTool, ToolRegistry } from '../tools/tool-search.js';
 import { TeamMessage } from '../orchestrator/types.js';
@@ -393,7 +393,7 @@ export class Agent implements IAgent {
     working: import('../providers/types.js').Message[],
   ): Promise<void> {
     for (const call of calls) {
-      let result: string;
+      let result: string | ToolOutcome;
       if (call.name === 'search_tools') {
         result = searchTools(call.arguments.query as string, registry);
       } else if (call.name === 'get_tool') {
@@ -408,7 +408,14 @@ export class Agent implements IAgent {
           ? await this.toolExecutor(this.name, call)
           : `Tool ${call.name} not connected.`;
       }
-      working.push({ role: 'tool', content: result, toolCallId: call.id, toolName: call.name });
+      const outcome = typeof result === 'string' ? { text: result } : result;
+      working.push({
+        role: 'tool',
+        content: outcome.text,
+        toolCallId: call.id,
+        toolName: call.name,
+        ...(outcome.images?.length ? { images: outcome.images } : {}),
+      });
     }
   }
 

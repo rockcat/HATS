@@ -1,5 +1,5 @@
 import { HatType } from '../hats/types.js';
-import { AIProvider, ToolCall } from '../providers/types.js';
+import { AIProvider, ToolCall, type ToolOutcome } from '../providers/types.js';
 import { TeamMessage } from '../orchestrator/types.js';
 
 export enum AgentState {
@@ -117,9 +117,13 @@ export interface AgentMessage {
 
 /**
  * Called by the orchestrator when the agent uses a tool.
- * Returns the string result to feed back to the LLM.
+ *
+ * Returns what to feed back to the LLM: a string for almost everything, or
+ * a ToolOutcome when the tool produced something the model should see as
+ * well as read — a photo from the device camera being the reason.
  */
-export type ToolExecutor = (agentName: string, call: ToolCall) => Promise<string>;
+export type ToolExecutor =
+  (agentName: string, call: ToolCall) => Promise<string | ToolOutcome>;
 
 /**
  * Called when the agent produces a final text response to a message.

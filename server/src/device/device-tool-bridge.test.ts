@@ -99,7 +99,7 @@ describe('calling a device tool', () => {
     expect(sent[0]?.request.arguments).toEqual({ facing: 'front' });
 
     bridge.settleResult(sent[0]!.request.id, { ok: true, result: 'a cup of tea' });
-    expect(await call).toBe('a cup of tea');
+    expect((await call).text).toBe('a cup of tea');
   });
 
   it('strips the namespace, because the device never sees it', async () => {
@@ -113,7 +113,7 @@ describe('calling a device tool', () => {
 
   it('tells the agent plainly when no device has the tool', async () => {
     const { bridge, sent } = makeBridge();
-    expect(await bridge.call('device__take_photo')).toContain('No connected device');
+    expect((await bridge.call('device__take_photo')).text).toContain('No connected device');
     expect(sent).toHaveLength(0);
   });
 
@@ -122,7 +122,7 @@ describe('calling a device tool', () => {
     bridge.register('phone', [PHOTO]);
     const call = bridge.call('device__take_photo');
     bridge.settleResult(sent[0]!.request.id, { ok: false, error: 'camera permission denied' });
-    expect(await call).toContain('camera permission denied');
+    expect((await call).text).toContain('camera permission denied');
   });
 
   it('says something useful when the device answers ok with no detail', async () => {
@@ -130,13 +130,13 @@ describe('calling a device tool', () => {
     bridge.register('phone', [TIME]);
     const call = bridge.call('device__get_device_time');
     bridge.settleResult(sent[0]!.request.id, { ok: true });
-    expect(await call).toBe('Done.');
+    expect((await call).text).toBe('Done.');
   });
 
   it('gives up when the device cannot be reached at all', async () => {
     const { bridge } = makeBridge({ deliverable: false });
     bridge.register('phone', [PHOTO]);
-    expect(await bridge.call('device__take_photo')).toContain('Could not reach the device');
+    expect((await bridge.call('device__take_photo')).text).toContain('Could not reach the device');
   });
 
   it('prefers the most recently connected device, which is the one in your hand', async () => {
@@ -159,8 +159,8 @@ describe('calling a device tool', () => {
     bridge.settleResult(sent[1]!.request.id, { ok: true, result: 'half past three' });
     bridge.settleResult(sent[0]!.request.id, { ok: true, result: 'a photo' });
 
-    expect(await photo).toBe('a photo');
-    expect(await time).toBe('half past three');
+    expect((await photo).text).toBe('a photo');
+    expect((await time).text).toBe('half past three');
   });
 
   it('carries an expiry the device can see', () => {
@@ -182,7 +182,7 @@ describe('when the device does not answer', () => {
     bridge.register('phone', [PHOTO]);
     const call = bridge.call('device__take_photo');
     await vi.advanceTimersByTimeAsync(1001);
-    expect(await call).toContain('did not answer');
+    expect((await call).text).toContain('did not answer');
   });
 
   it('ignores an answer that arrives after the timeout', async () => {
@@ -200,7 +200,7 @@ describe('when the device does not answer', () => {
     bridge.register('phone', [PHOTO]);
     const call = bridge.call('device__take_photo');
     bridge.unregister('phone');
-    expect(await call).toContain('went offline');
+    expect((await call).text).toContain('went offline');
   });
 
   it('settles everything in flight when the runner stops', async () => {
@@ -208,7 +208,7 @@ describe('when the device does not answer', () => {
     bridge.register('phone', [PHOTO]);
     const call = bridge.call('device__take_photo');
     bridge.close();
-    expect(await call).toContain('runner stopped');
+    expect((await call).text).toContain('runner stopped');
   });
 });
 
@@ -226,5 +226,151 @@ describe('connected', () => {
     expect(bridge.connected()).toEqual([
       { deviceId: 'phone', label: "Paul's phone", tools: ['take_photo', 'get_device_time'] },
     ]);
+  });
+});
+
+// ── Pictures ─────────────────────────────────────────────────────────────────
+
+/** A bridge that records what it was asked to keep, and where it says it went. */
+function makeBridgeWithKeeper(kept: string | null = 'outputs/device/photo.jpg') {
+  const asked: Array<{ tool: string; bytes: number }> = [];
+  const sent: Array<{ deviceId: string; request: DeviceRequest }> = [];
+  const bridge = new DeviceToolBridge({
+    timeoutMs: 1000,
+    deliver: (deviceId, request) => { sent.push({ deviceId, request }); return true; },
+    keepImage: async (tool, image) => {
+      asked.push({ tool, bytes: image.base64.length });
+      return kept;
+    },
+  });
+  return { bridge, sent, asked };
+}
+
+const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xd9]).toString('base64');
+
+describe('a device tool that took a picture', () => {
+  it('passes the image to the model, not just a description of it', async () => {
+    // Describing it in words would mean something else had done the looking.
+    const { bridge, sent } = makeBridgeWithKeeper();
+    bridge.register('phone', [PHOTO]);
+    const call = bridge.call(DEVICE_PREFIX + 'take_photo');
+    await vi.waitFor(() => expect(sent).toHaveLength(1));
+
+    bridge.settleResult(sent[0]!.request.id, {
+      ok: true, result: 'A mug on a desk.', image: { mediaType: 'image/jpeg', base64: JPEG },
+    });
+
+    const outcome = await call;
+    expect(outcome.images).toHaveLength(1);
+    expect(outcome.images?.[0]?.base64).toBe(JPEG);
+    expect(outcome.images?.[0]?.mediaType).toBe('image/jpeg');
+  });
+
+  it('tells the agent where it was kept, so it can look again later', async () => {
+    const { bridge, sent, asked } = makeBridgeWithKeeper('outputs/device/2026-mug.jpg');
+    bridge.register('phone', [PHOTO]);
+    const call = bridge.call(DEVICE_PREFIX + 'take_photo');
+    await vi.waitFor(() => expect(sent).toHaveLength(1));
+
+    bridge.settleResult(sent[0]!.request.id, {
+      ok: true, result: 'A mug on a desk.', image: { mediaType: 'image/jpeg', base64: JPEG },
+    });
+
+    const outcome = await call;
+    expect(asked).toEqual([{ tool: 'take_photo', bytes: JPEG.length }]);
+    expect(outcome.text).toContain('A mug on a desk.');
+    expect(outcome.text).toContain('outputs/device/2026-mug.jpg');
+    expect(outcome.images?.[0]?.path).toBe('outputs/device/2026-mug.jpg');
+  });
+
+  it('still shows the picture when it could not be kept', async () => {
+    // A full disk should cost the copy, not the answer.
+    const { bridge, sent } = makeBridgeWithKeeper(null);
+    bridge.register('phone', [PHOTO]);
+    const call = bridge.call(DEVICE_PREFIX + 'take_photo');
+    await vi.waitFor(() => expect(sent).toHaveLength(1));
+
+    bridge.settleResult(sent[0]!.request.id, {
+      ok: true, image: { mediaType: 'image/jpeg', base64: JPEG },
+    });
+
+    const outcome = await call;
+    expect(outcome.images).toHaveLength(1);
+    expect(outcome.text).not.toContain('Kept at');
+  });
+
+  it('survives a keeper that throws', async () => {
+    const sent: Array<{ deviceId: string; request: DeviceRequest }> = [];
+    const bridge = new DeviceToolBridge({
+      timeoutMs: 1000,
+      deliver: (deviceId, request) => { sent.push({ deviceId, request }); return true; },
+      keepImage: async () => { throw new Error('disk full'); },
+    });
+    bridge.register('phone', [PHOTO]);
+    const call = bridge.call(DEVICE_PREFIX + 'take_photo');
+    await vi.waitFor(() => expect(sent).toHaveLength(1));
+
+    bridge.settleResult(sent[0]!.request.id, {
+      ok: true, image: { mediaType: 'image/jpeg', base64: JPEG },
+    });
+
+    expect((await call).images).toHaveLength(1);
+  });
+
+  it('drops an image too large to send, and says why', async () => {
+    // Anthropic fails the whole request over an oversized image, which would
+    // cost the agent the answer as well as the picture.
+    const { bridge, sent } = makeBridgeWithKeeper();
+    bridge.register('phone', [PHOTO]);
+    const call = bridge.call(DEVICE_PREFIX + 'take_photo');
+    await vi.waitFor(() => expect(sent).toHaveLength(1));
+
+    bridge.settleResult(sent[0]!.request.id, {
+      ok: true, result: 'A mug.', image: { mediaType: 'image/jpeg', base64: 'A'.repeat(9_000_000) },
+    });
+
+    const outcome = await call;
+    expect(outcome.images).toBeUndefined();
+    expect(outcome.text).toContain('A mug.');
+    expect(outcome.text).toContain('too large');
+  });
+
+  it('drops an image in a format no model takes, and says which', async () => {
+    const { bridge, sent } = makeBridgeWithKeeper();
+    bridge.register('phone', [PHOTO]);
+    const call = bridge.call(DEVICE_PREFIX + 'take_photo');
+    await vi.waitFor(() => expect(sent).toHaveLength(1));
+
+    bridge.settleResult(sent[0]!.request.id, {
+      ok: true, image: { mediaType: 'image/heic', base64: JPEG },
+    });
+
+    const outcome = await call;
+    expect(outcome.images).toBeUndefined();
+    expect(outcome.text).toContain('image/heic');
+  });
+
+  it('does not try to keep anything when the device reported a failure', async () => {
+    const { bridge, sent, asked } = makeBridgeWithKeeper();
+    bridge.register('phone', [PHOTO]);
+    const call = bridge.call(DEVICE_PREFIX + 'take_photo');
+    await vi.waitFor(() => expect(sent).toHaveLength(1));
+
+    bridge.settleResult(sent[0]!.request.id, { ok: false, error: 'camera permission denied' });
+
+    expect((await call).text).toContain('camera permission denied');
+    expect(asked).toEqual([]);
+  });
+
+  it('leaves a tool that returns no picture exactly as it was', async () => {
+    const { bridge, sent } = makeBridgeWithKeeper();
+    bridge.register('phone', [TIME]);
+    const call = bridge.call(DEVICE_PREFIX + 'get_device_time');
+    await vi.waitFor(() => expect(sent).toHaveLength(1));
+
+    bridge.settleResult(sent[0]!.request.id, { ok: true, result: 'half past three' });
+
+    const outcome = await call;
+    expect(outcome).toEqual({ text: 'half past three' });
   });
 });

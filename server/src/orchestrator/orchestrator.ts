@@ -539,6 +539,9 @@ export class TeamOrchestrator {
     }
   }
 
+  /** Where the current project keeps its files, if there is one. */
+  getProjectDir(): string | null { return this.projectDir; }
+
   setProjectDir(dir: string | null): void {
     this.projectDir = dir;
     for (const agent of this.agents.values()) agent.updateProjectDir(dir);
