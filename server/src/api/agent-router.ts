@@ -489,7 +489,11 @@ export class AgentRouter {
      */
     if (pathname.match(/^\/api\/agents\/[^/]+\/memory$/) && method === 'GET') {
       const name = resolveAgentName(decodeURIComponent(pathname.split('/')[3] ?? ''));
-      if (!name) { json(res, 404, { error: 'Agent not found' }); return true; }
+      // resolveAgentName echoes an unknown name back, so check it is deployed:
+      // otherwise a typo reads as "this agent remembers nothing".
+      if (!orch.listAgents().some((a) => a.name === name)) {
+        json(res, 404, { error: `No agent named "${name}"` }); return true;
+      }
       json(res, 200, { agent: name, memory: await orch.readAgentMemory(name) });
       return true;
     }
