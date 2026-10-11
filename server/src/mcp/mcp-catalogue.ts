@@ -80,7 +80,7 @@ export function isHumanMcp(e: MCPCatalogueEntry): boolean {
 
 /** Returns true if a config references {PROJECT_DIR} and needs reconnecting on project switch. */
 export function isProjectScoped(config: MCPServerConfig): boolean {
-  const check = (v: string) => v.includes('{PROJECT_DIR}');
+  const check = (v: string) => v.includes('{PROJECT_DIR}') || v.includes('{AGENT_DIR}');
   if (config.transport === 'stdio') {
     if (config.args?.some(check)) return true;
     if (config.env && Object.values(config.env).some((v) => check(String(v)))) return true;
@@ -102,6 +102,10 @@ export function resolveConfig(config: MCPServerConfig, projectDir?: string | nul
     v
       .replace(/\{CWD\}/g, process.cwd())
       .replace(/\{HOME\}/g, os.homedir())
+      // A team instance belongs to no one agent, so {AGENT_DIR} resolves to the
+      // project: still one shared graph, but a findable one rather than a path
+      // buried in the npx cache.
+      .replace(/\{AGENT_DIR\}/g, projectDir ?? process.cwd())
       .replace(/\{PROJECT_DIR\}/g, projectDir ?? process.cwd());
 
   const resolved: Record<string, string> = {};
@@ -123,8 +127,18 @@ export function resolveConfig(config: MCPServerConfig, projectDir?: string | nul
   };
 }
 
-/** Build a config for a personal MCP instance using per-agent credentials directly. */
-export function resolvePersonalConfig(entry: MCPCatalogueEntry, credentials: Record<string, string>): MCPServerConfig {
+/**
+ * Build a config for a personal MCP instance.
+ *
+ * `agentDir` is where anything this agent alone owns is kept — its memory,
+ * for one. Expanded from `{AGENT_DIR}`, so a server that needs per-agent
+ * storage asks for it in the catalogue rather than needing code here.
+ */
+export function resolvePersonalConfig(
+  entry: MCPCatalogueEntry,
+  credentials: Record<string, string>,
+  agentDir?: string,
+): MCPServerConfig {
   if (entry.config.transport === 'http') {
     const vars = { ...(process.env as Record<string, string>), ...credentials };
     return entry.config.headers
@@ -132,14 +146,24 @@ export function resolvePersonalConfig(entry: MCPCatalogueEntry, credentials: Rec
       : entry.config;
   }
   if (entry.config.transport !== 'stdio') return entry.config;
+  const expandAgentDir = (value: string) =>
+    agentDir ? value.replace(/\{AGENT_DIR\}/g, agentDir) : value.replace(/\{AGENT_DIR\}[/\\]?/g, '');
+
   const env: Record<string, string> = {
     ...(process.env as Record<string, string>),
-    ...(entry.config.env ?? {}),
+    ...Object.fromEntries(
+      Object.entries(entry.config.env ?? {}).map(([k, v]) => [k, expandAgentDir(String(v))]),
+    ),
     ...credentials,
   };
   let command = entry.config.command;
   if (process.platform === 'win32' && (command === 'npx' || command === 'npm')) {
     command = command + '.cmd';
   }
-  return { ...entry.config, command, args: entry.config.args?.map(expandTilde), env };
+  return {
+    ...entry.config,
+    command,
+    args: entry.config.args?.map((a) => expandAgentDir(expandTilde(a))),
+    env,
+  };
 }

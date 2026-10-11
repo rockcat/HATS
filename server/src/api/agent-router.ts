@@ -481,6 +481,19 @@ export class AgentRouter {
       return true;
     }
 
+    /**
+     * What an agent remembers.
+     *
+     * Read from the running memory server rather than its file: the graph
+     * lives in the server between writes, so the file lags behind.
+     */
+    if (pathname.match(/^\/api\/agents\/[^/]+\/memory$/) && method === 'GET') {
+      const name = resolveAgentName(decodeURIComponent(pathname.split('/')[3] ?? ''));
+      if (!name) { json(res, 404, { error: 'Agent not found' }); return true; }
+      json(res, 200, { agent: name, memory: await orch.readAgentMemory(name) });
+      return true;
+    }
+
     if (pathname === '/api/human-requests' && method === 'GET') { json(res, 200, { requests: this.deps.buildRequestsList() }); return true; }
 
     if (pathname.match(/^\/api\/human-requests\/[^/]+$/) && method === 'DELETE') {

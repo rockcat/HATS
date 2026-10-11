@@ -31,6 +31,7 @@ import { EmailAllowlistStore } from '../api/email-allowlist-store.js';
 import { AgendaStore } from '../api/agenda-store.js';
 import { AgendaRunner } from './agenda-runner.js';
 import { resolvePersonalConfig, isAgentMcp } from '../mcp/mcp-catalogue.js';
+import { parseMemoryGraph, type MemoryGraph } from '../mcp/memory-graph.js';
 import { getCatalogue, recordDiscoveredTools } from '../mcp/catalogue-store.js';
 import {
   startMeeting as startMeetingFn,
@@ -491,7 +492,11 @@ export class TeamOrchestrator {
       return;
     }
     if (personalMcp.has(serverId)) await personalMcp.disconnect(serverId);
-    const config = resolvePersonalConfig(entry, credentials);
+    const agentDir = this.agentDir(agentName);
+    // The memory server writes its file but will not create the folder, so a
+    // first run would fail on a path that has never existed.
+    if (agentDir) await mkdir(agentDir, { recursive: true }).catch(() => {});
+    const config = resolvePersonalConfig(entry, credentials, agentDir);
     const credKeys = Object.keys(credentials);
     log.info(`[Team] Personal MCP "${serverId}" starting for ${agentName} — credential keys: [${credKeys.join(', ')}]`);
     await personalMcp.add({ name: serverId, config, toolArgMappings: entry.toolArgMappings });
@@ -503,6 +508,34 @@ export class TeamOrchestrator {
     if (!curated && toolCount > LARGE_PERSONAL_SERVER) {
       log.warn(`[Team] "${serverId}" is large: ${toolCount} tool schemas ride on every one of ${agentName}'s requests.`
         + ' Set "tools sent to the model" on the agent template to send only the ones it uses.');
+    }
+  }
+
+  /**
+   * Where one agent's own files live — its memory, and whatever else only it
+   * owns. Keyed by instance id rather than name, so renaming an agent does
+   * not lose what it remembered.
+   */
+  agentDir(agentName: string): string | undefined {
+    if (!this.projectDir) return undefined;
+    const id = this.findByName(agentName)?.id;
+    return id ? nodePath.join(this.projectDir, 'agents', id) : undefined;
+  }
+
+  /**
+   * Read an agent's memory graph, by asking the memory server it owns.
+   *
+   * Live rather than off disk: the server holds the graph in memory between
+   * writes, so the file lags behind what the agent actually knows.
+   */
+  async readAgentMemory(agentName: string): Promise<MemoryGraph | null> {
+    const personal = this.personalMcpByAgent.get(agentName.toLowerCase());
+    if (!personal?.has('memory')) return null;
+    try {
+      return parseMemoryGraph(await personal.callTool('mcp__memory__read_graph', {}));
+    } catch (err) {
+      log.warn(`[Team] Could not read ${agentName}'s memory: ${(err as Error).message}`);
+      return null;
     }
   }
 

@@ -72,10 +72,17 @@ export const BUILTIN_CATALOGUE: MCPCatalogueEntry[] = [
   {
     id: 'memory',
     name: 'Memory',
-    description: 'Persistent knowledge graph — agents can store and retrieve facts across sessions',
+    description: 'Persistent knowledge graph — facts an agent keeps across sessions',
     category: 'productivity',
-    users: ['human'],
-    config: { transport: 'stdio', command: 'npx', args: ['-y', '@modelcontextprotocol/server-memory'] },
+    // Both: as a team server it is a shared graph, as a personal one each
+    // agent keeps its own. The file path is what tells them apart.
+    users: ['human', 'agent'],
+    config: {
+      transport: 'stdio', command: 'npx', args: ['-y', '@modelcontextprotocol/server-memory'],
+      // Without this the server writes inside its npx cache directory, so
+      // every agent and every project shared one graph nobody could find.
+      env: { MEMORY_FILE_PATH: '{AGENT_DIR}/memory.json' },
+    },
     url: 'https://github.com/modelcontextprotocol/servers/tree/main/src/memory',
   },
   {
