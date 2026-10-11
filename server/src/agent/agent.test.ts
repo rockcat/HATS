@@ -116,7 +116,7 @@ describe('Agent', () => {
     const json = agent.toJSON() as Record<string, unknown>;
     expect(json['id']).toBeTruthy();
     expect(json['name']).toBe('TestAgent');
-    expect(json['hatType']).toBe(HatType.Black);
+    expect(json['hatType']).toEqual([HatType.Black]);
     expect(json['state']).toBe(AgentState.Idle);
   });
 

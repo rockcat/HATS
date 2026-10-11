@@ -8,8 +8,9 @@ describe('State Machine', () => {
       expect(transition(AgentState.Idle, 'task_assigned')).toBe(AgentState.Working);
     });
 
-    it('Working → Idle on task_complete', () => {
-      expect(transition(AgentState.Working, 'task_complete')).toBe(AgentState.Idle);
+    it('Working → Waiting on task_complete', () => {
+      // Done with work means quiet until woken, not idle and ready for more.
+      expect(transition(AgentState.Working, 'task_complete')).toBe(AgentState.Waiting);
     });
 
     it('Working → WaitingForHelp on blocked', () => {
@@ -32,8 +33,9 @@ describe('State Machine', () => {
       expect(transition(AgentState.InDiscussion, 'discussion_ended')).toBe(AgentState.Working);
     });
 
-    it('InDiscussion → Idle on task_complete', () => {
-      expect(transition(AgentState.InDiscussion, 'task_complete')).toBe(AgentState.Idle);
+    it('InDiscussion → Waiting on task_complete', () => {
+      // A meeting that ended with no new task leaves the agent waiting.
+      expect(transition(AgentState.InDiscussion, 'task_complete')).toBe(AgentState.Waiting);
     });
   });
 
