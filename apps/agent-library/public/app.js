@@ -10,6 +10,7 @@ import {
 import { clearAvatar, showAvatar } from '/ui-kit/avatar-stage.js';
 import { configuredPersonalServers, loadMcpCatalogue, showMcpFor } from '/mcp-panel.js';
 import { readUpfront, setToolSources, syncMode, writeUpfront } from '/upfront-tools.js';
+import { renderToolPreview } from '/tool-preview.js';
 import { initVoicePicker, initVoices } from '/voice-picker.js';
 
 const api = makeClient('/api/v1');
@@ -21,6 +22,8 @@ const state = {
   providers: [],
   avatars: [],
   mcp: { personal: [], shared: [] },
+  /** Catalogue entries this agent can draw tools from. */
+  toolSources: [],
   dirty: false,
   // What the stage is currently showing, so an unrelated keystroke does not
   // trigger a multi-megabyte model reload.
@@ -245,8 +248,16 @@ function selectTemplate(id) {
  */
 function refreshToolSources() {
   const useAll = ui.form.elements['allMcpServers']?.checked ?? true;
-  setToolSources(state.mcp, configuredPersonalServers(), useAll ? undefined : selectedServers(ui.form));
+  const sources = setToolSources(
+    state.mcp, configuredPersonalServers(), useAll ? undefined : selectedServers(ui.form));
   writeUpfront(ui.form, readUpfront(ui.form));
+  state.toolSources = sources;
+  refreshToolPreview();
+}
+
+/** What the agent will actually be handed, and what it must search for. */
+function refreshToolPreview() {
+  renderToolPreview(state.toolSources ?? [], readUpfront(ui.form));
 }
 
 function startNewTemplate() {
@@ -350,6 +361,7 @@ function init() {
     if (event.target.name === 'upfrontMode') syncMode(ui.form);
     // Changing which servers the agent may use changes what it can be given.
     if (['allMcpServers', 'mcpServer'].includes(event.target.name)) refreshToolSources();
+    if (['upfrontMode', 'upfrontServer', 'upfrontTool'].includes(event.target.name)) refreshToolPreview();
     setDirty(true);
     refreshPreview();
   });
@@ -366,6 +378,17 @@ function init() {
 
   window.addEventListener('beforeunload', (event) => { if (state.dirty) event.preventDefault(); });
 
+
+  // The panel shows one view at a time: the prompt, or the tools behind it.
+  $('#preview-tabs').addEventListener('click', (event) => {
+    const button = event.target.closest('button');
+    if (!button) return;
+    const tools = button.dataset.view === 'tools';
+    for (const b of $('#preview-tabs button')) b.classList.toggle('active', b === button);
+    $('#prompt-scroll').hidden = tools;
+    $('#tool-preview').hidden = !tools;
+    if (tools) refreshToolPreview();
+  });
 
   initVoicePicker(ui.form);
   trackHealth($('#health-dot'), $('#health-label'), '/api/v1/health');

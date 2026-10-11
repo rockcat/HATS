@@ -44,3 +44,46 @@ export function combineSelection(servers = [], tools = []) {
   const serverOf = (entry) => entry.slice(0, entry.indexOf(':')).toLowerCase();
   return [...servers, ...tools.filter((t) => !covered.has(serverOf(t)))];
 }
+
+/**
+ * What the model will be sent, and what it will have to search for.
+ *
+ * The same rule the runner applies, so the preview and the behaviour cannot
+ * drift: an absent selector list means every tool from the agent's own
+ * servers; an empty one means none. `unknown` catches a selector that matches
+ * nothing, which is otherwise silent — the tool simply never appears.
+ */
+export function splitForPreview(sources = [], upfrontTools) {
+  const all = [];
+  for (const server of sources) {
+    for (const tool of server.knownTools ?? []) {
+      all.push({ name: tool.name, description: tool.description, server: server.id, scope: server.scope });
+    }
+  }
+
+  // Absent means the default: everything from this agent's own servers.
+  if (upfrontTools === undefined) {
+    return {
+      upfront: all.filter((t) => t.scope === 'personal'),
+      searchable: all.filter((t) => t.scope !== 'personal'),
+      unknown: [],
+    };
+  }
+
+  const chosen = new Set(upfrontTools.map((s) => s.toLowerCase()));
+  const matched = new Set();
+  const isChosen = (tool) => {
+    const whole = tool.server.toLowerCase();
+    const exact = `${tool.server}:${tool.name}`.toLowerCase();
+    if (chosen.has(whole)) { matched.add(whole); return true; }
+    if (chosen.has(exact)) { matched.add(exact); return true; }
+    return false;
+  };
+
+  const upfront = all.filter(isChosen);
+  return {
+    upfront,
+    searchable: all.filter((t) => !upfront.includes(t)),
+    unknown: [...chosen].filter((c) => !matched.has(c)),
+  };
+}

@@ -490,6 +490,17 @@ export class Agent implements IAgent {
     });
   }
 
+  /**
+   * Whether a board is within reach.
+   *
+   * An absent allow-list means every team server, and the runner starts
+   * kanban for every project — so the honest default is yes.
+   */
+  private hasTicketing(): boolean {
+    const allowed = this.config.enabledMcpServers;
+    return allowed === undefined || allowed.includes('kanban');
+  }
+
   private buildSystemPrompt(): string {
     const hat = mergeHatDefinitions(this.config.hatType);
     return generateSystemPrompt({
@@ -507,6 +518,7 @@ export class Agent implements IAgent {
       projectGoal: this.config.projectGoal,
       specialisation: this.config.identity.specialisation,
       email: this.config.identity.email,
+      hasTicketing: this.hasTicketing(),
     }).text;
   }
 

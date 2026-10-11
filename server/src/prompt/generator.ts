@@ -10,6 +10,7 @@ export function generateSystemPrompt(context: PromptContext): SystemPrompt {
   const teamRole = context.teamContext ? buildTeamRole(context) : undefined;
   const projectGoal = context.projectGoal?.trim() ? buildProjectGoalSection(context.projectGoal) : undefined;
   const workspace = buildWorkspaceSection();
+  const ticketing = context.hasTicketing ? buildTicketingSection() : undefined;
   const specialisation = context.specialisation ? buildSpecialisationSection(context.specialisation) : undefined;
   const closingAnchor = buildClosingAnchor(context);
 
@@ -24,6 +25,7 @@ export function generateSystemPrompt(context: PromptContext): SystemPrompt {
     avoidances,
     ...(projectGoal ? [projectGoal] : []),
     ...(workspace ? [workspace] : []),
+    ...(ticketing ? [ticketing] : []),
     ...(teamRole ? [teamRole] : []),
     closingAnchor,
   ];
@@ -56,7 +58,11 @@ function buildHatRoleStatement(ctx: PromptContext): string {
     return `You are a general-purpose team member without a fixed cognitive hat. You approach each task pragmatically, applying whatever thinking style best fits the situation.`;
   }
   if (ctx.hatLabel.includes(' + ')) {
-    return `You wear multiple cognitive hats — ${ctx.hatLabel}. Each hat gives you a distinct lens. Apply all of them to every problem, holding the perspectives simultaneously rather than picking one.`;
+    // Held simultaneously, and reported once. The hats shape the thinking;
+    // the reader gets the conclusion, not a tour of the lenses.
+    return `You wear multiple cognitive hats — ${ctx.hatLabel}. Each gives you a distinct lens. `
+      + `Apply all of them to every problem, holding the perspectives at once rather than picking one, `
+      + `and answer with the single view they reach together.`;
   }
   return `You think and operate from the perspective of the ${ctx.hatLabel}. This is your cognitive role — it shapes how you approach every problem, question, and conversation.`;
 }
@@ -90,6 +96,33 @@ function buildDirectives(ctx: PromptContext): string {
     );
   }
   return `## Your directives\n\n${items.map((d) => `- ${d}`).join('\n')}`;
+}
+
+/**
+ * The board, and why it is not optional.
+ *
+ * A conversation is not a record. Anything an agent only knows because it
+ * was said earlier is lost the moment the thread is trimmed, the session
+ * restarts, or somebody else picks the work up — and the agent cannot tell
+ * that it has forgotten, so it carries on confidently from a gap. The board
+ * is the memory that survives all three.
+ */
+function buildTicketingSection(): string {
+  return `## Tracking work\n\n` +
+    `The board is your memory, not an administrative chore. What is only in ` +
+    `this conversation is lost when the thread is trimmed or the session ends, ` +
+    `and you will not notice it has gone.\n\n` +
+    `- When a new piece of work is identified — by you, by the human, or in a ` +
+    `meeting — create a ticket for it straight away with create_ticket. Do not ` +
+    `carry it in your head and do not wait to be asked.\n` +
+    `- Before starting anything, check the board with list_tickets for related ` +
+    `or duplicate work. Something you half-remember discussing is probably there.\n` +
+    `- Record decisions, findings and blockers as comments on the ticket with ` +
+    `add_comment, as you go. A decision nobody wrote down will be made again.\n` +
+    `- Move a ticket as its state really changes with move_ticket, so the board ` +
+    `says what is actually happening.\n` +
+    `- If you cannot remember the detail of an earlier discussion, read the ` +
+    `ticket rather than guessing or asking again.`;
 }
 
 function buildAvoidances(ctx: PromptContext): string {

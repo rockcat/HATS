@@ -214,6 +214,10 @@
       <header>
         Preview
         <span class="spacer"></span>
+        <span class="tabs" id="preview-tabs">
+          <button class="active" data-view="prompt">Prompt</button>
+          <button data-view="tools">Tools</button>
+        </span>
         <span class="tag" id="prompt-length"></span>
       </header>
 
@@ -227,6 +231,7 @@
       <div class="panel-body flush scroll" id="prompt-scroll">
         <pre class="code" id="prompt-text">Select a template to see the system prompt it produces.</pre>
       </div>
+      <div class="panel-body flush scroll" id="tool-preview" hidden></div>
 
     </section>
   </main>
