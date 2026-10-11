@@ -142,3 +142,52 @@ describe('splitForPreview', () => {
     expect(splitForPreview(unseen, undefined)).toEqual({ upfront: [], searchable: [], unknown: [] });
   });
 });
+
+describe('splitForPreview agrees with the runner', () => {
+  const sources = [
+    {
+      id: 'email-imap', scope: 'personal',
+      knownTools: [{ name: 'get_email', description: 'Read one.' }, { name: 'list_emails', description: 'List them.' }],
+    },
+    { id: 'kanban', scope: 'team', knownTools: [{ name: 'create_ticket', description: 'Raise one.' }] },
+  ];
+  const upfrontNames = (selectors?: string[]) =>
+    splitForPreview(sources, selectors).upfront.map((t: { name: string }) => t.name);
+
+  it('accepts a whole server', () => {
+    expect(upfrontNames(['email-imap'])).toEqual(['get_email', 'list_emails']);
+  });
+
+  it('accepts server:tool', () => {
+    expect(upfrontNames(['email-imap:get_email'])).toEqual(['get_email']);
+  });
+
+  it('accepts the namespaced name search results print', () => {
+    // Somebody copying a name out of search_tools output writes this form, and
+    // the runner honours it — so the preview must not call it unknown.
+    expect(upfrontNames(['mcp__email-imap__get_email'])).toEqual(['get_email']);
+    expect(splitForPreview(sources, ['mcp__email-imap__get_email']).unknown).toEqual([]);
+  });
+
+  it('accepts a bare tool name', () => {
+    expect(upfrontNames(['create_ticket'])).toEqual(['create_ticket']);
+    expect(splitForPreview(sources, ['create_ticket']).unknown).toEqual([]);
+  });
+
+  it('still names a selector that matches nothing', () => {
+    expect(splitForPreview(sources, ['no-such-server']).unknown).toEqual(['no-such-server']);
+  });
+
+  it('ignores blank selectors rather than reporting them unknown', () => {
+    expect(splitForPreview(sources, ['  ', 'email-imap']).unknown).toEqual([]);
+  });
+
+  it('an empty list means nothing upfront, not everything', () => {
+    expect(upfrontNames([])).toEqual([]);
+    expect(splitForPreview(sources, []).searchable).toHaveLength(3);
+  });
+
+  it('an absent list means the agent keeps its own servers', () => {
+    expect(upfrontNames(undefined)).toEqual(['get_email', 'list_emails']);
+  });
+});

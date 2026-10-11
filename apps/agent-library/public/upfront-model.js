@@ -48,10 +48,13 @@ export function combineSelection(servers = [], tools = []) {
 /**
  * What the model will be sent, and what it will have to search for.
  *
- * The same rule the runner applies, so the preview and the behaviour cannot
- * drift: an absent selector list means every tool from the agent's own
- * servers; an empty one means none. `unknown` catches a selector that matches
- * nothing, which is otherwise silent — the tool simply never appears.
+ * Mirrors `splitToolSet` in the runner, down to the selector forms it will
+ * accept: an absent list means every tool from the agent's own servers, an
+ * empty one means none, and a selector can name a whole server, one tool,
+ * the namespaced name search results print, or a bare tool name.
+ *
+ * `unknown` catches a selector that matches nothing, which is otherwise
+ * silent — the tool simply never appears and nobody is told why.
  */
 export function splitForPreview(sources = [], upfrontTools) {
   const all = [];
@@ -70,14 +73,18 @@ export function splitForPreview(sources = [], upfrontTools) {
     };
   }
 
-  const chosen = new Set(upfrontTools.map((s) => s.toLowerCase()));
+  const chosen = new Set(upfrontTools.map((s) => s.trim().toLowerCase()).filter(Boolean));
   const matched = new Set();
   const isChosen = (tool) => {
-    const whole = tool.server.toLowerCase();
-    const exact = `${tool.server}:${tool.name}`.toLowerCase();
-    if (chosen.has(whole)) { matched.add(whole); return true; }
-    if (chosen.has(exact)) { matched.add(exact); return true; }
-    return false;
+    const server = tool.server.toLowerCase();
+    const bare = tool.name.toLowerCase();
+    // Every form the runner honours. The editor only writes the first two,
+    // but a hand-edited template may use either of the others — and this
+    // panel exists for the person reading a hand-edited template.
+    const forms = [server, `${server}:${bare}`, `mcp__${server}__${bare}`, bare];
+    let hit = false;
+    for (const form of forms) if (chosen.has(form)) { matched.add(form); hit = true; }
+    return hit;
   };
 
   const upfront = all.filter(isChosen);
