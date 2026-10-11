@@ -3,6 +3,13 @@ export interface PromptContext {
   visualDescription: string;
   backstory?: string;
   hatLabel: string;
+  /**
+   * Whether this agent has a board to write to.
+   *
+   * Telling an agent to raise a ticket when it has no ticketing tool just
+   * teaches it that its tools do not work.
+   */
+  hasTicketing?: boolean;
   thinkingStyle: string;
   communicationTone: string;
   directives: string[];
