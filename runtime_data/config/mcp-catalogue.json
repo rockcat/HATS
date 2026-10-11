@@ -132,10 +132,11 @@
   {
     "id": "memory",
     "name": "Memory",
-    "description": "Persistent knowledge graph — agents can store and retrieve facts across sessions",
+    "description": "Persistent knowledge graph — facts an agent keeps across sessions",
     "category": "productivity",
     "users": [
-      "human"
+      "human",
+      "agent"
     ],
     "config": {
       "transport": "stdio",
@@ -143,7 +144,10 @@
       "args": [
         "-y",
         "@modelcontextprotocol/server-memory"
-      ]
+      ],
+      "env": {
+        "MEMORY_FILE_PATH": "{AGENT_DIR}/memory.json"
+      }
     },
     "url": "https://github.com/modelcontextprotocol/servers/tree/main/src/memory"
   },

@@ -1,6 +1,7 @@
 // ── Agent detail drawer ───────────────────────────────────────────────────────
 
 import { esc, mdSafe, truncate } from './utils.js';
+import { loadAgentMemory } from './agent-memory.js';
 import { hat, hatLabel } from './hat.js';
 import { state, agentConfigs } from './state.js';
 import { getVoices, findVoiceForAgent, getSpeakerOverrides, setVoiceOverride, getVoiceOverrides } from './voice.js';
@@ -326,6 +327,21 @@ export function togglePromptPreview() { /* agent-prompt-preview removed from HTM
 
 // ── initAgentDetail ───────────────────────────────────────────────────────────
 
+/**
+ * Wire the memory section for this agent.
+ *
+ * Loaded when opened rather than on every panel open: it is a round trip to
+ * an MCP server, and most of the time nobody is asking.
+ */
+function bindAgentMemory(name) {
+  const panel = document.getElementById('agent-memory-line');
+  const body = document.getElementById('agent-memory');
+  if (!panel || !body) return;
+  panel.open = false;
+  body.innerHTML = '';
+  panel.ontoggle = () => { if (panel.open) loadAgentMemory(name, body); };
+}
+
 export function initAgentDetail() {
   if (agentDetailInited) return;
   agentDetailInited = true;
@@ -424,6 +440,7 @@ export function openAgentDetail(name, chatOnly = false) {
   document.getElementById('agent-detail-hat').textContent = agent ? hatLabel(agent.hatType) : '';
   document.getElementById('agent-detail-hat').style.color = c.bar;
   document.getElementById('agent-config-email').value = agent?.email || '';
+  bindAgentMemory(name);
 
   const ticketsEl     = document.getElementById('agent-detail-tickets');
   ticketsEl.innerHTML = '';
