@@ -35,6 +35,7 @@ import { UserManagementRouter } from './user-management-router.js';
 import { parseRequestAuth } from './auth-middleware.js';
 import { EmbodimentRouter } from '../embodiment/embodiment-router.js';
 import { DeviceToolBridge } from '../device/device-tool-bridge.js';
+import { keepDeviceImage } from '../device/image-store.js';
 
 const __dirname  = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(__dirname, '..', '..', '..', 'apps', 'web');
@@ -269,6 +270,11 @@ export class APIServer {
         self.embodimentRouter.publish({ type: 'device_request', deviceId, ...request });
         return true;
       },
+      // A photo lives for one turn unless it is written down. Kept in the
+      // project so the agent can refer back to it with the file tools it
+      // already has, rather than in a store only the camera knows about.
+      keepImage: (tool, image) =>
+        keepDeviceImage(self.orchestrator.getProjectDir(), tool, image),
     });
     this.orchestrator.setDeviceTools(this.deviceTools);
 

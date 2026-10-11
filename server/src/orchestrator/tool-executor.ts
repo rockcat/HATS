@@ -3,7 +3,7 @@ import { readFile, writeFile, mkdir, readdir } from 'fs/promises';
 import { MCPRegistry } from '../mcp/mcp-registry.js';
 import type { DeviceToolBridge } from '../device/device-tool-bridge.js';
 import { EventStore } from '../store/event-store.js';
-import { ToolCall } from '../providers/types.js';
+import { ToolCall, type ToolOutcome } from '../providers/types.js';
 import { AgendaStore } from '../api/agenda-store.js';
 import { IAgent } from '../agent/iagent.js';
 import { Task, Meeting, TeamMessage, ScheduledMeeting, MeetingType } from './types.js';
@@ -157,7 +157,7 @@ function buildAutoComment(toolName: string, args: Record<string, unknown>): stri
 }
 
 export function buildToolExecutor(ctx: ToolCallContext, mcp: MCPRegistry) {
-  return async (agentName: string, call: ToolCall): Promise<string> => {
+  return async (agentName: string, call: ToolCall): Promise<string | ToolOutcome> => {
     await ctx.store.append('tool_call', { agent: agentName, tool: call.name, args: call.arguments });
     try {
       let result: string;
@@ -168,9 +168,14 @@ export function buildToolExecutor(ctx: ToolCallContext, mcp: MCPRegistry) {
       // Checked first: a device tool never reaches an MCP server or a
       // built-in, and the bridge answers for itself when no device has it.
       if (devices?.isDeviceTool(call.name)) {
-        result = await devices.call(call.name, call.arguments ?? {});
-        await ctx.store.append('tool_result', { agent: agentName, tool: call.name, result });
-        return result;
+        const outcome = await devices.call(call.name, call.arguments ?? {});
+        // The image is deliberately not logged: a photo of the room does
+        // not belong in an append-only event store.
+        await ctx.store.append('tool_result', {
+          agent: agentName, tool: call.name, result: outcome.text,
+          ...(outcome.images?.length ? { images: outcome.images.length } : {}),
+        });
+        return outcome;
       }
 
       if (isMcpTool) {

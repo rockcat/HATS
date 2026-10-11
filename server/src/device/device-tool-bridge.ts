@@ -22,7 +22,8 @@
  */
 
 import { randomUUID } from 'crypto';
-import type { ToolDefinition } from '../providers/types.js';
+import type { ToolDefinition, ToolOutcome } from '../providers/types.js';
+import { rejectImage } from './image-store.js';
 import { log } from '../util/logger.js';
 
 /** The prefix that marks a tool as living on a device, as `mcp__` marks MCP. */
@@ -52,7 +53,12 @@ export interface DeviceResult {
   /** Whatever the tool produced, as the agent should read it. */
   result?: string;
   error?: string;
+  /** A picture the tool took, base64, for a model that can see. */
+  image?: { mediaType: string; base64: string };
 }
+
+/** What a device tool produced. Same shape as any other tool result. */
+export type DeviceOutcome = ToolOutcome;
 
 interface Device {
   deviceId: string;
@@ -67,7 +73,7 @@ interface Device {
 interface Pending {
   deviceId: string;
   tool: string;
-  settle: (result: string) => void;
+  settle: (result: DeviceOutcome) => void;
   timer: ReturnType<typeof setTimeout>;
 }
 
@@ -76,6 +82,13 @@ export interface DeviceToolBridgeOptions {
   timeoutMs?: number;
   /** Delivers a request to one device. Returns false when it could not be sent. */
   deliver: (deviceId: string, request: DeviceRequest) => boolean;
+  /**
+   * Keep an image the device sent, and say where it went.
+   *
+   * Optional: with no keeper the picture is still shown to the model, it
+   * just cannot be referred back to once the thread moves on.
+   */
+  keepImage?: (tool: string, image: { mediaType: string; base64: string }) => Promise<string | null>;
 }
 
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -86,10 +99,12 @@ export class DeviceToolBridge {
   private seq = 0;
   private readonly timeoutMs: number;
   private readonly deliver: DeviceToolBridgeOptions['deliver'];
+  private readonly keepImage: DeviceToolBridgeOptions['keepImage'];
 
   constructor(options: DeviceToolBridgeOptions) {
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.deliver = options.deliver;
+    this.keepImage = options.keepImage;
   }
 
   // ── Devices ────────────────────────────────────────────────────────────────
@@ -158,13 +173,13 @@ export class DeviceToolBridge {
    * Always resolves — never rejects. A tool result is a string the agent reads,
    * and "the device did not answer" is a useful answer; an exception is not.
    */
-  call(name: string, args: Record<string, unknown> = {}): Promise<string> {
+  call(name: string, args: Record<string, unknown> = {}): Promise<DeviceOutcome> {
     const tool = this.bare(name);
     const device = this.deviceFor(tool);
     if (!device) {
-      return Promise.resolve(
-        `No connected device offers "${tool}". The user's device may be offline or may not have granted permission.`,
-      );
+      return Promise.resolve({
+        text: `No connected device offers "${tool}". The user's device may be offline or may not have granted permission.`,
+      });
     }
 
     const id = randomUUID();
@@ -175,7 +190,7 @@ export class DeviceToolBridge {
       expiresAt: new Date(Date.now() + this.timeoutMs).toISOString(),
     };
 
-    return new Promise<string>((settle) => {
+    return new Promise<DeviceOutcome>((settle) => {
       const timer = setTimeout(() => {
         this.resolve(id, `The device did not answer "${tool}" within ${Math.round(this.timeoutMs / 1000)}s.`);
       }, this.timeoutMs);
@@ -196,11 +211,46 @@ export class DeviceToolBridge {
    * reply after a timeout, or a result for a request this runner never made.
    */
   settleResult(id: string, result: DeviceResult): boolean {
-    if (!this.pending.has(id)) return false;
-    const text = result.ok
-      ? (result.result ?? 'Done.')
-      : `The device could not do that: ${result.error ?? 'no reason given'}`;
-    this.resolve(id, text);
+    const call = this.pending.get(id);
+    if (!call) return false;
+
+    if (!result.ok) {
+      this.resolve(id, { text: `The device could not do that: ${result.error ?? 'no reason given'}` });
+      return true;
+    }
+
+    const image = result.image;
+    const text = result.result ?? (image ? 'Here is the picture.' : 'Done.');
+    if (!image) { this.resolve(id, { text }); return true; }
+
+    // An image we cannot pass on costs the picture, not the answer: an
+    // oversized one would otherwise fail the whole model request.
+    const refusal = rejectImage(image);
+    if (refusal) {
+      this.resolve(id, { text: `${text}
+
+${refusal}` });
+      return true;
+    }
+
+    // Keeping it is best-effort and must not cost the agent the picture:
+    // a full disk is a reason to lose the copy, not the answer.
+    const settleWith = (path: string | null) => {
+      this.resolve(id, {
+        text: path ? `${text}
+
+Kept at ${path}.` : text,
+        images: [{ mediaType: image.mediaType, base64: image.base64, ...(path ? { path } : {}) }],
+      });
+    };
+
+    if (!this.keepImage) { settleWith(null); return true; }
+    this.keepImage(call.tool, image)
+      .then(settleWith)
+      .catch((err) => {
+        log.warn(`[Device] Could not keep the image from "${call.tool}": ${(err as Error).message}`);
+        settleWith(null);
+      });
     return true;
   }
 
@@ -214,12 +264,12 @@ export class DeviceToolBridge {
 
   // ── Internals ──────────────────────────────────────────────────────────────
 
-  private resolve(id: string, text: string): void {
+  private resolve(id: string, outcome: DeviceOutcome | string): void {
     const call = this.pending.get(id);
     if (!call) return;
     clearTimeout(call.timer);
     this.pending.delete(id);
-    call.settle(text);
+    call.settle(typeof outcome === 'string' ? { text: outcome } : outcome);
   }
 
   private bare(name: string): string {

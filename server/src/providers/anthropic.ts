@@ -98,7 +98,11 @@ export class AnthropicProvider implements AIProvider {
   }
 }
 
-function toAnthropicMessages(messages: Message[]): Anthropic.MessageParam[] {
+/**
+ * Exported for tests: what the model is actually shown is worth pinning,
+ * and it is otherwise only reachable through a network call.
+ */
+export function toAnthropicMessages(messages: Message[]): Anthropic.MessageParam[] {
   const result: Anthropic.MessageParam[] = [];
   let i = 0;
 
@@ -111,10 +115,26 @@ function toAnthropicMessages(messages: Message[]): Anthropic.MessageParam[] {
       // immediately following the assistant message that had N tool_use blocks.
       const toolResults: Anthropic.ToolResultBlockParam[] = [];
       while (i < messages.length && messages[i]!.role === 'tool') {
+        const message = messages[i]!;
         toolResults.push({
           type: 'tool_result',
-          tool_use_id: messages[i]!.toolCallId ?? '',
-          content: messages[i]!.content,
+          tool_use_id: message.toolCallId ?? '',
+          // A result carrying an image becomes blocks rather than a string.
+          // The text still goes first: it says what the image is and where
+          // it was kept, which the model needs even though it can see.
+          content: message.images?.length
+            ? [
+                { type: 'text' as const, text: message.content },
+                ...message.images.map((image) => ({
+                  type: 'image' as const,
+                  source: {
+                    type: 'base64' as const,
+                    media_type: image.mediaType as 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif',
+                    data: image.base64,
+                  },
+                })),
+              ]
+            : message.content,
         });
         i++;
       }
