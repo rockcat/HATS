@@ -21,6 +21,8 @@ import { initSchedulesTab }                            from './modules/schedules
 import { initMCPEditor }                               from './modules/mcp.js';
 import { initAgentDetail, closeAgentDetail }           from './modules/agent-detail.js';
 import { initCLI }                                     from './modules/cli.js';
+import { appendCLILine }                               from './modules/cli.js';
+import { initGoogleReturn }                            from './modules/google-return.js';
 import { initAllowlist }                               from './modules/allowlist.js';
 import { initTabs, initBacklogCalendarTabs,
          initPanelExpand, initMicButtons }             from './modules/panels.js';
@@ -66,6 +68,14 @@ initFileUpload();
 initFileViewer();
 initGenBgModal();
 initSchedulesTab();
+
+// A sign-in that ran in this tab rather than a popup comes back with its
+// result in the query string, and nobody listening for the message that a
+// popup would have sent.
+initGoogleReturn({
+  announce: (text) => appendCLILine(text, 'cli-system'),
+  showMcpTab: () => document.querySelector('.panel-tab[data-tab="mcp"]')?.click(),
+});
 
 // connect() opens the SSE stream; the 'init' event fires initTabs(),
 // initKanbanDrag(), initTicketEditing(), initCLI(), initAgentDetail(),
