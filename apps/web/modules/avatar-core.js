@@ -21,38 +21,115 @@ export const VISEME_TO_VRM = {
 export const VRM_VOWELS = ['aa', 'ih', 'ou', 'ee', 'oh'];
 
 // ── A-pose correction ─────────────────────────────────────────────────────────
-const ARM_DOWN = Math.PI / 3; // ~60° — T-pose to natural resting A-pose
+//
+// Most rigs ship in a T-pose, arms straight out, which looks like a scarecrow
+// rather than a person. Bringing them down sounds like one line, and it has
+// been written wrong twice — once about Z and once about Y — because which
+// axis lowers an arm depends entirely on how the exporter laid out the bone,
+// and that differs between VRM, Mixamo and Ready Player Me.
+//
+// Measuring the rig settles it. Of the six avatars in the library, max and
+// jordan are true T-poses while the other four already hang at about 54°, so
+// a fixed correction applied to all of them would push four pairs of arms
+// through their own ribs. The angle is read, the shortfall is applied, and
+// a model that already looks right is left alone.
 
-// VRM normalized space: left local-Y → global -X, right local-Y → global +X.
-// Rotating +Z lowers left arm; rotating -Z lowers right arm.
-export function applyVrmRestPose(vrm) {
-  const left  = vrm.humanoid?.getNormalizedBoneNode('leftUpperArm');
-  const right = vrm.humanoid?.getNormalizedBoneNode('rightUpperArm');
-  if (left)  left.rotation.z  =  ARM_DOWN;
-  if (right) right.rotation.z = -ARM_DOWN;
+/** Where an arm should end up: degrees below horizontal. */
+const ARM_REST_DEGREES = 60;
+
+/** Below this much of a correction, the pose is close enough to leave. */
+const ARM_SLACK_DEGREES = 5;
+
+/** World-space position of an object, without needing THREE imported. */
+function worldPosition(obj) {
+  const e = obj.matrixWorld.elements;
+  return [e[12], e[13], e[14]];
 }
 
-// GLB (Mixamo/RPM) bone space: left local-Y → global +X, right local-Y → global -X.
-// Signs are opposite to VRM because raw Mixamo bones aren't normalized.
-// Tries common naming conventions and applies the first match found.
-const GLB_ARM_PAIRS = [
-  ['LeftArm',          'RightArm'],
-  ['Left_arm',         'Right_arm'],
-  ['mixamorig:LeftArm','mixamorig:RightArm'],
+/** How far below horizontal the shoulder-to-elbow line points, in degrees. */
+function armAngle(shoulder, elbow) {
+  const a = worldPosition(shoulder);
+  const b = worldPosition(elbow);
+  const v = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+  const length = Math.hypot(v[0], v[1], v[2]);
+  if (length < 1e-6) return ARM_REST_DEGREES; // degenerate: leave it alone
+  return Math.asin(-v[1] / length) * 180 / Math.PI;
+}
+
+const AXES = ['x', 'y', 'z'];
+
+/**
+ * Lower one arm to roughly `ARM_REST_DEGREES` below horizontal.
+ *
+ * The axis is found by trying all six and keeping whichever actually moved
+ * the elbow furthest down — cheaper than being right about six exporters,
+ * and it cannot silently do nothing the way a hardcoded axis can. Rotating
+ * about the bone's own long axis, which is what the last two attempts did,
+ * scores zero and loses.
+ *
+ * @param {object} root     scene or model root, for updating world matrices
+ * @param {object} shoulder the upper-arm bone, rotated in place
+ * @param {object} elbow    the forearm bone, used only to measure
+ */
+export function lowerArm(root, shoulder, elbow) {
+  if (!root || !shoulder || !elbow) return;
+
+  root.updateMatrixWorld(true);
+  const shortfall = ARM_REST_DEGREES - armAngle(shoulder, elbow);
+  if (shortfall < ARM_SLACK_DEGREES) return;
+
+  const radians = shortfall * Math.PI / 180;
+  const base = { x: shoulder.rotation.x, y: shoulder.rotation.y, z: shoulder.rotation.z };
+  const restore = () => shoulder.rotation.set(base.x, base.y, base.z);
+
+  let best = null;
+  for (const axis of AXES) {
+    for (const sign of [1, -1]) {
+      restore();
+      shoulder.rotation[axis] = base[axis] + sign * radians;
+      root.updateMatrixWorld(true);
+      const angle = armAngle(shoulder, elbow);
+      if (!best || angle > best.angle) best = { axis, sign, angle };
+    }
+  }
+
+  restore();
+  if (best) shoulder.rotation[best.axis] = base[best.axis] + best.sign * radians;
+  root.updateMatrixWorld(true);
+}
+
+export function applyVrmRestPose(vrm) {
+  const humanoid = vrm?.humanoid;
+  if (!humanoid) return;
+  const root = vrm.scene ?? vrm.humanoid?.normalizedHumanBonesRoot;
+  for (const side of ['left', 'right']) {
+    lowerArm(
+      root,
+      humanoid.getNormalizedBoneNode(`${side}UpperArm`),
+      humanoid.getNormalizedBoneNode(`${side}LowerArm`),
+    );
+  }
+}
+
+// Naming conventions seen in the wild. Ready Player Me and Mixamo both use
+// the first; the others are here because a model that matches nothing gets
+// no correction at all, silently.
+const GLB_ARM_BONES = [
+  { shoulder: 'LeftArm',           elbow: 'LeftForeArm' },
+  { shoulder: 'RightArm',          elbow: 'RightForeArm' },
+  { shoulder: 'mixamorig:LeftArm', elbow: 'mixamorig:LeftForeArm' },
+  { shoulder: 'mixamorig:RightArm',elbow: 'mixamorig:RightForeArm' },
+  { shoulder: 'Left_arm',          elbow: 'Left_forearm' },
+  { shoulder: 'Right_arm',         elbow: 'Right_forearm' },
 ];
 
 export function applyGlbRestPose(scene) {
+  if (!scene) return;
   const bones = {};
   scene.traverse(obj => { if (obj.isBone) bones[obj.name] = obj; });
 
-  for (const [leftName, rightName] of GLB_ARM_PAIRS) {
-    const left  = bones[leftName];
-    const right = bones[rightName];
-    if (left && right) {
-      left.rotation.z  = ARM_DOWN;
-      right.rotation.z = -ARM_DOWN;
-      return;
-    }
+  for (const pair of GLB_ARM_BONES) {
+    lowerArm(scene, bones[pair.shoulder], bones[pair.elbow]);
   }
 }
 
