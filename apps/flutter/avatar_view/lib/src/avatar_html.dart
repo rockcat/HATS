@@ -18,6 +18,7 @@ String buildAvatarHtml({
   AvatarConfig? config,
   String? moduleOrigin,
   Map<String, String> headers = const {},
+  bool interactive = false,
 }) {
   final cfg = config ?? const AvatarConfig();
   final srcEsc = jsonEncode(src);
@@ -27,6 +28,7 @@ String buildAvatarHtml({
   final orbitZ = cfg.cameraZ;
   final fov = cfg.fov;
   final rotY = (cfg.rotateY * 3.14159265 / 180.0).toStringAsFixed(6);
+  final orbit = interactive ? 'true' : 'false';
 
   return '''<!DOCTYPE html>
 <html>
@@ -86,11 +88,17 @@ const camera = new THREE.PerspectiveCamera($fov, window.innerWidth / window.inne
 camera.position.set(0, TY, TZ);
 camera.lookAt(0, TY - 0.08, 0);
 
+// The camera is framed by the avatar catalogue on the runner, and on a
+// phone a drag is usually a finger that was aiming at the transcript behind
+// it. So the controls are off unless something asks for them.
+const INTERACTIVE = $orbit;
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.target.set(0, TY - 0.08, 0);
 controls.minDistance = 0.05;
 controls.maxDistance = 3.0;
 controls.enablePan = false;
+controls.enableRotate = INTERACTIVE;
+controls.enableZoom = INTERACTIVE;
 controls.update();
 
 // ── State ─────────────────────────────────────────────────────────────────
