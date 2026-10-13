@@ -3,6 +3,8 @@
 import { fetchMCPCatalogue } from './mcp.js';
 import { fetchGlobalAgents } from './library.js';
 import { fetchScheduledActions } from './schedules.js';
+import { appendCLILine } from './cli.js';
+import { micAction } from './mic-action.js';
 
 // ── Main panel tabs ───────────────────────────────────────────────────────────
 
@@ -78,7 +80,17 @@ export function initPanelExpand() {
   });
 }
 
-// ── Mic buttons (push-to-talk via Whisper) ────────────────────────────────────
+// ── Mic buttons ─────────────────────────────────────────────────────────────
+//
+// Hold to talk, or click to start and click again to stop. It used to be
+// hold-only, which meant a click recorded nothing, produced no chunks, and
+// returned in silence — indistinguishable from a dead button, and a click is
+// what most people try first.
+//
+// Every failure is now said out loud in the CLI pane. They were all
+// console.warn before, so a refused microphone, a missing OPENAI_API_KEY or
+// a Whisper error all looked identical: nothing happening.
+
 
 export function initMicBtn(btnId, inputId) {
   const btn = document.getElementById(btnId);
@@ -87,15 +99,21 @@ export function initMicBtn(btnId, inputId) {
 
   let mediaRecorder = null;
   let chunks        = [];
+  let pressedAt     = 0;
+  /** Set by a click-start, so the matching release does not stop it. */
+  let latched       = false;
 
   const setState = (s) => {
     btn.classList.toggle('recording',  s === 'recording');
     btn.classList.toggle('processing', s === 'processing');
     btn.disabled = s === 'processing';
-    btn.title    = s === 'recording'  ? 'Release to transcribe'
+    btn.title    = s === 'recording'  ? 'Listening — click to stop'
                  : s === 'processing' ? 'Transcribing…'
-                 : 'Hold to speak (Whisper)';
+                 : 'Speak: hold, or click to start and click again to stop';
   };
+  setState('idle');
+
+  const say = (text) => appendCLILine(text, 'cli-error');
 
   const startRecording = async () => {
     chunks = [];
@@ -106,7 +124,8 @@ export function initMicBtn(btnId, inputId) {
       mediaRecorder.start();
       setState('recording');
     } catch (err) {
-      console.warn('[mic] getUserMedia failed:', err);
+      // Nearly always a refused permission, and the browser only asks once.
+      say(`Microphone unavailable: ${err?.message ?? err}. Check the site's microphone permission.`);
       setState('idle');
     }
   };
@@ -121,7 +140,12 @@ export function initMicBtn(btnId, inputId) {
       mediaRecorder.stream.getTracks().forEach(t => t.stop());
     });
 
-    if (chunks.length === 0) { setState('idle'); return; }
+    if (chunks.length === 0) {
+      say('Nothing was recorded — hold the mic while you speak, or click it to start and stop.');
+      setState('idle');
+      mediaRecorder = null;
+      return;
+    }
 
     try {
       const mimeType = chunks[0].type || 'audio/webm';
@@ -131,14 +155,17 @@ export function initMicBtn(btnId, inputId) {
         headers: { 'Content-Type': mimeType },
         body: blob,
       });
-      const data = await res.json();
-      if (data.text) {
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok)          say(`Could not transcribe: ${data.error ?? `HTTP ${res.status}`}`);
+      else if (!data.text)  say('Nothing was heard in that recording.');
+      else {
         const sep = inp.value && !inp.value.endsWith(' ') ? ' ' : '';
         inp.value += sep + data.text;
         inp.focus();
       }
     } catch (err) {
-      console.warn('[mic] transcription failed:', err);
+      say(`Could not reach the transcription service: ${err?.message ?? err}`);
     }
 
     setState('idle');
@@ -146,13 +173,37 @@ export function initMicBtn(btnId, inputId) {
     chunks        = [];
   };
 
-  btn.addEventListener('mousedown', e => { e.preventDefault(); startRecording(); });
-  window.addEventListener('mouseup', () => { if (mediaRecorder?.state === 'recording') stopAndTranscribe(); });
+  /** A press starts recording, whether it turns out to be a hold or a click. */
+  const press = (e) => {
+    e.preventDefault();
+    if (btn.disabled) return;
+    const recording = mediaRecorder?.state === 'recording';
+    if (micAction('press', { recording, heldMs: 0, latched }) === 'stop') {
+      latched = false;
+      stopAndTranscribe();
+      return;
+    }
+    pressedAt = Date.now();
+    latched   = false;
+    startRecording();
+  };
 
-  btn.addEventListener('touchstart', e => { e.preventDefault(); startRecording(); }, { passive: false });
-  window.addEventListener('touchend', () => { if (mediaRecorder?.state === 'recording') stopAndTranscribe(); });
+  /** A release stops it, unless it came too quickly to have been a hold. */
+  const release = () => {
+    const action = micAction('release', {
+      recording: mediaRecorder?.state === 'recording',
+      heldMs: Date.now() - pressedAt,
+      latched,
+    });
+    if (action === 'latch') latched = true;
+    else if (action === 'stop') stopAndTranscribe();
+  };
+
+  btn.addEventListener('mousedown', press);
+  window.addEventListener('mouseup', release);
+  btn.addEventListener('touchstart', press, { passive: false });
+  window.addEventListener('touchend', release);
 }
-
 export function initMicButtons() {
   initMicBtn('cli-mic-btn',     'cli-input');
   initMicBtn('meeting-mic-btn', 'meeting-input');
