@@ -4590,3 +4590,28 @@ body.has-expanded-panel main > section:not(.panel--expanded) {
 }
 
 .memory-raw { font-size: 10.5px; white-space: pre-wrap; word-break: break-word; }
+
+/* ── Google sign-in, not set up ──────────────────────────────────────────── */
+/* Neither green nor amber: nothing is wrong and nothing is connected, there
+   is simply no credential on this runner yet. */
+
+.mcp-google-auth-banner.unconfigured {
+  background: var(--surface-2);
+  border-color: var(--border);
+  color: var(--text-muted);
+}
+
+.mcp-google-auth-banner.unconfigured code {
+  font-size: 10.5px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+.agent-google-auth-unconfigured {
+  margin: 4px 0 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text-muted);
+}

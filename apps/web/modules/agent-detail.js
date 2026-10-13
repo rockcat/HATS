@@ -136,6 +136,14 @@ function _renderAgentGoogleAuth(agentName, container) {
         render({ authenticated: false });
       };
       body.appendChild(disconnectBtn);
+    } else if (status.configured === false) {
+      // Nothing to press. The runner cannot start a sign-in at all, and a
+      // button here would only open a popup that says so.
+      const note = document.createElement('p');
+      note.className = 'agent-google-auth-unconfigured';
+      note.textContent = 'Google sign-in is not set up on this runner — '
+        + 'add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to .env and restart.';
+      body.appendChild(note);
     } else {
       const connectBtn = document.createElement('button');
       connectBtn.className   = 'agent-google-auth-connect-btn';

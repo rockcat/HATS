@@ -26,6 +26,17 @@ interface OAuthState {
   agent?: string; // present when mode === 'agent'
 }
 
+/**
+ * Can this runner start a Google sign-in at all?
+ *
+ * Without both halves of the client credential the flow dead-ends on a
+ * plain-text error in a popup — so the UI needs to know *before* it offers
+ * a button, not after someone has pressed it.
+ */
+export function isGoogleOAuthConfigured(): boolean {
+  return !!process.env['GOOGLE_CLIENT_ID'] && !!process.env['GOOGLE_CLIENT_SECRET'];
+}
+
 export class GoogleOAuthRouter {
   private tokenStore:        GoogleTokenStore;
   private agentTokenStore:   AgentGoogleTokenStore | null = null;
@@ -81,7 +92,10 @@ export class GoogleOAuthRouter {
     // ── Shared: status ────────────────────────────────────────────────────────
     if (pathname === '/api/auth/google/status' && method === 'GET') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ authenticated: this.tokenStore.isAuthenticated() }));
+      res.end(JSON.stringify({
+        authenticated: this.tokenStore.isAuthenticated(),
+        configured: isGoogleOAuthConfigured(),
+      }));
       return true;
     }
 
@@ -91,13 +105,14 @@ export class GoogleOAuthRouter {
       const agentName = url.searchParams.get('agent');
       if (!agentName || !this.agentTokenStore) {
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ authenticated: false }));
+        res.end(JSON.stringify({ authenticated: false, configured: isGoogleOAuthConfigured() }));
         return true;
       }
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({
         authenticated: this.agentTokenStore.isAuthenticated(agentName),
         email:         this.agentTokenStore.getEmail(agentName),
+        configured:    isGoogleOAuthConfigured(),
       }));
       return true;
     }
