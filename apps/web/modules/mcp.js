@@ -52,6 +52,16 @@ function renderMCPCatalogue(catalogue, googleStatus = { authenticated: false }) 
         <span>Google Account connected</span>
         <button class="mcp-google-auth-btn disconnect" onclick="disconnectGoogle()">Disconnect</button>
       </div>`;
+    } else if (googleStatus.configured === false) {
+      // No button, because pressing it could only produce a popup saying
+      // GOOGLE_CLIENT_ID is not configured — which reads as a broken
+      // feature rather than an unfinished setup.
+      html += `<div class="mcp-google-auth-banner unconfigured">
+        <span class="mcp-google-auth-icon">⚙</span>
+        <span>Google sign-in is not set up on this runner. Add
+          <code>GOOGLE_CLIENT_ID</code> and <code>GOOGLE_CLIENT_SECRET</code>
+          to <code>.env</code> and restart, then this becomes a Connect button.</span>
+      </div>`;
     } else {
       html += `<div class="mcp-google-auth-banner">
         <span class="mcp-google-auth-icon">⚠</span>
