@@ -149,12 +149,15 @@ function _renderAgentGoogleAuth(agentName, container) {
       connectBtn.className   = 'agent-google-auth-connect-btn';
       connectBtn.textContent = 'Connect Google Account';
       connectBtn.onclick = () => {
-        const popup = window.open(
-          `/api/auth/google/agent/start?agent=${encodeURIComponent(agentName)}`,
-          'google-auth-agent',
-          'width=520,height=640,menubar=no,toolbar=no',
-        );
+        // A normal window, not a cramped one: an account chooser and often a
+        // second factor have to fit. If it is blocked we go there in this tab
+        // instead — the finish page knows how to bring us back.
+        const url = `/api/auth/google/agent/start?agent=${encodeURIComponent(agentName)}`;
+        const popup = window.open(url, 'google-auth-agent');
+        if (!popup || popup.closed) { window.location.href = url; return; }
+
         const onMessage = (e) => {
+          if (e.origin !== window.location.origin) return;
           if (e.data?.type !== 'google-auth-success') return;
           window.removeEventListener('message', onMessage);
           popup?.close();

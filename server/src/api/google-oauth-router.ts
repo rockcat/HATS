@@ -26,6 +26,8 @@ interface OAuthState {
   agent?: string; // present when mode === 'agent'
 }
 
+import { finishPage } from './google-oauth-finish.js';
+
 /**
  * Can this runner start a Google sign-in at all?
  *
@@ -168,8 +170,11 @@ export class GoogleOAuthRouter {
     const code   = urlObj.searchParams.get('code');
     const error  = urlObj.searchParams.get('error');
 
-    const closeHtml = (msg: string, success: boolean, extra: Record<string, unknown> = {}) =>
-      `<html><body><script>window.opener?.postMessage({type:'google-auth-${success ? 'success' : 'error'}',error:'${success ? '' : msg}'${Object.entries(extra).map(([k, v]) => `,${k}:${JSON.stringify(v)}`).join('')}},'*');window.close();</script><p>${success ? 'Google authentication successful! You can close this window.' : `Authentication failed: ${msg}. You can close this window.`}</p></body></html>`;
+    const closeHtml = (
+      msg: string,
+      success: boolean,
+      extra: { agent?: string; email?: string } = {},
+    ) => finishPage({ success, message: msg, ...extra });
 
     // Parse state to know which flow this belongs to
     let oauthState: OAuthState = { mode: 'shared' };
@@ -234,7 +239,7 @@ export class GoogleOAuthRouter {
         this.onAgentAuthCb?.(agentName, data.access_token, data.refresh_token, data.expires_in ?? 3600, email)
           .catch(err => log.error('[GoogleAuth] Agent post-auth callback error:', (err as Error).message));
         res.writeHead(200, { 'Content-Type': 'text/html' });
-        res.end(closeHtml('', true, { agent: agentName, email: email ?? '' }));
+        res.end(closeHtml('', true, { agent: agentName, ...(email ? { email } : {}) }));
       } else {
         // ── Shared flow ───────────────────────────────────────────────────────
         await this.tokenStore.saveTokens(data.access_token, data.refresh_token, data.expires_in ?? 3600);

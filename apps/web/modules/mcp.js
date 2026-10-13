@@ -170,9 +170,23 @@ export function fetchMCPCatalogue() {
     .catch(() => {});
 }
 
+/**
+ * Start a Google sign-in.
+ *
+ * A normal window rather than a cramped 600x700 popup: this is a real sign-in
+ * page, with an account chooser and often a second factor, and it should look
+ * like one. If the browser blocks it we go there in this tab instead — a
+ * blocked popup used to mean nothing happened at all, with no explanation.
+ */
 function openGoogleAuthPopup() {
-  const popup = window.open('/api/auth/google/start', 'google-auth', 'width=600,height=700,scrollbars=yes');
+  const popup = window.open('/api/auth/google/start', 'google-auth');
+  if (!popup || popup.closed) {
+    window.location.href = '/api/auth/google/start';
+    return;
+  }
   window.addEventListener('message', function onMsg(e) {
+    // Same origin: the page that sends this is served by this runner.
+    if (e.origin !== window.location.origin) return;
     if (e.data?.type === 'google-auth-success') {
       window.removeEventListener('message', onMsg);
       popup?.close();
