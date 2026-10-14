@@ -2,6 +2,7 @@ import { writeFile, mkdir, rename } from 'fs/promises';
 import { existsSync, readFileSync, statSync } from 'fs';
 import path from 'path';
 import { DiscoveredTool, MCPCatalogueEntry } from './mcp-catalogue.js';
+import { builtin } from './builtin-server.js';
 
 // All built-in entries serialised as plain JSON-compatible objects.
 // Uses ~/ prefix for home-directory paths (expanded by resolveConfig at connect time).
@@ -12,7 +13,7 @@ export const BUILTIN_CATALOGUE: MCPCatalogueEntry[] = [
     description: 'Built-in kanban board for ticket and task tracking',
     category: 'productivity',
     users: ['human'],
-    config: { transport: 'stdio', command: 'node', args: ['dist/mcp/kanban/server.js'] },
+    config: { transport: 'stdio', command: 'node', args: [builtin('mcp/kanban/server')] },
   },
   {
     id: 'calendar',
@@ -23,10 +24,7 @@ export const BUILTIN_CATALOGUE: MCPCatalogueEntry[] = [
     // has agreed to. A team instance would be one diary for everybody.
     users: ['agent'],
     config: {
-      // Where `npm run build` actually puts it. The kanban entry still points
-      // at a top-level dist/ that no current build writes to — it works only
-      // because a stale copy from an older layout happens to be there.
-      transport: 'stdio', command: 'node', args: ['server/dist/server/src/calendar/server.js'],
+      transport: 'stdio', command: 'node', args: [builtin('calendar/server')],
       // Beside its memory, for the same reason: one agent, one directory.
       env: { CALENDAR_FILE_PATH: '{AGENT_DIR}/calendar.ics' },
     },

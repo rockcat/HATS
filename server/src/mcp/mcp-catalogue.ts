@@ -1,6 +1,7 @@
 import os from 'os';
 import path from 'path';
 import { MCPServerConfig, interpolateHeaders } from './mcp-client.js';
+import { expandBuiltin } from './builtin-server.js';
 
 const expandTilde = (s: string) =>
   s.startsWith('~/') ? path.join(os.homedir(), s.slice(2)) : s;
@@ -119,12 +120,16 @@ export function resolveConfig(config: MCPServerConfig, projectDir?: string | nul
     command = command + '.cmd';
   }
 
-  return {
+  const resolvedConfig = {
     ...config,
     command,
     args: config.args?.map(a => expandPlaceholders(expandTilde(a))),
     ...(Object.keys(resolved).length > 0 ? { env: resolved } : {}),
   };
+
+  // One of our own servers: how to run it depends on whether this checkout
+  // has been built, so it is decided now rather than written in the entry.
+  return { ...resolvedConfig, ...(expandBuiltin(resolvedConfig) ?? {}) };
 }
 
 /**
