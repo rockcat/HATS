@@ -5,7 +5,7 @@
  * live agents in the orchestrator.
  */
 
-import * as path from 'path';
+import { builtinServerCommand } from '../mcp/builtin-server.js';
 import type { TeamOrchestrator } from '../orchestrator/orchestrator.js';
 import type { ProviderFactory } from '../orchestrator/orchestrator.js';
 import type { ProjectDefinition } from '../../../packages/contracts/src/types.js';
@@ -89,12 +89,12 @@ export function assembleDefaultTeam(
 
 /** The default kanban MCP server for a brand new local project. */
 export function defaultKanbanServer(kanbanFile: string): MCPServerDef {
+  // Resolved the same way the catalogue entry is, so there is one answer to
+  // "how does the kanban server start" rather than two that can drift apart —
+  // which is exactly how the catalogue came to name a path no build writes.
+  const { command, args } = builtinServerCommand('mcp/kanban/server');
   return {
     name: 'kanban',
-    config: {
-      transport: 'stdio',
-      command: 'node',
-      args: ['--import', 'tsx/esm', path.join('scripts', 'kanban-mcp.ts'), kanbanFile],
-    },
+    config: { transport: 'stdio', command, args: [...args, kanbanFile] },
   } as MCPServerDef;
 }
