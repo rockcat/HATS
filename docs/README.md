@@ -298,7 +298,7 @@ piper_voices/     Install voices for piper tts in here
 npm test            # run tests (vitest)
 npm run test:watch  # watch mode
 npm run typecheck   # tsc --noEmit across src, apps and packages
-npm run build       # compile TypeScript to dist/
+npm run build       # compile TypeScript to server/dist/ (only needed for a packaged build)
 ```
 
 No build step is required to run the app — `npm start` and every service use
