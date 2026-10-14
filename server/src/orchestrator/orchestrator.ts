@@ -480,6 +480,29 @@ export class TeamOrchestrator {
     return new Set(this.findByName(agentName)?.config.disabledPersonalMcpServers ?? []);
   }
 
+  /**
+   * Lend the calendar the agent's own email settings.
+   *
+   * Sending an invitation needs SMTP, which the agent has already given to its
+   * email server. Declaring the same variables on the calendar would mean
+   * typing the same host and password twice and keeping them in step
+   * afterwards, so they are borrowed instead. Anything set on the calendar
+   * itself wins, for an agent whose diary sends from a different address.
+   */
+  private withBorrowedMail(
+    agentName: string, serverId: string, credentials: Record<string, string>,
+  ): Record<string, string> {
+    if (serverId !== 'calendar') return credentials;
+    const all = this.findByName(agentName)?.config.personalMcpCredentials ?? {};
+    const mail = all['email-imap'] ?? all['email-pop3'];
+    if (!mail) return credentials;
+
+    const borrowed = Object.fromEntries(
+      Object.entries(mail).filter(([k]) => k.startsWith('MCP_EMAIL_')),
+    );
+    return { ...borrowed, ...credentials };
+  }
+
   private async startPersonalMcp(agentName: string, serverId: string, credentials: Record<string, string>, force = false): Promise<void> {
     const entry = getCatalogue().find(e => e.id === serverId);
     if (!entry) return;
@@ -496,7 +519,7 @@ export class TeamOrchestrator {
     // The memory server writes its file but will not create the folder, so a
     // first run would fail on a path that has never existed.
     if (agentDir) await mkdir(agentDir, { recursive: true }).catch(() => {});
-    const config = resolvePersonalConfig(entry, credentials, agentDir);
+    const config = resolvePersonalConfig(entry, this.withBorrowedMail(agentName, serverId, credentials), agentDir);
     const credKeys = Object.keys(credentials);
     log.info(`[Team] Personal MCP "${serverId}" starting for ${agentName} — credential keys: [${credKeys.join(', ')}]`);
     await personalMcp.add({ name: serverId, config, toolArgMappings: entry.toolArgMappings });
