@@ -76,6 +76,41 @@ export function builtinServerCommand(
   };
 }
 
+/** Servers that live in this repo, by the name a saved definition calls them. */
+const BUILTIN_BY_NAME: Record<string, string> = {
+  kanban: 'mcp/kanban/server',
+  calendar: 'calendar/server',
+};
+
+/**
+ * Repoint a saved server definition at the built-in it names.
+ *
+ * A project definition or a saved state carries whatever path was right on the
+ * day it was written, and ours move: a definition saved before the build
+ * layout changed still names `dist/mcp/kanban/server.js`. Trusting it means
+ * the catalogue can be fixed and the board still start from a stale file,
+ * because this path never consults the catalogue at all.
+ *
+ * `dataPath` replaces any file argument that was saved with it — a board path
+ * from somebody else's checkout is no use here.
+ *
+ * Returns null when this is not one of ours, leaving the definition alone.
+ */
+export function repointBuiltinServer(
+  name: string,
+  config: { transport?: string; args?: string[] },
+  dataPath?: string,
+): { command: string; args: string[] } | null {
+  const modulePath = BUILTIN_BY_NAME[name];
+  if (!modulePath || config.transport !== 'stdio') return null;
+
+  const { command, args } = builtinServerCommand(modulePath);
+  const kept = dataPath
+    ? [dataPath]
+    : (config.args ?? []).filter((a) => a.endsWith('.json') && !isBuiltinMarker(a));
+  return { command, args: [...args, ...kept] };
+}
+
 /**
  * Expand a `builtin:` marker into a real command.
  *

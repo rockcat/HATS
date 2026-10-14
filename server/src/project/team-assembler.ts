@@ -5,7 +5,7 @@
  * live agents in the orchestrator.
  */
 
-import { builtinServerCommand } from '../mcp/builtin-server.js';
+import { builtinServerCommand, repointBuiltinServer } from '../mcp/builtin-server.js';
 import type { TeamOrchestrator } from '../orchestrator/orchestrator.js';
 import type { ProviderFactory } from '../orchestrator/orchestrator.js';
 import type { ProjectDefinition } from '../../../packages/contracts/src/types.js';
@@ -50,10 +50,11 @@ export async function attachDefinitionMcpServers(
 ): Promise<void> {
   for (const server of definition.mcpServers ?? []) {
     const def = { name: server.name, config: { ...server.config } } as MCPServerDef;
-    if (def.name === 'kanban' && def.config.transport === 'stdio') {
-      const args = (def.config.args ?? []).filter((a: string) => !a.endsWith('.json'));
-      def.config.args = [...args, kanbanFile];
-    }
+    // A saved definition carries whatever path was right when it was
+    // written, and ours move. Repoint it rather than trusting it.
+    const builtinServer = repointBuiltinServer(def.name, def.config,
+      def.name === 'kanban' ? kanbanFile : undefined);
+    if (builtinServer) Object.assign(def.config, builtinServer);
     await orchestrator.addMCPServer(def).catch((err: Error) =>
       log.warn(`[Team] MCP server "${def.name}" failed to start: ${err.message}`));
   }
