@@ -15,6 +15,25 @@ export const BUILTIN_CATALOGUE: MCPCatalogueEntry[] = [
     config: { transport: 'stdio', command: 'node', args: ['dist/mcp/kanban/server.js'] },
   },
   {
+    id: 'calendar',
+    name: 'Calendar',
+    description: 'A diary of its own for each agent — meetings, free/busy, and invitations by email',
+    category: 'productivity',
+    // Per agent rather than shared: the point is that each one knows what it
+    // has agreed to. A team instance would be one diary for everybody.
+    users: ['agent'],
+    config: {
+      // Where `npm run build` actually puts it. The kanban entry still points
+      // at a top-level dist/ that no current build writes to — it works only
+      // because a stale copy from an older layout happens to be there.
+      transport: 'stdio', command: 'node', args: ['server/dist/server/src/calendar/server.js'],
+      // Beside its memory, for the same reason: one agent, one directory.
+      env: { CALENDAR_FILE_PATH: '{AGENT_DIR}/calendar.ics' },
+    },
+    notes: 'Invitations need an email account. Set up the Email (IMAP / SMTP) server for this '
+      + 'agent and the calendar borrows its settings — there is nothing to enter twice.',
+  },
+  {
     id: 'filesystem',
     name: 'Filesystem',
     description: 'Read, write, and list files in the project folder — sources/ for inputs, outputs/ for deliverables',
