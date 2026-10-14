@@ -586,7 +586,7 @@ sudo apt-get install -y \
 │   │   ├── providers/ AI provider adapters
 │   │   └── team-runner.ts  <span class="hl">Entry point</span>
 │   ├── dist/          Compiled output (gitignored)
-│   ├── tsconfig.json  TypeScript config (rootDir: src)
+│   ├── tsconfig.json  TypeScript config (rootDir: .., so output nests)
 │   └── package.json   Server-scoped build scripts
 │
 ├── <span class="hl">apps/</span>
@@ -953,22 +953,23 @@ bash scripts/setup.sh</pre></div>
         <pre>cd server && npm run build</pre>
       </div>
 
-      <p>The compiled output preserves the <code>src/</code> structure under <code>dist/</code>:</p>
+      <p>The compilation root is the repo, not <code>server/src</code>, because the server imports from <code>packages/</code>. So the output nests the whole source path under <code>server/dist/</code> — a longer path than people expect, and the reason a hand-written path to a compiled file is usually wrong:</p>
       <div class="dir-tree">server/dist/
-├── team-runner.js      ← <span class="hl">entry point</span>
-├── api/
-├── orchestrator/
-├── util/runtime-dir.js
-└── ...</div>
+├── server/src/
+│   ├── team-runner.js  ← <span class="hl">entry point</span>
+│   ├── api/
+│   ├── orchestrator/
+│   └── util/runtime-dir.js
+└── packages/           Shared contracts and clients</div>
 
       <h3>Running compiled JS</h3>
       <div class="code-wrap">
-        <pre>node --env-file=.env server/dist/team-runner.js</pre>
+        <pre>node --env-file=.env server/dist/server/src/team-runner.js</pre>
       </div>
 
-      <div class="callout callout-warn">
-        <strong>kanban-mcp.ts subprocess</strong>
-        The kanban MCP server is spawned as a subprocess running <code>scripts/kanban-mcp.ts</code> via <code>tsx</code>. Ensure <code>tsx</code> is in <code>node_modules</code> (it is by default — it's in devDependencies and installed by <code>npm ci</code>).
+      <div class="callout">
+        <strong>Built-in MCP servers</strong>
+        The kanban board and the per-agent calendar are our own code, spawned as subprocesses. Which file is run is decided when they start: the compiled output if this checkout has been built, otherwise the TypeScript source through <code>tsx</code>. Nothing needs building for them to work, and no path to them is written down — an earlier version named a compiled path by hand and went on working only because a stale copy from an older layout was still lying around.
       </div>
     </section>
 
