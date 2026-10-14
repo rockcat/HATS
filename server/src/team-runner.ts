@@ -24,6 +24,7 @@
  */
 
 import { existsSync, readFileSync, writeFileSync } from 'fs';
+import { repointBuiltinServer } from './mcp/builtin-server.js';
 import { mkdir } from 'fs/promises';
 import * as path from 'path';
 import { TeamOrchestrator } from './orchestrator/orchestrator.js';
@@ -148,10 +149,12 @@ function makeProjectLoader(
       for (const def of mcpDefs) {
         // Always repoint the kanban MCP at this project's board — a saved path
         // may be stale (e.g. './kanban-board.json' from the repo root).
-        if (def.name === 'kanban' && def.config.transport === 'stdio') {
-          const args = (def.config.args ?? []).filter((a: string) => !a.endsWith('.json'));
-          def.config.args = [...args, kanbanFile];
-        }
+        // Saved state carries the launcher that was right when it was
+        // written, as well as a board path that may be from another
+        // checkout. Both are repointed.
+        const builtinServer = repointBuiltinServer(def.name, def.config,
+          def.name === 'kanban' ? kanbanFile : undefined);
+        if (builtinServer) Object.assign(def.config, builtinServer);
         await orchestrator.addMCPServer(def);
       }
 

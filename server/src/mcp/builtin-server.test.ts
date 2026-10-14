@@ -3,6 +3,7 @@ import { existsSync } from 'fs';
 import * as path from 'path';
 import {
   BUILTIN_PREFIX, builtin, builtinServerCommand, expandBuiltin, isBuiltinMarker,
+  repointBuiltinServer,
 } from './builtin-server.js';
 import { resolveConfig } from './mcp-catalogue.js';
 
@@ -109,5 +110,45 @@ describe('through resolveConfig, which is what actually runs', () => {
     }, '/projects/paige');
 
     expect((resolved as { args: string[] }).args).toContain('/projects/paige');
+  });
+});
+
+describe('repointing a saved server definition', () => {
+  it('rescues a definition written before the build layout moved', () => {
+    // paige.json still says dist/mcp/kanban/server.js. Trusting it means the
+    // catalogue can be fixed and the board still start from a stale file,
+    // because this path never consults the catalogue at all.
+    const saved = { transport: 'stdio', command: 'node', args: ['dist/mcp/kanban/server.js'] };
+    const fixed = repointBuiltinServer('kanban', saved, '/projects/paige/kanban-board.json');
+
+    expect(fixed).not.toBeNull();
+    expect(fixed!.args.some((a) => a.includes('dist/mcp/kanban'))).toBe(false);
+    expect(existsSync(fixed!.args[fixed!.args.length - 2] ?? fixed!.args[0]!)
+      || existsSync(fixed!.args[0]!)).toBe(true);
+  });
+
+  it('puts this project\'s board file on the end', () => {
+    const saved = { transport: 'stdio', args: ['dist/mcp/kanban/server.js', 'someone-elses.json'] };
+    const fixed = repointBuiltinServer('kanban', saved, '/projects/paige/board.json');
+
+    expect(fixed!.args[fixed!.args.length - 1]).toBe('/projects/paige/board.json');
+    expect(fixed!.args).not.toContain('someone-elses.json');
+  });
+
+  it('also covers the calendar', () => {
+    const fixed = repointBuiltinServer('calendar', { transport: 'stdio', args: ['old/path.js'] });
+    expect(fixed).not.toBeNull();
+    expect(fixed!.args.some((a) => a.includes('old/path.js'))).toBe(false);
+  });
+
+  it('leaves a server that is not ours completely alone', () => {
+    // Rewriting someone's brave-search or filesystem entry would be a bug.
+    expect(repointBuiltinServer('brave-search', {
+      transport: 'stdio', args: ['-y', '@modelcontextprotocol/server-brave-search'],
+    })).toBeNull();
+  });
+
+  it('leaves an http server alone, built-in name or not', () => {
+    expect(repointBuiltinServer('kanban', { transport: 'http' })).toBeNull();
   });
 });
