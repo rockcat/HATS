@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { hasCamera, negotiate, sanitise, type DeviceCapabilities } from './capabilities.js';
 
 const MOBILEFACENET = { model: 'mobilefacenet-v1', dimensions: 192 };
-const runner = { faceEmbedding: MOBILEFACENET };
+// A runner that both names the canonical model and can run it.
+const runner = { faceEmbedding: MOBILEFACENET, canEmbed: true };
 
 describe('deciding where a face gets embedded', () => {
   it('uses the device when it runs the same model', () => {
@@ -39,10 +40,25 @@ describe('deciding where a face gets embedded', () => {
     expect(agreed.faceEmbedding).toBe('device');
   });
 
-  it('says nowhere when the runner itself cannot embed', () => {
-    // Better than silently accepting whatever the device sends into a store
-    // the runner cannot add to later.
+  it('says nowhere when no canonical model is named', () => {
+    // Without one there is no store to put a vector in, whoever computes it.
     expect(negotiate({ faceEmbedding: [MOBILEFACENET] }, {}).faceEmbedding).toBe('nowhere');
+  });
+
+  it('still uses the device when the runner names a model it cannot run', () => {
+    // The common case: no embedding runtime on the server, but a phone that
+    // can do it faster and without sending the picture anywhere.
+    const agreed = negotiate(
+      { faceEmbedding: [MOBILEFACENET] }, { faceEmbedding: MOBILEFACENET });
+    expect(agreed.faceEmbedding).toBe('device');
+  });
+
+  it('says nowhere when neither end can run the named model', () => {
+    // Not "runner": claiming it would have the device stop trying and send
+    // pictures to something that cannot read them.
+    const agreed = negotiate({ camera: { lenses: ['front'] } }, { faceEmbedding: MOBILEFACENET });
+    expect(agreed.faceEmbedding).toBe('nowhere');
+    expect(agreed.faceModel).toEqual(MOBILEFACENET);
   });
 
   it('copes with a device that declared nothing', () => {

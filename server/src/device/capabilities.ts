@@ -34,10 +34,20 @@ export interface DeviceCapabilities {
   speech?: { recognition?: boolean; synthesis?: boolean };
 }
 
-/** What the runner can do for itself, when a device cannot. */
+/** What the runner knows and can do, which shapes what it asks of a device. */
 export interface RunnerCapabilities {
-  /** The model the runner embeds with. Anything stored is in this space. */
+  /**
+   * The model the person store is in.
+   *
+   * Naming it is separate from being able to run it. A runner with no
+   * embedding runtime installed can still say which space its stored
+   * templates are in, and accept vectors from a device that can produce
+   * them — which is the common case, since a phone embeds faster than a
+   * server and without sending the picture anywhere.
+   */
   faceEmbedding?: EmbeddingModel;
+  /** Whether the runner can compute an embedding itself, for devices that cannot. */
+  canEmbed?: boolean;
 }
 
 /** Where a piece of work should happen. */
@@ -72,13 +82,16 @@ export function negotiate(
   runner: RunnerCapabilities,
 ): Negotiated {
   const wanted = runner.faceEmbedding;
+  // No canonical model means no store to put a vector in, whoever computes it.
   if (!wanted) return { faceEmbedding: 'nowhere' };
 
   const onDevice = (device?.faceEmbedding ?? []).some((m) => sameModel(m, wanted));
-  return {
-    faceEmbedding: onDevice ? 'device' : 'runner',
-    faceModel: wanted,
-  };
+  if (onDevice) return { faceEmbedding: 'device', faceModel: wanted };
+
+  // The runner is the fallback, and only when it actually has a runtime.
+  // Saying runner without one would have the device stop trying and send
+  // pictures to something that cannot read them.
+  return { faceEmbedding: runner.canEmbed ? 'runner' : 'nowhere', faceModel: wanted };
 }
 
 /** Does this device claim a camera at all? */
