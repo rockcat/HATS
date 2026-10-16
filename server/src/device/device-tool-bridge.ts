@@ -24,6 +24,8 @@
 import { randomUUID } from 'crypto';
 import type { ToolDefinition, ToolOutcome } from '../providers/types.js';
 import { rejectImage } from './image-store.js';
+import { negotiate, sanitise } from './capabilities.js';
+import type { DeviceCapabilities, Negotiated, RunnerCapabilities } from './capabilities.js';
 import { log } from '../util/logger.js';
 
 /** The prefix that marks a tool as living on a device, as `mcp__` marks MCP. */
@@ -65,6 +67,10 @@ interface Device {
   /** Something a human can recognise in a log: "Paul's phone". */
   label: string;
   tools: DeviceToolSpec[];
+  /** What it can do for itself, beyond the tools it offers. */
+  capabilities: DeviceCapabilities;
+  /** What the runner and this device settled on. */
+  agreed: Negotiated;
   /** Registration order. A clock ties when two devices connect in the same
    *  millisecond, which is exactly what happens on a reconnect. */
   seq: number;
@@ -89,6 +95,13 @@ export interface DeviceToolBridgeOptions {
    * just cannot be referred back to once the thread moves on.
    */
   keepImage?: (tool: string, image: { mediaType: string; base64: string }) => Promise<string | null>;
+  /**
+   * What the runner can do itself, for devices that cannot.
+   *
+   * The runner's embedding model is canonical: it is the space the person
+   * store is in, so a device may only embed if it runs that exact model.
+   */
+  runner?: RunnerCapabilities;
 }
 
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -100,20 +113,49 @@ export class DeviceToolBridge {
   private readonly timeoutMs: number;
   private readonly deliver: DeviceToolBridgeOptions['deliver'];
   private readonly keepImage: DeviceToolBridgeOptions['keepImage'];
+  private readonly runner: RunnerCapabilities;
 
   constructor(options: DeviceToolBridgeOptions) {
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.deliver = options.deliver;
     this.keepImage = options.keepImage;
+    this.runner = options.runner ?? {};
   }
 
   // ── Devices ────────────────────────────────────────────────────────────────
 
-  /** A device declares what it can do. Re-registering replaces the old list. */
-  register(deviceId: string, tools: DeviceToolSpec[], label = 'device'): void {
+  /**
+   * A device declares what it can do. Re-registering replaces the old list.
+   *
+   * Returns what was agreed, so the device learns where work will happen —
+   * a phone that can embed faces needs telling whether the runner wants it
+   * to, and with which model.
+   */
+  register(
+    deviceId: string, tools: DeviceToolSpec[], label = 'device', capabilities?: unknown,
+  ): Negotiated {
     const valid = tools.filter((t) => t.name?.trim());
-    this.devices.set(deviceId, { deviceId, label, tools: valid, seq: ++this.seq });
+    const declared = sanitise(capabilities);
+    const agreed = negotiate(declared, this.runner);
+    this.devices.set(deviceId, {
+      deviceId, label, tools: valid, capabilities: declared, agreed, seq: ++this.seq,
+    });
     log.info(`[Device] "${label}" offers ${valid.length} tool(s): ${valid.map((t) => t.name).join(', ')}`);
+    if (agreed.faceEmbedding !== 'nowhere') {
+      log.info(`[Device] "${label}" will embed faces on the ${agreed.faceEmbedding}`
+        + ` (${agreed.faceModel?.model})`);
+    }
+    return agreed;
+  }
+
+  /** What a connected device can do, for code deciding how to do a job. */
+  capabilitiesOf(deviceId: string): DeviceCapabilities | undefined {
+    return this.devices.get(deviceId)?.capabilities;
+  }
+
+  /** What was agreed with a connected device. */
+  agreementWith(deviceId: string): Negotiated | undefined {
+    return this.devices.get(deviceId)?.agreed;
   }
 
   /**
@@ -131,9 +173,13 @@ export class DeviceToolBridge {
     log.info(`[Device] "${device.label}" disconnected`);
   }
 
-  connected(): Array<{ deviceId: string; label: string; tools: string[] }> {
+  connected(): Array<{
+    deviceId: string; label: string; tools: string[];
+    capabilities: DeviceCapabilities; agreed: Negotiated;
+  }> {
     return [...this.devices.values()].map((d) => ({
       deviceId: d.deviceId, label: d.label, tools: d.tools.map((t) => t.name),
+      capabilities: d.capabilities, agreed: d.agreed,
     }));
   }
 

@@ -48,6 +48,8 @@ tags:
     description: Face and voice
   - name: Meta
     description: Health, project context and this document
+  - name: Devices
+    description: What the client can do, and tools that run on it rather than the runner
 
 paths:
   /health:
@@ -329,6 +331,116 @@ paths:
             text/event-stream:
               schema: { type: string }
 
+  /devices/{deviceId}:
+    put:
+      tags: [Devices]
+      summary: Declare a device
+      description: |
+        Register what this client offers and what it can do for itself, and
+        learn what the runner decided to do about it.
+
+        **Tools** are things the agent calls that run here — a camera is the
+        reason this exists, since the runner has no route to one. They are
+        offered to the agent only while a device that declared them is
+        connected, because a tool that cannot work is worse than an absent one.
+
+        **Capabilities** are different: the runner never calls them, it reads
+        them to decide how to do its own job. Two devices offering the same
+        tools are not equivalent — a phone may be able to turn a face into a
+        vector in milliseconds where a browser tab cannot.
+
+        The response is half of a negotiation rather than an acknowledgement.
+        It says where each piece of work will happen, so a client that *can*
+        embed faces learns whether the runner wants it to, and with which
+        model. That last part matters more than it looks: vectors from
+        different models cannot be compared at all, so the runner's model is
+        canonical and a device may embed only if it runs that exact one.
+
+        Re-registering replaces the previous declaration rather than merging,
+        so an app upgraded mid-session does not keep abilities it has lost.
+      operationId: declareDevice
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DeviceDeclaration' }
+      responses:
+        '200':
+          description: Registered, with what was agreed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DeviceAgreement' }
+        '400':
+          description: No tool list
+    delete:
+      tags: [Devices]
+      summary: Withdraw a device
+      description: |
+        Stop offering this device's tools. Anything it was asked and never
+        answered is failed immediately rather than left to time out, so the
+        agent learns sooner. A device is dropped automatically when its event
+        stream closes, so this is for a clean exit.
+      operationId: withdrawDevice
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+      responses:
+        '204':
+          description: Withdrawn
+
+  /devices:
+    get:
+      tags: [Devices]
+      summary: List connected devices
+      operationId: listDevices
+      responses:
+        '200':
+          description: What is attached, what it offers and what was agreed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  devices:
+                    type: array
+                    items: { $ref: '#/components/schemas/ConnectedDevice' }
+
+  /device-results/{requestId}:
+    post:
+      tags: [Devices]
+      summary: Answer a device request
+      description: |
+        Post the result of a `device_request` that arrived on the event stream,
+        against its id.
+
+        Always answer, including on failure: a request left unanswered costs
+        the agent the full timeout before it learns nothing. A late answer is
+        not an error — it raced the timeout — so it is reported as
+        `settled: false` rather than rejected.
+      operationId: postDeviceResult
+      parameters:
+        - name: requestId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DeviceResult' }
+      responses:
+        '200':
+          description: Whether anything was still waiting for it
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  settled: { type: boolean }
+        '400':
+          description: Missing `ok`
+
 components:
   securitySchemes:
     ApiKeyAuth:
@@ -342,6 +454,12 @@ components:
       description: A dashboard session token, for clients already signed in.
 
   parameters:
+    DeviceId:
+      name: deviceId
+      in: path
+      required: true
+      description: A stable id this client chose for itself and reuses across reconnects.
+      schema: { type: string }
     AgentId:
       name: agentId
       in: path
@@ -362,6 +480,130 @@ components:
           schema: { $ref: '#/components/schemas/Error' }
 
   schemas:
+    EmbeddingModel:
+      type: object
+      description: |
+        A model that turns a face into a vector. Vectors are comparable only
+        within one model — the same face through two models gives two sets of
+        numbers with no relationship — so it is always named alongside them.
+      required: [model, dimensions]
+      properties:
+        model:
+          type: string
+          description: Stable id, compared exactly.
+          example: mobilefacenet-v1
+        dimensions:
+          type: integer
+          description: Length of the vector it produces.
+          example: 192
+
+    DeviceCapabilities:
+      type: object
+      description: |
+        What a device can do for itself. Unknown keys are ignored rather than
+        rejected, so a newer client still registers with an older runner.
+
+        Claim only what works. The runner plans around these, so a capability
+        claimed and not delivered is worse than one never claimed — it stops
+        the runner doing the job itself.
+      properties:
+        faceEmbedding:
+          type: array
+          description: Models this device can run locally.
+          items: { $ref: '#/components/schemas/EmbeddingModel' }
+        camera:
+          type: object
+          properties:
+            lenses:
+              type: array
+              items: { type: string, example: back }
+        speech:
+          type: object
+          properties:
+            recognition: { type: boolean }
+            synthesis: { type: boolean }
+
+    DeviceToolSpec:
+      type: object
+      required: [name, description]
+      properties:
+        name:
+          type: string
+          description: Bare name. The runner namespaces it with `device__`.
+          example: take_photo
+        description:
+          type: string
+          description: |
+            What it is for, in terms the agent can act on. This is all the model
+            has when deciding whether to call it.
+        parameters:
+          type: object
+          description: JSON Schema for the arguments, or absent if it takes none.
+
+    DeviceDeclaration:
+      type: object
+      required: [tools]
+      properties:
+        tools:
+          type: array
+          items: { $ref: '#/components/schemas/DeviceToolSpec' }
+        label:
+          type: string
+          description: Something recognisable in a log.
+          example: Paul's phone
+        capabilities: { $ref: '#/components/schemas/DeviceCapabilities' }
+
+    DeviceAgreement:
+      type: object
+      description: Where each piece of work will happen, now that both ends have spoken.
+      properties:
+        deviceId: { type: string }
+        tools:
+          type: array
+          items: { type: string }
+        agreed:
+          type: object
+          properties:
+            faceEmbedding:
+              type: string
+              enum: [device, runner, nowhere]
+              description: |
+                `device` — embed here and send a vector, which keeps the face on
+                this device. `runner` — send the picture instead. `nowhere` —
+                neither end can, so do not offer it to the agent.
+            faceModel: { $ref: '#/components/schemas/EmbeddingModel' }
+
+    ConnectedDevice:
+      type: object
+      properties:
+        deviceId: { type: string }
+        label: { type: string }
+        tools:
+          type: array
+          items: { type: string }
+        capabilities: { $ref: '#/components/schemas/DeviceCapabilities' }
+
+    DeviceResult:
+      type: object
+      required: [ok]
+      properties:
+        ok: { type: boolean }
+        result:
+          type: string
+          description: What the agent should read.
+        error:
+          type: string
+          description: Why it failed, in terms the agent can act on.
+        image:
+          type: object
+          description: |
+            A picture the tool produced, for a model that can see. Dropped with
+            an explanation if it is too large or in a format no model takes,
+            rather than failing the whole request.
+          properties:
+            mediaType: { type: string, example: image/jpeg }
+            base64: { type: string, description: The image, with no data: prefix. }
+
     HatType:
       type: string
       enum: [none, white, red, black, yellow, green, blue]

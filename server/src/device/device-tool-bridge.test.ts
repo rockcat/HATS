@@ -223,7 +223,7 @@ describe('connected', () => {
   it('lists what is attached, for the operator', () => {
     const { bridge } = makeBridge();
     bridge.register('phone', [PHOTO, TIME], "Paul's phone");
-    expect(bridge.connected()).toEqual([
+    expect(bridge.connected()).toMatchObject([
       { deviceId: 'phone', label: "Paul's phone", tools: ['take_photo', 'get_device_time'] },
     ]);
   });

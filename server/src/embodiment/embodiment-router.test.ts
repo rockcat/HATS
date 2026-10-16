@@ -69,6 +69,7 @@ beforeAll(async () => {
       delivered.push({ deviceId, tool: request.tool, id: request.id });
       return true;
     },
+    runner: { faceEmbedding: { model: 'mobilefacenet-v1', dimensions: 192 } },
   });
 
   router = new EmbodimentRouter({
@@ -88,6 +89,18 @@ beforeAll(async () => {
 });
 
 afterAll(async () => { await rm(dir, { recursive: true, force: true }); });
+
+const send = async (method: string, pathname: string, body?: unknown) => {
+  const c = capture();
+  const chunks = body === undefined ? [] : [Buffer.from(JSON.stringify(body))];
+  const req = Object.assign(
+    (async function* () { yield* chunks; })(),
+    { url: pathname, method, headers: {} },
+  ) as unknown as IncomingMessage;
+  const handled = await router.handleRoutes(pathname, method, req, c.res);
+  expect(handled).toBe(true);
+  return c;
+};
 
 const call = async (pathname: string) => {
   const c = capture();
@@ -131,17 +144,6 @@ describe('GET /agents/{id}', () => {
 
 describe('device tools', () => {
   /** POST/PUT through the router the way a device would. */
-  const send = async (method: string, pathname: string, body?: unknown) => {
-    const c = capture();
-    const chunks = body === undefined ? [] : [Buffer.from(JSON.stringify(body))];
-    const req = Object.assign(
-      (async function* () { yield* chunks; })(),
-      { url: pathname, method, headers: {} },
-    ) as unknown as IncomingMessage;
-    const handled = await router.handleRoutes(pathname, method, req, c.res);
-    expect(handled).toBe(true);
-    return c;
-  };
 
   it('accepts a declaration and lists what is connected', async () => {
     await send('PUT', `${EMBODIMENT_BASE}/devices/phone`, {
@@ -149,7 +151,9 @@ describe('device tools', () => {
       tools: [{ name: 'take_photo', description: 'Take a photo.' }],
     });
     const { devices: listed } = (await call(`${EMBODIMENT_BASE}/devices`)).body();
-    expect(listed).toEqual([{ deviceId: 'phone', label: "Paul's phone", tools: ['take_photo'] }]);
+    expect(listed).toMatchObject([
+      { deviceId: 'phone', label: "Paul's phone", tools: ['take_photo'] },
+    ]);
   });
 
   it('refuses a declaration with no tool list', async () => {
@@ -185,5 +189,76 @@ describe('device tools', () => {
 
     await send('DELETE', `${EMBODIMENT_BASE}/devices/phone`);
     expect(devices.toolDefinitions()).toEqual([]);
+  });
+});
+
+// ── Capability exchange ──────────────────────────────────────────────────────
+//
+// Devices offering the same tools are not equivalent, and the runner has to
+// know which it is talking to before deciding how to do a job.
+
+describe('what a device says it can do', () => {
+  const declare = (capabilities?: unknown) =>
+    send('PUT', `${EMBODIMENT_BASE}/devices/phone`, {
+      label: "Paul's phone",
+      tools: [{ name: 'take_photo', description: 'Take a photo.' }],
+      ...(capabilities === undefined ? {} : { capabilities }),
+    });
+
+  it('tells the device where faces will be embedded', async () => {
+    // The reply is half a negotiation, not an acknowledgement: a phone that
+    // can embed needs telling whether the runner wants it to.
+    const res = await declare({ faceEmbedding: [{ model: 'mobilefacenet-v1', dimensions: 192 }] });
+
+    expect(res.body().agreed.faceEmbedding).toBe('device');
+    expect(res.body().agreed.faceModel).toEqual({ model: 'mobilefacenet-v1', dimensions: 192 });
+  });
+
+  it('keeps the work on the runner when the device cannot embed', async () => {
+    expect((await declare({ camera: { lenses: ['front'] } })).body().agreed.faceEmbedding)
+      .toBe('runner');
+  });
+
+  it('keeps it on the runner when the device offers a different model', async () => {
+    // A vector from another model is not a worse answer, it is a meaningless
+    // one — it would match nothing and nobody could tell why.
+    expect((await declare({ faceEmbedding: [{ model: 'arcface', dimensions: 512 }] }))
+      .body().agreed.faceEmbedding).toBe('runner');
+  });
+
+  it('accepts a device that declares nothing at all', async () => {
+    // Every client written before this existed.
+    const res = await declare(undefined);
+    expect(res.status()).toBe(200);
+    expect(res.body().agreed.faceEmbedding).toBe('runner');
+  });
+
+  it('accepts a client declaring something this runner has never heard of', async () => {
+    const res = await declare({ teleportation: true, camera: { lenses: ['back'] } });
+    expect(res.status()).toBe(200);
+  });
+
+  it('does not let rubbish into the store', async () => {
+    await declare({ faceEmbedding: [{ model: '', dimensions: -4 }] });
+    const { devices: listed } = (await call(`${EMBODIMENT_BASE}/devices`)).body();
+
+    expect(listed[0].capabilities.faceEmbedding).toBeUndefined();
+    expect(listed[0].agreed.faceEmbedding).toBe('runner');
+  });
+
+  it('reports what each device can do, for the operator', async () => {
+    await declare({ camera: { lenses: ['front', 'back'] }, speech: { recognition: true } });
+    const { devices: listed } = (await call(`${EMBODIMENT_BASE}/devices`)).body();
+
+    expect(listed[0].capabilities.camera.lenses).toEqual(['front', 'back']);
+    expect(listed[0].capabilities.speech.recognition).toBe(true);
+  });
+
+  it('replaces the declaration when a device re-registers', async () => {
+    // An app upgraded mid-session should not keep its old abilities.
+    await declare({ faceEmbedding: [{ model: 'mobilefacenet-v1', dimensions: 192 }] });
+    const second = await declare({ camera: { lenses: ['front'] } });
+
+    expect(second.body().agreed.faceEmbedding).toBe('runner');
   });
 });
