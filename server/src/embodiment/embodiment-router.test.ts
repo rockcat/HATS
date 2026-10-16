@@ -69,7 +69,8 @@ beforeAll(async () => {
       delivered.push({ deviceId, tool: request.tool, id: request.id });
       return true;
     },
-    runner: { faceEmbedding: { model: 'mobilefacenet-v1', dimensions: 192 } },
+    // Names the canonical model and can run it, so 'runner' is a real option.
+    runner: { faceEmbedding: { model: 'mobilefacenet-v1', dimensions: 192 }, canEmbed: true },
   });
 
   router = new EmbodimentRouter({
