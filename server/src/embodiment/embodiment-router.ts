@@ -208,10 +208,17 @@ export class EmbodimentRouter {
        */
       put(`${B}/devices/:deviceId`, async ({ req, res, params }) => {
         const deviceId = params['deviceId'] as string;
-        const body = await readJsonBody<{ tools?: DeviceToolSpec[]; label?: string }>(req);
+        const body = await readJsonBody<{
+          tools?: DeviceToolSpec[]; label?: string; capabilities?: unknown;
+        }>(req);
         if (!Array.isArray(body?.tools)) { badRequest(res, 'tools must be an array'); return; }
-        this.deps.devices.register(deviceId, body.tools, body.label?.trim() || deviceId);
-        json(res, 200, { deviceId, tools: body.tools.map((t) => t.name) });
+
+        // The reply is half of a negotiation rather than an acknowledgement:
+        // it tells the device where work will happen and which model to use,
+        // so a phone that can embed faces knows whether to bother.
+        const agreed = this.deps.devices.register(
+          deviceId, body.tools, body.label?.trim() || deviceId, body.capabilities);
+        json(res, 200, { deviceId, tools: body.tools.map((t) => t.name), agreed });
       }),
 
       del(`${B}/devices/:deviceId`, ({ res, params }) => {
