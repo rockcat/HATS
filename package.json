@@ -22,7 +22,8 @@
     "services:all": "node --env-file=.env scripts/dev-services.mjs --with-runner",
     "electron:build": "npm run build && electron-builder",
     "electron:run": "electron --env-file=.env apps/electron/main.js",
-    "speech-service": "node --env-file=.env --import tsx/esm apps/speech-service/src/main.ts"
+    "speech-service": "node --env-file=.env --import tsx/esm apps/speech-service/src/main.ts",
+    "companion": "node --env-file=.env --import tsx/esm apps/companion/src/main.ts"
   },
   "build": {
     "appId": "com.hatagents.app",

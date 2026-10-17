@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Companion</title>
+  <link rel="stylesheet" href="/ui-kit/hats-ui.css">
+  <link rel="stylesheet" href="/ui-kit/avatar-stage.css">
+  <link rel="stylesheet" href="/style.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "/nm/three/build/three.module.js",
+        "three/addons/": "/nm/three/examples/jsm/",
+        "@pixiv/three-vrm": "/nm/@pixiv/three-vrm/lib/three-vrm.module.js"
+      }
+    }
+  </script>
+</head>
+<body>
+
+<!-- ── Choosing which agent this is ──────────────────────────────────────── -->
+<!-- Shown once. After that the page is that agent and the roster is gone. -->
+<div class="chooser" id="chooser" hidden>
+  <div class="chooser-card">
+    <h1>Who would you like to talk to?</h1>
+    <p class="muted" id="chooser-hint">Looking for agents…</p>
+    <div class="chooser-list" id="chooser-list"></div>
+  </div>
+</div>
+
+<!-- ── The conversation ──────────────────────────────────────────────────── -->
+<main class="companion" id="companion" hidden>
+
+  <header class="companion-header">
+    <span class="status-dot" id="link-dot"></span>
+    <strong id="agent-name">…</strong>
+    <span class="muted" id="agent-state"></span>
+    <span class="spacer"></span>
+
+    <button class="icon-btn" id="camera-btn" title="Let the agent use the camera" hidden>
+      <span aria-hidden="true">&#9673;</span><span class="icon-label">Camera</span>
+    </button>
+    <button class="icon-btn" id="voice-btn" title="Where the voice comes from">
+      <span aria-hidden="true">&#9834;</span><span class="icon-label" id="voice-label">Voice</span>
+    </button>
+    <button class="icon-btn" id="switch-btn" title="Talk to somebody else">
+      <span aria-hidden="true">&#8644;</span><span class="icon-label">Switch</span>
+    </button>
+  </header>
+
+  <!-- A banner rather than a silent failure: being offline is normal and the
+       user needs to know their words are queued rather than lost. -->
+  <div class="banner" id="banner" hidden></div>
+
+  <section class="stage">
+    <img class="stage-background" id="stage-background" alt="">
+    <canvas class="stage-canvas" id="avatar-canvas"></canvas>
+    <div class="stage-hint" id="stage-hint">No face yet</div>
+  </section>
+
+  <section class="transcript" id="transcript" aria-live="polite"></section>
+
+  <form class="say" id="say-form">
+    <input id="say-input" type="text" autocomplete="off"
+           placeholder="Say something…" aria-label="Message">
+    <button class="icon-btn mic" id="mic-btn" type="button" title="Speak">
+      <span aria-hidden="true">&#9679;</span>
+    </button>
+    <button class="btn primary" id="send-btn" type="submit">Send</button>
+  </form>
+
+</main>
+
+<script type="module" src="/app.js"></script>
+</body>
+</html>
