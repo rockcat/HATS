@@ -104,9 +104,14 @@ export class EmbodimentClient {
    * `handlers` maps event name to callback; the parsed payload is passed in.
    * Returns a function that closes the stream.
    */
-  stream(handlers = {}, { agentId } = {}) {
-    const query = agentId ? `?agentId=${encodeURIComponent(agentId)}` : '';
-    const source = new EventSource(`${this.basePath}/events${query}`);
+  stream(handlers = {}, { agentId, deviceId } = {}) {
+    const query = new URLSearchParams({
+      ...(agentId ? { agentId } : {}),
+      // Without this a device never hears the requests addressed to it:
+      // device_request frames are filtered to the device they are for.
+      ...(deviceId ? { deviceId } : {}),
+    }).toString();
+    const source = new EventSource(`${this.basePath}/events${query ? `?${query}` : ''}`);
     for (const [name, handler] of Object.entries(handlers)) {
       if (name === 'open' || name === 'error') { source.addEventListener(name, handler); continue; }
       source.addEventListener(name, (event) => {
@@ -114,6 +119,51 @@ export class EmbodimentClient {
       });
     }
     return () => source.close();
+  }
+
+  // ── Being a device ─────────────────────────────────────────────────────────
+  //
+  // A browser is a device like any other: it has a camera, a microphone and a
+  // clock that the runner has no route to. Declaring them turns this page into
+  // somewhere the agent's tools can run.
+
+  /**
+   * Say what this client offers and what it can do for itself.
+   *
+   * Returns what the runner agreed, which is how a client learns where work
+   * will happen — whether to embed a face here or send the picture.
+   *
+   * Declare only what works. The runner plans around these, so claiming a
+   * capability you cannot deliver is worse than claiming none: it stops the
+   * runner doing the job itself.
+   */
+  async declareDevice(deviceId, tools, { label, capabilities } = {}) {
+    const body = await this.request('PUT', `/devices/${encodeURIComponent(deviceId)}`, {
+      tools,
+      ...(label ? { label } : {}),
+      ...(capabilities ? { capabilities } : {}),
+    });
+    return body?.agreed ?? {};
+  }
+
+  /** Stop offering this device's tools. */
+  withdrawDevice(deviceId) {
+    return this.request('DELETE', `/devices/${encodeURIComponent(deviceId)}`);
+  }
+
+  /**
+   * Answer something the runner asked this device to do.
+   *
+   * Always answer, including on failure: an unanswered request costs the agent
+   * the full timeout before it learns nothing at all.
+   */
+  sendDeviceResult(requestId, { ok, result, error, image } = {}) {
+    return this.request('POST', `/device-results/${encodeURIComponent(requestId)}`, {
+      ok: !!ok,
+      ...(result !== undefined ? { result } : {}),
+      ...(error !== undefined ? { error } : {}),
+      ...(image ? { image } : {}),
+    });
   }
 
   /** Find a running agent by name — deployed agents keep their template's name. */
