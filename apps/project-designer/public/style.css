@@ -41,3 +41,7 @@ li.disabled-agent .name { text-decoration: line-through; opacity: 0.6; }
 
 #mcp-section { margin-bottom: 18px; }
 .mcp-unknown { display: block; margin-top: 6px; color: var(--warn); }
+
+/* `[hidden]` ties with a class selector and loses to a later author rule, so
+   `.mcp-unknown { display: ... }` would quietly defeat it. */
+.mcp-unknown[hidden] { display: none; }

@@ -302,3 +302,14 @@ input[type="text"]:focus { outline: none; border-color: var(--accent, var(--bord
   .tab { padding: 9px 10px; font-size: 12px; }
   .columns { grid-template-columns: 1fr; }
 }
+
+/* ── hidden must actually hide ─────────────────────────────────────────────
+   The browser's own `[hidden] { display: none }` is an attribute selector,
+   so it carries exactly the same specificity as a class selector — and an
+   author stylesheet beats the user-agent one on a tie. Any rule here like
+   `.chooser { display: grid }` therefore silently defeats `hidden`, and the
+   element stays on screen while the code that set it believes it is gone.
+
+   That is what it looks like when clicking does nothing: the handler runs,
+   sets hidden, and the panel is still painted over the top of the result. */
+[hidden] { display: none !important; }
