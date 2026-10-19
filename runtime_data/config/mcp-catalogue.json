@@ -11,7 +11,7 @@
       "transport": "stdio",
       "command": "node",
       "args": [
-        "dist/mcp/kanban/server.js"
+        "builtin:mcp/kanban/server"
       ]
     }
   },
@@ -881,5 +881,25 @@
     ],
     "notes": "Create an app at developers.facebook.com, add the Threads API product, and generate an OAuth access token. Your user ID can be found via the Threads API /me endpoint.",
     "url": "https://developers.facebook.com/docs/threads"
+  },
+  {
+    "id": "calendar",
+    "name": "Calendar",
+    "description": "A diary of its own for each agent — meetings, free/busy, and invitations by email",
+    "category": "productivity",
+    "users": [
+      "agent"
+    ],
+    "config": {
+      "transport": "stdio",
+      "command": "node",
+      "args": [
+        "builtin:calendar/server"
+      ],
+      "env": {
+        "CALENDAR_FILE_PATH": "{AGENT_DIR}/calendar.ics"
+      }
+    },
+    "notes": "Invitations need an email account. Set up the Email (IMAP / SMTP) server for this agent and the calendar borrows its settings — there is nothing to enter twice."
   }
 ]
