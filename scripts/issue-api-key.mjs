@@ -42,9 +42,18 @@ async function main() {
     process.exit(1);
   }
 
-  // The pair URL may carry a LAN host from HATS_PUBLIC_URL; only the token matters.
-  const { pairUrl } = await generated.json();
-  const pairToken = String(pairUrl ?? '').split('/').pop();
+  // The response carries the token outright, alongside a url and every
+  // candidate address the QR could encode. Only the token matters here —
+  // this script is already on the machine the runner is on.
+  const generatedBody = await generated.json();
+  const pairToken = generatedBody.token
+    ?? String(generatedBody.url ?? generatedBody.pairUrl ?? '').split('/').pop();
+
+  if (!pairToken) {
+    console.error('The runner did not return a pairing token. Response keys: '
+      + Object.keys(generatedBody).join(', '));
+    process.exit(1);
+  }
 
   const claimed = await fetch(`${RUNNER}/api/auth/pair/${pairToken}`);
   if (!claimed.ok) {
