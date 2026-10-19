@@ -39,7 +39,23 @@
 
   <!-- ── Calendar ───────────────────────────────────────────────────────── -->
   <section class="view" id="view-calendar">
+    <div class="cal-bar">
+      <div class="cal-views" id="cal-views">
+        <button class="chip" data-cal="day">Day</button>
+        <button class="chip active" data-cal="week">Week</button>
+        <button class="chip" data-cal="agenda">Agenda</button>
+      </div>
+      <button class="btn" id="cal-prev" title="Previous">&#8592;</button>
+      <button class="btn" id="cal-today">Today</button>
+      <button class="btn" id="cal-next" title="Next">&#8594;</button>
+      <strong class="cal-title" id="cal-title"></strong>
+      <!-- Jumping to a date, rather than only stepping to it. -->
+      <input class="cal-date" id="cal-date" type="date" aria-label="Go to date">
+      <span class="spacer"></span>
+      <button class="btn primary" id="cal-add">New meeting</button>
+    </div>
     <div class="summary" id="calendar-summary"></div>
+    <div class="cal-grid" id="calendar-grid" hidden></div>
     <div class="list" id="calendar-list"></div>
   </section>
 

@@ -11,6 +11,10 @@
 
 import { $, $$, clear, el, relativeTime, toastError, toastOk } from '/ui-kit/hats-ui.js';
 import { COLUMN_LABELS, byAssignee, stale, summarise, toColumns } from '/board-model.js';
+import {
+  DAY_START_HOUR, MEETING_TYPES, TYPE_LABELS, agenda, daysInView, defaultMeetingTime,
+  hourRows, meetingsOn, outsideHours, placeInDay, startOfDay, step, titleFor, whenOf,
+} from '/calendar-model.js';
 
 const API = '/runner/api';
 
@@ -20,6 +24,9 @@ const state = {
   requests: [],
   files: [],
   telemetry: null,
+  agents: [],
+  calView: 'week',
+  calFocus: new Date(),
 };
 
 // ── Talking to the runner ────────────────────────────────────────────────────
@@ -169,43 +176,204 @@ function commentBox(ticket) {
 
 // ── The calendar ─────────────────────────────────────────────────────────────
 
-async function loadCalendar() { state.meetings = await get('/scheduled-meetings'); }
+async function loadCalendar() {
+  state.meetings = await get('/scheduled-meetings');
+  // Best effort: without it the new-meeting form has nobody to offer, but the
+  // calendar itself still reads fine.
+  try {
+    const roster = await get('/agents');
+    state.agents = (roster.agents ?? roster ?? []).filter((a) => a?.name);
+  } catch { /* leave whatever we had */ }
+}
 
 function renderCalendar() {
-  const meetings = [...(state.meetings ?? [])]
-    .sort((a, b) => String(a.scheduledFor ?? '').localeCompare(String(b.scheduledFor ?? '')));
-  const now = Date.now();
-  const upcoming = meetings.filter((m) => Date.parse(m.scheduledFor ?? '') >= now);
+  const meetings = state.meetings ?? [];
+  const { upcoming, past } = agenda(meetings);
+
+  $('#cal-title').textContent = titleFor(state.calView, state.calFocus);
+  $('#cal-date').value = toDateInput(state.calFocus);
+  for (const chip of $$('#cal-views .chip')) {
+    chip.classList.toggle('active', chip.dataset.cal === state.calView);
+  }
 
   clear($('#calendar-summary'));
   $('#calendar-summary').append(
     stat(upcoming.length, 'upcoming'),
-    stat(meetings.length - upcoming.length, 'past'),
+    stat(past.length, 'past'),
   );
 
+  const grid = $('#calendar-grid');
   const list = $('#calendar-list');
+  clear(grid);
   clear(list);
-  if (meetings.length === 0) {
-    list.append(el('p', { class: 'muted empty' }, 'Nothing scheduled.'));
+
+  if (state.calView === 'agenda') {
+    grid.hidden = true;
+    renderAgendaList(list, upcoming, past);
     return;
   }
 
-  for (const meeting of meetings) {
-    const when = Date.parse(meeting.scheduledFor ?? '');
-    const past = Number.isFinite(when) && when < now;
-    list.append(el('div', { class: `row-item ${past ? 'past' : ''}` },
-      el('div', { class: 'grow' },
-        el('strong', {}, meeting.topic ?? 'Meeting'),
-        el('span', { class: 'muted' },
-          `${meeting.facilitator ?? 'someone'} · ${(meeting.participants ?? []).length} attending`
-          + (Number.isFinite(when) ? ` · ${new Date(when).toLocaleString()}` : '')),
-      ),
-      ...(past ? [] : [el('button', {
-        class: 'btn', onclick: () => launch(meeting),
-      }, 'Start now')]),
-    ));
+  grid.hidden = false;
+  renderGrid(grid, list, meetings);
+}
+
+function renderAgendaList(list, upcoming, past) {
+  if (!upcoming.length && !past.length) {
+    list.append(el('p', { class: 'muted empty' }, 'Nothing scheduled.'));
+    return;
+  }
+  if (upcoming.length) {
+    list.append(el('h4', { class: 'block-title' }, 'Coming up'),
+      ...upcoming.map((m) => meetingRow(m, false)));
+  }
+  if (past.length) {
+    list.append(el('h4', { class: 'block-title' }, 'Already happened'),
+      ...past.slice(0, 30).map((m) => meetingRow(m, true)));
   }
 }
+
+/** A day or week drawn as hours, so a gap in the diary looks like a gap. */
+function renderGrid(grid, list, meetings) {
+  const days = daysInView(state.calView, state.calFocus);
+  const today = startOfDay(new Date()).getTime();
+
+  grid.style.setProperty('--days', String(days.length));
+  grid.append(el('div', { class: 'cal-corner' }),
+    ...days.map((day) => el('div', {
+      class: `cal-dayhead ${day.getTime() === today ? 'today' : ''}`,
+    },
+      el('span', {}, day.toLocaleDateString(undefined, { weekday: 'short' })),
+      el('strong', {}, String(day.getDate())),
+    )));
+
+  grid.append(el('div', { class: 'cal-hours' },
+    ...hourRows().map((h) => el('div', { class: 'cal-hour' }, `${pad2(h)}:00`))));
+
+  for (const day of days) {
+    const column = el('div', { class: 'cal-day' },
+      ...hourRows().map(() => el('div', { class: 'cal-slot' })));
+
+    for (const meeting of meetingsOn(meetings, day)) {
+      const place = placeInDay(meeting);
+      if (!place) continue;
+      const when = whenOf(meeting);
+      column.append(el('button', {
+        class: `cal-event type-${meeting.type ?? 'ad_hoc'}`,
+        style: `top:${place.top * 100}%;height:${Math.max(place.height * 100, 4)}%`,
+        onclick: () => openMeeting(meeting),
+      },
+        el('span', { class: 'cal-event-time' }, `${pad2(when.getHours())}:${pad2(when.getMinutes())}`),
+        el('span', { class: 'cal-event-topic' }, meeting.topic ?? 'Meeting'),
+      ));
+    }
+    grid.append(column);
+  }
+
+  // Anything outside the drawn hours is listed rather than hidden — a 03:00
+  // meeting that simply vanished would be worse than an ugly footnote.
+  const stragglers = days.flatMap((day) => outsideHours(meetings, day));
+  if (stragglers.length) {
+    list.append(el('h4', { class: 'block-title' }, 'Outside the shown hours'),
+      ...stragglers.map((m) => meetingRow(m, false)));
+  }
+}
+
+function meetingRow(meeting, past) {
+  const when = whenOf(meeting);
+  return el('div', { class: `row-item ${past ? 'past' : ''}` },
+    el('div', { class: 'grow' },
+      el('strong', {}, meeting.topic ?? 'Meeting'),
+      el('span', { class: 'muted' },
+        `${TYPE_LABELS[meeting.type] ?? 'Meeting'} · ${meeting.facilitator ?? 'someone'}`
+        + ` · ${(meeting.participants ?? []).length} attending`
+        + (when ? ` · ${when.toLocaleString()}` : ' · no date')),
+    ),
+    ...(past ? [] : [el('button', { class: 'btn', onclick: () => launch(meeting) }, 'Start now')]),
+  );
+}
+
+function openMeeting(meeting) {
+  const when = whenOf(meeting);
+  openDetail(meeting.topic ?? 'Meeting', [
+    el('p', { class: 'row gap' },
+      el('span', { class: 'tag' }, TYPE_LABELS[meeting.type] ?? 'Meeting'),
+      el('span', { class: 'tag' }, meeting.facilitator ?? 'someone'),
+      ...(when ? [el('span', { class: 'tag' }, when.toLocaleString())] : []),
+    ),
+    ...(meeting.agenda ? [el('p', { class: 'wrap' }, meeting.agenda)] : []),
+    el('h4', {}, 'Attending'),
+    el('p', { class: 'wrap' }, (meeting.participants ?? []).join(', ') || 'Nobody listed'),
+    el('div', { class: 'row gap' },
+      el('button', { class: 'btn primary', onclick: () => launch(meeting) }, 'Start now'),
+      el('button', { class: 'btn', onclick: () => cancelMeeting(meeting) }, 'Cancel it'),
+    ),
+  ]);
+}
+
+async function cancelMeeting(meeting) {
+  try {
+    await send('POST', `/scheduled-meetings/${encodeURIComponent(meeting.id)}/cancel`);
+    toastOk('Cancelled');
+    $('#detail').hidden = true;
+    await load('calendar', loadCalendar, renderCalendar);
+  } catch (err) { toastError(err); }
+}
+
+/** Book something. The runner needs a type, a facilitator and a time. */
+function openNewMeeting() {
+  const topic = el('input', { type: 'text', placeholder: 'What is it about?' });
+  const when = el('input', { type: 'datetime-local', value: defaultMeetingTime() });
+  const type = el('select', {},
+    ...MEETING_TYPES.map((t) => el('option', { value: t.id }, t.label)));
+  const agendaText = el('textarea', { rows: '3', placeholder: 'Agenda (optional)' });
+
+  // Whoever is on the team. Without a facilitator the runner refuses, so this
+  // is a list rather than a free-text box to get wrong.
+  const facilitator = el('select', {},
+    ...state.agents.map((a) => el('option', { value: a.name }, a.name)));
+  const attending = state.agents.map((a) => ({
+    name: a.name,
+    box: el('input', { type: 'checkbox', checked: true }),
+  }));
+
+  const create = async () => {
+    if (!topic.value.trim()) { toastError(new Error('It needs a topic.')); return; }
+    try {
+      await send('POST', '/scheduled-meetings', {
+        type: type.value,
+        topic: topic.value.trim(),
+        agenda: agendaText.value.trim(),
+        facilitator: facilitator.value,
+        participants: attending.filter((a) => a.box.checked && a.name !== facilitator.value)
+          .map((a) => a.name),
+        scheduledFor: new Date(when.value).toISOString(),
+      });
+      toastOk('Meeting booked');
+      $('#detail').hidden = true;
+      await load('calendar', loadCalendar, renderCalendar);
+    } catch (err) { toastError(err); }
+  };
+
+  openDetail('New meeting', [
+    field('Topic', topic),
+    field('Type', type),
+    field('When', when),
+    field('Led by', facilitator),
+    field('Attending', el('div', { class: 'checks' },
+      ...attending.map((a) => el('label', { class: 'check' }, a.box, a.name)))),
+    field('Agenda', agendaText),
+    el('div', { class: 'row gap' },
+      el('button', { class: 'btn primary', onclick: create }, 'Book it'),
+      el('button', { class: 'btn', onclick: () => { $('#detail').hidden = true; } }, 'Cancel'),
+    ),
+  ]);
+}
+
+const field = (label, control) =>
+  el('label', { class: 'field' }, el('span', { class: 'field-label' }, label), control);
+
+const toDateInput = (date) =>
+  `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
 
 async function launch(meeting) {
   try {
@@ -221,8 +389,11 @@ async function launch(meeting) {
 async function loadRequests() { state.requests = await get('/human-requests'); }
 
 function renderRequests() {
+  // The runner's shape: { id, agentName, message, urgency, status, createdAt }.
+  // This read `agent` and `question` and filtered on timestamps that do not
+  // exist, so every request rendered blank and none was ever filtered out.
   const open = (state.requests?.requests ?? state.requests ?? [])
-    .filter((r) => !r.answeredAt && !r.dismissedAt);
+    .filter((r) => (r.status ?? 'pending') === 'pending');
 
   const pip = $('#requests-pip');
   pip.hidden = open.length === 0;
@@ -235,27 +406,49 @@ function renderRequests() {
     return;
   }
 
-  for (const request of open) {
+  // Most urgent first, then oldest: a request from June is more overdue than
+  // one from this morning, and urgency is what decides which to read.
+  const rank = { critical: 0, high: 1, medium: 2, low: 3 };
+  open.sort((a, b) =>
+    (rank[a.urgency] ?? 2) - (rank[b.urgency] ?? 2)
+    || String(a.createdAt ?? '').localeCompare(String(b.createdAt ?? '')));
+
+  for (const request of open.slice(0, 50)) {
     const input = el('input', { type: 'text', placeholder: 'Your answer…' });
-    const respond = async () => {
-      const text = input.value.trim();
-      if (!text) return;
+
+    const act = async (what, body) => {
       try {
-        await send('POST', `/human-requests/${encodeURIComponent(request.id)}/respond`, { response: text });
-        toastOk('Sent');
+        await send('POST', `/human-requests/${encodeURIComponent(request.id)}/${what}`, body);
+        toastOk(what === 'respond' ? 'Answer sent' : 'Dismissed');
         await load('requests', loadRequests, renderRequests);
       } catch (err) { toastError(err); }
     };
-    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') void respond(); });
+
+    const respond = () => {
+      const text = input.value.trim();
+      if (text) void act('respond', { response: text });
+    };
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') respond(); });
 
     list.append(el('div', { class: 'row-item column-item' },
-      el('div', {},
-        el('strong', {}, request.agent ?? 'An agent'),
-        el('span', { class: 'muted' }, ` asked ${relativeTime(request.askedAt ?? request.at) ?? ''}`)),
-      el('p', { class: 'wrap' }, request.question ?? request.prompt ?? ''),
+      el('div', { class: 'row gap' },
+        el('strong', {}, request.agentName ?? 'An agent'),
+        el('span', { class: `tag urgency-${request.urgency ?? 'medium'}` }, request.urgency ?? 'medium'),
+        el('span', { class: 'muted' }, relativeTime(request.createdAt) ?? ''),
+      ),
+      el('p', { class: 'wrap' }, request.message ?? ''),
       el('div', { class: 'row gap' }, input,
-        el('button', { class: 'btn primary', onclick: respond }, 'Answer')),
+        el('button', { class: 'btn primary', onclick: respond }, 'Answer'),
+        // Not every question still needs answering months later, and without
+        // this there was no way to clear one.
+        el('button', { class: 'btn', onclick: () => void act('dismiss') }, 'Dismiss'),
+      ),
     ));
+  }
+
+  if (open.length > 50) {
+    list.append(el('p', { class: 'muted empty' },
+      `…and ${open.length - 50} more. Answer or dismiss these first.`));
   }
 }
 
@@ -294,32 +487,51 @@ const formatSize = (bytes) => bytes < 1024 ? `${bytes} B`
 async function loadCost() { state.telemetry = await get('/telemetry'); }
 
 function renderCost() {
-  const data = state.telemetry ?? {};
-  const agents = data.agents ?? data.byAgent ?? [];
+  // Everything is under `summary`, and byAgent/byModel are objects keyed by
+  // name rather than arrays. Reading the top level found nothing, so the
+  // panel showed zeroes while the project had spent real money.
+  const summary = state.telemetry?.summary ?? {};
+  const tokens = (summary.totalInputTokens ?? 0) + (summary.totalOutputTokens ?? 0);
 
   clear($('#cost-summary'));
   $('#cost-summary').append(
-    stat(money(data.totalCost ?? data.cost ?? 0), 'total'),
-    stat(compact(data.totalTokens ?? data.tokens ?? 0), 'tokens'),
-    stat(data.calls ?? agents.length ?? 0, 'calls'),
+    stat(money(summary.totalCost), 'total'),
+    stat(compact(tokens), 'tokens'),
+    stat(compact(summary.totalCalls ?? 0), 'calls'),
   );
 
   const list = $('#cost-list');
   clear(list);
-  if (!agents.length) {
+  const rows = [
+    ...breakdown(summary.byAgent, 'Agents'),
+    ...breakdown(summary.byModel, 'Models'),
+  ];
+  if (!rows.length) {
     list.append(el('p', { class: 'muted empty' }, 'Nothing recorded yet.'));
     return;
   }
-  for (const agent of agents) {
-    list.append(el('div', { class: 'row-item' },
-      el('span', { class: 'grow' }, agent.name ?? agent.agent ?? 'unknown'),
-      el('span', { class: 'muted mono' }, compact(agent.tokens ?? 0)),
-      el('strong', { class: 'mono' }, money(agent.cost ?? 0)),
-    ));
-  }
+  list.append(...rows);
+}
+
+/** One titled block of name → cost rows, dearest first. */
+function breakdown(byName, title) {
+  const entries = Object.entries(byName ?? {});
+  if (!entries.length) return [];
+
+  entries.sort((a, b) => (b[1]?.cost ?? 0) - (a[1]?.cost ?? 0));
+  return [
+    el('h4', { class: 'block-title' }, title),
+    ...entries.map(([name, usage]) => el('div', { class: 'row-item' },
+      el('span', { class: 'grow' }, name),
+      el('span', { class: 'muted mono' },
+        compact((usage.inputTokens ?? 0) + (usage.outputTokens ?? 0))),
+      el('strong', { class: 'mono' }, money(usage.cost)),
+    )),
+  ];
 }
 
 const money = (n) => `$${Number(n ?? 0).toFixed(2)}`;
+const pad2 = (n) => String(n).padStart(2, '0');
 const compact = (n) => n >= 1_000_000 ? `${(n / 1e6).toFixed(1)}M`
   : n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n ?? 0);
 
@@ -331,6 +543,31 @@ function openDetail(title, body) {
   $('#detail-body').append(...body);
   $('#detail').hidden = false;
 }
+
+$('#cal-views').addEventListener('click', (event) => {
+  const chip = event.target.closest('.chip');
+  if (!chip) return;
+  state.calView = chip.dataset.cal;
+  renderCalendar();
+});
+
+$('#cal-prev').addEventListener('click', () => {
+  state.calFocus = step(state.calView, state.calFocus, -1);
+  renderCalendar();
+});
+$('#cal-next').addEventListener('click', () => {
+  state.calFocus = step(state.calView, state.calFocus, 1);
+  renderCalendar();
+});
+$('#cal-today').addEventListener('click', () => {
+  state.calFocus = new Date();
+  renderCalendar();
+});
+$('#cal-date').addEventListener('change', (event) => {
+  const picked = new Date(`${event.target.value}T12:00`);
+  if (!Number.isNaN(picked.getTime())) { state.calFocus = picked; renderCalendar(); }
+});
+$('#cal-add').addEventListener('click', openNewMeeting);
 
 $('#detail-close').addEventListener('click', () => { $('#detail').hidden = true; });
 $('#detail').addEventListener('click', (event) => {
@@ -357,7 +594,10 @@ $('#tabs').addEventListener('click', (event) => {
  * is connected and to reload the panel an event concerns.
  */
 function follow() {
-  const source = new EventSource(`${API}/events`);
+  // /events, not /api/events. The latter exists and answers 200 with JSON, so
+  // EventSource opened it, failed to parse a stream, and reported the runner
+  // as down while it was serving perfectly well.
+  const source = new EventSource('/runner/events');
   const dot = $('#runner-dot');
 
   source.addEventListener('open', () => {

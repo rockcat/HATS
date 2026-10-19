@@ -49,7 +49,7 @@ const WORKSPACE_SURFACE = [
   '/api/telemetry',         // what it has cost
   '/api/email-allowlist',   // who agents may write to
   '/api/agents',            // read-only: who is on the team
-  '/api/events',            // the live stream
+  '/events',                // the live stream (SSE; /api/events is JSON)
 ];
 
 await startService({
