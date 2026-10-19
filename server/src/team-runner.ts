@@ -155,7 +155,15 @@ function makeProjectLoader(
         const builtinServer = repointBuiltinServer(def.name, def.config,
           def.name === 'kanban' ? kanbanFile : undefined);
         if (builtinServer) Object.assign(def.config, builtinServer);
-        await orchestrator.addMCPServer(def);
+
+        // One server failing must not stop the runner starting. An expired
+        // credential on an optional MCP — a Google token nobody has refreshed
+        // for a week — would otherwise reject here, go unhandled, and take the
+        // whole process down before it ever listens. The team is still worth
+        // running without that server, and the agent is told the tool is
+        // missing rather than the operator being told nothing at all.
+        await orchestrator.addMCPServer(def).catch((err: Error) =>
+          console.log(`[Team] MCP server "${def.name}" failed to start: ${err.message}`));
       }
 
       // The definition still owns goal, human name, and any agents added in the
