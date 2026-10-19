@@ -2,7 +2,10 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import * as path from 'path';
-import { describeRecognition, handlePeopleCall, peopleTools, type PeopleToolsContext } from './tools.js';
+import {
+  PEOPLE_TOOL_NAMES, describeRecognition, handlePeopleCall, peopleTools,
+  type PeopleToolsContext,
+} from './tools.js';
 import { PeopleStore } from './store.js';
 import { normalise } from './matching.js';
 import type { FaceEmbedder } from './embedder.js';
@@ -37,15 +40,24 @@ const call = (name: string, args: Record<string, unknown> = {}, ctx = context) =
   handlePeopleCall(ctx, name, args);
 
 describe('what the agent is offered', () => {
-  it('offers nothing when no model is configured', () => {
-    // A tool that cannot work is one the agent calls over and over.
-    expect(peopleTools({ ...context, model: undefined })).toEqual([]);
-  });
-
-  it('offers the four tools when it can recognise', () => {
+  it('offers the four tools', () => {
     expect(peopleTools(context).map((t) => t.name)).toEqual([
       'identify_person', 'remember_person', 'forget_person', 'list_people',
     ]);
+  });
+
+  it('offers them even on a runner with no model of its own', () => {
+    // The runner names the space; a device that can embed does the work. An
+    // agent offered nothing here cannot even list who it has met.
+    expect(peopleTools({ ...context, embedder: null }).map((t) => t.name))
+      .toHaveLength(4);
+  });
+
+  it('names every tool it offers in PEOPLE_TOOL_NAMES', () => {
+    // The executor routes on that list, so a tool missing from it is offered
+    // to the agent and then reported as unknown when called.
+    expect([...PEOPLE_TOOL_NAMES].sort())
+      .toEqual(peopleTools(context).map((t) => t.name).sort());
   });
 
   it('tells the agent not to guess a name', () => {
@@ -122,7 +134,7 @@ describe('identifying somebody', () => {
 
   it('says plainly when a photo arrives and nothing here can read it', async () => {
     const out = await call('identify_person', { image_base64: 'abc' }).catch((e: Error) => e.message);
-    expect(out).toContain('not set up');
+    expect(out).toContain('no face model');
   });
 
   it('says so when there is no face in the picture', async () => {
@@ -229,10 +241,19 @@ describe('listing who is known', () => {
   });
 });
 
-describe('a runner that cannot recognise anybody', () => {
-  it('explains rather than failing oddly', async () => {
-    const bare = { ...context, model: undefined };
-    expect(await call('identify_person', { vector: facing(0) }, bare)).toContain('not set up');
+describe('a runner that cannot embed a picture itself', () => {
+  it('says what to send instead, and names the model to send it in', async () => {
+    // Thrown rather than returned: the agent has to know the call did not
+    // happen, not read a sentence and assume it did.
+    await expect(call('identify_person', { image_base64: 'c29tZXRoaW5n' },
+      { ...context, embedder: null }))
+      .rejects.toThrow(new RegExp(`${MODEL.model}.*${MODEL.dimensions}d`));
+  });
+
+  it('still works from a vector the device produced', async () => {
+    // The whole point of naming a model without running one.
+    expect(await call('identify_person', { vector: facing(0) }, { ...context, embedder: null }))
+      .toBeTruthy();
   });
 });
 

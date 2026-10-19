@@ -19,11 +19,12 @@ import type { Recognition } from './types.js';
 import type { FaceEmbedder } from './embedder.js';
 import { whyNotAvailable, type EmbedderConfig } from './embedder.js';
 import type { EmbeddingModel } from '../device/capabilities.js';
+import type { ToolDefinition } from '../providers/types.js';
 
 export interface PeopleToolsContext {
   store: PeopleStore;
-  /** The canonical model every stored template is in. */
-  model?: EmbeddingModel;
+  /** The canonical model every stored template is in. Always named. */
+  model: EmbeddingModel;
   /** The runner's own embedder, when it has one. */
   embedder?: FaceEmbedder | null;
   config: EmbedderConfig;
@@ -31,11 +32,19 @@ export interface PeopleToolsContext {
   agentName: string;
 }
 
-/** Tool definitions, shaped by what this runner can actually do. */
-export function peopleTools(context: PeopleToolsContext) {
-  const canRecognise = !!context.model;
-  if (!canRecognise) return [];
+/** Every tool this module offers. The one list, so nothing drifts. */
+export const PEOPLE_TOOL_NAMES = ['identify_person', 'remember_person',
+  'forget_person', 'list_people'] as const;
 
+/** One tool, in the shape both the MCP server and the agent tool list want. */
+export interface PeopleTool {
+  name: string;
+  description: string;
+  inputSchema: ToolDefinition['parameters'];
+}
+
+/** Tool definitions, shaped by what this runner can actually do. */
+export function peopleTools(_context: PeopleToolsContext): PeopleTool[] {
   return [
     {
       name: 'identify_person',
@@ -132,13 +141,13 @@ async function vectorFrom(
     if (vector.some((v) => !Number.isFinite(v))) {
       throw new Error('That face vector contains values I cannot read.');
     }
-    const expected = context.model?.dimensions;
-    if (expected && vector.length !== expected) {
+    const expected = context.model.dimensions;
+    if (vector.length !== expected) {
       // Silently storing it would put a template in the file that can never
       // match anything, and nobody would be able to tell why.
       throw new Error(
         `That vector has ${vector.length} dimensions and this runner's people are `
-        + `stored with ${expected} (${context.model?.model}). They cannot be compared.`,
+        + `stored with ${expected} (${context.model.model}). They cannot be compared.`,
       );
     }
     return vector;
@@ -146,7 +155,7 @@ async function vectorFrom(
 
   const image = args['image_base64'];
   if (typeof image === 'string' && image.length > 0) {
-    if (!context.embedder) throw new Error(whyNotAvailable(context.config));
+    if (!context.embedder) throw new Error(whyNotAvailable(context.config, context.model));
     const vector = await context.embedder.embed(Buffer.from(image, 'base64'));
     if (!vector) throw new Error('There is no face in that picture.');
     return vector;
@@ -160,7 +169,6 @@ export async function handlePeopleCall(
   context: PeopleToolsContext, name: string, args: Record<string, unknown>,
 ): Promise<string> {
   const { store, model } = context;
-  if (!model) return whyNotAvailable(context.config);
 
   switch (name) {
     case 'identify_person': {

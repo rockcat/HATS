@@ -37,6 +37,9 @@ export interface ToolCallContext {
   getPersonalMcp(agentName: string): MCPRegistry | null;
   /** Tools that run on the user's device. Null when nothing is connected. */
   getDeviceTools?(): DeviceToolBridge | null;
+  /** Recognising people. Absent, or false, when no face model is configured. */
+  isPeopleTool?(name: string): boolean;
+  callPeopleTool?(agentName: string, name: string, args: Record<string, unknown>): Promise<string>;
   /** Mutable ref so the store stays live after context creation. */
   agendaStore: { store: AgendaStore | null };
   findByName(name: string): IAgent | undefined;
@@ -167,6 +170,16 @@ export function buildToolExecutor(ctx: ToolCallContext, mcp: MCPRegistry) {
 
       // Checked first: a device tool never reaches an MCP server or a
       // built-in, and the bridge answers for itself when no device has it.
+      // Ahead of MCP too: a project could name an MCP tool "list_people"
+      // and we would still mean this one.
+      if (ctx.isPeopleTool?.(call.name) && ctx.callPeopleTool) {
+        result = await ctx.callPeopleTool(agentName, call.name, call.arguments ?? {});
+        // The face vector is not logged — the result is a sentence about a
+        // person, which is the part worth keeping in the history.
+        await ctx.store.append('tool_result', { agent: agentName, tool: call.name, result });
+        return result;
+      }
+
       if (devices?.isDeviceTool(call.name)) {
         const outcome = await devices.call(call.name, call.arguments ?? {});
         // The image is deliberately not logged: a photo of the room does

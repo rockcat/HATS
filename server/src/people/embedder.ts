@@ -16,7 +16,7 @@
 // templates are in and a device may well be able to produce them.
 
 import { log } from '../util/logger.js';
-import type { EmbeddingModel } from '../device/capabilities.js';
+import { DEFAULT_EMBEDDING_MODEL, type EmbeddingModel } from '../device/capabilities.js';
 
 /** Anything that can turn a face image into a vector. */
 export interface FaceEmbedder {
@@ -58,24 +58,23 @@ export function configFromEnv(env: NodeJS.ProcessEnv = process.env): EmbedderCon
  * Available without any runtime: naming the space is not the same as being
  * able to compute in it, and a device that *can* needs to be told which one.
  */
-export function canonicalModel(config: EmbedderConfig): EmbeddingModel | undefined {
+export function canonicalModel(config: EmbedderConfig): EmbeddingModel {
   const model = config.modelName?.trim();
   const dimensions = config.dimensions;
-  if (!model || !Number.isInteger(dimensions) || !(dimensions! > 0)) return undefined;
+  if (!model || !Number.isInteger(dimensions) || !(dimensions! > 0)) {
+    return DEFAULT_EMBEDDING_MODEL;
+  }
   return { model, dimensions: dimensions! };
 }
 
 /** What to tell somebody who asked for an embedding we cannot produce. */
-export function whyNotAvailable(config: EmbedderConfig): string {
-  if (!canonicalModel(config)) {
-    return 'Face recognition is not set up on this runner: no model is named. '
-      + 'Set FACE_MODEL_NAME and FACE_MODEL_DIMENSIONS, and either install a '
-      + 'runtime here or use a device that can embed faces itself.';
-  }
+export function whyNotAvailable(config: EmbedderConfig, model: EmbeddingModel): string {
   if (!config.modelPath) {
-    return 'This runner names a face model but cannot run it, so a device has to '
-      + 'do the embedding. The device in use cannot, so there is no way to '
-      + 'recognise anybody from here.';
+    return 'I cannot turn a picture into a face vector here — this runner has no '
+      + `face model loaded, so whatever is looking has to do it and send a `
+      + `${model.model} (${model.dimensions}d) vector instead. `
+      + 'To do it on the runner, set FACE_MODEL_PATH to an ONNX model and install '
+      + 'onnxruntime-node.';
   }
   return 'The face model could not be loaded. Check FACE_MODEL_PATH and that '
     + 'onnxruntime-node is installed.';

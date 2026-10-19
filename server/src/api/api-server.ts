@@ -277,6 +277,10 @@ export class APIServer {
         keepDeviceImage(self.orchestrator.getProjectDir(), tool, image),
     });
     this.orchestrator.setDeviceTools(this.deviceTools);
+    // Loading a face model takes a moment and most runners have none, so this
+    // settles in the background; until it does, only devices that embed for
+    // themselves can be recognised.
+    void this.orchestrator.prepareFaceEmbedder();
 
     this.embodimentRouter = new EmbodimentRouter({
       getOrchestrator:   () => self.orchestrator,

@@ -32,6 +32,11 @@ import { AgendaStore } from '../api/agenda-store.js';
 import { AgendaRunner } from './agenda-runner.js';
 import { resolvePersonalConfig, isAgentMcp } from '../mcp/mcp-catalogue.js';
 import { parseMemoryGraph, type MemoryGraph } from '../mcp/memory-graph.js';
+import { PeopleStore } from '../people/store.js';
+import {
+  PEOPLE_TOOL_NAMES, handlePeopleCall, peopleTools, type PeopleToolsContext,
+} from '../people/tools.js';
+import { canonicalModel, configFromEnv, createEmbedder, type FaceEmbedder } from '../people/embedder.js';
 import { getCatalogue, recordDiscoveredTools } from '../mcp/catalogue-store.js';
 import {
   startMeeting as startMeetingFn,
@@ -82,6 +87,17 @@ export class TeamOrchestrator {
   private mcp = new MCPRegistry();
   /** Tools that run on a connected device. Absent until a client registers one. */
   private deviceTools: DeviceToolBridge | null = null;
+
+  /**
+   * Who the team knows by sight.
+   *
+   * One register per project rather than per agent — "who is this" is a fact
+   * about the world, not about one agent's relationship with somebody. Built
+   * lazily because most projects never ask.
+   */
+  private people: PeopleStore | null = null;
+  private faceEmbedder: FaceEmbedder | null = null;
+  private faceEmbedderTried = false;
   private llmSemaphore: Semaphore;
   private lastSenderByAgent = new Map<string, string>();
   private telemetryRecorder: ((entry: { agent: string; provider: string; model: string; promptLength: number; inputTokens: number; outputTokens: number; cost: number }) => void) | null = null;
@@ -161,6 +177,53 @@ export class TeamOrchestrator {
   }
 
   setDeviceTools(bridge: DeviceToolBridge): void { this.deviceTools = bridge; }
+
+  /** The project's register of people, or null when there is no project yet. */
+  peopleStore(): PeopleStore | null {
+    if (!this.projectDir) return null;
+    if (!this.people) this.people = new PeopleStore(nodePath.join(this.projectDir, 'people.json'));
+    return this.people;
+  }
+
+  /**
+   * What an agent needs to recognise somebody.
+   *
+   * Returns null when no face model is configured, so the tools are simply not
+   * offered rather than offered and always failing.
+   */
+  private peopleContext(agentName: string): PeopleToolsContext | null {
+    const store = this.peopleStore();
+    const config = configFromEnv();
+    const model = canonicalModel(config);
+    if (!store || !model) return null;
+    return { store, model, config, agentName, embedder: this.faceEmbedder };
+  }
+
+  /** Load the runner's own face embedder once, if one is configured. */
+  async prepareFaceEmbedder(): Promise<void> {
+    if (this.faceEmbedderTried) return;
+    this.faceEmbedderTried = true;
+    this.faceEmbedder = await createEmbedder(configFromEnv());
+  }
+
+  /** Run one of the people tools for an agent. */
+  async callPeopleTool(agentName: string, name: string, args: Record<string, unknown>): Promise<string> {
+    const context = this.peopleContext(agentName);
+    if (!context) return 'Face recognition is not set up on this runner.';
+    return handlePeopleCall(context, name, args);
+  }
+
+  /**
+   * Is this one of the people tools, and can this runner actually run it?
+   *
+   * Both halves matter: the name alone would swallow a call on a runner
+   * with no face model, where it should fall through and be reported as an
+   * unknown tool rather than silently doing nothing.
+   */
+  isPeopleTool(name: string): boolean {
+    return (PEOPLE_TOOL_NAMES as readonly string[]).includes(name)
+      && this.peopleContext('') !== null;
+  }
   getDeviceTools(): DeviceToolBridge | null { return this.deviceTools; }
 
   /** Names of the shared MCP servers currently connected for the team. */
@@ -566,6 +629,9 @@ export class TeamOrchestrator {
   getProjectDir(): string | null { return this.projectDir; }
 
   setProjectDir(dir: string | null): void {
+    // The register lives in the project, so moving project has to drop it —
+    // otherwise the team carries the last project's faces into this one.
+    if (dir !== this.projectDir) this.people = null;
     this.projectDir = dir;
     for (const agent of this.agents.values()) agent.updateProjectDir(dir);
   }
@@ -606,9 +672,15 @@ export class TeamOrchestrator {
         // A device tool counts as personal: it belongs to this user's own
         // phone, there are few of them, and an agent that has to discover
         // the camera will not think to look.
+        const context = this.peopleContext(agent.name);
         const personal = [
           ...(this.personalMcpByAgent.get(agent.name.toLowerCase())?.getAllTools() ?? []),
           ...(this.deviceTools?.toolDefinitions() ?? []),
+          // Knowing who you are speaking to is not something to go looking
+          // for mid-conversation, so these sit upfront with the device tools.
+          ...(context ? peopleTools(context).map((t) => ({
+            name: t.name, description: t.description, parameters: t.inputSchema,
+          })) : []),
         ];
 
         // Checked here rather than at registration because this is the first
@@ -969,6 +1041,9 @@ export class TeamOrchestrator {
       emailAllowlistRef: this.emailAllowlistRef,
       getPersonalMcp: (agentName) => this.personalMcpByAgent.get(agentName.toLowerCase()) ?? null,
       getDeviceTools: () => this.deviceTools,
+      isPeopleTool: (name: string) => this.isPeopleTool(name),
+      callPeopleTool: (agent: string, name: string, args: Record<string, unknown>) =>
+        this.callPeopleTool(agent, name, args),
       agendaStore: this.agendaStoreRef,
       findByName: (name) => this.findByName(name),
       findBlueHat: () => this.findBlueHat(),

@@ -17,6 +17,23 @@
 // worse.
 
 /** A model that turns a face into a vector. Vectors are comparable only within one. */
+/**
+ * What a face is turned into unless the runner is told otherwise.
+ *
+ * MobileFaceNet because it is the one every on-device stack can actually run
+ * — ML Kit on Android, Core ML on iOS, tfjs in a browser tab — and because
+ * 192 floats is small enough to put on the wire every frame.
+ *
+ * There has to be a default. Vectors from two models are not comparable, so
+ * somebody must name the space, and leaving it unnamed until an operator sets
+ * an environment variable means recognition quietly does not exist on a fresh
+ * install, which is indistinguishable from it being broken.
+ */
+export const DEFAULT_EMBEDDING_MODEL: EmbeddingModel = {
+  model: 'mobilefacenet-v1',
+  dimensions: 192,
+};
+
 export interface EmbeddingModel {
   /** Stable id, e.g. `mobilefacenet-v1`. Compared exactly. */
   model: string;
