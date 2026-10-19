@@ -4615,3 +4615,23 @@ body.has-expanded-panel main > section:not(.panel--expanded) {
   line-height: 1.45;
   color: var(--text-muted);
 }
+
+/* ── hidden must actually hide ─────────────────────────────────────────────
+   `[hidden] { display: none }` lives in the browser's own stylesheet and is
+   an attribute selector — the same specificity as a class. An author rule
+   like `.cal-nav { display: flex }` therefore beats it, and `hidden` does
+   nothing: the code sets it, believes the element is gone, and it is still
+   on screen.
+
+   Guarded per class rather than with a blanket `!important`, matching the
+   overlays above, so an inline style can still win where one is used. */
+
+.btab-pane[hidden],
+.field-group[hidden],
+.cli-reply-bar[hidden],
+.agent-config-line[hidden],
+.cal-nav[hidden],
+.cal-view-tabs[hidden],
+.tab-badge[hidden],
+.panel-header-action-btn[hidden],
+.lib-avatar-panel[hidden] { display: none; }
