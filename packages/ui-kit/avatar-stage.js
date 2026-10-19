@@ -13,6 +13,7 @@
  */
 
 import * as THREE from 'three';
+import { applyRestPose } from '/ui-kit/avatar-pose.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
 
@@ -20,7 +21,7 @@ const DEFAULT_CAMERA = [0, 1.65, 0.5];
 const DEFAULT_FOV = 50;
 const DEG = Math.PI / 180;
 /** VRM models load in a T-pose; drop the upper arms to a natural rest. */
-const ARM_DOWN = Math.PI / 3;
+
 
 let renderer = null;
 let scene = null;
@@ -87,13 +88,7 @@ function disposeModel() {
   mixer = null;
 }
 
-/** Arms out horizontally reads as a mannequin; a rest pose reads as a person. */
-function applyRestPose(loaded) {
-  const left = loaded.humanoid?.getNormalizedBoneNode('leftUpperArm');
-  const right = loaded.humanoid?.getNormalizedBoneNode('rightUpperArm');
-  if (left) left.rotation.z = ARM_DOWN;
-  if (right) right.rotation.z = -ARM_DOWN;
-}
+
 
 /**
  * Show the model at `spec.url`, framed by `camera` / `rotate` / `fov` / `scale`.
@@ -121,10 +116,13 @@ export async function showAvatar(canvas, spec) {
     // Removing unused vertices and joints keeps the preview cheap.
     VRMUtils.removeUnnecessaryVertices(model);
     VRMUtils.combineSkeletons(model);
-    applyRestPose(loadedVrm);
   } else {
     model = gltf.scene;
   }
+
+  // Every model, not only the VRMs. This used to pose VRMs and leave each
+  // GLB standing with its arms out — which is most of the avatar library.
+  applyRestPose(gltf, loadedVrm);
 
   model.scale.setScalar(spec.scale ?? 1);
   // `rotate` in the catalogue is degrees, matching the runner's renderer.

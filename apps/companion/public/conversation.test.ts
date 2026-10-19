@@ -155,3 +155,36 @@ describe('not growing without bound', () => {
     expect(state.awaitingEcho).toContain('message 79');
   });
 });
+
+describe('the echo racing the send', () => {
+  it('shows it once when the echo beats the POST back', () => {
+    // The runner broadcasts the moment it records the message, so the event
+    // can land while the POST is still in flight. Registering it as ours
+    // before sending is what makes the order not matter — the first version
+    // of this app sent first, and every message appeared twice.
+    let state = saidByUser(emptyConversation(), 'hello', { delivered: false });
+    state = arrived(state, user('hello'));          // echo arrives first
+    state = delivered(state, 'hello');              // POST returns after
+
+    expect(state.messages).toHaveLength(1);
+    expect(state.messages[0].pending).toBe(false);
+    expect(unsentCount(state)).toBe(0);
+  });
+
+  it('shows it once when the POST returns first', () => {
+    let state = saidByUser(emptyConversation(), 'hello', { delivered: false });
+    state = delivered(state, 'hello');
+    state = arrived(state, user('hello'));
+
+    expect(state.messages).toHaveLength(1);
+    expect(state.messages[0].pending).toBe(false);
+  });
+
+  it('settles the message even if the echo never comes', () => {
+    // Some runners do not echo at all; the message must not stay greyed out.
+    let state = saidByUser(emptyConversation(), 'hello', { delivered: false });
+    state = delivered(state, 'hello');
+
+    expect(state.messages[0].pending).toBe(false);
+  });
+});

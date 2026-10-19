@@ -92,8 +92,17 @@ export class EmbodimentClient {
   }
 
   /** Synthesise speech in the agent's voice. Resolves to a WAV Blob. */
+  /**
+   * Have an agent say something, and get the audio back.
+   *
+   * Asks for `withVisemes`, which is the JSON form: sentence-sized chunks of
+   * base64 WAV with mouth shapes alongside. Without it the endpoint answers
+   * with raw WAV bytes rather than JSON — perfectly valid for an `<audio>`
+   * tag, but only the first sentence, and it carries nothing to drive a face.
+   */
   speak(id, text) {
-    return this.request('POST', `/agents/${encodeURIComponent(id)}/speech`, { text });
+    return this.request('POST', `/agents/${encodeURIComponent(id)}/speech`,
+      { text, withVisemes: true });
   }
 
   avatarUrl(id)     { return `${this.basePath}/agents/${encodeURIComponent(id)}/avatar`; }

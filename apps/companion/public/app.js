@@ -271,13 +271,21 @@ async function say(text) {
   const trimmed = text.trim();
   if (!trimmed || !state.agent) return;
 
-  let sent = false;
+  // Shown *before* the send, not after. The runner broadcasts the message the
+  // moment it records it, so the echo can land on the event stream while the
+  // POST is still in flight — and if we have not registered it as ours by
+  // then, it arrives looking like news and is shown a second time. Marked
+  // undelivered until the send returns, so an offline message still reads
+  // correctly.
+  state.conversation = saidByUser(state.conversation, trimmed, { delivered: false });
+  renderTranscript();
+  renderBanner();
+
   try {
     await client.send(state.agent.id, trimmed);
-    sent = true;
-  } catch { /* queued below, and flushed when the stream comes back */ }
+    state.conversation = delivered(state.conversation, trimmed);
+  } catch { /* stays queued, and flushes when the stream comes back */ }
 
-  state.conversation = saidByUser(state.conversation, trimmed, { delivered: sent });
   renderTranscript();
   renderBanner();
 }
@@ -309,7 +317,7 @@ function toggleListening() {
 
 async function speak(text) {
   if (state.speech === SpeechMode.off || !text?.trim()) return;
-  stopSpeaking();
+  stopTalking();
 
   if (state.speech === SpeechMode.device) {
     // Sentence at a time, so the first words start while the rest is still
@@ -319,12 +327,46 @@ async function speak(text) {
   }
 
   try {
-    const { audioUrl } = await client.speak(state.agent.id, text);
-    if (audioUrl) await new Audio(audioUrl).play();
+    // Chunks of base64 WAV, one per sentence, each with mouth shapes. There
+    // is no URL to hand an <audio> tag — the first version of this looked for
+    // an `audioUrl` the API has never returned, so the server voice was
+    // silently doing nothing at all.
+    const { chunks = [] } = await client.speak(state.agent.id, text);
+    for (const chunk of chunks) {
+      if (state.speech !== SpeechMode.server) break;  // switched voices mid-reply
+      await playWav(chunk.audioBase64);
+    }
   } catch {
-    // The server voice is a round trip and can fail; the words are on screen
+    // The server voice is a round trip and can fail. The words are on screen
     // either way, so this is not worth interrupting anybody about.
   }
+}
+
+/**
+ * Stop talking, whichever voice is talking.
+ *
+ * stopSpeaking() only reaches the browser's synthesiser; a server chunk is
+ * an <audio> element and carries on regardless, which is how you end up
+ * with two voices after switching.
+ */
+function stopTalking() {
+  stopSpeaking();
+  try { state.playing?.pause(); } catch { /* nothing was playing */ }
+  state.playing = null;
+}
+
+/** Play one base64 WAV, resolving when it finishes or fails. */
+function playWav(base64) {
+  if (!base64) return Promise.resolve();
+  return new Promise((resolve) => {
+    const audio = new Audio(`data:audio/wav;base64,${base64}`);
+    state.playing = audio;
+    // Resolve on error as well as on end: one chunk failing must not leave
+    // the rest of the reply unspoken.
+    audio.onended = resolve;
+    audio.onerror = resolve;
+    audio.play().catch(resolve);
+  });
 }
 
 function cycleVoice() {
@@ -332,7 +374,7 @@ function cycleVoice() {
   const next = order[(order.indexOf(state.speech) + 1) % order.length];
   state.speech = next;
   write(VOICE_KEY, next);
-  stopSpeaking();
+  stopTalking();
   renderVoiceLabel();
 }
 
