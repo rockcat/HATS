@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Project</title>
+  <link rel="stylesheet" href="/ui-kit/hats-ui.css">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<header class="app-header">
+  <h1 id="project-name">Project</h1>
+  <span class="subtitle" id="project-goal"></span>
+  <span class="spacer"></span>
+  <!-- Whether the runner is up is information, not an error: the board and
+       the calendar are worth reading either way. -->
+  <span class="row" style="gap:6px">
+    <span class="status-dot" id="runner-dot"></span>
+    <span class="muted mono" id="runner-label">runner</span>
+  </span>
+</header>
+
+<nav class="tabs" id="tabs">
+  <button class="tab active" data-view="board">Board</button>
+  <button class="tab" data-view="calendar">Calendar</button>
+  <button class="tab" data-view="requests">Needs you <span class="pip" id="requests-pip" hidden></span></button>
+  <button class="tab" data-view="files">Files</button>
+  <button class="tab" data-view="cost">Cost</button>
+</nav>
+
+<main>
+  <!-- ── Board ──────────────────────────────────────────────────────────── -->
+  <section class="view active" id="view-board">
+    <div class="summary" id="board-summary"></div>
+    <div class="attention" id="board-attention" hidden></div>
+    <div class="columns" id="board-columns"></div>
+  </section>
+
+  <!-- ── Calendar ───────────────────────────────────────────────────────── -->
+  <section class="view" id="view-calendar">
+    <div class="summary" id="calendar-summary"></div>
+    <div class="list" id="calendar-list"></div>
+  </section>
+
+  <!-- ── Things waiting on a person ─────────────────────────────────────── -->
+  <section class="view" id="view-requests">
+    <div class="list" id="requests-list"></div>
+  </section>
+
+  <!-- ── What the team produced ─────────────────────────────────────────── -->
+  <section class="view" id="view-files">
+    <div class="list" id="files-list"></div>
+  </section>
+
+  <!-- ── What it has cost ───────────────────────────────────────────────── -->
+  <section class="view" id="view-cost">
+    <div class="summary" id="cost-summary"></div>
+    <div class="list" id="cost-list"></div>
+  </section>
+</main>
+
+<div class="detail" id="detail" hidden>
+  <div class="detail-card">
+    <header class="detail-head">
+      <strong id="detail-title"></strong>
+      <span class="spacer"></span>
+      <button class="btn" id="detail-close">Close</button>
+    </header>
+    <div class="detail-body" id="detail-body"></div>
+  </div>
+</div>
+
+<script type="module" src="/app.js"></script>
+</body>
+</html>

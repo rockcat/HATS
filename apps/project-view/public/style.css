@@ -1,0 +1,304 @@
+/* ── The project, not the machinery ────────────────────────────────────────
+   Read far more often than it is clicked, so it is laid out for scanning:
+   counts first, then what has stopped moving, then everything else. */
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+.app-header {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.app-header h1 { font-size: 16px; font-weight: 600; margin: 0; }
+.app-header .subtitle { font-size: 12px; color: var(--text-muted); }
+.app-header .spacer { flex: 1; }
+
+.tabs {
+  display: flex;
+  gap: 2px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.tab {
+  position: relative;
+  padding: 9px 14px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+}
+
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--text); border-bottom-color: var(--accent, #7c5cff); }
+
+/* A count on the tab, so something waiting on you is visible from any tab. */
+.pip {
+  display: inline-grid;
+  place-items: center;
+  min-width: 17px;
+  height: 17px;
+  margin-left: 6px;
+  padding: 0 4px;
+  font-size: 10px;
+  color: #fff;
+  background: #f85149;
+  border-radius: 9px;
+}
+
+main { padding: 16px 18px 40px; }
+.view { display: none; }
+.view.active { display: block; }
+
+/* ── Counts ──────────────────────────────────────────────────────────────── */
+
+.summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.stat {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 8px 13px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.stat strong { font-size: 18px; }
+.stat span { font-size: 11px; color: var(--text-muted); }
+
+/* Blocked is the number that should make somebody do something. */
+.stat.warn {
+  background: color-mix(in srgb, #f85149 12%, var(--surface));
+  border-color: color-mix(in srgb, #f85149 40%, var(--border));
+}
+
+/* What has stopped moving — said out loud rather than left to be spotted. */
+.attention {
+  margin-bottom: 14px;
+  padding: 9px 12px;
+  font-size: 12px;
+  background: color-mix(in srgb, #f59e0b 12%, var(--surface-2));
+  border: 1px solid color-mix(in srgb, #f59e0b 38%, var(--border));
+  border-radius: 7px;
+}
+
+.link {
+  padding: 0 4px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--accent, #7c5cff);
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+/* ── The board ───────────────────────────────────────────────────────────── */
+
+.columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+
+.column {
+  padding: 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.column > header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.column > header .count {
+  margin-left: auto;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.column.blocked > header { color: #f85149; }
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+  margin-bottom: 7px;
+  padding: 9px 10px;
+  font: inherit;
+  text-align: left;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  /* The priority stripe does the work a colour-coded card would, without
+     making the whole board shout. */
+  border-left: 3px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.card:hover { border-color: var(--border-hover); }
+.card-id { font-size: 10px; color: var(--text-muted); font-family: ui-monospace, monospace; }
+.card-title { font-size: 13px; line-height: 1.35; }
+.card-who { font-size: 11px; color: var(--text-muted); }
+
+.priority-critical { border-left-color: #f85149; }
+.priority-high     { border-left-color: #f59e0b; }
+.priority-medium   { border-left-color: var(--border); }
+.priority-low      { border-left-color: transparent; }
+
+.who-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 5px 0;
+  font-size: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.who-row:last-child { border-bottom: none; }
+
+/* ── Lists ───────────────────────────────────────────────────────────────── */
+
+.list { display: flex; flex-direction: column; gap: 7px; }
+
+.row-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  font-size: 13px;
+  color: inherit;
+  text-decoration: none;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+}
+
+a.row-item:hover { border-color: var(--border-hover); }
+.row-item.column-item { flex-direction: column; align-items: stretch; gap: 8px; }
+.row-item.past { opacity: 0.55; }
+.row-item .grow { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.row-item .muted { font-size: 11px; }
+
+.empty { padding: 18px 2px; font-size: 12px; }
+.wrap { white-space: pre-wrap; line-height: 1.5; margin: 0; font-size: 13px; }
+.row { display: flex; align-items: center; }
+.row.gap { gap: 8px; }
+.mono { font-family: ui-monospace, 'Cascadia Code', monospace; }
+
+input[type="text"] {
+  flex: 1;
+  min-width: 0;
+  padding: 7px 10px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+input[type="text"]:focus { outline: none; border-color: var(--accent, var(--border-hover)); }
+
+/* ── One ticket, close up ────────────────────────────────────────────────── */
+
+.detail {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 20;
+}
+
+.detail-card {
+  display: flex;
+  flex-direction: column;
+  width: min(620px, 100%);
+  max-height: 80vh;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.detail-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.detail-head .spacer { flex: 1; }
+
+.detail-body {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  padding: 14px;
+  overflow-y: auto;
+}
+
+.detail-body h4 {
+  margin: 4px 0 0;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.comment {
+  padding: 8px 10px;
+  background: var(--surface-2);
+  border-radius: 6px;
+}
+
+.comment .muted { font-size: 10.5px; }
+.comment p { margin: 3px 0 0; }
+
+.tag {
+  padding: 2px 7px;
+  font-size: 10.5px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.tag.priority-critical { color: #f85149; border-color: #f85149; }
+.tag.priority-high { color: #f59e0b; border-color: #f59e0b; }
+
+@media (max-width: 560px) {
+  main { padding: 12px; }
+  .tab { padding: 9px 10px; font-size: 12px; }
+  .columns { grid-template-columns: 1fr; }
+}

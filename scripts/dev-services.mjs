@@ -29,6 +29,7 @@ const SERVICES = {
   embodiment:{ label: 'embodied ', script: 'apps/embodiment-test/src/main.ts',  port: 3040, colour: '\x1b[32m' },
   speech:    { label: 'speech   ', script: 'apps/speech-service/src/main.ts',   port: 3050, colour: '\x1b[31m' },
   companion: { label: 'companion', script: 'apps/companion/src/main.ts',        port: 3060, colour: '\x1b[95m' },
+  project:   { label: 'project  ', script: 'apps/project-view/src/main.ts',     port: 3070, colour: '\x1b[96m' },
   runner:    { label: 'runner   ', script: 'team-runner.ts',                    port: 3001, colour: '\x1b[34m' },
 };
 
