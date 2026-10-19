@@ -12,7 +12,7 @@ import { $, clear, el, toastError, toastOk } from '/ui-kit/hats-ui.js';
 import { EmbodimentClient } from '/ui-kit/embodiment-client.js';
 import { applyLipSync, showAvatar, stopLipSync } from '/ui-kit/avatar-stage.js';
 import {
-  arrived, delivered, emptyConversation, pending, saidByUser, unsentCount,
+  arrived, delivered, emptyConversation, pending, saidByUser, statusLine, unsentCount,
 } from '/conversation.js';
 import {
   DeviceToolHost, cameraTool, deviceId, deviceTimeTool,
@@ -235,7 +235,10 @@ function connect(agent) {
 
     agent_state: (event) => {
       if (event.agentId !== agent.id) return;
-      ui.agentState.textContent = event.activity || event.state || '';
+      // Not the activity verbatim: the runner sets it to the whole reply
+      // when an agent responds, which puts a second copy of every answer
+      // above the avatar.
+      ui.agentState.textContent = statusLine(event.state, event.activity);
     },
 
     // The inverted call: the runner asking this tab to do something.

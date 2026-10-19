@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 // @ts-expect-error — a browser module with no imports, so it loads here.
 import {
-  arrived, delivered, emptyConversation, lastFromAgent, pending, saidByUser, unsentCount,
+  STATUS_MAX, arrived, delivered, emptyConversation, lastFromAgent, pending, saidByUser,
+  statusLine, unsentCount,
 } from './conversation.js';
 
 const user = (text: string) => ({ role: 'user', content: text });
@@ -186,5 +187,38 @@ describe('the echo racing the send', () => {
     state = delivered(state, 'hello');
 
     expect(state.messages[0].pending).toBe(false);
+  });
+});
+
+describe('the status line under the name', () => {
+  it('shows a short activity, which is a real status', () => {
+    expect(statusLine('working', 'Messaging Rhoda…')).toBe('Messaging Rhoda…');
+    expect(statusLine('idle', 'Task complete')).toBe('Task complete');
+  });
+
+  it('falls back to the state when the activity is the whole reply', () => {
+    // The runner sets activity to the message content when an agent responds,
+    // which put a second copy of every answer above the avatar.
+    const reply = 'Yes, I looked into the lease options and the Polestar 2 '
+      + 'works out cheaper over three years than the alternatives.';
+    expect(statusLine('working', reply)).toBe('working');
+  });
+
+  it('rejects a short activity that spans lines', () => {
+    expect(statusLine('idle', 'one\ntwo')).toBe('idle');
+  });
+
+  it('shows the state when there is no activity at all', () => {
+    expect(statusLine('idle', '')).toBe('idle');
+    expect(statusLine('idle', undefined)).toBe('idle');
+  });
+
+  it('says nothing rather than undefined when it knows nothing', () => {
+    expect(statusLine(undefined, undefined)).toBe('');
+  });
+
+  it('takes an activity right on the limit', () => {
+    expect(statusLine('idle', 'x'.repeat(STATUS_MAX))).toBe('x'.repeat(STATUS_MAX));
+    expect(statusLine('idle', 'x'.repeat(STATUS_MAX + 1))).toBe('idle');
   });
 });

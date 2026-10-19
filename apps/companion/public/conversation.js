@@ -124,3 +124,22 @@ export function lastFromAgent(state) {
   }
   return null;
 }
+
+/**
+ * The one-line status under the agent's name.
+ *
+ * The runner's `activity` is sometimes a status — "Messaging Rhoda…", "Task
+ * complete" — and sometimes the agent's entire reply, because that is what it
+ * sets when an agent responds. Printing it unfiltered put a second copy of
+ * every answer above the avatar.
+ *
+ * So length decides: short enough to be a status, use it; longer than that it
+ * is the message, which is already in the transcript where it belongs.
+ */
+export const STATUS_MAX = 40;
+
+export function statusLine(state, activity) {
+  const text = (activity ?? '').trim();
+  if (text && text.length <= STATUS_MAX && !text.includes('\n')) return text;
+  return (state ?? '').trim();
+}
