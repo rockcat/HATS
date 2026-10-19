@@ -14,6 +14,10 @@
 
 import * as THREE from 'three';
 import { applyRestPose } from '/ui-kit/avatar-pose.js';
+import {
+  applyMorphWeights, applyVrmWeights, chatterVisemeAt, collectVisemeMeshes,
+  isFinished, morphTargetFor, stepWeights, visemeAt, vrmTargetFor,
+} from '/ui-kit/avatar-lipsync.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
 
@@ -31,6 +35,9 @@ let vrm = null;
 let mixer = null;
 let rafId = null;
 let loadToken = 0;
+
+/** The sentence being mouthed: its timeline, when it started, and the meshes. */
+let lip = { timeline: null, chatter: false, startedAt: 0, meshes: [], weights: {} };
 const clock = new THREE.Clock();
 
 const loader = new GLTFLoader();
@@ -67,11 +74,68 @@ function startLoop(canvas) {
     rafId = requestAnimationFrame(tick);
     const delta = clock.getDelta();
     if (mixer) mixer.update(delta);
+    stepLipSync();
+    // After the mouth, because vrm.update() is what commits expression values.
     if (vrm) vrm.update(delta);
     resize(canvas);
     renderer.render(scene, camera);
   };
   tick();
+}
+
+/**
+ * Advance the mouth one frame.
+ *
+ * Timed from `performance.now()` against the timeline's own seconds rather
+ * than counted in frames: a dropped frame would otherwise slide the mouth out
+ * of step with the audio and never catch up.
+ */
+function stepLipSync() {
+  if (!model) return;
+
+  const talking = lip.timeline || lip.chatter;
+  const elapsed = talking ? (performance.now() - lip.startedAt) / 1000 : 0;
+  const viseme = lip.timeline ? visemeAt(lip.timeline, elapsed)
+    : lip.chatter ? chatterVisemeAt(elapsed)
+    : 'viseme_sil';
+  const target = vrm ? vrmTargetFor(viseme) : morphTargetFor(viseme);
+
+  lip.weights = stepWeights(lip.weights, target);
+
+  if (vrm) applyVrmWeights(vrm, lip.weights);
+  else if (lip.meshes.length) applyMorphWeights(lip.meshes, viseme, lip.weights);
+
+  // Keep stepping after the words end so the mouth closes, then stop.
+  if (lip.timeline && isFinished(lip.timeline, elapsed)
+      && Object.values(lip.weights).every((v) => v === 0)) {
+    lip.timeline = null;
+  }
+}
+
+/**
+ * Mouth a sentence, starting now.
+ *
+ * Call it as the audio starts playing, not when it is requested — the gap
+ * between asking for audio and hearing it is exactly the drift this would
+ * otherwise bake in.
+ *
+ * With no timeline it falls back to plausible movement, because the browser's
+ * own voice reports only "started" and "ended". An approximate mouth is not
+ * the same kind of thing as a motionless one: only the second looks broken.
+ *
+ * @param {Array<{viseme: string, start: number, end: number}>} [timeline]
+ */
+export function applyLipSync(timeline) {
+  const timed = Array.isArray(timeline) && timeline.length ? timeline : null;
+  lip.timeline = timed;
+  lip.chatter = !timed;
+  lip.startedAt = performance.now();
+}
+
+/** Stop mouthing. The mouth then closes over the next few frames. */
+export function stopLipSync() {
+  lip.timeline = null;
+  lip.chatter = false;
 }
 
 function disposeModel() {
@@ -86,6 +150,7 @@ function disposeModel() {
     model = null;
   }
   mixer = null;
+  lip = { timeline: null, chatter: false, startedAt: 0, meshes: [], weights: {} };
 }
 
 
@@ -123,6 +188,9 @@ export async function showAvatar(canvas, spec) {
   // Every model, not only the VRMs. This used to pose VRMs and leave each
   // GLB standing with its arms out — which is most of the avatar library.
   applyRestPose(gltf, loadedVrm);
+  // Once per model: walking the scene every frame to find the mouth would
+  // cost more than the lip-sync itself.
+  lip.meshes = loadedVrm ? [] : collectVisemeMeshes(model);
 
   model.scale.setScalar(spec.scale ?? 1);
   // `rotate` in the catalogue is degrees, matching the runner's renderer.

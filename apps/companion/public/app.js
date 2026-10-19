@@ -10,7 +10,7 @@
 
 import { $, clear, el, toastError, toastOk } from '/ui-kit/hats-ui.js';
 import { EmbodimentClient } from '/ui-kit/embodiment-client.js';
-import { showAvatar } from '/ui-kit/avatar-stage.js';
+import { applyLipSync, showAvatar, stopLipSync } from '/ui-kit/avatar-stage.js';
 import {
   arrived, delivered, emptyConversation, pending, saidByUser, unsentCount,
 } from '/conversation.js';
@@ -320,9 +320,16 @@ async function speak(text) {
   stopTalking();
 
   if (state.speech === SpeechMode.device) {
-    // Sentence at a time, so the first words start while the rest is still
-    // being prepared.
-    for (const sentence of sentences(text)) await speakOnDevice(sentence);
+    // No viseme data from the browser's voice, so the mouth moves
+    // approximately rather than not at all.
+    applyLipSync(null);
+    try {
+      // Sentence at a time, so the first words start while the rest is still
+      // being prepared.
+      for (const sentence of sentences(text)) await speakOnDevice(sentence);
+    } finally {
+      stopLipSync();
+    }
     return;
   }
 
@@ -334,7 +341,7 @@ async function speak(text) {
     const { chunks = [] } = await client.speak(state.agent.id, text);
     for (const chunk of chunks) {
       if (state.speech !== SpeechMode.server) break;  // switched voices mid-reply
-      await playWav(chunk.audioBase64);
+      await playWav(chunk.audioBase64, chunk.visemes);
     }
   } catch {
     // The server voice is a round trip and can fail. The words are on screen
@@ -353,19 +360,29 @@ function stopTalking() {
   stopSpeaking();
   try { state.playing?.pause(); } catch { /* nothing was playing */ }
   state.playing = null;
+  stopLipSync();
 }
 
-/** Play one base64 WAV, resolving when it finishes or fails. */
-function playWav(base64) {
+/**
+ * Play one base64 WAV and mouth it, resolving when it finishes or fails.
+ *
+ * The mouth starts on `playing`, not when the audio is created: there is a
+ * gap between asking for sound and hearing it, and starting the timeline at
+ * the request would bake that gap in as permanent drift.
+ */
+function playWav(base64, visemes) {
   if (!base64) return Promise.resolve();
   return new Promise((resolve) => {
     const audio = new Audio(`data:audio/wav;base64,${base64}`);
     state.playing = audio;
+
+    audio.onplaying = () => applyLipSync(visemes);
+    const done = () => { stopLipSync(); resolve(); };
     // Resolve on error as well as on end: one chunk failing must not leave
-    // the rest of the reply unspoken.
-    audio.onended = resolve;
-    audio.onerror = resolve;
-    audio.play().catch(resolve);
+    // the rest of the reply unspoken, or the mouth hanging open.
+    audio.onended = done;
+    audio.onerror = done;
+    audio.play().catch(done);
   });
 }
 
