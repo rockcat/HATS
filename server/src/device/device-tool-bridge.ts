@@ -100,8 +100,12 @@ export interface DeviceToolBridgeOptions {
    *
    * The runner's embedding model is canonical: it is the space the person
    * store is in, so a device may only embed if it runs that exact model.
+   *
+   * Read fresh on every registration rather than captured, because whether
+   * the runner can embed is decided by a model that loads in the background
+   * and a device may well register before it has.
    */
-  runner?: RunnerCapabilities;
+  runner?: RunnerCapabilities | (() => RunnerCapabilities);
 }
 
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -113,13 +117,14 @@ export class DeviceToolBridge {
   private readonly timeoutMs: number;
   private readonly deliver: DeviceToolBridgeOptions['deliver'];
   private readonly keepImage: DeviceToolBridgeOptions['keepImage'];
-  private readonly runner: RunnerCapabilities;
+  private readonly runner: () => RunnerCapabilities;
 
   constructor(options: DeviceToolBridgeOptions) {
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.deliver = options.deliver;
     this.keepImage = options.keepImage;
-    this.runner = options.runner ?? {};
+    const runner = options.runner ?? {};
+    this.runner = typeof runner === 'function' ? runner : () => runner;
   }
 
   // ── Devices ────────────────────────────────────────────────────────────────
@@ -136,7 +141,7 @@ export class DeviceToolBridge {
   ): Negotiated {
     const valid = tools.filter((t) => t.name?.trim());
     const declared = sanitise(capabilities);
-    const agreed = negotiate(declared, this.runner);
+    const agreed = negotiate(declared, this.runner());
     this.devices.set(deviceId, {
       deviceId, label, tools: valid, capabilities: declared, agreed, seq: ++this.seq,
     });

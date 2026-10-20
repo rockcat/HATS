@@ -35,6 +35,7 @@ import { UserManagementRouter } from './user-management-router.js';
 import { parseRequestAuth } from './auth-middleware.js';
 import { EmbodimentRouter } from '../embodiment/embodiment-router.js';
 import { DeviceToolBridge } from '../device/device-tool-bridge.js';
+import { canonicalModel, configFromEnv } from '../people/embedder.js';
 import { keepDeviceImage } from '../device/image-store.js';
 
 const __dirname  = path.dirname(fileURLToPath(import.meta.url));
@@ -266,6 +267,14 @@ export class APIServer {
     // owns — so the bridge is given a late binding to it rather than the
     // router being constructed first.
     this.deviceTools = new DeviceToolBridge({
+      // Half of the capability exchange. Without naming the model the runner
+      // stores people in, every device was told to embed nowhere — which is
+      // to say face recognition was switched off on the device side no
+      // matter what the device could do.
+      runner: () => ({
+        faceEmbedding: canonicalModel(configFromEnv()),
+        canEmbed: self.orchestrator.canEmbedFaces(),
+      }),
       deliver: (deviceId, request) => {
         self.embodimentRouter.publish({ type: 'device_request', deviceId, ...request });
         return true;

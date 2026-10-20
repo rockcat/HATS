@@ -199,6 +199,9 @@ export class TeamOrchestrator {
     return { store, model, config, agentName, embedder: this.faceEmbedder };
   }
 
+  /** Can the runner turn a photo into a face vector itself? */
+  canEmbedFaces(): boolean { return this.faceEmbedder !== null; }
+
   /** Load the runner's own face embedder once, if one is configured. */
   async prepareFaceEmbedder(): Promise<void> {
     if (this.faceEmbedderTried) return;
@@ -207,7 +210,7 @@ export class TeamOrchestrator {
   }
 
   /** Run one of the people tools for an agent. */
-  async callPeopleTool(agentName: string, name: string, args: Record<string, unknown>): Promise<string> {
+  async callPeopleTool(agentName: string, name: string, args: Record<string, unknown> = {}): Promise<string> {
     const context = this.peopleContext(agentName);
     if (!context) return 'Face recognition is not set up on this runner.';
     return handlePeopleCall(context, name, args);
