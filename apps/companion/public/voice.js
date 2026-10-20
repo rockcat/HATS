@@ -35,15 +35,34 @@ export class Listener {
    * @param {(text: string, isFinal: boolean) => void} [options.onHeard]
    * @param {(state: string) => void} [options.onState]
    * @param {(message: string) => void} [options.onError]
+   * @param {() => void} [options.onEnd]  The recogniser stopped of its own accord.
    */
-  constructor({ onHeard, onState, onError, scope = globalThis } = {}) {
+  constructor({ onHeard, onState, onError, onEnd, scope = globalThis } = {}) {
     this.onHeard = onHeard ?? null;
     this.onState = onState ?? null;
     this.onError = onError ?? null;
+    this.onEnd = onEnd ?? null;
     this.scope = scope;
     this.state = Hearing.idle;
     this.heard = '';
     this.recognition = null;
+    // A continuous session hands back every result it has ever produced, so
+    // reading from zero would re-send the whole conversation each time. This
+    // is where the current utterance starts.
+    this.from = 0;
+    this.seen = 0;
+  }
+
+  /**
+   * Forget what has been heard so far; the next words start a new utterance.
+   *
+   * Needed because a continuous session keeps growing. Without it, hands-free
+   * listening would send "hello", then "hello how are you", then "hello how
+   * are you what is the time".
+   */
+  clear() {
+    this.from = this.seen;
+    this.heard = '';
   }
 
   get isListening() { return this.state !== Hearing.idle; }
@@ -63,6 +82,8 @@ export class Listener {
     }
 
     this.heard = '';
+    this.from = 0;
+    this.seen = 0;
     const recognition = new Recognition();
     recognition.continuous = true;
     recognition.interimResults = true;
@@ -73,8 +94,9 @@ export class Listener {
       // the sentence and cleared the box, which this would silently refill.
       if (this.state === Hearing.idle) return;
 
+      this.seen = event.results.length;
       let text = '';
-      for (let i = 0; i < event.results.length; i++) text += event.results[i][0].transcript;
+      for (let i = this.from; i < event.results.length; i++) text += event.results[i][0].transcript;
       text = text.trim();
       // An empty final result does not erase a partial one: the recogniser
       // sometimes settles on nothing after hearing something.
@@ -93,7 +115,10 @@ export class Listener {
       );
     };
 
-    recognition.onend = () => this.setState(Hearing.idle);
+    recognition.onend = () => {
+      this.setState(Hearing.idle);
+      this.onEnd?.();
+    };
 
     this.recognition = recognition;
     this.setState(Hearing.listening);

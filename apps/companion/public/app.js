@@ -20,9 +20,11 @@ import {
 import {
   Hearing, Listener, SpeechMode, canListen, canSpeak, sentences, speakOnDevice, stopSpeaking,
 } from '/voice.js';
+import { HandsFree, Mode as HandsFreeMode } from '/hands-free.js';
 
 const AGENT_KEY = 'hats.companion.agent';
 const VOICE_KEY = 'hats.companion.voice';
+const HANDS_FREE_KEY = 'hats.companion.handsFree';
 
 const ui = {
   chooser:     $('#chooser'),
@@ -38,6 +40,8 @@ const ui = {
   stageHint:   $('#stage-hint'),
   transcript:  $('#transcript'),
   form:        $('#say-form'),
+  earBtn:      $('#ear-btn'),
+  earLabel:    $('#ear-label'),
   input:       $('#say-input'),
   micBtn:      $('#mic-btn'),
   sendBtn:     $('#send-btn'),
@@ -296,17 +300,52 @@ async function say(text) {
 // ── Hearing ──────────────────────────────────────────────────────────────────
 
 const listener = new Listener({
-  onHeard: (text) => {
+  onHeard: (text, isFinal) => {
+    if (handsFree.enabled) {
+      // Shown in the box as it firms up, so you can see you are being heard,
+      // but it is hands-free that decides when the sentence is over.
+      ui.input.value = text;
+      handsFree.heard(text, isFinal);
+      return;
+    }
     // Into the field rather than held aside: recognition is usually nearly
     // right, and the fastest correction is the keyboard already on screen.
     const join = !state.beforeDictation || state.beforeDictation.endsWith(' ') ? '' : ' ';
     ui.input.value = state.beforeDictation + join + text;
   },
   onState: () => renderMic(),
-  onError: (message) => toastError(new Error(message)),
+  onEnd: () => handsFree.recogniserEnded(),
+  onError: (message) => {
+    // A refused microphone is permanent until the user changes it, so an
+    // always-on mode that keeps restarting would toast forever.
+    if (handsFree.enabled) handsFree.disable();
+    renderMic();
+    toastError(new Error(message));
+  },
+});
+
+/**
+ * Always-on listening.
+ *
+ * The sentence goes straight out when you stop talking — no button, no Enter
+ * — which is the only way the thing reads as a conversation rather than a
+ * form you dictate into.
+ */
+const handsFree = new HandsFree({
+  listener,
+  onUtterance: async (text) => {
+    ui.input.value = '';
+    state.beforeDictation = '';
+    await say(text);
+  },
+  onMode: () => renderMic(),
 });
 
 function toggleListening() {
+  // Hands-free owns the microphone while it is on, so the button means
+  // "stop" rather than "start a one-off".
+  if (handsFree.enabled) { setHandsFree(false); return; }
+
   if (listener.isListening) {
     listener.stop();
   } else {
@@ -316,11 +355,44 @@ function toggleListening() {
   renderMic();
 }
 
+function setHandsFree(on) {
+  if (on && !canListen()) {
+    toastError(new Error('This browser has no speech recognition. Chrome has it; Firefox does not.'));
+    return;
+  }
+  if (on) {
+    // A one-off dictation already in progress would otherwise fight it for
+    // the same recogniser.
+    listener.cancel();
+    ui.input.value = '';
+    state.beforeDictation = '';
+    handsFree.enable();
+  } else {
+    handsFree.disable();
+  }
+  write(HANDS_FREE_KEY, on ? '1' : '');
+  renderMic();
+}
+
 // ── Speaking ─────────────────────────────────────────────────────────────────
 
 async function speak(text) {
   if (state.speech === SpeechMode.off || !text?.trim()) return;
   stopTalking();
+
+  // The reply comes out of the speakers the microphone is pointed at. Without
+  // this the agent transcribes its own voice, answers it, and talks to itself
+  // until the tab is closed. With the voice off there is nothing to hear, so
+  // the microphone stays open and you can interrupt.
+  handsFree.hold();
+  try {
+    await speakAloud(text);
+  } finally {
+    handsFree.release();
+  }
+}
+
+async function speakAloud(text) {
 
   if (state.speech === SpeechMode.device) {
     // No viseme data from the browser's voice, so the mouth moves
@@ -427,10 +499,28 @@ function renderBanner() {
 
 function renderMic() {
   const listening = listener.state !== Hearing.idle;
-  ui.micBtn.classList.toggle('recording', listening);
-  ui.micBtn.title = listening ? 'Stop listening' : 'Speak';
+  const hands = handsFree.enabled;
+
+  ui.micBtn.classList.toggle('recording', listening && !hands);
+  ui.micBtn.title = hands ? 'Stop listening'
+    : listening ? 'Stop listening' : 'Speak';
   ui.micBtn.disabled = !canListen();
   if (!canListen()) ui.micBtn.title = 'This browser has no speech recognition';
+
+  ui.earBtn.disabled = !canListen();
+  ui.earBtn.classList.toggle('ok', hands);
+  ui.earBtn.classList.toggle('held', hands && handsFree.held);
+  ui.earLabel.textContent = !hands ? 'Hands-free'
+    : handsFree.held ? 'Speaking…'
+    : handsFree.mode === HandsFreeMode.hearing ? 'Heard you…'
+    : 'Listening';
+  ui.earBtn.title = !canListen() ? 'This browser has no speech recognition'
+    : hands ? 'Stop listening all the time'
+    : 'Keep listening and send what you say';
+
+  // Typing is still allowed, but the placeholder should not claim the box is
+  // the only way in when it is not.
+  ui.input.placeholder = hands ? 'Listening — just talk' : 'Say something…';
 }
 
 function renderVoiceLabel() {
@@ -451,9 +541,16 @@ function renderCameraButton() {
 
 ui.form.addEventListener('submit', async (event) => {
   event.preventDefault();
-  // Sending while still listening counts what was just said: the recogniser's
-  // last word usually lands before the stop does.
-  if (listener.isListening) listener.stop();
+  if (handsFree.enabled) {
+    // Typed over the top of what was heard. Dropping the pending utterance
+    // stops the same words being sent again a moment later, and the
+    // microphone stays open rather than being switched off by sending.
+    handsFree.dismiss();
+  } else if (listener.isListening) {
+    // Sending while still listening counts what was just said: the
+    // recogniser's last word usually lands before the stop does.
+    listener.stop();
+  }
 
   const text = ui.input.value;
   ui.input.value = '';
@@ -462,6 +559,7 @@ ui.form.addEventListener('submit', async (event) => {
 });
 
 ui.micBtn.addEventListener('click', toggleListening);
+ui.earBtn.addEventListener('click', () => setHandsFree(!handsFree.enabled));
 ui.voiceBtn.addEventListener('click', cycleVoice);
 ui.cameraBtn.addEventListener('click', askForCamera);
 ui.switchBtn.addEventListener('click', async () => {
@@ -473,6 +571,10 @@ ui.switchBtn.addEventListener('click', async () => {
 
 // Leaving should withdraw rather than letting the runner discover it: a device
 // that vanishes keeps its tools offered until the stream times out.
+// Picked up again on the next visit: somebody who wants to talk rather than
+// type wants that every time, not once.
+if (read(HANDS_FREE_KEY) === '1' && canListen()) setHandsFree(true);
+
 window.addEventListener('pagehide', () => {
   state.camera?.close?.();
   navigator.sendBeacon?.(

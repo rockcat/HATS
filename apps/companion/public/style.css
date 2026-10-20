@@ -259,3 +259,13 @@ body {
    That is what it looks like when clicking does nothing: the handler runs,
    sets hidden, and the panel is still painted over the top of the result. */
 [hidden] { display: none !important; }
+
+/* Hands-free has three states and all three matter: off, open, and
+   deliberately deaf while the agent talks. Without the third you press the
+   button, hear nothing happen, and assume it is broken. */
+#ear-btn.ok { animation: ear-glow 2s ease-in-out infinite; }
+#ear-btn.ok.held { animation: none; opacity: 0.6; }
+
+@keyframes ear-glow {
+  50% { background: rgba(88, 166, 255, 0.16); }
+}
