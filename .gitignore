@@ -43,3 +43,9 @@ apps/flutter/avatar_view/pubspec.lock
 runtime_data/config/mcp-discovered-tools.json
 apps/flutter/**/ios/
 apps/poppyinyourpocket/ios/
+
+# Credentials the runner writes at runtime. Never in the repo: these are live
+# OAuth tokens for the user's own Google account.
+runtime_data/data/google-tokens.json
+runtime_data/data/google-agent-tokens/
+runtime_data/data/users.json

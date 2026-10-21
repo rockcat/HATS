@@ -57,6 +57,15 @@ export interface DeviceResult {
   error?: string;
   /** A picture the tool took, base64, for a model that can see. */
   image?: { mediaType: string; base64: string };
+  /**
+   * Something the runner asked for that the agent should never read.
+   *
+   * A face vector is 192 numbers. Routed through the agent it would cost two
+   * kilobytes of context, arrive as prose, and be retyped wrong — and it is
+   * not information the model can use anyway. Requested with askForData()
+   * and handled by the runner alone.
+   */
+  data?: unknown;
 }
 
 /** What a device tool produced. Same shape as any other tool result. */
@@ -81,6 +90,8 @@ interface Pending {
   tool: string;
   settle: (result: DeviceOutcome) => void;
   timer: ReturnType<typeof setTimeout>;
+  /** Settled with the raw result instead of something the agent can read. */
+  raw?: (result: DeviceResult) => void;
 }
 
 export interface DeviceToolBridgeOptions {
@@ -232,7 +243,46 @@ export class DeviceToolBridge {
         text: `No connected device offers "${tool}". The user's device may be offline or may not have granted permission.`,
       });
     }
+    return this.dispatch(tool, device.deviceId, args);
+  }
 
+  /**
+   * Ask a device for data the agent must not see.
+   *
+   * The face case: the runner wants the vector, the agent wants to know who
+   * it is looking at, and those are not the same thing. Resolves rather than
+   * rejects, like call(), so a missing device is an answer.
+   */
+  askForData<T = unknown>(
+    tool: string, args: Record<string, unknown> = {},
+  ): Promise<{ ok: true; data: T } | { ok: false; error: string }> {
+    const bare = this.bare(tool);
+    const device = this.deviceFor(bare);
+    if (!device) {
+      return Promise.resolve({
+        ok: false,
+        error: `No connected device offers "${bare}".`,
+      });
+    }
+
+    return new Promise((settle) => {
+      this.dispatch(bare, device.deviceId, args, (result) => {
+        if (!result.ok) {
+          settle({ ok: false, error: result.error ?? 'The device gave no reason.' });
+        } else if (result.data === undefined || result.data === null) {
+          settle({ ok: false, error: `The device ran "${bare}" but sent no data back.` });
+        } else {
+          settle({ ok: true, data: result.data as T });
+        }
+      });
+    });
+  }
+
+  /** The shared half: send a request, wait, time it out. */
+  private dispatch(
+    tool: string, deviceId: string, args: Record<string, unknown>,
+    raw?: (result: DeviceResult) => void,
+  ): Promise<DeviceOutcome> {
     const id = randomUUID();
     const request: DeviceRequest = {
       id,
@@ -247,11 +297,11 @@ export class DeviceToolBridge {
       }, this.timeoutMs);
       timer.unref?.();
 
-      this.pending.set(id, { deviceId: device.deviceId, tool, settle, timer });
+      this.pending.set(id, { deviceId, tool, settle, timer, ...(raw ? { raw } : {}) });
 
       // Delivery is attempted after the call is pending, so an answer that
       // somehow arrives first still finds something to settle.
-      if (!this.deliver(device.deviceId, request)) {
+      if (!this.deliver(deviceId, request)) {
         this.resolve(id, `Could not reach the device to run "${tool}".`);
       }
     });
@@ -264,6 +314,16 @@ export class DeviceToolBridge {
   settleResult(id: string, result: DeviceResult): boolean {
     const call = this.pending.get(id);
     if (!call) return false;
+
+    if (call.raw) {
+      clearTimeout(call.timer);
+      this.pending.delete(id);
+      call.raw(result);
+      // Nothing reads this outcome; the promise from dispatch() is discarded
+      // by askForData, which waits on the raw callback instead.
+      call.settle({ text: '' });
+      return true;
+    }
 
     if (!result.ok) {
       this.resolve(id, { text: `The device could not do that: ${result.error ?? 'no reason given'}` });
@@ -320,7 +380,12 @@ Kept at ${path}.` : text,
     if (!call) return;
     clearTimeout(call.timer);
     this.pending.delete(id);
-    call.settle(typeof outcome === 'string' ? { text: outcome } : outcome);
+    const settled = typeof outcome === 'string' ? { text: outcome } : outcome;
+    // A timeout or an unreachable device arrives here rather than through
+    // settleResult, so a data request has to be failed explicitly or its
+    // caller waits for ever.
+    call.raw?.({ ok: false, error: settled.text ?? 'The device did not answer.' });
+    call.settle(settled);
   }
 
   private bare(name: string): string {

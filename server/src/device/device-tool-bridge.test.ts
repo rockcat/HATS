@@ -374,3 +374,90 @@ describe('a device tool that took a picture', () => {
     expect(outcome).toEqual({ text: 'half past three' });
   });
 });
+
+// ── Asking a device for something the agent must not read ────────────────────
+
+const FACE = { name: 'embed_face', description: 'Turn the face in view into a vector.' };
+
+describe('askForData', () => {
+  it('hands back what the device sent, not a sentence about it', async () => {
+    const { bridge, sent } = makeBridge();
+    bridge.register('phone', [FACE]);
+
+    const asked = bridge.askForData<number[]>('embed_face');
+    bridge.settleResult(sent[0]!.request.id, { ok: true, data: [0.1, 0.2, 0.3] });
+
+    expect(await asked).toEqual({ ok: true, data: [0.1, 0.2, 0.3] });
+  });
+
+  it('works through the device__ prefix as well as without it', async () => {
+    const { bridge, sent } = makeBridge();
+    bridge.register('phone', [FACE]);
+
+    const asked = bridge.askForData<number[]>(`${DEVICE_PREFIX}embed_face`);
+    bridge.settleResult(sent[0]!.request.id, { ok: true, data: [1] });
+    expect(await asked).toEqual({ ok: true, data: [1] });
+  });
+
+  it('fails rather than hang when no device offers it', async () => {
+    const { bridge } = makeBridge();
+    const answer = await bridge.askForData('embed_face');
+    expect(answer.ok).toBe(false);
+  });
+
+  it('fails when the device ran it but sent nothing back', async () => {
+    // Silence read as an empty vector would match everybody.
+    const { bridge, sent } = makeBridge();
+    bridge.register('phone', [FACE]);
+
+    const asked = bridge.askForData('embed_face');
+    bridge.settleResult(sent[0]!.request.id, { ok: true, result: 'Done.' });
+
+    const answer = await asked;
+    expect(answer.ok).toBe(false);
+    expect(answer.ok === false && answer.error).toMatch(/no data/i);
+  });
+
+  it('passes the device error through', async () => {
+    const { bridge, sent } = makeBridge();
+    bridge.register('phone', [FACE]);
+
+    const asked = bridge.askForData('embed_face');
+    bridge.settleResult(sent[0]!.request.id, { ok: false, error: 'The camera is covered.' });
+
+    const answer = await asked;
+    expect(answer.ok).toBe(false);
+    expect(answer.ok === false && answer.error).toContain('camera is covered');
+  });
+
+  it('settles when the device never answers', async () => {
+    // Without this the people tools wait for ever on a tab that was closed
+    // mid-request.
+    const { bridge } = makeBridge({ timeoutMs: 5 });
+    bridge.register('phone', [FACE]);
+
+    const answer = await bridge.askForData('embed_face');
+    expect(answer.ok).toBe(false);
+    expect(answer.ok === false && answer.error).toMatch(/did not answer/i);
+  });
+
+  it('settles when the device cannot be reached at all', async () => {
+    const { bridge } = makeBridge({ deliverable: false });
+    bridge.register('phone', [FACE]);
+
+    const answer = await bridge.askForData('embed_face');
+    expect(answer.ok).toBe(false);
+  });
+
+  it('keeps the data away from an agent calling the same tool', async () => {
+    const { bridge, sent } = makeBridge();
+    bridge.register('phone', [FACE]);
+
+    const called = bridge.call(`${DEVICE_PREFIX}embed_face`);
+    bridge.settleResult(sent[0]!.request.id, { ok: true, result: 'Looked.', data: [0.1, 0.2] });
+
+    const outcome = await called;
+    expect(outcome.text).toBe('Looked.');
+    expect(JSON.stringify(outcome)).not.toContain('0.1');
+  });
+});

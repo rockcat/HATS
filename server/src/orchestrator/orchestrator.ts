@@ -11,7 +11,17 @@ import { AIProvider } from '../providers/types.js';
 import { EventStore } from '../store/event-store.js';
 import { MCPRegistry } from '../mcp/mcp-registry.js';
 import { splitToolSet, unmatchedSelectors } from '../tools/tool-exposure.js';
+import { DEVICE_PREFIX } from '../device/device-tool-bridge.js';
 import type { DeviceToolBridge } from '../device/device-tool-bridge.js';
+
+/**
+ * The tool a device declares when it can turn a face into a vector itself.
+ *
+ * Named here rather than in the people module because it is a contract with
+ * the embodiment clients — the Flutter app and the browser companion both
+ * declare exactly this name.
+ */
+const FACE_TOOL = 'embed_face';
 import { MCPServerDef } from '../mcp/mcp-client.js';
 import { Semaphore } from '../providers/semaphore.js';
 import { TeamSnapshot, TeamSnapshotV1, TeamSnapshotV2, AgentSnapshot, AgentDefinition, HistoryEntry } from '../store/team-snapshot.js';
@@ -196,7 +206,17 @@ export class TeamOrchestrator {
     const config = configFromEnv();
     const model = canonicalModel(config);
     if (!store || !model) return null;
-    return { store, model, config, agentName, embedder: this.faceEmbedder };
+
+    // Only offered when something is actually connected that can embed a
+    // face. Without this, identify_person with no arguments would reach for
+    // a device that is not there and fail in a way the agent cannot act on.
+    const devices = this.deviceTools;
+    const canAsk = devices?.isDeviceTool(`${DEVICE_PREFIX}${FACE_TOOL}`) ?? false;
+
+    return {
+      store, model, config, agentName, embedder: this.faceEmbedder,
+      ...(canAsk ? { askDevice: () => devices!.askForData<number[]>(FACE_TOOL) } : {}),
+    };
   }
 
   /** Can the runner turn a photo into a face vector itself? */

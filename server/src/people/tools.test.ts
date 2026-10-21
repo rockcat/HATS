@@ -154,8 +154,8 @@ describe('identifying somebody', () => {
       .rejects.toThrow(/cannot read/);
   });
 
-  it('asks for something to work with when given neither', async () => {
-    await expect(call('identify_person')).rejects.toThrow(/either a face vector or a photo/);
+  it('says what is missing when nothing here can see', async () => {
+    await expect(call('identify_person')).rejects.toThrow(/nothing here that can see a face/);
   });
 });
 
@@ -260,5 +260,60 @@ describe('a runner that cannot embed a picture itself', () => {
 describe('an unknown tool', () => {
   it('says which one', async () => {
     await expect(call('make_tea')).rejects.toThrow(/Unknown tool: make_tea/);
+  });
+});
+
+
+// ── Letting the device do the looking ────────────────────────────────────────
+//
+// The path that matters in practice: the phone or the browser tab runs the
+// model, so the face never leaves it and the agent never handles the numbers.
+
+describe('asking the device to look', () => {
+  const withDevice = (answer: unknown) => ({
+    ...context,
+    askDevice: async () => answer as never,
+  });
+
+  it('identifies with no arguments at all', async () => {
+    // The agent should not have to know a vector exists.
+    const ctx = withDevice({ ok: true, data: facing(0) });
+    await call('remember_person', { name: 'Paul', consent: true, vector: facing(0) });
+    expect(await call('identify_person', {}, ctx)).toContain('Paul');
+  });
+
+  it('remembers somebody from the camera, given just a name', async () => {
+    const ctx = withDevice({ ok: true, data: facing(0) });
+    expect(await call('remember_person', { name: 'Paul', consent: true }, ctx)).toContain('Paul');
+    expect(await call('identify_person', {}, ctx)).toContain('Paul');
+  });
+
+  it('prefers a vector it was handed over asking the device', async () => {
+    let asked = false;
+    const ctx = {
+      ...context,
+      askDevice: async () => { asked = true; return { ok: true, data: facing(0) } as never; },
+    };
+    await call('identify_person', { vector: facing(1) }, ctx);
+    expect(asked).toBe(false);
+  });
+
+  it(`passes the device's own complaint through`, async () => {
+    // "I cannot see a face" is something the agent can act on by asking the
+    // user to move; a generic failure is not.
+    const ctx = withDevice({ ok: false, error: 'I cannot see a face.' });
+    await expect(call('identify_person', {}, ctx)).rejects.toThrow(/cannot see a face/);
+  });
+
+  it('falls back to its own words when the device sends an empty vector', async () => {
+    const ctx = withDevice({ ok: true, data: [] });
+    await expect(call('identify_person', {}, ctx)).rejects.toThrow(/nothing here that can see/);
+  });
+
+  it('refuses a vector of the wrong size from a device', async () => {
+    // A device running a different model would otherwise file templates that
+    // can never match anything, and nobody could tell why.
+    const ctx = withDevice({ ok: true, data: new Array(512).fill(0.1) });
+    await expect(call('identify_person', {}, ctx)).rejects.toThrow(/cannot be compared/);
   });
 });
