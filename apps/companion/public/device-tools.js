@@ -90,6 +90,9 @@ export class DeviceToolHost {
         ok: true,
         result: produced?.text ?? 'Done.',
         ...(produced?.image ? { image: produced.image } : {}),
+        // For results the runner wants and the agent must not read — a face
+        // vector. Passed through untouched rather than described.
+        ...(produced?.data !== undefined ? { data: produced.data } : {}),
       });
     } catch (err) {
       // Whatever went wrong, the agent is told. Silence costs it the timeout

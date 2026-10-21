@@ -21,6 +21,7 @@ import {
   Hearing, Listener, SpeechMode, canListen, canSpeak, sentences, speakOnDevice, stopSpeaking,
 } from '/voice.js';
 import { HandsFree, Mode as HandsFreeMode } from '/hands-free.js';
+import { faceTool } from '/face-tool.js';
 
 const AGENT_KEY = 'hats.companion.agent';
 const VOICE_KEY = 'hats.companion.voice';
@@ -59,6 +60,7 @@ const state = {
   speech: read(VOICE_KEY) ?? SpeechMode.device,
   device: null,
   camera: null,
+  face: null,
   closeStream: null,
   beforeDictation: '',
 };
@@ -148,6 +150,24 @@ async function loadHistory(agent) {
 
 // ── Being a device ───────────────────────────────────────────────────────────
 
+/**
+ * Offer face recognition, if this browser can actually do it.
+ *
+ * Loading the models takes a few seconds and a few megabytes, so it happens
+ * after the rest of the device is declared rather than holding up the first
+ * message. Failing is normal and silent: most installs will not have a
+ * recognition model to hand.
+ */
+async function offerFaceRecognition() {
+  const tool = await faceTool({ onProblem: (message) => console.info('[Face]', message) });
+  if (!tool) return;
+
+  state.face = tool;
+  state.device.add(tool);
+  state.device.capabilities = { ...state.device.capabilities, ...tool.capability };
+  await state.device.declare();
+}
+
 async function becomeADevice() {
   state.device = new DeviceToolHost({
     client,
@@ -170,6 +190,10 @@ async function becomeADevice() {
     // would stop the runner embedding and leave it waiting for vectors.
   };
   await state.device.declare();
+
+  // After declaring, not before: a tab that can recognise faces is still a
+  // working companion while the models download.
+  if (granted) void offerFaceRecognition();
 }
 
 /** Has the camera already been allowed, without prompting for it now? */
@@ -209,6 +233,8 @@ async function askForCamera() {
   await state.device.declare();
   renderCameraButton();
   toastOk('The agent can use the camera');
+  // Permission just arrived, so this is the first moment it could work.
+  void offerFaceRecognition();
 }
 
 /** A camera that fires with no trace is what costs an app the benefit of the doubt. */
@@ -393,7 +419,6 @@ async function speak(text) {
 }
 
 async function speakAloud(text) {
-
   if (state.speech === SpeechMode.device) {
     // No viseme data from the browser's voice, so the mouth moves
     // approximately rather than not at all.
@@ -577,6 +602,7 @@ if (read(HANDS_FREE_KEY) === '1' && canListen()) setHandsFree(true);
 
 window.addEventListener('pagehide', () => {
   state.camera?.close?.();
+  state.face?.close?.();
   navigator.sendBeacon?.(
     `${client.basePath}/devices/${encodeURIComponent(state.device?.deviceId ?? '')}`,
   );

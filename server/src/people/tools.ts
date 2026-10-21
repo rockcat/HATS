@@ -30,6 +30,14 @@ export interface PeopleToolsContext {
   config: EmbedderConfig;
   /** Which agent is asking, recorded against any consent it collects. */
   agentName: string;
+  /**
+   * Ask the device in front of the user to look and send back a vector.
+   *
+   * This is the path that matters. A phone or a browser tab runs the model
+   * itself, so the face never leaves the device and the agent never handles
+   * 192 floats it cannot use. Absent when nothing is connected that can.
+   */
+  askDevice?: () => Promise<{ ok: true; data: unknown } | { ok: false; error: string }>;
 }
 
 /** Every tool this module offers. The one list, so nothing drifts. */
@@ -49,7 +57,8 @@ export function peopleTools(_context: PeopleToolsContext): PeopleTool[] {
     {
       name: 'identify_person',
       description:
-        'Work out who you are looking at, from a face vector or a photo. '
+        'Work out who you are looking at. Call it with no arguments and the '
+        + "user's device will look through its camera for you. "
         + 'Answers one of four ways, and they mean different things: you know them; '
         + 'you are unsure between a few people, so ask which; you do not know them, '
         + 'so you may ask their name and offer to remember them; or there is nobody '
@@ -60,11 +69,11 @@ export function peopleTools(_context: PeopleToolsContext): PeopleTool[] {
         properties: {
           vector: {
             type: 'array', items: { type: 'number' },
-            description: 'A face embedding, when the device produced one.',
+            description: 'Only if you already have an embedding. Normally leave this out.',
           },
           image_base64: {
             type: 'string',
-            description: 'A photo instead, when the device cannot embed. Needs a model on the runner.',
+            description: 'A photo instead. Needs a face model on the runner; usually leave this out.',
           },
         },
       },
@@ -73,6 +82,7 @@ export function peopleTools(_context: PeopleToolsContext): PeopleTool[] {
       name: 'remember_person',
       description:
         "Store somebody's face against their name, so you recognise them next time. "
+        + 'Give just their name and consent — the camera is used for the face. '
         + 'Ask them first and only call this once they have said yes — a face is '
         + 'personal data and this refuses without consent. Use the same name you '
         + 'were given; calling again for somebody you already know adds another '
@@ -135,7 +145,7 @@ export function describeRecognition(result: Recognition): string {
 async function vectorFrom(
   context: PeopleToolsContext, args: Record<string, unknown>,
 ): Promise<number[]> {
-  const given = args['vector'];
+  const given = args['vector'] ?? await fromDevice(context);
   if (Array.isArray(given) && given.length > 0) {
     const vector = given.map(Number);
     if (vector.some((v) => !Number.isFinite(v))) {
@@ -161,7 +171,28 @@ async function vectorFrom(
     return vector;
   }
 
-  throw new Error('Give me either a face vector or a photo.');
+  throw new Error(
+    'There is nothing here that can see a face: no device is connected that can '
+    + 'embed one, and no picture was given. Ask the user to open their companion '
+    + 'app or point their camera at themselves.',
+  );
+}
+
+/**
+ * Ask whatever is embodying the agent to look.
+ *
+ * Returns undefined rather than throwing on every kind of failure, so the
+ * caller falls through to a photo or to a clear refusal. A device that cannot
+ * see a face is not an error worth a stack trace — it is "I cannot see you",
+ * which the sentence below says better.
+ */
+async function fromDevice(context: PeopleToolsContext): Promise<number[] | undefined> {
+  if (!context.askDevice) return undefined;
+  const answer = await context.askDevice();
+  if (!answer.ok) throw new Error(answer.error);
+  const vector = answer.data;
+  if (!Array.isArray(vector) || vector.length === 0) return undefined;
+  return vector.map(Number);
 }
 
 /** Run one of the tools. Separated from the transport so it can be tested. */
