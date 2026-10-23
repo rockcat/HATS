@@ -21,8 +21,10 @@
 // one a script should make on anybody's behalf.
 
 import { execFileSync, execSync } from 'child_process';
-import { existsSync, mkdirSync, readFileSync, rmSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import * as path from 'path';
+
+const toPosix = (p) => p.split(path.sep).join('/');
 
 const HERE = path.resolve(path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1')), '..');
 const ALLOWLIST = path.join(HERE, 'docs', 'runner-public-paths.txt');
@@ -122,25 +124,48 @@ Check it first — a push to a public repository is not reversible:
 `);
 }
 
+/**
+ * One allowlist entry as an anchored regex, regex characters taken literally.
+ *
+ * Without the escaping, `.gitignore` matches `agitignore` and `package.json`
+ * matches `packagexjson` — harmless here, but the same unescaped dot in a
+ * future entry is how something unintended gets published.
+ */
+export function keepPattern(entry) {
+  const literal = entry.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return entry.endsWith('/') ? `^${literal}` : `^${literal}$`;
+}
+
 /** Drop every non-public path from every commit, keeping the rest of history. */
 function rewriteHistory(out, allowlist) {
   console.log('rewriting history (this takes a few minutes) …');
 
+  // The filter lives in files rather than on the command line. filter-branch
+  // evals the index-filter through sh, and a regex full of quotes does not
+  // survive that on Windows — the first attempt died inside the eval with an
+  // unterminated string, part-way through rewriting.
+  const work = path.join(out, '.git', 'hats-export');
+  mkdirSync(work, { recursive: true });
+
+  const patterns = path.join(work, 'keep.txt');
+  writeFileSync(patterns, `${allowlist.map(keepPattern).join('\n')}\n`);
+
+  // -z the whole way through: a filename may contain a newline, and splitting
+  // on one would delete the wrong path from every commit in the history.
+  const script = path.join(work, 'filter.sh');
+  writeFileSync(script, [
+    '#!/bin/sh',
+    'git ls-files -z \\',
+    `  | grep -z -v -E -f "${toPosix(patterns)}" \\`,
+    '  | xargs -0 -r git rm --cached -q --ignore-unmatch --',
+    '',
+  ].join('\n'));
+
   // An index-filter rather than a tree-filter: it rewrites the index without
   // checking each commit out, which is the difference between minutes and
   // hours over a few hundred commits.
-  //
-  // The allowlist is applied inside the filter so that a path nobody thought
-  // about is dropped rather than kept.
-  const keep = allowlist
-    .map((entry) => (entry.endsWith('/') ? `^${entry}` : `^${entry}$`))
-    .join('|');
-
-  const filter = `git ls-files -z | grep -z -v -E '${keep}' | `
-    + `tr '\\0' '\\n' | sed 's/.*/"&"/' | xargs -r git rm --cached -q --ignore-unmatch --`;
-
   execSync(
-    `git filter-branch --force --index-filter "${filter}" --prune-empty -- --all`,
+    `git filter-branch --force --index-filter 'sh "${toPosix(script)}"' --prune-empty -- --all`,
     { cwd: out, stdio: 'inherit', env: { ...process.env, FILTER_BRANCH_SQUELCH_WARNING: '1' } },
   );
 
