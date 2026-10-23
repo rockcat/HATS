@@ -15,20 +15,12 @@
   },
   "include": [
     "server/src/**/*",
-    "packages/*/src/**/*",
-    "packages/ui-kit/index.ts",
-    "apps/agent-library/src/**/*",
-    "apps/project-server/src/**/*",
-    "apps/project-designer/src/**/*",
-    "apps/embodiment-test/src/**/*"
+    "packages/*/src/**/*"
   ],
   "exclude": [
     "node_modules",
     "dist",
-    "dist-desktop",
     "server/dist",
-    "apps/flutter",
-    "apps/electron",
     "apps/web",
     "**/public/**"
   ]
