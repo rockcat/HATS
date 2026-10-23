@@ -6,10 +6,6 @@
   "author": "Ely House 25 Ltd",
   "type": "module",
   "scripts": {
-    "runner": "docker compose up -d runner",
-    "runner:logs": "docker compose logs -f runner",
-    "runner:stop": "docker compose down",
-    "runner:build": "docker build -t hats-runner:latest ../hats-runner",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",

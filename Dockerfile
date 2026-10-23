@@ -99,7 +99,8 @@ RUN pip3 install --no-cache-dir --break-system-packages piper-tts flask
 ENV PYTHON_BIN=python3 \
     PIPER_VOICES_DIR=/workspace/HATS/runtime_data/piper_voices
 
-# 3050 speech · 5100-5120 one Piper HTTP server per loaded voice
-EXPOSE 3050 5100-5120
+# Only the service itself. The Piper servers it spawns listen on 5100
+# upwards, but nothing outside this container talks to them.
+EXPOSE 3050
 
 CMD ["node", "--import", "tsx/esm", "apps/speech-service/src/main.ts"]
