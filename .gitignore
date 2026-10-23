@@ -49,3 +49,8 @@ apps/poppyinyourpocket/ios/
 runtime_data/data/google-tokens.json
 runtime_data/data/google-agent-tokens/
 runtime_data/data/users.json
+
+# The whole of runtime_data now lives outside both repositories, in one
+# place set by HATS_DATA. Avatars were 136MB tracked here and duplicated
+# in the runner repo; outputs/ is work agents produced, not source.
+runtime_data/

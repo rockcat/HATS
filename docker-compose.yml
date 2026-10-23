@@ -30,7 +30,9 @@ x-service: &service
   restart: unless-stopped
   env_file: [.env]
   volumes:
-    - ./runtime_data:/workspace/HATS/runtime_data
+    # One directory for the whole installation, outside both repositories.
+    # Set HATS_DATA in .env; see docs/runtime-data.md.
+    - ${HATS_DATA:-../hats-data}:/workspace/HATS/runtime_data
   environment: &service-env
     NODE_ENV: production
     RUNTIME_DIR: /workspace/HATS/runtime_data
