@@ -3,7 +3,7 @@ import { existsSync } from 'fs';
 import * as path from 'path';
 import {
   BUILTIN_PREFIX, builtin, builtinServerCommand, expandBuiltin, isBuiltinMarker,
-  repointBuiltinServer,
+  repointBuiltinServer, repoRootFrom,
 } from './builtin-server.js';
 import { resolveConfig } from './mcp-catalogue.js';
 
@@ -51,18 +51,32 @@ describe('deciding how to start it', () => {
     }
   });
 
-  it('points at a file that is really there', () => {
-    // The whole bug: the catalogue named dist/mcp/kanban/server.js, which no
-    // current build writes, and it worked only because a stale copy from an
-    // older layout was still lying around.
-    const { args } = builtinServerCommand('mcp/kanban/server');
-    expect(existsSync(args[args.length - 1]!)).toBe(true);
+  // "…and the file is really there" is asserted in the runner repository,
+  // not here. The built-in servers are its modules under server/src, which
+  // this repository no longer contains — only the marker that names them.
+  // Asserting their existence here would fail for the right reason, which is
+  // not a useful test.
+
+  it('finds the root from inside the compiled output, not dist\'s mirror of it', () => {
+    // The Docker image: only server/dist, and dist mirrors the repo, so
+    // server/dist has a server/src of its own. Stopping there named
+    // server/dist/server/dist/…, and then a .ts file that is not shipped.
+    const app = path.resolve('/app');
+    const dist = path.join(app, 'server', 'dist');
+    const present = new Set([path.join(dist, 'server', 'src'), dist]);
+    const here = path.join(dist, 'packages', 'core', 'src', 'mcp');
+
+    expect(repoRootFrom(here, (p) => present.has(p))).toBe(app);
   });
 
-  it('points at a real file for the calendar too', () => {
-    const { args } = builtinServerCommand('calendar/server');
-    expect(existsSync(args[args.length - 1]!)).toBe(true);
+  it('finds the root from the source tree', () => {
+    const repo = path.resolve('/repo');
+    const present = new Set([path.join(repo, 'server', 'src')]);
+    const here = path.join(repo, 'packages', 'core', 'src', 'mcp');
+
+    expect(repoRootFrom(here, (p) => present.has(p))).toBe(repo);
   });
+
 });
 
 describe('expanding the marker in a config', () => {
@@ -100,8 +114,11 @@ describe('through resolveConfig, which is what actually runs', () => {
 
     expect(resolved.transport).toBe('stdio');
     const args = (resolved as { args: string[] }).args;
+    // The marker is gone and a path has taken its place. Whether that path
+    // exists depends on the runner being present, which is the runner
+    // repository's business to assert.
     expect(args.some((a) => a.startsWith(BUILTIN_PREFIX))).toBe(false);
-    expect(existsSync(args[args.length - 1]!)).toBe(true);
+    expect(path.isAbsolute(args[args.length - 1]!)).toBe(true);
   });
 
   it('still expands the placeholders an ordinary entry uses', () => {
@@ -123,8 +140,9 @@ describe('repointing a saved server definition', () => {
 
     expect(fixed).not.toBeNull();
     expect(fixed!.args.some((a) => a.includes('dist/mcp/kanban'))).toBe(false);
-    expect(existsSync(fixed!.args[fixed!.args.length - 2] ?? fixed!.args[0]!)
-      || existsSync(fixed!.args[0]!)).toBe(true);
+    // That the replacement path exists is asserted in the runner repository,
+    // which is where the file it names lives.
+    expect(fixed!.args.some((a) => path.isAbsolute(a))).toBe(true);
   });
 
   it('puts this project\'s board file on the end', () => {

@@ -3,7 +3,8 @@
  * Launch the HATS services together for development.
  *
  *   node scripts/dev-services.mjs                 # library + project server + designer + embodiment test
- *   node scripts/dev-services.mjs --with-runner   # also start the Team Runner
+ *
+ * The runner is not one of these — it runs as a container. See `npm run runner`.
  *   node scripts/dev-services.mjs library designer
  *
  * Each child's output is prefixed with its service name. Ctrl+C stops them all.
@@ -30,8 +31,15 @@ const SERVICES = {
   speech:    { label: 'speech   ', script: 'apps/speech-service/src/main.ts',   port: 3050, colour: '\x1b[31m' },
   companion: { label: 'companion', script: 'apps/companion/src/main.ts',        port: 3060, colour: '\x1b[95m' },
   project:   { label: 'project  ', script: 'apps/project-view/src/main.ts',     port: 3070, colour: '\x1b[96m' },
-  runner:    { label: 'runner   ', script: 'team-runner.ts',                    port: 3001, colour: '\x1b[34m' },
 };
+
+// The runner is deliberately not in that list. It is not built here any more:
+// it lives in its own repository and runs as a container.
+//
+//   npm run runner        → docker compose up -d runner
+//
+// Starting it from source would mean keeping a copy of it here, which is the
+// duplication the split exists to remove.
 
 const RESET = '\x1b[0m';
 const DEFAULT_SET = ['library', 'projects', 'designer', 'embodiment', 'speech'];
@@ -39,7 +47,7 @@ const DEFAULT_SET = ['library', 'projects', 'designer', 'embodiment', 'speech'];
 function chosenServices(argv) {
   const named = argv.filter((a) => !a.startsWith('--'));
   if (named.length > 0) return named.filter((name) => name in SERVICES);
-  return argv.includes('--with-runner') ? [...DEFAULT_SET, 'runner'] : DEFAULT_SET;
+  return DEFAULT_SET;
 }
 
 const selected = chosenServices(process.argv.slice(2));

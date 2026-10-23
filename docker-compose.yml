@@ -1,24 +1,55 @@
+# The runner, as a thing this repository uses rather than builds.
+#
+# The runner lives in its own repository and ships as an image. This file
+# runs it; it does not compile it. That is the point of the split — one
+# runner, built once, consumed by whatever needs it.
+#
+#   docker compose up -d runner
+#
+# The image is not published to a registry yet, so build it from the runner
+# repo once and the tag below finds it locally:
+#
+#   git -C ../hats-runner pull
+#   docker build -t hats-runner:latest ../hats-runner
+#
+# Set HATS_RUNNER_IMAGE to use a published tag instead.
+#
+# The services in this repository — the agent library, project server and
+# speech service — still run from source with `npm run <name>`. The runner
+# reaches them on the host, which is why they are addressed through
+# host.docker.internal below rather than as compose services.
+
 services:
-  hats:
-    build: .
-    image: hats:latest
+  runner:
+    image: ${HATS_RUNNER_IMAGE:-hats-runner:latest}
     restart: unless-stopped
     ports:
       - "3001:3001"
       # Piper TTS HTTP servers — one per loaded voice model
       - "5100-5120:5100-5120"
     volumes:
-      # Bind-mount runtime data — survives container restarts and rebuilds
+      # Bind-mounted so projects, avatars and config survive a new image.
+      # Never baked in: the image is the runner, not the work it has done.
       - ./runtime_data:/app/runtime_data
     env_file:
-      # Docker injects these directly; no --env-file flag needed in CMD
       - .env
     environment:
       NODE_ENV: production
       RUNTIME_DIR: /app/runtime_data
-      # No terminal attached, so no chat CLI — it would read EOF and exit.
-      HATS_HEADLESS: "1"
       PIPER_VOICES_DIR: /app/runtime_data/piper_voices
+      # No terminal in a container. Without this the chat CLI reads EOF on
+      # stdin and closes the process about a second after it starts, which
+      # looks exactly like a crash rather than a design decision.
+      HATS_HEADLESS: "1"
+      # localhost inside a container is the container. These point back at
+      # the services running on the host; each is optional, and the runner
+      # falls back to local disk when one is absent.
+      AGENT_LIBRARY_URL: http://host.docker.internal:3010
+      PROJECT_SERVER_URL: http://host.docker.internal:3020
+      SPEECH_SERVICE_URL: http://host.docker.internal:3050
+    extra_hosts:
+      # Linux needs this spelled out; Docker Desktop provides it already.
+      - "host.docker.internal:host-gateway"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3001/api/state"]
       interval: 30s

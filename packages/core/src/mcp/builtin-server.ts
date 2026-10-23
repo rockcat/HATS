@@ -41,11 +41,18 @@ export const isBuiltinMarker = (value: unknown): value is string =>
  * stopped one level too early and produced `…/server/server/src/…`. The thing
  * being looked for is a directory containing `server`, so that is what the
  * walk looks for.
+ *
+ * Compiled, this module sits at `<root>/server/dist/packages/core/src/mcp`, and
+ * dist mirrors the repo — so `server/dist` holds a `server/src` of its own, full
+ * of .js, and the walk stopped there. The image only has `server/dist`, so the
+ * fallback then named `server/dist/server/src/….ts`, which exists nowhere. The
+ * walk starts above dist instead.
  */
-function repoRoot(): string {
-  let dir = path.dirname(fileURLToPath(import.meta.url));
+export function repoRootFrom(here: string, exists: (p: string) => boolean = existsSync): string {
+  const dist = here.lastIndexOf(`${path.sep}server${path.sep}dist${path.sep}`);
+  let dir = dist >= 0 ? here.slice(0, dist) : here;
   for (let up = 0; up < 12; up++) {
-    if (existsSync(path.join(dir, 'server', 'src')) || existsSync(path.join(dir, 'server', 'dist'))) {
+    if (exists(path.join(dir, 'server', 'src')) || exists(path.join(dir, 'server', 'dist'))) {
       return dir;
     }
     const parent = path.dirname(dir);
@@ -64,7 +71,7 @@ function repoRoot(): string {
 export function builtinServerCommand(
   modulePath: string, exists: (p: string) => boolean = existsSync,
 ): { command: string; args: string[] } {
-  const root = repoRoot();
+  const root = repoRootFrom(path.dirname(fileURLToPath(import.meta.url)));
   const compiled = path.join(root, 'server', 'dist', 'server', 'src', `${modulePath}.js`);
   if (exists(compiled)) return { command: 'node', args: [compiled] };
 
