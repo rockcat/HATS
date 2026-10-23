@@ -73,9 +73,11 @@ EXPOSE 5100-5120
 # Standalone: don't probe the Agent Library / Project Server on localhost —
 # inside a container they are never there. Override with HATS_STANDALONE=0 and
 # AGENT_LIBRARY_URL / PROJECT_SERVER_URL to use them.
+# Headless: no terminal is attached, so no chat CLI — it would read EOF and exit.
 ENV NODE_ENV=production \
     RUNTIME_DIR=/app/runtime_data \
-    HATS_STANDALONE=1
+    HATS_STANDALONE=1 \
+    HATS_HEADLESS=1
 
 # The compilation root is the repo (the server imports packages/), so the
 # emitted entry point keeps its server/src/ path inside dist.
