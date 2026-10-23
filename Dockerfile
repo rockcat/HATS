@@ -37,16 +37,11 @@ WORKDIR /app
 
 # Runtime shared libraries (not -dev headers)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      python3 python3-pip \
       libcairo2 libpango-1.0-0 libpangocairo-1.0-0 libjpeg62-turbo libgif7 \
       libgl1-mesa-glx libglu1-mesa libxi6 libxext6 \
       libsdl2-2.0-0 \
       ffmpeg \
     && rm -rf /var/lib/apt/lists/*
-
-# Piper TTS Python package (flask = HTTP server shim)
-# --break-system-packages required on Debian 12+ / bookworm
-RUN pip3 install --no-cache-dir --break-system-packages piper-tts flask
 
 # node_modules carries compiled .node files AND tsx (needed for the
 # kanban MCP subprocess: node --import tsx/esm scripts/kanban-mcp.ts)
@@ -66,9 +61,9 @@ COPY package.json ./
 # The volume must contain at minimum: avatars/, config/, data/
 VOLUME ["/app/runtime_data"]
 
+# Speech (Piper voices) is a separate service — see SPEECH_SERVICE_URL in
+# docker-compose.yml. The runner only talks to it.
 EXPOSE 3001
-# Piper TTS servers (one per voice model, starting at PIPER_SERVER_PORT_START)
-EXPOSE 5100-5120
 
 # Standalone: don't probe the Agent Library / Project Server on localhost —
 # inside a container they are never there. Override with HATS_STANDALONE=0 and

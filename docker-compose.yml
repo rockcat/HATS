@@ -5,8 +5,6 @@ services:
     restart: unless-stopped
     ports:
       - "3001:3001"
-      # Piper TTS HTTP servers — one per loaded voice model
-      - "5100-5120:5100-5120"
     volumes:
       # Bind-mount runtime data — survives container restarts and rebuilds
       - ./runtime_data:/app/runtime_data
@@ -16,7 +14,6 @@ services:
     environment:
       NODE_ENV: production
       RUNTIME_DIR: /app/runtime_data
-      PIPER_VOICES_DIR: /app/runtime_data/piper_voices
       # localhost in .env means the container itself here, not your machine.
       # Overrides .env; set DOCKER_OLLAMA_BASE_URL to point somewhere else.
       OLLAMA_BASE_URL: ${DOCKER_OLLAMA_BASE_URL:-http://host.docker.internal:11434/v1}
