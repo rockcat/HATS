@@ -98,18 +98,27 @@ function main() {
   } else {
     flatten(out, withheld);
   }
+  detach(out);
 
   // Belt and braces. The filter above is the mechanism; this is the check
   // that it worked, run against what is actually in the result.
-  const left = git(['ls-files'], out).trim().split('\n').filter(Boolean);
-  const leaked = privatePaths(left, allowlist);
+  //
+  // Across all of history, not just the checked-out tree. A push sends every
+  // reachable object, so a withheld file surviving in one old commit is
+  // published just as surely as one sitting in HEAD — and a tree-only check
+  // would say the export was clean.
+  const everPresent = git(['log', '--all', '--pretty=format:', '--name-only'], out)
+    .split('\n').map((line) => line.trim()).filter(Boolean);
+  const leaked = [...new Set(privatePaths(everPresent, allowlist))];
   if (leaked.length) {
     console.error(`\nREFUSING: ${leaked.length} private path(s) survived the filter:`);
     for (const file of leaked.slice(0, 20)) console.error(`   ${file}`);
     process.exit(1);
   }
 
-  console.log(`\n${left.length} files, no private paths present.`);
+  const left = git(['ls-files'], out).trim().split('\n').filter(Boolean);
+  console.log(`\n${left.length} files, ${new Set(everPresent).size} paths across all history, `
+    + 'none of them private.');
   console.log(`
 Nothing has been pushed. To publish:
 
@@ -185,6 +194,28 @@ function rewriteHistory(out, allowlist) {
 
   git(['reflog', 'expire', '--expire=now', '--all'], out);
   execFileSync('git', ['gc', '--prune=now', '--aggressive'], { cwd: out, stdio: 'inherit' });
+}
+
+/**
+ * Cut the export loose from the repository it came from.
+ *
+ * The clone inherits `origin` pointing at this private repo, so a plain
+ * `git push` in the export would push the public branch straight back into
+ * the private one. It also inherits every remote-tracking branch, which are
+ * snapshots of the old repository and nothing to do with what is being
+ * published.
+ */
+function detach(out) {
+  const remotes = git(['remote'], out).split('\n').map((r) => r.trim()).filter(Boolean);
+  for (const remote of remotes) git(['remote', 'remove', remote], out);
+
+  const tracking = git(['for-each-ref', '--format=%(refname)', 'refs/remotes'], out)
+    .split('\n').map((line) => line.trim()).filter(Boolean);
+  for (const ref of tracking) git(['update-ref', '-d', ref], out);
+
+  if (remotes.length || tracking.length) {
+    console.log(`detached: removed ${remotes.length} remote(s) and ${tracking.length} tracking ref(s)`);
+  }
 }
 
 /** One commit, no history. */
