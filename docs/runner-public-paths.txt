@@ -48,4 +48,3 @@ docs/ARCHITECTURE.md
 docs/README.md
 docs/SERVICES.md
 docs/face-recognition.md
-docs/runner-public-paths.txt

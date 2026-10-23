@@ -164,17 +164,27 @@ function rewriteHistory(out, allowlist) {
   // An index-filter rather than a tree-filter: it rewrites the index without
   // checking each commit out, which is the difference between minutes and
   // hours over a few hundred commits.
-  execSync(
-    `git filter-branch --force --index-filter 'sh "${toPosix(script)}"' --prune-empty -- --all`,
-    { cwd: out, stdio: 'inherit', env: { ...process.env, FILTER_BRANCH_SQUELCH_WARNING: '1' } },
-  );
+  //
+  // execFileSync, not execSync: on Windows the latter goes through cmd.exe,
+  // where the single quotes meant to hold the filter together are just
+  // characters. It passed `'sh` as the whole argument and filter-branch could
+  // not find it.
+  execFileSync('git', [
+    'filter-branch', '--force',
+    '--index-filter', `sh "${toPosix(script)}"`,
+    '--prune-empty', '--', '--all',
+  ], { cwd: out, stdio: 'inherit', env: { ...process.env, FILTER_BRANCH_SQUELCH_WARNING: '1' } });
 
-  // filter-branch leaves the originals behind; without this the objects stay
-  // reachable and the "private" files are still in the pack it would push.
-  execSync('git for-each-ref --format="%(refname)" refs/original | xargs -r -n1 git update-ref -d',
-    { cwd: out, stdio: 'inherit' });
-  execSync('git reflog expire --expire=now --all && git gc --prune=now --aggressive',
-    { cwd: out, stdio: 'inherit' });
+  // filter-branch keeps the originals under refs/original. Left there, every
+  // withheld file is still reachable in the pack — the repo would look
+  // filtered and push everything.
+  const originals = git(['for-each-ref', '--format=%(refname)', 'refs/original'], out)
+    .split('\n').map((line) => line.trim()).filter(Boolean);
+  for (const ref of originals) git(['update-ref', '-d', ref], out);
+  console.log(`dropped ${originals.length} original ref(s)`);
+
+  git(['reflog', 'expire', '--expire=now', '--all'], out);
+  execFileSync('git', ['gc', '--prune=now', '--aggressive'], { cwd: out, stdio: 'inherit' });
 }
 
 /** One commit, no history. */
