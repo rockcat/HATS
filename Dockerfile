@@ -70,8 +70,12 @@ EXPOSE 3001
 # Piper TTS servers (one per voice model, starting at PIPER_SERVER_PORT_START)
 EXPOSE 5100-5120
 
+# Standalone: don't probe the Agent Library / Project Server on localhost —
+# inside a container they are never there. Override with HATS_STANDALONE=0 and
+# AGENT_LIBRARY_URL / PROJECT_SERVER_URL to use them.
 ENV NODE_ENV=production \
-    RUNTIME_DIR=/app/runtime_data
+    RUNTIME_DIR=/app/runtime_data \
+    HATS_STANDALONE=1
 
 # The compilation root is the repo (the server imports packages/), so the
 # emitted entry point keeps its server/src/ path inside dist.
