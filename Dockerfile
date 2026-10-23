@@ -52,8 +52,14 @@ RUN pip3 install --no-cache-dir --break-system-packages piper-tts flask
 # kanban MCP subprocess: node --import tsx/esm scripts/kanban-mcp.ts)
 COPY --from=builder /build/node_modules ./node_modules
 COPY --from=builder /build/server/dist  ./server/dist
-COPY --from=builder /build/apps/web     ./apps/web
 COPY --from=builder /build/scripts      ./scripts
+# tsc emits only .js, but the compiled code finds these assets relative to its
+# own location — dist mirrors the repo, so they must sit beside it in dist:
+#   contracts/src/validate.ts → ../schemas, contracts/src/openapi.ts → ../openapi
+#   api-server.ts (static UI) and glb-renderer.ts (imports) → apps/web
+COPY --from=builder /build/packages/contracts/schemas ./server/dist/packages/contracts/schemas
+COPY --from=builder /build/packages/contracts/openapi ./server/dist/packages/contracts/openapi
+COPY --from=builder /build/apps/web     ./server/dist/apps/web
 COPY package.json ./
 
 # runtime_data/ is always mounted — never bake project data into the image.
