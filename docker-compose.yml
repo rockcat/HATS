@@ -17,6 +17,12 @@ services:
       NODE_ENV: production
       RUNTIME_DIR: /app/runtime_data
       PIPER_VOICES_DIR: /app/runtime_data/piper_voices
+      # localhost in .env means the container itself here, not your machine.
+      # Overrides .env; set DOCKER_OLLAMA_BASE_URL to point somewhere else.
+      OLLAMA_BASE_URL: ${DOCKER_OLLAMA_BASE_URL:-http://host.docker.internal:11434/v1}
+    extra_hosts:
+      # Docker Desktop provides host.docker.internal; plain Linux Docker needs this.
+      - "host.docker.internal:host-gateway"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3001/api/state"]
       interval: 30s
