@@ -1,6 +1,6 @@
 import os from 'os';
 import path from 'path';
-import { MCPServerConfig, interpolateHeaders } from './mcp-client.js';
+import { MCPServerConfig, interpolateHeaders } from './config.js';
 import { expandBuiltin } from './builtin-server.js';
 
 const expandTilde = (s: string) =>

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resolveConfig, resolvePersonalConfig, type MCPCatalogueEntry } from './mcp-catalogue.js';
+import { resolveConfig, resolvePersonalConfig, type MCPCatalogueEntry } from '../../../packages/core/src/mcp/mcp-catalogue.js';
 import type { MCPServerConfig } from './mcp-client.js';
 
 /** The memory entry as the catalogue declares it. */

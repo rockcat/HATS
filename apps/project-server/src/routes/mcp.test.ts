@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { mkdtemp, rm, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import * as path from 'path';
-import { initCatalogue } from '../../../../server/src/mcp/catalogue-store.js';
+import { initCatalogue } from '../../../../packages/core/src/mcp/catalogue-store.js';
 import { resolveServerIds, sharedCatalogue } from './mcp.js';
 
 let dir = '';

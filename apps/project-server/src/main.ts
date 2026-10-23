@@ -7,7 +7,7 @@
  */
 
 import { metaRoutes, startService } from '../../../packages/service-kit/src/index.js';
-import { initCatalogue } from '../../../server/src/mcp/catalogue-store.js';
+import { initCatalogue } from '../../../packages/core/src/mcp/catalogue-store.js';
 import { AgentLibraryClient } from '../../../packages/clients/src/agent-library-client.js';
 import { activeFilePath, config } from './config.js';
 import { ProjectStore } from './project-store.js';

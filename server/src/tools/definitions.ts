@@ -1,5 +1,5 @@
 import { ToolDefinition } from '../providers/types.js';
-import { HatType } from '../hats/types.js';
+import { HatType } from '../../../packages/core/src/hats/types.js';
 
 // ── Tools available to every agent ───────────────────────────────────────────
 

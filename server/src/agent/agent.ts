@@ -1,8 +1,8 @@
 import { v4 as uuidv4 } from 'uuid';
-import { log } from '../util/logger.js';
-import { HatType } from '../hats/types.js';
-import { mergeHatDefinitions } from '../hats/definitions.js';
-import { generateSystemPrompt } from '../prompt/generator.js';
+import { log } from '../../../packages/core/src/logger.js';
+import { HatType } from '../../../packages/core/src/hats/types.js';
+import { mergeHatDefinitions } from '../../../packages/core/src/hats/definitions.js';
+import { generateSystemPrompt } from '../../../packages/core/src/prompt/generator.js';
 import { AIProvider, CompletionRequest, Message, ProviderError, ToolCall, type ToolOutcome } from '../providers/types.js';
 import { getToolsForHat, getAllToolsForHat } from '../tools/definitions.js';
 import { buildToolRegistry, searchTools, getTool, ToolRegistry } from '../tools/tool-search.js';

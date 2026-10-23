@@ -15,7 +15,7 @@ import { CalendarStore, newUid } from './store.js';
 import { parseCalendar } from './icalendar.js';
 import { sendInvitation, sendReply, type MailAccount, type Mailer } from './invitation.js';
 import type { CalendarEvent, Participation } from './types.js';
-import { log } from '../util/logger.js';
+import { log } from '../../../packages/core/src/logger.js';
 
 const RESPONSES: Participation[] = ['ACCEPTED', 'DECLINED', 'TENTATIVE'];
 

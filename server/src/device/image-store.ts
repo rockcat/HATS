@@ -10,7 +10,7 @@
 
 import { mkdir, writeFile } from 'fs/promises';
 import * as path from 'path';
-import { log } from '../util/logger.js';
+import { log } from '../../../packages/core/src/logger.js';
 
 /**
  * The most we will pass on to a model.

@@ -15,7 +15,7 @@
 // still names the canonical model either way, because that is what the stored
 // templates are in and a device may well be able to produce them.
 
-import { log } from '../util/logger.js';
+import { log } from '../../../packages/core/src/logger.js';
 import { DEFAULT_EMBEDDING_MODEL, type EmbeddingModel } from '../device/capabilities.js';
 
 /** Anything that can turn a face image into a vector. */

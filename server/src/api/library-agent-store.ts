@@ -12,8 +12,8 @@ import * as path from 'path';
 import { AgentLibraryClient } from '../../../packages/clients/src/agent-library-client.js';
 import type { AgentTemplate, HatTypeName, ProviderName } from '../../../packages/contracts/src/types.js';
 import type { AgentDefinition } from '../store/team-snapshot.js';
-import type { HatType } from '../hats/types.js';
-import { log } from '../util/logger.js';
+import type { HatType } from '../../../packages/core/src/hats/types.js';
+import { log } from '../../../packages/core/src/logger.js';
 import type { AgentDefinitionStore } from './agent-store.js';
 
 /** Fields that must never leave the runner. */

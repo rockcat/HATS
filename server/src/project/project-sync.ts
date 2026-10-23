@@ -14,7 +14,7 @@ import type { ProjectServerClient } from '../../../packages/clients/src/project-
 import type { DeployedAgent, ProjectDefinition } from '../../../packages/contracts/src/types.js';
 import type { TeamOrchestrator } from '../orchestrator/orchestrator.js';
 import { toDeployedAgent } from '../embodiment/agent-mapper.js';
-import { log } from '../util/logger.js';
+import { log } from '../../../packages/core/src/logger.js';
 
 const DEBOUNCE_MS = 2_000;
 

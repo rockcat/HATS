@@ -5,7 +5,7 @@ import * as path from 'path';
 import { TeamOrchestrator } from '../orchestrator/orchestrator.js';
 import { Task } from '../orchestrator/types.js';
 import { Board } from '../mcp/kanban/types.js';
-import { log } from '../util/logger.js';
+import { log } from '../../../packages/core/src/logger.js';
 import { buildBoardSummary } from './api-utils.js';
 
 export interface KanbanManagerDeps {

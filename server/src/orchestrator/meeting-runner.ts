@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
-import { log } from '../util/logger.js';
+import { log } from '../../../packages/core/src/logger.js';
 import { renderMarkdown } from '../human/markdown.js';
 import { IAgent } from '../agent/iagent.js';
 import { EventStore } from '../store/event-store.js';

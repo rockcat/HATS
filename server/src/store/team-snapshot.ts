@@ -1,5 +1,5 @@
 import { AgentIdentity, ExternalAgentEndpoint } from '../agent/types.js';
-import { HatType } from '../hats/types.js';
+import { HatType } from '../../../packages/core/src/hats/types.js';
 import { MCPServerDef } from '../mcp/mcp-client.js';
 import { Task, Meeting } from '../orchestrator/types.js';
 

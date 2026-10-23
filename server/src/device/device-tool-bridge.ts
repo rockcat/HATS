@@ -26,7 +26,7 @@ import type { ToolDefinition, ToolOutcome } from '../providers/types.js';
 import { rejectImage } from './image-store.js';
 import { negotiate, sanitise } from './capabilities.js';
 import type { DeviceCapabilities, Negotiated, RunnerCapabilities } from './capabilities.js';
-import { log } from '../util/logger.js';
+import { log } from '../../../packages/core/src/logger.js';
 
 /** The prefix that marks a tool as living on a device, as `mcp__` marks MCP. */
 export const DEVICE_PREFIX = 'device__';

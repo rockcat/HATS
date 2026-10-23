@@ -2,7 +2,7 @@ import { IAgent } from '../agent/iagent.js';
 import { Agent } from '../agent/agent.js';
 import { AgentConfig } from '../agent/types.js';
 import { AgentState } from '../agent/types.js';
-import { HatType } from '../hats/types.js';
+import { HatType } from '../../../packages/core/src/hats/types.js';
 
 export class AgentRegistry {
   private agents: Map<string, IAgent> = new Map();

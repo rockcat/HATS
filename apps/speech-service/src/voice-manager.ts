@@ -14,7 +14,7 @@
 import { spawn, ChildProcess } from 'child_process';
 import { readdir } from 'fs/promises';
 import * as path from 'path';
-import { log } from '../../../server/src/util/logger.js';
+import { log } from '../../../packages/core/src/logger.js';
 import { readSpeakers, resolveVoicesDir } from '../../../packages/speech-core/src/voice-models.js';
 import type { RunningVoice } from '../../../packages/speech-core/src/types.js';
 

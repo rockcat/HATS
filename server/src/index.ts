@@ -1,9 +1,9 @@
-export { HatType } from './hats/types.js';
-export type { HatDefinition } from './hats/types.js';
-export { hatDefinitions, getHatDefinition } from './hats/definitions.js';
+export { HatType } from '../../packages/core/src/hats/types.js';
+export type { HatDefinition } from '../../packages/core/src/hats/types.js';
+export { hatDefinitions, getHatDefinition } from '../../packages/core/src/hats/definitions.js';
 
-export type { PromptContext, SystemPrompt } from './prompt/types.js';
-export { generateSystemPrompt } from './prompt/generator.js';
+export type { PromptContext, SystemPrompt } from '../../packages/core/src/prompt/types.js';
+export { generateSystemPrompt } from '../../packages/core/src/prompt/generator.js';
 
 export type { CompletionRequest, CompletionResponse, AIProvider } from './providers/types.js';
 export { ProviderError } from './providers/types.js';

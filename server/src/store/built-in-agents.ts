@@ -1,6 +1,6 @@
 import { AgentDefinitionStore } from '../api/agent-store.js';
 import { AgentDefinition } from './team-snapshot.js';
-import { HatType } from '../hats/types.js';
+import { HatType } from '../../../packages/core/src/hats/types.js';
 
 export const BUILTIN_CLAUDE_CODE_ID = 'builtin-claude-code';
 

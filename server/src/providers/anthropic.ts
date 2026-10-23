@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { log } from '../util/logger.js';
+import { log } from '../../../packages/core/src/logger.js';
 import {
   AIProvider, CompletionRequest, CompletionResponse, ProviderError,
   Message, ToolCall,

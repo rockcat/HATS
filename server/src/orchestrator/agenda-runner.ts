@@ -2,7 +2,7 @@ import { AgendaEntry, AgendaStore } from '../api/agenda-store.js';
 import { MCPRegistry } from '../mcp/mcp-registry.js';
 import { TeamMessage } from './types.js';
 import { buildMessage } from './orchestrator-utils.js';
-import { log } from '../util/logger.js';
+import { log } from '../../../packages/core/src/logger.js';
 
 export class AgendaRunner {
   private store: AgendaStore;

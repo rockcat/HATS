@@ -12,7 +12,7 @@ import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { metaRoutes, startService } from '../../../packages/service-kit/src/index.js';
 import { uiKitMount } from '../../../packages/ui-kit/index.js';
-import { initCatalogue } from '../../../server/src/mcp/catalogue-store.js';
+import { initCatalogue } from '../../../packages/core/src/mcp/catalogue-store.js';
 import { config } from './config.js';
 import { CredentialStore } from './credential-store.js';
 import { TemplateStore } from './template-store.js';

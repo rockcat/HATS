@@ -5,15 +5,15 @@
  * live agents in the orchestrator.
  */
 
-import { builtinServerCommand, repointBuiltinServer } from '../mcp/builtin-server.js';
+import { builtinServerCommand, repointBuiltinServer } from '../../../packages/core/src/mcp/builtin-server.js';
 import type { TeamOrchestrator } from '../orchestrator/orchestrator.js';
 import type { ProviderFactory } from '../orchestrator/orchestrator.js';
 import type { ProjectDefinition } from '../../../packages/contracts/src/types.js';
 import type { MCPServerDef } from '../mcp/mcp-client.js';
-import { HatType } from '../hats/types.js';
-import { getRandomPersona } from '../hats/personas.js';
+import { HatType } from '../../../packages/core/src/hats/types.js';
+import { getRandomPersona } from '../../../packages/core/src/hats/personas.js';
 import { toAgentConfig } from '../embodiment/agent-mapper.js';
-import { log } from '../util/logger.js';
+import { log } from '../../../packages/core/src/logger.js';
 
 /**
  * Register every enabled agent from a project definition.

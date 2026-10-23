@@ -1,5 +1,5 @@
 import * as path from 'path';
-import { runtimeDir } from '../../../server/src/util/runtime-dir.js';
+import { runtimeDir } from '../../../packages/core/src/runtime-dir.js';
 
 const REPO_ROOT = path.resolve(process.cwd());
 

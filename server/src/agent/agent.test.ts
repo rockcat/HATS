@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { Agent } from './agent.js';
 import { AgentState } from './types.js';
-import { HatType } from '../hats/types.js';
+import { HatType } from '../../../packages/core/src/hats/types.js';
 import { MockProvider } from '../providers/mock.js';
 import { TeamMessage } from '../orchestrator/types.js';
 import { searchTools, getTool, buildToolRegistry } from '../tools/tool-search.js';

@@ -15,7 +15,7 @@ import * as os from 'os';
 import * as path from 'path';
 import type { VisemeEvent, SpeechChunk } from '../../../packages/speech-core/src/types.js';
 import { RHUBARB_TO_ARKIT } from '../../../packages/speech-core/src/rhubarb-map.js';
-import { log } from '../../../server/src/util/logger.js';
+import { log } from '../../../packages/core/src/logger.js';
 
 const execFileAsync = promisify(execFile);
 

@@ -12,10 +12,10 @@
  */
 
 import { get, json, type Route } from '../../../../packages/service-kit/src/index.js';
-import { getCatalogue } from '../../../../server/src/mcp/catalogue-store.js';
+import { getCatalogue } from '../../../../packages/core/src/mcp/catalogue-store.js';
 import {
   envVarName, envVarPlaceholder, isHumanMcp, type MCPCatalogueEntry,
-} from '../../../../server/src/mcp/mcp-catalogue.js';
+} from '../../../../packages/core/src/mcp/mcp-catalogue.js';
 import type { McpServerDefinition } from '../../../../packages/contracts/src/types.js';
 
 const BASE = '/api/v1';

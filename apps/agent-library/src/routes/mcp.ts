@@ -10,10 +10,10 @@ import {
   badRequest, json, noContent, notFound, readJsonBody,
   del, get, put, type Route,
 } from '../../../../packages/service-kit/src/index.js';
-import { getCatalogue } from '../../../../server/src/mcp/catalogue-store.js';
+import { getCatalogue } from '../../../../packages/core/src/mcp/catalogue-store.js';
 import {
   envVarName, envVarPlaceholder, isAgentMcp, isHumanMcp, type MCPCatalogueEntry,
-} from '../../../../server/src/mcp/mcp-catalogue.js';
+} from '../../../../packages/core/src/mcp/mcp-catalogue.js';
 import type { CredentialStore, CredentialSet } from '../credential-store.js';
 import { maskCredentials } from '../credential-store.js';
 import type { TemplateStore } from '../template-store.js';

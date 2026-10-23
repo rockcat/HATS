@@ -13,7 +13,7 @@
 
 import { SpeechClient } from '../../../packages/clients/src/speech-client.js';
 import type { SpeechChunk, Voice } from '../../../packages/speech-core/src/types.js';
-import { log } from '../util/logger.js';
+import { log } from '../../../packages/core/src/logger.js';
 
 const REFRESH_MS = 60_000;
 

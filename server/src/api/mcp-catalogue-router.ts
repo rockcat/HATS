@@ -1,6 +1,6 @@
 import { IncomingMessage, ServerResponse } from 'http';
-import { MCPCatalogueEntry, MCPCategory } from '../mcp/mcp-catalogue.js';
-import { getCatalogue, addEntry, updateEntry, removeEntry } from '../mcp/catalogue-store.js';
+import { MCPCatalogueEntry, MCPCategory } from '../../../packages/core/src/mcp/mcp-catalogue.js';
+import { getCatalogue, addEntry, updateEntry, removeEntry } from '../../../packages/core/src/mcp/catalogue-store.js';
 
 const VALID_TRANSPORTS = ['stdio', 'sse', 'http'] as const;
 const VALID_CATEGORIES: MCPCategory[] = ['productivity', 'files', 'web', 'data', 'dev'];

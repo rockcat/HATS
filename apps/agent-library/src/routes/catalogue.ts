@@ -6,10 +6,10 @@ import {
   badRequest, binary, fail, get, json, post, readJsonBody, type Route,
 } from '../../../../packages/service-kit/src/index.js';
 import { SpeechClient } from '../../../../packages/clients/src/speech-client.js';
-import { hatDefinitions } from '../../../../server/src/hats/definitions.js';
-import { personasByHat } from '../../../../server/src/hats/personas.js';
-import { SPECIALISATION_DIRECTIVES } from '../../../../server/src/prompt/generator.js';
-import { KNOWN_PROVIDERS } from '../../../../server/src/api/providers.js';
+import { hatDefinitions } from '../../../../packages/core/src/hats/definitions.js';
+import { personasByHat } from '../../../../packages/core/src/hats/personas.js';
+import { SPECIALISATION_DIRECTIVES } from '../../../../packages/core/src/prompt/generator.js';
+import { KNOWN_PROVIDERS } from '../../../../packages/core/src/providers.js';
 import { listVoices } from '../../../../packages/speech-core/src/voice-models.js';
 
 const BASE = '/api/v1';

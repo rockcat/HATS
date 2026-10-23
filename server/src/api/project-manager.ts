@@ -6,7 +6,7 @@ import { TeamOrchestrator } from '../orchestrator/orchestrator.js';
 import { TelemetryStore } from '../store/telemetry-store.js';
 import { readEnvFile, writeEnvFile } from './env-manager.js';
 import { listFilesRecursive } from './api-utils.js';
-import { log } from '../util/logger.js';
+import { log } from '../../../packages/core/src/logger.js';
 
 export interface AgentStatus {
   id?: string; name: string; hatType: string[]; state: string; activity: string;
