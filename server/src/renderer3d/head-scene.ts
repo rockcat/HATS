@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { log } from '../util/logger.js';
+import { log } from '../../../packages/core/src/logger.js';
 import * as fs from 'fs/promises';
 import { HeadlessRenderer } from './headless-renderer.js';
 import { VisemeId } from '../avatar/types.js';

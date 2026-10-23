@@ -1,5 +1,5 @@
 import { ProviderError } from './types.js';
-import { log } from '../util/logger.js';
+import { log } from '../../../packages/core/src/logger.js';
 
 /**
  * Retry an async operation on rate-limit (429) errors with exponential backoff.

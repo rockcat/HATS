@@ -3,40 +3,15 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { ToolDefinition } from '../providers/types.js';
-import { log } from '../util/logger.js';
+import { log } from '../../../packages/core/src/logger.js';
 
-export interface MCPServerConfigStdio {
-  transport: 'stdio';
-  command: string;       // e.g. 'npx'
-  args?: string[];       // e.g. ['-y', '@modelcontextprotocol/server-filesystem', '/tmp']
-  env?: Record<string, string>;
-}
+export type {
+  MCPServerConfig, MCPServerConfigStdio, MCPServerConfigSSE, MCPServerConfigHTTP,
+} from '../../../packages/core/src/mcp/config.js';
+export { interpolateHeaders } from '../../../packages/core/src/mcp/config.js';
 
-export interface MCPServerConfigSSE {
-  transport: 'sse';
-  url: string;           // e.g. 'http://localhost:3001/sse'
-}
-
-export interface MCPServerConfigHTTP {
-  transport: 'http';
-  url: string;           // e.g. 'https://service.googleapis.com/mcp/v1'
-  /** Request headers. Values may use ${VAR_NAME} to interpolate env / credentials. */
-  headers?: Record<string, string>;
-}
-
-export type MCPServerConfig = MCPServerConfigStdio | MCPServerConfigSSE | MCPServerConfigHTTP;
-
-/** Replace ${VAR_NAME} placeholders in header values from the supplied variable map. */
-export function interpolateHeaders(
-  headers: Record<string, string>,
-  vars: Record<string, string | undefined>,
-): Record<string, string> {
-  const result: Record<string, string> = {};
-  for (const [k, v] of Object.entries(headers)) {
-    result[k] = v.replace(/\$\{([^}]+)\}/g, (_, name) => vars[name] ?? '');
-  }
-  return result;
-}
+import { interpolateHeaders } from '../../../packages/core/src/mcp/config.js';
+import type { MCPServerConfig } from '../../../packages/core/src/mcp/config.js';
 
 export interface MCPServerDef {
   name: string;          // short identifier, used for tool namespacing

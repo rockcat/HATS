@@ -1,6 +1,6 @@
 import { appendFileSync, mkdirSync } from 'fs';
 import * as path from 'path';
-import { runtimeDir } from '../util/runtime-dir.js';
+import { runtimeDir } from '../../../packages/core/src/runtime-dir.js';
 
 /** Shared debug flags — mutated at runtime via the API. */
 export const debugState = {

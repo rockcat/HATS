@@ -1,5 +1,5 @@
 import sdl from '@kmamal/sdl';
-import { log } from '../util/logger.js';
+import { log } from '../../../packages/core/src/logger.js';
 import { MediaOutput } from '../media/types.js';
 
 export interface SDLViewerConfig {

@@ -1,6 +1,6 @@
 import { mkdir, readdir, readFile, writeFile } from 'fs/promises';
 import * as path from 'path';
-import { log } from '../util/logger.js';
+import { log } from '../../../packages/core/src/logger.js';
 
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 

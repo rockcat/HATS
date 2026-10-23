@@ -1,11 +1,11 @@
 import * as nodePath from 'path';
 import { readFile, writeFile, rename, mkdir } from 'fs/promises';
-import { log } from '../util/logger.js';
+import { log } from '../../../packages/core/src/logger.js';
 import { Agent } from '../agent/agent.js';
 import { ExternalAgent, EXTERNAL_PROVIDER } from '../agent/external-agent.js';
 import { IAgent } from '../agent/iagent.js';
 import { AgentConfig } from '../agent/types.js';
-import { HatType } from '../hats/types.js';
+import { HatType } from '../../../packages/core/src/hats/types.js';
 import { getToolsForHat } from '../tools/definitions.js';
 import { AIProvider } from '../providers/types.js';
 import { EventStore } from '../store/event-store.js';
@@ -40,14 +40,14 @@ import { buildToolExecutor, ToolCallContext } from './tool-executor.js';
 import { EmailAllowlistStore } from '../api/email-allowlist-store.js';
 import { AgendaStore } from '../api/agenda-store.js';
 import { AgendaRunner } from './agenda-runner.js';
-import { resolvePersonalConfig, isAgentMcp } from '../mcp/mcp-catalogue.js';
+import { resolvePersonalConfig, isAgentMcp } from '../../../packages/core/src/mcp/mcp-catalogue.js';
 import { parseMemoryGraph, type MemoryGraph } from '../mcp/memory-graph.js';
 import { PeopleStore } from '../people/store.js';
 import {
   PEOPLE_TOOL_NAMES, handlePeopleCall, peopleTools, type PeopleToolsContext,
 } from '../people/tools.js';
 import { canonicalModel, configFromEnv, createEmbedder, type FaceEmbedder } from '../people/embedder.js';
-import { getCatalogue, recordDiscoveredTools } from '../mcp/catalogue-store.js';
+import { getCatalogue, recordDiscoveredTools } from '../../../packages/core/src/mcp/catalogue-store.js';
 import {
   startMeeting as startMeetingFn,
   makeResponseHandler as makeResponseHandlerFn,

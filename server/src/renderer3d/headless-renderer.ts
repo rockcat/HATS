@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { log } from '../util/logger.js';
+import { log } from '../../../packages/core/src/logger.js';
 import createGl from 'gl';
 import * as fs from 'fs/promises';
 import { loadImage } from '@napi-rs/canvas';

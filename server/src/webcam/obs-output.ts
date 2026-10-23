@@ -1,6 +1,6 @@
 import ffmpeg from 'fluent-ffmpeg';
 import { PassThrough } from 'stream';
-import { log } from '../util/logger.js';
+import { log } from '../../../packages/core/src/logger.js';
 
 export interface OBSOutputConfig {
   width: number;

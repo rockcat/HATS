@@ -5,7 +5,7 @@ import {
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { KanbanStore } from './store.js';
-import { log } from '../../util/logger.js';
+import { log } from '../../../../packages/core/src/logger.js';
 import { ClosedReason, Column, Priority } from './types.js';
 
 const COLUMNS: Column[] = ['backlog', 'ready', 'in_progress', 'blocked', 'review', 'closed'];

@@ -9,7 +9,7 @@
 import type { IAgent } from '../agent/iagent.js';
 import type { AgentConfig } from '../agent/types.js';
 import type { AIProvider } from '../providers/types.js';
-import type { HatType } from '../hats/types.js';
+import type { HatType } from '../../../packages/core/src/hats/types.js';
 import { createDeployedAgent } from '../../../packages/contracts/src/factories.js';
 import type {
   AvatarFraming,

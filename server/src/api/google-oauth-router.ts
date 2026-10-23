@@ -1,7 +1,7 @@
 import { IncomingMessage, ServerResponse } from 'http';
 import { GoogleTokenStore, GOOGLE_OAUTH_SCOPES } from './google-token-store.js';
 import { AgentGoogleTokenStore } from './agent-google-token-store.js';
-import { log } from '../util/logger.js';
+import { log } from '../../../packages/core/src/logger.js';
 
 // The five personal Google MCP ids and the token env var each one expects.
 export const GOOGLE_PERSONAL_MCPS = [

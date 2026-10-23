@@ -1,6 +1,6 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { runtimeDir } from '../util/runtime-dir.js';
+import { runtimeDir } from '../../../packages/core/src/runtime-dir.js';
 
 export interface ModelPricing {
   input:  number;   // $ per 1M input tokens

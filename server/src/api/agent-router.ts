@@ -6,13 +6,13 @@ import { HumanRequest } from '../orchestrator/types.js';
 import { HumanRequestStore } from './human-request-store.js';
 import { StoredEvent } from '../store/event-store.js';
 import { Board } from '../mcp/kanban/types.js';
-import { MCPCatalogueEntry, isAgentMcp } from '../mcp/mcp-catalogue.js';
-import { getCatalogue } from '../mcp/catalogue-store.js';
+import { MCPCatalogueEntry, isAgentMcp } from '../../../packages/core/src/mcp/mcp-catalogue.js';
+import { getCatalogue } from '../../../packages/core/src/mcp/catalogue-store.js';
 import { debugState } from '../providers/debug-state.js';
-import { HatType } from '../hats/types.js';
-import { SPECIALISATION_DIRECTIVES, generateSystemPrompt } from '../prompt/generator.js';
-import { mergeHatDefinitions } from '../hats/definitions.js';
-import { personasByHat } from '../hats/personas.js';
+import { HatType } from '../../../packages/core/src/hats/types.js';
+import { SPECIALISATION_DIRECTIVES, generateSystemPrompt } from '../../../packages/core/src/prompt/generator.js';
+import { mergeHatDefinitions } from '../../../packages/core/src/hats/definitions.js';
+import { personasByHat } from '../../../packages/core/src/hats/personas.js';
 import { getPricingTable, FREE_PROVIDERS, reloadPricingFromFile } from '../providers/pricing.js';
 import { getToolsForHat } from '../tools/definitions.js';
 import { AnthropicProvider } from '../providers/anthropic.js';
@@ -59,7 +59,7 @@ export interface AgentRouterDeps {
   updateKanbanColumn(id: string, col: string): Promise<void>;
   saveCurrentState(): Promise<void>;
   resolveAgentName(input: string): string;
-  resolveMCPConfig(id: string, entry: import('../mcp/mcp-catalogue.js').MCPCatalogueEntry): ReturnType<typeof import('../mcp/mcp-catalogue.js').resolveConfig>;
+  resolveMCPConfig(id: string, entry: import('../../../packages/core/src/mcp/mcp-catalogue.js').MCPCatalogueEntry): ReturnType<typeof import('../../../packages/core/src/mcp/mcp-catalogue.js').resolveConfig>;
   saveMCPEnabled(): Promise<void>;
   enabledMCPIds: Set<string>;
   getAgentStore(): AgentDefinitionStore | null;
@@ -741,7 +741,7 @@ export class AgentRouter {
       const def = await store.addOrUpdate({
         id: uuidv4(),
         identity: { name: name.trim(), visualDescription: visualDescription?.trim() || 'a focused, capable team member', specialisation: specialisation?.trim() || undefined, backstory: backstory?.trim() || undefined },
-        hatType: hatTypes as import('../hats/types.js').HatType[],
+        hatType: hatTypes as import('../../../packages/core/src/hats/types.js').HatType[],
         model: resolvedModel, providerName: resolvedProvider,
         scheduledActionIds: [],
       });
@@ -836,7 +836,7 @@ export class AgentRouter {
           ...(patch.speakerName       !== undefined && { speakerName: patch.speakerName ?? undefined }),
           ...(patch.background        !== undefined && { background: patch.background ?? undefined }),
         },
-        ...(patch.hatTypes          !== undefined && { hatType: patch.hatTypes as import('../hats/types.js').HatType[] }),
+        ...(patch.hatTypes          !== undefined && { hatType: patch.hatTypes as import('../../../packages/core/src/hats/types.js').HatType[] }),
         ...(patch.provider          !== undefined && { providerName: patch.provider }),
         ...(patch.model             !== undefined && { model: patch.model.trim() }),
         ...(patch.maxContextTokens  !== undefined && { maxContextTokens: patch.maxContextTokens ?? undefined }),

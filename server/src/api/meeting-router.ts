@@ -1,7 +1,7 @@
 import { IncomingMessage, ServerResponse } from 'http';
 import { TeamOrchestrator } from '../orchestrator/orchestrator.js';
 import { MeetingType } from '../orchestrator/types.js';
-import { log } from '../util/logger.js';
+import { log } from '../../../packages/core/src/logger.js';
 
 export interface MeetingRouterDeps {
   getOrchestrator(): TeamOrchestrator;

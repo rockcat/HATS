@@ -2,7 +2,7 @@ import * as path from 'path';
 import { mkdir, writeFile } from 'fs/promises';
 import { TeamOrchestrator } from '../orchestrator/orchestrator.js';
 import { StoredEvent } from '../store/event-store.js';
-import { log } from '../util/logger.js';
+import { log } from '../../../packages/core/src/logger.js';
 import { KanbanManager } from './kanban-manager.js';
 import { HumanRequestStore } from './human-request-store.js';
 import { EmailAllowlistStore } from './email-allowlist-store.js';

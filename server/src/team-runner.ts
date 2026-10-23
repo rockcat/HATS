@@ -24,7 +24,7 @@
  */
 
 import { existsSync, readFileSync, writeFileSync } from 'fs';
-import { repointBuiltinServer } from './mcp/builtin-server.js';
+import { repointBuiltinServer } from '../../packages/core/src/mcp/builtin-server.js';
 import { mkdir } from 'fs/promises';
 import * as path from 'path';
 import { TeamOrchestrator } from './orchestrator/orchestrator.js';
@@ -33,13 +33,13 @@ import { APIServer, ProjectLoader } from './api/api-server.js';
 import { AnthropicProvider } from './providers/anthropic.js';
 import { OpenAIProvider, OllamaProvider, LMStudioProvider } from './providers/openai.js';
 import { GeminiProvider } from './providers/gemini.js';
-import { HatType } from './hats/types.js';
-import { initCatalogue } from './mcp/catalogue-store.js';
+import { HatType } from '../../packages/core/src/hats/types.js';
+import { initCatalogue } from '../../packages/core/src/mcp/catalogue-store.js';
 import { AgentStore, type AgentDefinitionStore } from './api/agent-store.js';
 import { LibraryAgentStore } from './api/library-agent-store.js';
 import { ScheduledActionStore } from './api/scheduled-action-store.js';
 import { seedBuiltIns } from './store/built-in-agents.js';
-import { runtimeDir } from './util/runtime-dir.js';
+import { runtimeDir } from '../../packages/core/src/runtime-dir.js';
 import { UserStore } from './api/user-store.js';
 import { AgentLibraryClient } from '../../packages/clients/src/agent-library-client.js';
 import { resolveProjectSource } from './project/project-source.js';

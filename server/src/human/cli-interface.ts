@@ -1,7 +1,7 @@
 import * as readline from 'readline';
-import { log } from '../util/logger.js';
+import { log } from '../../../packages/core/src/logger.js';
 import { TeamOrchestrator, ProviderFactory } from '../orchestrator/orchestrator.js';
-import { HatType } from '../hats/types.js';
+import { HatType } from '../../../packages/core/src/hats/types.js';
 import { DEFAULT_MODEL, DEFAULT_PROVIDER } from '../providers/default-provider.js';
 
 const HAT_NAMES: Record<string, HatType> = {

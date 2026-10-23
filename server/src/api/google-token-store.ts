@@ -1,5 +1,5 @@
 import { readFile, writeFile } from 'fs/promises';
-import { log } from '../util/logger.js';
+import { log } from '../../../packages/core/src/logger.js';
 
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 

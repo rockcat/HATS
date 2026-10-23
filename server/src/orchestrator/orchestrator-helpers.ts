@@ -1,8 +1,8 @@
 import * as path from 'path';
 import { mkdir } from 'fs/promises';
 import { v4 as uuidv4 } from 'uuid';
-import { log } from '../util/logger.js';
-import { HatType } from '../hats/types.js';
+import { log } from '../../../packages/core/src/logger.js';
+import { HatType } from '../../../packages/core/src/hats/types.js';
 import { IAgent } from '../agent/iagent.js';
 import { Task, TeamMessage } from './types.js';
 import { toProjectSlug } from './orchestrator-utils.js';

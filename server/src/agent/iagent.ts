@@ -1,4 +1,4 @@
-import { HatType } from '../hats/types.js';
+import { HatType } from '../../../packages/core/src/hats/types.js';
 import { AIProvider, ToolDefinition } from '../providers/types.js';
 import { TeamMessage } from '../orchestrator/types.js';
 import { Semaphore } from '../providers/semaphore.js';

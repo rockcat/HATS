@@ -1,5 +1,5 @@
 import OpenAI from 'openai';
-import { log } from '../util/logger.js';
+import { log } from '../../../packages/core/src/logger.js';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import type { FaceBounds } from './types.js';

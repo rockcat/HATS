@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { log } from '../util/logger.js';
+import { log } from '../../../packages/core/src/logger.js';
 import { AIProvider, CompletionRequest, CompletionResponse, ProviderError } from './types.js';
 import { debugState, writePromptLog, tk } from './debug-state.js';
 

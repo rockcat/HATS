@@ -4,7 +4,7 @@ import { Meeting, MeetingTurn } from './types.js';
 import { IAgent } from '../agent/iagent.js';
 import { EventStore } from '../store/event-store.js';
 import { renderMarkdown } from '../human/markdown.js';
-import { log } from '../util/logger.js';
+import { log } from '../../../packages/core/src/logger.js';
 import { RAISE_HAND } from '../tools/definitions.js';
 
 export type HumanResponder = (transcript: MeetingTurn[], topic: string) => Promise<string | null>;

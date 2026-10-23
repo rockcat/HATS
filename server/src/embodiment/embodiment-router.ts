@@ -14,7 +14,7 @@ import type { IAgent } from '../agent/iagent.js';
 import type { TeamOrchestrator } from '../orchestrator/orchestrator.js';
 import type { StoredEvent } from '../store/event-store.js';
 import type { SpeechGateway } from '../speech/speech-gateway.js';
-import { log } from '../util/logger.js';
+import { log } from '../../../packages/core/src/logger.js';
 import {
   badRequest, binary, fail, json, notFound, readJsonBody,
   matchRoute, MethodNotAllowed, get, post, put, del, noContent, type Route,

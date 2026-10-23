@@ -10,7 +10,7 @@
 import * as path from 'path';
 import { ProjectServerClient } from '../../../packages/clients/src/project-server-client.js';
 import type { ProjectDefinition } from '../../../packages/contracts/src/types.js';
-import { log } from '../util/logger.js';
+import { log } from '../../../packages/core/src/logger.js';
 
 export interface ProjectSourceOptions {
   /** Base URL of the Project Server, or null to stay standalone. */
