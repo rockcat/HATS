@@ -11,12 +11,12 @@
  * project definition that gets shared around.
  */
 
-import { get, json, type Route } from '../../../../packages/service-kit/src/index.js';
-import { getCatalogue } from '../../../../packages/core/src/mcp/catalogue-store.js';
+import { get, json, type Route } from '@hats/service-kit/index';
+import { getCatalogue } from '@hats/core/mcp/catalogue-store';
 import {
   envVarName, envVarPlaceholder, isHumanMcp, type MCPCatalogueEntry,
-} from '../../../../packages/core/src/mcp/mcp-catalogue.js';
-import type { McpServerDefinition } from '../../../../packages/contracts/src/types.js';
+} from '@hats/core/mcp/mcp-catalogue';
+import type { McpServerDefinition } from '@hats/contracts/types';
 
 const BASE = '/api/v1';
 

@@ -14,9 +14,9 @@
 import { spawn, ChildProcess } from 'child_process';
 import { readdir } from 'fs/promises';
 import * as path from 'path';
-import { log } from '../../../packages/core/src/logger.js';
-import { readSpeakers, resolveVoicesDir } from '../../../packages/speech-core/src/voice-models.js';
-import type { RunningVoice } from '../../../packages/speech-core/src/types.js';
+import { log } from '@hats/core/logger';
+import { readSpeakers, resolveVoicesDir } from '@hats/speech-core/voice-models';
+import type { RunningVoice } from '@hats/speech-core/types';
 
 /** A voice this manager has started, and where to reach it. */
 export type PiperVoice = RunningVoice;

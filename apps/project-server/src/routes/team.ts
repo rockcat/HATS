@@ -3,12 +3,12 @@
 import {
   badRequest, fail, json, noContent, notFound, readJsonBody,
   del, get, patch, post, type Route,
-} from '../../../../packages/service-kit/src/index.js';
-import { createDeployedAgent, deployTemplate } from '../../../../packages/contracts/src/factories.js';
-import { validateDeployedAgent } from '../../../../packages/contracts/src/validate.js';
-import type { AgentLibraryClient } from '../../../../packages/clients/src/agent-library-client.js';
-import { ServiceUnavailableError } from '../../../../packages/clients/src/http-client.js';
-import type { DeployedAgent } from '../../../../packages/contracts/src/types.js';
+} from '@hats/service-kit/index';
+import { createDeployedAgent, deployTemplate } from '@hats/contracts/factories';
+import { validateDeployedAgent } from '@hats/contracts/validate';
+import type { AgentLibraryClient } from '@hats/clients/agent-library-client';
+import { ServiceUnavailableError } from '@hats/clients/http-client';
+import type { DeployedAgent } from '@hats/contracts/types';
 import type { ProjectStore } from '../project-store.js';
 import { withStoreErrors } from './projects.js';
 

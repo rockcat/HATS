@@ -7,20 +7,20 @@
  */
 
 import { access, rename } from 'fs/promises';
-import { JsonStore, readJsonFile } from '../../../packages/service-kit/src/json-store.js';
+import { JsonStore, readJsonFile } from '@hats/service-kit/json-store';
 import {
   createAgentTemplate,
   patchAgentTemplate,
   replaceAgentTemplate,
-} from '../../../packages/contracts/src/factories.js';
-import { validateAgentTemplate } from '../../../packages/contracts/src/validate.js';
+} from '@hats/contracts/factories';
+import { validateAgentTemplate } from '@hats/contracts/validate';
 import type {
   AgentTemplate,
   AgentTemplateInput,
   ExternalEndpoint,
   HatTypeName,
   ProviderName,
-} from '../../../packages/contracts/src/types.js';
+} from '@hats/contracts/types';
 
 /** Shape of the pre-rearchitecture `agents.json` entries. */
 interface LegacyAgentDefinition {

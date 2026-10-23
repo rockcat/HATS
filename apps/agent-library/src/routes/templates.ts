@@ -3,8 +3,8 @@
 import {
   badRequest, json, noContent, notFound, readJsonBody,
   del, get, patch, post, put, type Route, type RequestContext,
-} from '../../../../packages/service-kit/src/index.js';
-import type { AgentTemplateInput } from '../../../../packages/contracts/src/types.js';
+} from '@hats/service-kit/index';
+import type { AgentTemplateInput } from '@hats/contracts/types';
 import type { TemplateStore } from '../template-store.js';
 import { renderTemplatePrompt } from '../prompt-preview.js';
 

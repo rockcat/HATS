@@ -9,11 +9,11 @@
 import {
   badRequest, json, noContent, notFound, readJsonBody,
   del, get, put, type Route,
-} from '../../../../packages/service-kit/src/index.js';
-import { getCatalogue } from '../../../../packages/core/src/mcp/catalogue-store.js';
+} from '@hats/service-kit/index';
+import { getCatalogue } from '@hats/core/mcp/catalogue-store';
 import {
   envVarName, envVarPlaceholder, isAgentMcp, isHumanMcp, type MCPCatalogueEntry,
-} from '../../../../packages/core/src/mcp/mcp-catalogue.js';
+} from '@hats/core/mcp/mcp-catalogue';
 import type { CredentialStore, CredentialSet } from '../credential-store.js';
 import { maskCredentials } from '../credential-store.js';
 import type { TemplateStore } from '../template-store.js';

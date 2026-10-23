@@ -3,9 +3,9 @@
 import {
   badRequest, conflict, json, noContent, notFound, readJsonBody,
   del, get, patch, post, put, type RequestContext, type Route,
-} from '../../../../packages/service-kit/src/index.js';
-import { isValidProjectId, slugifyProjectId } from '../../../../packages/contracts/src/factories.js';
-import type { ProjectDefinition } from '../../../../packages/contracts/src/types.js';
+} from '@hats/service-kit/index';
+import { isValidProjectId, slugifyProjectId } from '@hats/contracts/factories';
+import type { ProjectDefinition } from '@hats/contracts/types';
 import { ProjectStore, RevisionConflictError, ValidationError } from '../project-store.js';
 import { resolveServerIds } from './mcp.js';
 

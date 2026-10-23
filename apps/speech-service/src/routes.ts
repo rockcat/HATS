@@ -9,9 +9,9 @@
  */
 
 import type { ServerResponse } from 'http';
-import { badRequest, fail, get, json, post, readJsonBody, type Route } from '../../../packages/service-kit/src/index.js';
-import { resolveSpeakerId, resolveVoice } from '../../../packages/speech-core/src/voice-models.js';
-import type { SpeechChunk, SynthesiseRequest } from '../../../packages/speech-core/src/types.js';
+import { badRequest, fail, get, json, post, readJsonBody, type Route } from '@hats/service-kit/index';
+import { resolveSpeakerId, resolveVoice } from '@hats/speech-core/voice-models';
+import type { SpeechChunk, SynthesiseRequest } from '@hats/speech-core/types';
 import { isSpeechAvailable, processSpeech, runPiperServer } from './pipeline.js';
 import type { VoiceManager } from './voice-manager.js';
 

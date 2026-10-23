@@ -9,13 +9,13 @@
 
 import { mkdir, rm } from 'fs/promises';
 import * as path from 'path';
-import { JsonStore, readJsonFile, writeJsonFile } from '../../../packages/service-kit/src/json-store.js';
+import { JsonStore, readJsonFile, writeJsonFile } from '@hats/service-kit/json-store';
 import {
   createProject, reviseProject, summariseProject,
   type CreateProjectInput,
-} from '../../../packages/contracts/src/factories.js';
-import { validateProject } from '../../../packages/contracts/src/validate.js';
-import type { ProjectDefinition, ProjectSummary } from '../../../packages/contracts/src/types.js';
+} from '@hats/contracts/factories';
+import { validateProject } from '@hats/contracts/validate';
+import type { ProjectDefinition, ProjectSummary } from '@hats/contracts/types';
 
 export class RevisionConflictError extends Error {
   readonly expected: number;

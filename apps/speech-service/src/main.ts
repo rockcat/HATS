@@ -11,7 +11,7 @@
  * Start it with `npm run speech-service`.
  */
 
-import { startService } from '../../../packages/service-kit/src/index.js';
+import { startService } from '@hats/service-kit/index';
 import { config } from './config.js';
 import { speechRoutes } from './routes.js';
 import { isSpeechAvailable } from './pipeline.js';

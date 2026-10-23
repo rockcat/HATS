@@ -6,9 +6,9 @@
  * and writes back what the team changes at runtime.
  */
 
-import { metaRoutes, startService } from '../../../packages/service-kit/src/index.js';
-import { initCatalogue } from '../../../packages/core/src/mcp/catalogue-store.js';
-import { AgentLibraryClient } from '../../../packages/clients/src/agent-library-client.js';
+import { metaRoutes, startService } from '@hats/service-kit/index';
+import { initCatalogue } from '@hats/core/mcp/catalogue-store';
+import { AgentLibraryClient } from '@hats/clients/agent-library-client';
 import { activeFilePath, config } from './config.js';
 import { ProjectStore } from './project-store.js';
 import { projectRoutes } from './routes/projects.js';

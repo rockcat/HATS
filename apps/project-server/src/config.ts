@@ -1,5 +1,5 @@
 import * as path from 'path';
-import { runtimeDir } from '../../../packages/core/src/runtime-dir.js';
+import { runtimeDir } from '@hats/core/runtime-dir';
 
 export const config = {
   name: 'ProjectServer',

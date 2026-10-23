@@ -13,9 +13,9 @@ import { promisify } from 'util';
 import { readFile, unlink, writeFile } from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';
-import type { VisemeEvent, SpeechChunk } from '../../../packages/speech-core/src/types.js';
-import { RHUBARB_TO_ARKIT } from '../../../packages/speech-core/src/rhubarb-map.js';
-import { log } from '../../../packages/core/src/logger.js';
+import type { VisemeEvent, SpeechChunk } from '@hats/speech-core/types';
+import { RHUBARB_TO_ARKIT } from '@hats/speech-core/rhubarb-map';
+import { log } from '@hats/core/logger';
 
 const execFileAsync = promisify(execFile);
 

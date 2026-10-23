@@ -4,13 +4,13 @@ import { readFile, readdir } from 'fs/promises';
 import * as path from 'path';
 import {
   badRequest, binary, fail, get, json, post, readJsonBody, type Route,
-} from '../../../../packages/service-kit/src/index.js';
-import { SpeechClient } from '../../../../packages/clients/src/speech-client.js';
-import { hatDefinitions } from '../../../../packages/core/src/hats/definitions.js';
-import { personasByHat } from '../../../../packages/core/src/hats/personas.js';
-import { SPECIALISATION_DIRECTIVES } from '../../../../packages/core/src/prompt/generator.js';
-import { KNOWN_PROVIDERS } from '../../../../packages/core/src/providers.js';
-import { listVoices } from '../../../../packages/speech-core/src/voice-models.js';
+} from '@hats/service-kit/index';
+import { SpeechClient } from '@hats/clients/speech-client';
+import { hatDefinitions } from '@hats/core/hats/definitions';
+import { personasByHat } from '@hats/core/hats/personas';
+import { SPECIALISATION_DIRECTIVES } from '@hats/core/prompt/generator';
+import { KNOWN_PROVIDERS } from '@hats/core/providers';
+import { listVoices } from '@hats/speech-core/voice-models';
 
 const BASE = '/api/v1';
 

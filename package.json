@@ -65,7 +65,12 @@
     "qrcode": "^1.5.4",
     "three": "0.162.0",
     "uuid": "^11.1.0",
-    "ws": "^8.19.0"
+    "ws": "^8.19.0",
+    "@hats/core": "file:../hats-runner/packages/core",
+    "@hats/contracts": "file:../hats-runner/packages/contracts",
+    "@hats/clients": "file:../hats-runner/packages/clients",
+    "@hats/service-kit": "file:../hats-runner/packages/service-kit",
+    "@hats/speech-core": "file:../hats-runner/packages/speech-core"
   },
   "devDependencies": {
     "@types/fluent-ffmpeg": "^2.1.28",

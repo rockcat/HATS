@@ -14,7 +14,7 @@
 
 import * as path from 'path';
 import { fileURLToPath } from 'url';
-import { get, json, proxyRoutes, startService } from '../../../packages/service-kit/src/index.js';
+import { get, json, proxyRoutes, startService } from '@hats/service-kit/index';
 import { uiKitMount } from '../../../packages/ui-kit/index.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
