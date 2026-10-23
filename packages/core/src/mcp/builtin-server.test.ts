@@ -3,7 +3,7 @@ import { existsSync } from 'fs';
 import * as path from 'path';
 import {
   BUILTIN_PREFIX, builtin, builtinServerCommand, expandBuiltin, isBuiltinMarker,
-  repointBuiltinServer,
+  repointBuiltinServer, repoRootFrom,
 } from './builtin-server.js';
 import { resolveConfig } from './mcp-catalogue.js';
 
@@ -57,6 +57,26 @@ describe('deciding how to start it', () => {
     // older layout was still lying around.
     const { args } = builtinServerCommand('mcp/kanban/server');
     expect(existsSync(args[args.length - 1]!)).toBe(true);
+  });
+
+  it('finds the root from inside the compiled output, not dist\'s mirror of it', () => {
+    // The Docker image: only server/dist, and dist mirrors the repo, so
+    // server/dist has a server/src of its own. Stopping there named
+    // server/dist/server/dist/…, and then a .ts file that is not shipped.
+    const app = path.resolve('/app');
+    const dist = path.join(app, 'server', 'dist');
+    const present = new Set([path.join(dist, 'server', 'src'), dist]);
+    const here = path.join(dist, 'packages', 'core', 'src', 'mcp');
+
+    expect(repoRootFrom(here, (p) => present.has(p))).toBe(app);
+  });
+
+  it('finds the root from the source tree', () => {
+    const repo = path.resolve('/repo');
+    const present = new Set([path.join(repo, 'server', 'src')]);
+    const here = path.join(repo, 'packages', 'core', 'src', 'mcp');
+
+    expect(repoRootFrom(here, (p) => present.has(p))).toBe(repo);
   });
 
   it('points at a real file for the calendar too', () => {
