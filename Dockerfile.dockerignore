@@ -1,0 +1,43 @@
+# Ignore rules for the build, resolved against the context — which is the
+# directory holding both repositories, not this one. BuildKit looks for
+# <dockerfile>.dockerignore, which is why this sits next to the Dockerfile
+# rather than at the context root we do not own.
+
+# Never ship an install. It is platform-specific, and the image builds its
+# own; copying one in is how a Windows binary ends up in a Linux container.
+**/node_modules
+
+**/.git
+**/.gitignore
+**/.github
+
+# Secrets and local state. Compose passes .env at run time instead.
+**/.env
+**/.env.*
+!**/.env.example
+**/runtime_data
+**/dist
+**/dist-desktop
+**/build
+
+# Nothing in the runner repo is needed except the libraries, and those are
+# copied explicitly. This keeps the context small and makes it impossible to
+# accidentally bake the runner into a services image.
+hats-runner/server
+hats-runner/apps
+hats-runner/scripts
+hats-runner/docs
+hats-runner/runtime_data
+
+# Not part of any service.
+HATS/apps/flutter
+HATS/apps/poppyinyourpocket
+HATS/apps/electron
+HATS/docs
+HATS/tools
+**/*.md
+**/*.log
+**/.claude
+**/.vscode
+**/.idea
+**/.dart_tool
