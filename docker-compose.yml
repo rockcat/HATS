@@ -20,6 +20,9 @@ services:
       # localhost in .env means the container itself here, not your machine.
       # Overrides .env; set DOCKER_OLLAMA_BASE_URL to point somewhere else.
       OLLAMA_BASE_URL: ${DOCKER_OLLAMA_BASE_URL:-http://host.docker.internal:11434/v1}
+      # Voices come from the Speech Service, not the runner — without it the
+      # voice list is empty. Set DOCKER_SPEECH_SERVICE_URL to point elsewhere.
+      SPEECH_SERVICE_URL: ${DOCKER_SPEECH_SERVICE_URL:-http://host.docker.internal:3050}
     extra_hosts:
       # Docker Desktop provides host.docker.internal; plain Linux Docker needs this.
       - "host.docker.internal:host-gateway"
