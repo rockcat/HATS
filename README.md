@@ -1,3 +1,6 @@
+# This repo is no longer being developed #
+
+
 # HATS — AI agents that disagree to make better decisions
 
 Don't ask one AI, start running a team.
