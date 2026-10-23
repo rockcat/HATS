@@ -61,17 +61,14 @@ COPY package.json ./
 # The volume must contain at minimum: avatars/, config/, data/
 VOLUME ["/app/runtime_data"]
 
-# Speech (Piper voices) is a separate service — see SPEECH_SERVICE_URL in
-# docker-compose.yml. The runner only talks to it.
+# Speech, the Agent Library and the Project Server are separate services — see
+# the *_URL settings in docker-compose.yml. The runner only talks to them, and
+# falls back to local files when the library or project server is not there.
 EXPOSE 3001
 
-# Standalone: don't probe the Agent Library / Project Server on localhost —
-# inside a container they are never there. Override with HATS_STANDALONE=0 and
-# AGENT_LIBRARY_URL / PROJECT_SERVER_URL to use them.
 # Headless: no terminal is attached, so no chat CLI — it would read EOF and exit.
 ENV NODE_ENV=production \
     RUNTIME_DIR=/app/runtime_data \
-    HATS_STANDALONE=1 \
     HATS_HEADLESS=1
 
 # The compilation root is the repo (the server imports packages/), so the

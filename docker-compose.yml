@@ -20,6 +20,10 @@ services:
       # Voices come from the Speech Service, not the runner — without it the
       # voice list is empty. Set DOCKER_SPEECH_SERVICE_URL to point elsewhere.
       SPEECH_SERVICE_URL: ${DOCKER_SPEECH_SERVICE_URL:-http://host.docker.internal:3050}
+      # Optional: when these do not answer, the runner uses the local agents.json
+      # and project folders instead.
+      AGENT_LIBRARY_URL: ${DOCKER_AGENT_LIBRARY_URL:-http://host.docker.internal:3010}
+      PROJECT_SERVER_URL: ${DOCKER_PROJECT_SERVER_URL:-http://host.docker.internal:3020}
     extra_hosts:
       # Docker Desktop provides host.docker.internal; plain Linux Docker needs this.
       - "host.docker.internal:host-gateway"
