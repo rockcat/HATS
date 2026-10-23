@@ -59,6 +59,24 @@ const argv = process.argv.slice(2);
 const NO_EMAIL   = argv.includes('--no-email');
 const STANDALONE = argv.includes('--standalone') || process.env['HATS_STANDALONE'] === '1';
 if (NO_EMAIL) process.env['HATS_NO_EMAIL'] = '1';
+
+/**
+ * Run without the chat CLI, as a service does.
+ *
+ * The CLI closes the process when its input ends. That is right at a
+ * terminal, where the input ending means the person has gone, and wrong
+ * everywhere else: in a container there is no stdin at all, so the runner
+ * used to start, restore its state, and exit within a second of being
+ * launched — looking for all the world like a crash.
+ *
+ * Detected rather than only declared, because the common cases are not ones
+ * anybody remembers to pass a flag for: `docker run` without -i, a systemd
+ * unit, a CI job. Pass --headless to be explicit, or HATS_FORCE_CLI=1 to
+ * insist on the CLI when piping commands into it on purpose.
+ */
+const HEADLESS = argv.includes('--headless')
+  || process.env['HATS_HEADLESS'] === '1'
+  || (!process.stdin.isTTY && process.env['HATS_FORCE_CLI'] !== '1');
 const positionalArgs = argv.filter(a => !a.startsWith('--'));
 
 const PROJECTS_ROOT = process.env['PROJECTS_ROOT']
@@ -296,6 +314,14 @@ async function main() {
     await api.shutdown();
     process.exit(0);
   });
+
+  if (HEADLESS) {
+    // The API server's listening socket is what keeps the process alive, so
+    // there is nothing to start here — only to say so, because a runner that
+    // prints nothing after this point looks hung rather than ready.
+    console.log('[Team] Headless — no chat CLI. Talk to it through the web UI or the API.');
+    return;
+  }
 
   const blueHat = orchestrator.listAgents().find(a => a.hatType.includes(HatType.Blue));
   const cli = new CLIInterface(orchestrator, blueHat?.name ?? orchestrator.listAgents()[0]?.name ?? 'Amara', STATE_FILE, providerFactory);

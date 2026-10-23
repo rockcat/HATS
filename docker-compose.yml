@@ -16,6 +16,8 @@ services:
     environment:
       NODE_ENV: production
       RUNTIME_DIR: /app/runtime_data
+      # No terminal attached, so no chat CLI — it would read EOF and exit.
+      HATS_HEADLESS: "1"
       PIPER_VOICES_DIR: /app/runtime_data/piper_voices
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3001/api/state"]

@@ -70,8 +70,12 @@ EXPOSE 3001
 # Piper TTS servers (one per voice model, starting at PIPER_SERVER_PORT_START)
 EXPOSE 5100-5120
 
+# Headless because there is no terminal here. The chat CLI closes the process
+# when its input ends, and a container without -i has no stdin at all — the
+# runner would start, restore its state and exit within the second.
 ENV NODE_ENV=production \
-    RUNTIME_DIR=/app/runtime_data
+    RUNTIME_DIR=/app/runtime_data \
+    HATS_HEADLESS=1
 
 # The compilation root is the repo (the server imports packages/), so the
 # emitted entry point keeps its server/src/ path inside dist.
