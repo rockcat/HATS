@@ -28,22 +28,25 @@ export class EmailAllowlistRouter {
     if (pathname === '/api/email-allowlist' && method === 'POST') {
       const body   = await readBody(req);
       const fields = JSON.parse(body) as { email?: string; reason?: string };
-      const email  = fields.email?.trim().toLowerCase();
-      if (!email) { json(res, 400, { error: 'email is required' }); return true; }
-      const existing = this.deps.store.get(email);
-      if (existing) { json(res, 409, { error: 'Email already in allowlist', entry: existing }); return true; }
-      const now: string = new Date().toISOString();
-      const entry: EmailAllowlistEntry = {
-        email,
-        status:      'approved',
-        requestedBy: 'human',
-        reason:      fields.reason,
-        requestedAt: now,
-        approvedAt:  now,
-      };
-      await this.deps.store.add(entry);
+      const emails  = fields.email?.trim().toLowerCase().split(',').map(e => e.trim()).filter(Boolean);
+      if (!emails?.length) { json(res, 400, { error: 'email is required' }); return true; }
+      // filter any existing
+      const newEmails = emails.filter(email => !this.deps.store.get(email));
+      if (!newEmails.length) { json(res, 409, { error: 'All emails already in allowlist' }); return true; }
+      for (const email of newEmails) {
+        const now: string = new Date().toISOString();
+        const entry: EmailAllowlistEntry = {
+          email,
+          status:      'approved',
+          requestedBy: 'human',
+          reason:      fields.reason,
+          requestedAt: now,
+          approvedAt:  now,
+        };
+        await this.deps.store.add(entry);
+      }
       sseBroadcast({ type: 'email_allowlist_update', allowlist: this.deps.store.list() });
-      json(res, 201, entry);
+      json(res, 201, newEmails.map(email => this.deps.store.get(email)));
       return true;
     }
 

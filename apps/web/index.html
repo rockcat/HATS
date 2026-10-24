@@ -17,7 +17,7 @@
 </head>
 <body>
   <header>
-    <h1>Team RunnerDashboard
+    <h1>Team Runner Dashboard
     </h1>
     <div class="project-selector">
       <h1>Project:</h1>
@@ -334,10 +334,12 @@
           <button id="agent-config-apply" class="agent-config-btn">Apply</button>
         </div>
       </div>
-      <div id="avatar-panel" class="avatar-panel" hidden>
-        <canvas id="avatar-canvas" class="avatar-canvas"></canvas>
+      <div class="agent-comms">
+        <div id="avatar-panel" class="avatar-panel" hidden>
+          <canvas id="avatar-canvas" class="avatar-canvas"></canvas>
+        </div>
+        <conversation-threads id="agent-detail-threads" class="agent-detail-feed"></conversation-threads>
       </div>
-      <conversation-threads id="agent-detail-threads" class="agent-detail-feed"></conversation-threads>
       <div class="agent-detail-tickets" id="agent-detail-tickets"></div>
     </div>
   </div>

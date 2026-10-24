@@ -610,7 +610,9 @@ main {
 }
 
 .agent-cost-idle {
-  margin-top: 4px;
+  position: absolute;
+  top: 11px;
+  right: 6px;
   font-size: 10px;
   color: var(--text-muted);
   font-weight: 500;
@@ -1602,6 +1604,7 @@ main {
 .agent-detail-feed {
   flex: 1;
   min-height: 0;
+  max-height: 600px;
   overflow: hidden;
 }
 
@@ -2590,21 +2593,25 @@ main {
   background: rgba(248,81,73,0.12);
 }
 
+.agent-comms {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  margin-top: 8px;
+}
+
 /* ── Avatar panel ───────────────────────────────────── */
 
 .avatar-panel {
-  flex-shrink: 0;
-  align-self: center;
-  width: min(100%, 280px);
+  align-self: baseline;
   aspect-ratio: 1 / 1;
-  margin: 8px auto;
+  margin: 20px;
   border-radius: 14px;
-  overflow: hidden;
   background: var(--surface);
-  background-size: cover;
-  background-position: center;
   border: 2px solid var(--border);
   position: relative;
+  max-width: 280px;
+  flex: 1 0 280px;
 }
 
 .avatar-canvas {
