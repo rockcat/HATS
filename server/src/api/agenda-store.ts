@@ -13,6 +13,8 @@ export interface AgendaEntry {
   createdAt: string;
   type?: ScheduledActionType;
   mcpToolCall?: McpToolCallSpec;
+  /** The global scheduled action this entry was assigned from, if any. */
+  actionId?: string;
 }
 
 export class AgendaStore {
@@ -61,6 +63,7 @@ export class AgendaStore {
     delaySeconds?: number;
     type?: ScheduledActionType;
     mcpToolCall?: McpToolCallSpec;
+    actionId?: string;
   }): Promise<AgendaEntry> {
     // Deduplicate: if an entry with the same agent+label already exists, update it
     const labelKey = data.label.trim().toLowerCase();
@@ -76,6 +79,7 @@ export class AgendaStore {
         enabled:         true,
         type:            data.type,
         mcpToolCall:     data.mcpToolCall,
+        ...(data.actionId && { actionId: data.actionId }),
       });
       await this.save();
       return existing;
@@ -93,6 +97,7 @@ export class AgendaStore {
       createdAt:       new Date().toISOString(),
       ...(data.type        && { type: data.type }),
       ...(data.mcpToolCall && { mcpToolCall: data.mcpToolCall }),
+      ...(data.actionId    && { actionId: data.actionId }),
     };
     this.entries.set(entry.id, entry);
     await this.save();
@@ -102,7 +107,12 @@ export class AgendaStore {
   async update(id: string, patch: Partial<AgendaEntry>): Promise<AgendaEntry | undefined> {
     const entry = this.entries.get(id);
     if (!entry) return undefined;
-    Object.assign(entry, patch);
+    const { id: _id, agentName: _agent, createdAt: _created, ...editable } = patch;
+    // A new interval starts counting from now; otherwise an entry moved from
+    // daily to hourly would still wait out the rest of its day.
+    const rescheduled = editable.intervalSeconds !== undefined && editable.intervalSeconds !== entry.intervalSeconds;
+    Object.assign(entry, editable);
+    if (rescheduled) entry.nextRunAt = Date.now() + (entry.intervalSeconds ?? 60) * 1000;
     await this.save();
     return entry;
   }

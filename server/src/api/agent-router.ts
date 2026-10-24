@@ -21,6 +21,7 @@ import { EXTERNAL_PROVIDER } from '../agent/external-agent.js';
 import { AgentStatus } from './project-manager.js';
 import { AgentDefinitionStore } from './agent-store.js';
 import { ScheduledActionStore } from './scheduled-action-store.js';
+import { planAssignment, applyAssignment, propagateEdit, removeCopies } from './agenda-sync.js';
 import { Task } from '../orchestrator/types.js';
 
 function labelForThread(key: string, tasks: Task[]): string {
@@ -780,25 +781,13 @@ export class AgentRouter {
       const { scheduledActionIds } = JSON.parse(body) as { scheduledActionIds: string[] };
       const ids = scheduledActionIds ?? [];
       await agentStore.addOrUpdate({ ...def, scheduledActionIds: ids });
-      // Seed runtime agenda entries for newly assigned actions
+      // Make the running agent's agenda match: add newly ticked actions, drop unticked ones.
       if (actionStore) {
         const agendaStore = orch.getAgendaStore();
-        const agent       = orch.listAgents().find(a => a.id === agentId);
+        const agent       = orch.listAgents().find(a => a.id === agentId || a.name === def.identity?.name);
         if (agendaStore && agent) {
-          const existing = agendaStore.list(agent.name).map(e => (e as { actionId?: string }).actionId).filter(Boolean);
-          for (const actionId of ids) {
-            if (existing.includes(actionId)) continue;
-            const actionDef = actionStore.get(actionId);
-            if (!actionDef) continue;
-            await agendaStore.add({
-              agentName: agent.name,
-              label: actionDef.label,
-              description: actionDef.description,
-              intervalSeconds: actionDef.intervalSeconds,
-              type: actionDef.type,
-              mcpToolCall: actionDef.mcpToolCall,
-            });
-          }
+          const plan = planAssignment(agendaStore.list(agent.name), actionStore.list(), ids);
+          await applyAssignment(agendaStore, agent.name, plan);
         }
       }
       json(res, 200, { ok: true });
@@ -938,7 +927,10 @@ export class AgentRouter {
       if (parsed.intervalMinutes !== undefined) {
         patch['intervalSeconds'] = (parsed.intervalMinutes && parsed.intervalMinutes > 0) ? Math.round(parsed.intervalMinutes * 60) : null;
       }
+      const before  = store.get(actionId);
       const updated = await store.update(actionId, patch as never);
+      const agenda  = orch.getAgendaStore();
+      if (before && updated && agenda) await propagateEdit(agenda, before, updated);
       json(res, updated ? 200 : 404, updated ?? { error: 'Action not found' });
       return true;
     }
@@ -947,7 +939,10 @@ export class AgentRouter {
       const actionId = decodeURIComponent(pathname.slice('/api/scheduled-actions/'.length));
       const store    = this.deps.getActionStore();
       if (!store) { json(res, 503, { error: 'Action store not ready' }); return true; }
+      const action = store.get(actionId);
       const ok = await store.remove(actionId);
+      const agenda = orch.getAgendaStore();
+      if (ok && action && agenda) await removeCopies(agenda, action);
       json(res, ok ? 200 : 404, ok ? { ok: true } : { error: 'Action not found' });
       return true;
     }
