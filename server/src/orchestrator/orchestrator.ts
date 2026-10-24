@@ -1017,6 +1017,11 @@ export class TeamOrchestrator {
     if (board) await this.kanbanLoaded;
 
     for (const task of this.listTasks().filter((t) => t.status === 'active')) {
+      if (task.ticketId && !board) {
+        // Resumed anyway, as before — but said, because this is exactly how a
+        // closed ticket kept being resumed without anyone being able to see why.
+        log.warn(`[Team] Resuming ${task.ticketId} without checking it: no project board is open.`);
+      }
       const ticket = task.ticketId && board ? await board.getTicket(task.ticketId) : undefined;
       if (ticket?.column === 'closed') {
         task.status = 'complete';

@@ -157,6 +157,12 @@ function makeProjectLoader(
       humanName:    definition?.humanName ?? 'Boss',
     });
     orchestrator.setAgentStore(agentStore);
+    // Before restoring anything. The API server sets this too, but only once
+    // it starts — after state has been loaded and active tasks resumed. Until
+    // then the orchestrator has no project, so it has no board, so every
+    // ticket looks absent and a task whose ticket was closed gets resumed
+    // anyway. That is how TKT-009 kept coming back.
+    orchestrator.setProjectDir(projectDir);
     await orchestrator.init();
     await orchestrator.initMeetingStore(meetingsFile);
     await orchestrator.initAgendaStore(agendaFile);
@@ -300,12 +306,22 @@ async function main() {
     });
   }
 
-  process.on('SIGINT', async () => {
+  // SIGTERM as well as SIGINT. Ctrl+C sends SIGINT, but `docker stop` — and
+  // so every compose restart and recreate — sends SIGTERM, which nothing
+  // handled. In a container the final save never ran: whatever had changed
+  // since the last turn was simply lost on every stop.
+  let stopping = false;
+  const shutdown = async (signal: string) => {
+    if (stopping) return;            // a second signal must not race the first save
+    stopping = true;
+    console.log(`[Team] ${signal} — saving state and stopping`);
     sync?.stop();
     await sync?.flush().catch(() => {});
     await api.shutdown();
     process.exit(0);
-  });
+  };
+  process.on('SIGINT', () => { void shutdown('SIGINT'); });
+  process.on('SIGTERM', () => { void shutdown('SIGTERM'); });
 
   if (HEADLESS) {
     // The API server's listening socket is what keeps the process alive, so
