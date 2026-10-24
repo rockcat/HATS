@@ -56,11 +56,7 @@ export async function handleCLICommand(line: string, ctx: CLIContext): Promise<s
   }
 
   if (line === 'resume') {
-    const active = ctx.orchestrator.listTasks().filter(t => t.status === 'active');
-    for (const task of active) {
-      const name = ctx.resolveAgentName(task.assignedTo);
-      await ctx.orchestrator.humanMessage(name, `You have an active task to continue: ${task.description}`);
-    }
+    const { resumed: active } = await ctx.orchestrator.resumeActiveTasks();
     await ctx.dispatchUnstartedTickets();
     return active.length > 0
       ? `Resumed ${active.length} active task(s) and re-dispatched in-progress kanban tickets.`

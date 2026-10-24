@@ -2,6 +2,35 @@ import { Message, ToolCall } from '../providers/types.js';
 import { AgentMessage } from './types.js';
 import { TeamMessage } from '../orchestrator/types.js';
 
+/**
+ * The tail of a conversation that fits in front of the model.
+ *
+ * This decides what is *sent*, never what is kept. It used to be applied to
+ * the stored thread itself, so anything older than twenty messages was
+ * deleted outright — an agent forgot a conversation from an hour earlier
+ * because a few restarts had each added a message or two.
+ *
+ * With a token budget it drops the oldest messages until the rest fits (at
+ * roughly four characters a token); without one it keeps the last
+ * `maxMessages`.
+ */
+export function contextWindow<T extends { content?: string | null }>(
+  messages: T[],
+  maxContextTokens?: number,
+  maxMessages = 20,
+): T[] {
+  if (!maxContextTokens) return messages.slice(-maxMessages);
+
+  const maxChars = maxContextTokens * 4;
+  let total = messages.reduce((n, m) => n + (m.content?.length ?? 0), 0);
+  let start = 0;
+  while (messages.length - start > 2 && total > maxChars) {
+    total -= messages[start]!.content?.length ?? 0;
+    start++;
+  }
+  return messages.slice(start);
+}
+
 export function sanitizeHistory<T extends { role: string; toolCalls?: ToolCall[]; toolCallId?: string }>(
   messages: T[],
 ): T[] {

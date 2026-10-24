@@ -422,19 +422,14 @@ export class CLIInterface {
   // ── resume ────────────────────────────────────────────────────────────────
 
   private async resumeActiveTasks(): Promise<void> {
-    const active = this.orchestrator.listTasks().filter(t => t.status === 'active');
-    if (active.length === 0) {
+    const { resumed, retired } = await this.orchestrator.resumeActiveTasks();
+    for (const task of retired) log.info(`  ✓ ${task.ticketId} is closed — task completed rather than resumed`);
+    if (resumed.length === 0) {
       log.info('No active tasks to resume.');
       return;
     }
-
-    log.info(`\nResuming ${active.length} active task(s)…`);
-    for (const task of active) {
-      const name = this.resolveAgentName(task.assignedTo);
-      const msg = `You have an active task to continue: ${task.description}${task.context ? `\n\nContext: ${task.context}` : ''}`;
-      log.info(`  → ${name}: ${task.description.slice(0, 60)}`);
-      await this.orchestrator.humanMessage(name, msg);
-    }
+    log.info(`\nResumed ${resumed.length} active task(s):`);
+    for (const task of resumed) log.info(`  → ${task.assignedTo}: ${task.description.slice(0, 60)}`);
   }
 
   // ── display helpers ───────────────────────────────────────────────────────

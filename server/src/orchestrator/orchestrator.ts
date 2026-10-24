@@ -994,6 +994,47 @@ export class TeamOrchestrator {
 
   getTask(id: string): Task | undefined { return this.tasks.get(id); }
   listTasks(): Task[] { return Array.from(this.tasks.values()); }
+
+  /**
+   * Nudge every agent with an active task to carry on with it.
+   *
+   * Three places used to do this — the runner on startup, the CLI and the
+   * API's resume command — each sending the same message and none checking
+   * the board. So a task whose ticket had been closed stayed "active" for
+   * ever and was resumed on every start: Poppy was told to continue TKT-009,
+   * closed weeks earlier, seven times in an hour, and each exchange pushed
+   * real conversation further back in her thread.
+   *
+   * A task whose ticket is closed is completed here instead of resumed.
+   * Returns what was resumed and what was retired, so callers can say so.
+   */
+  async resumeActiveTasks(): Promise<{ resumed: Task[]; retired: Task[] }> {
+    const resumed: Task[] = [];
+    const retired: Task[] = [];
+    const board = this.kanbanStore();
+    // The board loads asynchronously. Asking an unloaded one finds nothing,
+    // and a closed ticket that looked absent would be resumed anyway.
+    if (board) await this.kanbanLoaded;
+
+    for (const task of this.listTasks().filter((t) => t.status === 'active')) {
+      const ticket = task.ticketId && board ? await board.getTicket(task.ticketId) : undefined;
+      if (ticket?.column === 'closed') {
+        task.status = 'complete';
+        task.completedAt = new Date().toISOString();
+        task.summary ??= `Ticket ${task.ticketId} was closed (${ticket.closedReason ?? 'completed'}).`;
+        retired.push(task);
+        log.info(`[Team] Not resuming ${task.ticketId}: the ticket is closed, so the task is too.`);
+        continue;
+      }
+
+      await this.humanMessage(task.assignedTo,
+        `You have an active task to continue: ${task.description}`
+        + (task.context ? `\n\nContext: ${task.context}` : ''));
+      resumed.push(task);
+    }
+
+    return { resumed, retired };
+  }
   getMeeting(id: string): Meeting | undefined { return this.meetings.get(id); }
   listMeetings(): Meeting[] { return Array.from(this.meetings.values()); }
 

@@ -197,16 +197,8 @@ function makeProjectLoader(
         }
       }
 
-      const activeTasks = orchestrator.listTasks().filter(t => t.status === 'active');
-      if (activeTasks.length > 0) {
-        console.log(`[Team] Resuming ${activeTasks.length} active task(s)…`);
-        for (const task of activeTasks) {
-          await orchestrator.humanMessage(
-            task.assignedTo,
-            `You have an active task to continue: ${task.description}${task.context ? `\n\nContext: ${task.context}` : ''}`,
-          );
-        }
-      }
+      const { resumed } = await orchestrator.resumeActiveTasks();
+      if (resumed.length > 0) console.log(`[Team] Resumed ${resumed.length} active task(s)`);
       return orchestrator;
     }
 

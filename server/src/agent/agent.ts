@@ -12,7 +12,7 @@ import { IAgent } from './iagent.js';
 import { transition } from './state-machine.js';
 import { Semaphore } from '../providers/semaphore.js';
 import { calcCost } from '../providers/pricing.js';
-import { sanitizeHistory, toProviderMessage, formatIncomingMessage } from './agent-utils.js';
+import { contextWindow, sanitizeHistory, toProviderMessage, formatIncomingMessage } from './agent-utils.js';
 
 type TelemetryRecorder = (entry: {
   agent: string; provider: string; model: string;
@@ -20,7 +20,11 @@ type TelemetryRecorder = (entry: {
 }) => void;
 
 const MAX_TOOL_ROUNDS      = 10; // prevent infinite tool loops
-const MAX_HISTORY_MESSAGES = 20; // fallback cap when no maxContextTokens is set
+const MAX_HISTORY_MESSAGES = 20;  // what is SENT when no maxContextTokens is set
+// What a thread KEEPS. Generous, because forgetting is the failure that
+// matters, but bounded: threads are serialised into team-state.json on every
+// save. The event log keeps everything regardless.
+const MAX_STORED_MESSAGES = 500;
 
 export class Agent implements IAgent {
   readonly id: string;
@@ -28,6 +32,14 @@ export class Agent implements IAgent {
   private _state: AgentState;
   private systemPrompt: string;
   private threads = new Map<string, AgentMessage[]>();
+  /**
+   * When each message was first said, keyed by the provider message object.
+   *
+   * Provider messages carry no timestamp, so persisting a turn used to stamp
+   * every message in the thread with new Date() — a thread restored from
+   * disk showed all of its history as having happened at the last save.
+   */
+  private stamps = new WeakMap<Message, Date>();
   private activeTaskId: string | null = null;
 
   private get activeThreadKey(): string { return this.activeTaskId ?? 'general'; }
@@ -267,8 +279,17 @@ export class Agent implements IAgent {
     const tools = [...getToolsForHat(this.config.hatType), ...mcp.upfront];
 
     // Scheduled tasks start fresh — no history needed for a cron-style trigger
-    const history = message.isScheduled ? [] : (this.threads.get(historyKey) ?? []).map(toProviderMessage);
+    // working holds the whole conversation; each request sends a window of
+    // it. Storage and context used to be the same thing, which is how a cap
+    // on what the model sees became a cap on what the agent remembers.
+    const history = message.isScheduled ? [] : this.fromStored(this.threads.get(historyKey) ?? []);
     const working: Message[] = [...history, { role: 'user', content: userContent }];
+    const turnStart = history.length;
+    let withHistory = true;
+    const toSend = (): Message[] => withHistory
+      ? [...sanitizeHistory(contextWindow(working.slice(0, turnStart),
+          this.config.maxContextTokens, MAX_HISTORY_MESSAGES)), ...working.slice(turnStart)]
+      : working.slice(turnStart);
 
     // Persist user message immediately so it appears in the UI while the agent is thinking.
     // persistHistory is called again after the response to add the agent's reply.
@@ -278,7 +299,7 @@ export class Agent implements IAgent {
     for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
       const req: CompletionRequest = {
         systemPrompt: this.systemPrompt,
-        messages: working,
+        messages: toSend(),
         model: this.config.model,
         tools: [...tools], // snapshot so later pushes don't mutate past requests
         agentName: this.name,
@@ -291,14 +312,14 @@ export class Agent implements IAgent {
           : this.config.provider.complete(req));
       } catch (err) {
         if (err instanceof ProviderError && err.statusCode === 400 && err.message.includes('prompt is too long')) {
-          log.warn(`[${this.name}] context overflow — clearing history and retrying`);
-          this.threads.set(historyKey, []);
-          // Rebuild with only the triggering user message — safe regardless of where in the tool loop we are
-          working.splice(0);
-          working.push({ role: 'user', content: userContent });
+          // Send only this turn and retry. This used to empty the thread —
+          // the whole conversation deleted to recover from one oversized
+          // request. Nothing is deleted now; the model just sees less.
+          log.warn(`[${this.name}] context overflow — retrying with this turn only`);
+          withHistory = false;
           response = await (this.llmSemaphore
-            ? this.llmSemaphore.run(() => this.config.provider.complete({ ...req, messages: working }))
-            : this.config.provider.complete({ ...req, messages: working }));
+            ? this.llmSemaphore.run(() => this.config.provider.complete({ ...req, messages: toSend() }))
+            : this.config.provider.complete({ ...req, messages: toSend() }));
         } else {
           throw err;
         }
@@ -360,13 +381,17 @@ export class Agent implements IAgent {
       ...upfront,
       ...extraMeetingTools,
     ];
-    const working: Message[] = [
-      ...this.conversationHistory.map(toProviderMessage),
-      { role: 'user', content: transcript },
-    ];
+    const earlier = this.fromStored(this.conversationHistory);
+    const working: Message[] = [...earlier, { role: 'user', content: transcript }];
+    const meetingStart = earlier.length;
 
     for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-      const req2 = { systemPrompt: this.systemPrompt, messages: working, model: this.config.model, tools: [...tools], agentName: this.name };
+      const sent = [
+        ...sanitizeHistory(contextWindow(working.slice(0, meetingStart),
+          this.config.maxContextTokens, MAX_HISTORY_MESSAGES)),
+        ...working.slice(meetingStart),
+      ];
+      const req2 = { systemPrompt: this.systemPrompt, messages: sent, model: this.config.model, tools: [...tools], agentName: this.name };
       const response = await (this.llmSemaphore
         ? this.llmSemaphore.run(() => this.config.provider.complete(req2))
         : this.config.provider.complete(req2));
@@ -529,26 +554,44 @@ export class Agent implements IAgent {
     }).text;
   }
 
+  /**
+   * Store a thread.
+   *
+   * Everything, up to MAX_STORED_MESSAGES — not the context window. What the
+   * model is shown is decided per request by toSend(); this is what the agent
+   * remembers, and it is no longer the same number.
+   */
   private persistHistory(working: Message[], historyKey: string): void {
-    let sliced = working;
-    if (this.config.maxContextTokens) {
-      const maxChars = this.config.maxContextTokens * 4; // ~4 chars per token
-      while (sliced.length > 2) {
-        const totalChars = sliced.reduce((n, m) => n + (m.content?.length ?? 0), 0);
-        if (totalChars <= maxChars) break;
-        sliced = sliced.slice(1);
-      }
-    } else {
-      sliced = sliced.slice(-MAX_HISTORY_MESSAGES);
-    }
-    this.threads.set(historyKey, sanitizeHistory(sliced).map((m): AgentMessage => ({
+    const now = new Date();
+    const kept = sanitizeHistory(working.slice(-MAX_STORED_MESSAGES));
+    this.threads.set(historyKey, kept.map((m): AgentMessage => ({
       role: m.role,
       content: m.content,
-      timestamp: new Date(),
+      timestamp: this.stampOf(m, now),
       toolCalls: m.toolCalls,
       toolCallId: m.toolCallId,
       toolName: m.toolName,
     })));
+  }
+
+  /** Stored messages as provider messages, remembering when each was said. */
+  private fromStored(stored: AgentMessage[]): Message[] {
+    return stored.map((m) => {
+      const message = toProviderMessage(m);
+      const at = m.timestamp instanceof Date ? m.timestamp : new Date(m.timestamp as unknown as string);
+      if (!Number.isNaN(at.getTime())) this.stamps.set(message, at);
+      return message;
+    });
+  }
+
+  /** When a message was first said; now, the first time it is persisted. */
+  private stampOf(message: Message, now: Date): Date {
+    let at = this.stamps.get(message);
+    if (!at) {
+      at = now;
+      this.stamps.set(message, at);
+    }
+    return at;
   }
 
   getHistory(): AgentMessage[] { return [...(this.threads.get('general') ?? [])]; }
