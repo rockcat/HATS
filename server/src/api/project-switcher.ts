@@ -53,7 +53,6 @@ export async function executeProjectSwitch(newId: string, ctx: ProjectSwitchCont
   await mkdir(newProjectDir, { recursive: true });
 
   ctx.unsubscribeEvents?.();
-  ctx.kanbanManager.closeWatcher();
   ctx.agentActivity.clear();
   ctx.agentFeeds.clear();
   ctx.agentTicketMap.clear();
@@ -89,7 +88,6 @@ export async function executeProjectSwitch(newId: string, ctx: ProjectSwitchCont
   await ctx.projectManager.initTelemetryStore(path.join(newProjectDir, 'telemetry.jsonl'));
   ctx.onStateChange({ unsubscribeEvents: ctx.subscribeToOrchestrator(newOrchestrator) });
 
-  ctx.kanbanManager.watchKanban(newKanbanFile);
   await ctx.humanRequestStore.switchTo(newRequestsFile).catch(() => {});
   await ctx.emailAllowlistStore.switchTo(newAllowlistFile).catch(() => {});
   newOrchestrator.setEmailAllowlistStore(ctx.emailAllowlistStore);

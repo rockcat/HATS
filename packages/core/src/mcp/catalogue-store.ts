@@ -8,14 +8,6 @@ import { builtin } from './builtin-server.js';
 // Uses ~/ prefix for home-directory paths (expanded by resolveConfig at connect time).
 export const BUILTIN_CATALOGUE: MCPCatalogueEntry[] = [
   {
-    id: 'kanban',
-    name: 'Kanban Board',
-    description: 'Built-in kanban board for ticket and task tracking',
-    category: 'productivity',
-    users: ['human'],
-    config: { transport: 'stdio', command: 'node', args: [builtin('mcp/kanban/server')] },
-  },
-  {
     id: 'calendar',
     name: 'Calendar',
     description: 'A diary of its own for each agent — meetings, free/busy, and invitations by email',

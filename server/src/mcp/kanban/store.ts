@@ -263,6 +263,29 @@ export class KanbanStore {
   }
 
   private async persist(): Promise<void> {
-    await fs.writeFile(this.filePath, JSON.stringify(this.board, null, 2), 'utf-8');
+    // Temp then rename, so a crash mid-write leaves the previous board whole.
+    // A plain writeFile truncates first, and load() throws on a partial file
+    // rather than silently starting from an empty board.
+    const tmp = `${this.filePath}.tmp`;
+    await fs.writeFile(tmp, JSON.stringify(this.board, null, 2), 'utf-8');
+    await fs.rename(tmp, this.filePath);
+  }
+
+  /**
+   * The whole board.
+   *
+   * For the HTTP routes, which edit in bulk rather than a ticket at a time.
+   * Everything still goes through this object, which is the point — there
+   * used to be three places that opened the file.
+   */
+  async getBoard(): Promise<Board> {
+    await this.reload();
+    return this.board;
+  }
+
+  /** Replace the board wholesale, for the same callers. */
+  async replaceBoard(board: Board): Promise<void> {
+    this.board = board;
+    await this.persist();
   }
 }

@@ -88,14 +88,3 @@ export function assembleDefaultTeam(
   return [blueIdentity.name, ...selected.map((a) => a.identity.name)];
 }
 
-/** The default kanban MCP server for a brand new local project. */
-export function defaultKanbanServer(kanbanFile: string): MCPServerDef {
-  // Resolved the same way the catalogue entry is, so there is one answer to
-  // "how does the kanban server start" rather than two that can drift apart —
-  // which is exactly how the catalogue came to name a path no build writes.
-  const { command, args } = builtinServerCommand('mcp/kanban/server');
-  return {
-    name: 'kanban',
-    config: { transport: 'stdio', command, args: [...args, kanbanFile] },
-  } as MCPServerDef;
-}

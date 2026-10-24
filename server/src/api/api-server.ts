@@ -183,6 +183,10 @@ export class APIServer {
       resolveAgentName: (n) => self.resolveAgentName(n),
       agentIdForName:   (n) => self.orchestrator.agentIdForName(n) ?? n,
       sseBroadcast: (d) => self.sseBroadcast(d),
+      // The orchestrator owns the board, because it owns the project. Read
+      // through a getter rather than captured, so switching project swaps
+      // the board underneath without anything having to be rebuilt.
+      getKanbanStore: () => self.orchestrator.kanbanStore(),
       json: (r, s, b) => self.json(r, s, b),
       readBody,
     });
@@ -426,7 +430,6 @@ export class APIServer {
     if (this.kanbanManager.kanbanPath) this.kanbanManager.dispatchUnstartedTickets().catch(() => {});
 
     this.nudgeScheduler = setInterval(() => this.kanbanManager.nudgeStaleTickets().catch(() => {}), 30 * 60 * 1000);
-    if (this.kanbanManager.kanbanPath) this.kanbanManager.watchKanban(this.kanbanManager.kanbanPath);
 
     this.server.listen(this.port, () => {
       log.info(`[API] UI         http://localhost:${this.port}`);
@@ -445,7 +448,6 @@ export class APIServer {
 
   stop(): void {
     this.unsubscribeEvents?.();
-    this.kanbanManager.closeWatcher();
     if (this.meetingScheduler)    { clearInterval(this.meetingScheduler);    this.meetingScheduler    = null; }
     if (this.nudgeScheduler)      { clearInterval(this.nudgeScheduler);      this.nudgeScheduler      = null; }
     if (this.googleRefreshTimer)  { clearInterval(this.googleRefreshTimer);  this.googleRefreshTimer  = null; }
@@ -734,7 +736,15 @@ export class APIServer {
       const data = JSON.parse(raw) as { ids: string[] };
       for (const id of data.ids ?? []) {
         const entry = getCatalogue().find(e => e.id === id);
-        if (!entry || this.orchestrator.hasMCPServer(id)) continue;
+        if (!entry) {
+          // Kanban was one of these: it used to be an MCP server and is now
+          // built in. Skipping in silence leaves an operator looking at an
+          // enabled list with no matching server and no explanation.
+          log.info(`[MCP] "${id}" is enabled for this project but is not in the `
+            + 'catalogue — it has been removed or is built in now. Ignoring it.');
+          continue;
+        }
+        if (this.orchestrator.hasMCPServer(id)) continue;
         try {
           const config = this.resolveMCPConfig(id, entry);
           await this.orchestrator.addMCPServer({ name: id, config, toolArgMappings: entry.toolArgMappings });

@@ -45,7 +45,7 @@ import { AgentLibraryClient } from '../../packages/clients/src/agent-library-cli
 import { resolveProjectSource } from './project/project-source.js';
 import { ProjectSync } from './project/project-sync.js';
 import {
-  assembleDefaultTeam, assembleFromDefinition, attachDefinitionMcpServers, defaultKanbanServer,
+  assembleDefaultTeam, assembleFromDefinition, attachDefinitionMcpServers,
 } from './project/team-assembler.js';
 import type { ProjectDefinition } from '../../packages/contracts/src/types.js';
 
@@ -213,13 +213,11 @@ function makeProjectLoader(
     if (definition && definition.team.length > 0) {
       assembleFromDefinition(orchestrator, definition, providerFactory);
       await attachDefinitionMcpServers(orchestrator, definition, kanbanFile);
-      if (!orchestrator.hasMCPServer('kanban')) await orchestrator.addMCPServer(defaultKanbanServer(kanbanFile));
       return orchestrator;
     }
 
     console.log(`[Team] No team defined for ${projectDir} — assembling a default team.`);
     const names = assembleDefaultTeam(orchestrator, providerFactory, 'anthropic', DEFAULT_MODEL);
-    await orchestrator.addMCPServer(defaultKanbanServer(kanbanFile));
     console.log(`[Team] Team assembled: ${names.join(' · ')}`);
     return orchestrator;
   };

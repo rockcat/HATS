@@ -1,10 +1,10 @@
 import { IncomingMessage, ServerResponse } from 'http';
-import { readFile, writeFile, rename } from 'fs/promises';
-import * as fs from 'fs';
+import { writeFile } from 'fs/promises';
 import * as path from 'path';
 import { TeamOrchestrator } from '../orchestrator/orchestrator.js';
 import { Task } from '../orchestrator/types.js';
 import { Board } from '../mcp/kanban/types.js';
+import type { KanbanStore } from '../mcp/kanban/store.js';
 import { log } from '../../../packages/core/src/logger.js';
 import { buildBoardSummary } from './api-utils.js';
 
@@ -15,6 +15,14 @@ export interface KanbanManagerDeps {
   resolveAgentName(input: string): string;
   agentIdForName(name: string): string;
   sseBroadcast(data: object): void;
+  /**
+   * The project's board.
+   *
+   * One store, owned by the orchestrator. This class used to open the file
+   * itself — a second readFile/writeFile/rename alongside the subprocess's —
+   * and watch it to notice what the other one wrote.
+   */
+  getKanbanStore(): KanbanStore | null;
   json(res: ServerResponse, status: number, body: unknown): void;
   readBody(req: IncomingMessage): Promise<string>;
 }
@@ -22,77 +30,54 @@ export interface KanbanManagerDeps {
 export class KanbanManager {
   kanbanPath: string | null;
   private deps: KanbanManagerDeps;
-  private kanbanWatcher: fs.FSWatcher | null = null;
-  private kanbanDebounce: ReturnType<typeof setTimeout> | null = null;
 
   constructor(kanbanPath: string | null, deps: KanbanManagerDeps) {
     this.kanbanPath = kanbanPath;
     this.deps = deps;
   }
 
+  private get store(): KanbanStore | null { return this.deps.getKanbanStore(); }
+
   async readKanban(): Promise<Board> {
-    const raw = await readFile(this.kanbanPath!, 'utf-8');
-    return JSON.parse(raw) as Board;
+    const store = this.store;
+    if (!store) throw new Error('No project is open, so there is no board.');
+    return store.getBoard();
   }
 
+  /**
+   * Replace the board, and say so.
+   *
+   * The broadcast used to come from an fs.watch, because the writer was a
+   * different process. With one writer it belongs here, where we know a write
+   * happened rather than inferring it from the file changing — so no debounce,
+   * and no chance of reading a file that is mid-write.
+   */
   async writeKanban(board: Board): Promise<void> {
-    const tmp = this.kanbanPath! + '.tmp';
-    await writeFile(tmp, JSON.stringify(board, null, 2), 'utf-8');
-    await rename(tmp, this.kanbanPath!);
+    const store = this.store;
+    if (!store) return;
+    await store.replaceBoard(board);
+    this.deps.sseBroadcast({ type: 'kanban_update', tickets: Object.values(board.tickets) });
   }
 
   async readTickets(): Promise<Board['tickets'][string][]> {
-    if (!this.kanbanPath) return [];
-    const board = await this.readKanban();
-    return Object.values(board.tickets);
+    const store = this.store;
+    if (!store) return [];
+    return store.listTickets();
   }
 
   async addComment(ticketId: string, author: string, text: string): Promise<void> {
-    if (!this.kanbanPath) return;
-    try {
-      const board = await this.readKanban();
-      const ticket = board.tickets[ticketId];
-      if (!ticket) return;
-      ticket.comments.push({ id: crypto.randomUUID(), author, text, ts: new Date().toISOString() });
-      ticket.updatedAt = new Date().toISOString();
-      await this.writeKanban(board);
-    } catch { /* non-fatal */ }
-  }
-
-  watchKanban(filePath: string): void {
-    try {
-      this.kanbanWatcher = fs.watch(filePath, () => {
-        if (this.kanbanDebounce) clearTimeout(this.kanbanDebounce);
-        this.kanbanDebounce = setTimeout(async () => {
-          try {
-            const tickets = await this.readTickets();
-            this.deps.sseBroadcast({ type: 'kanban_update', tickets });
-          } catch { /* file may be mid-write */ }
-        }, 150);
-      });
-    } catch {
-      // File may not exist yet
-    }
-  }
-
-  closeWatcher(): void {
-    this.kanbanWatcher?.close();
-    this.kanbanWatcher = null;
+    await this.addTicketComment(ticketId, author, text);
   }
 
   async updateKanbanColumn(ticketId: string, column: string, closedReason?: 'completed' | 'cancelled'): Promise<void> {
-    if (!this.kanbanPath) return;
-    const board  = await this.readKanban();
-    const ticket = board.tickets[ticketId];
+    const store = this.store;
+    if (!store) return;
+
+    const ticket = await store.getTicket(ticketId);
     if (!ticket || ticket.column === column) return;
-    ticket.column    = column as never;
-    if (column === 'closed') {
-      ticket.closedReason = closedReason ?? 'completed';
-    } else {
-      delete ticket.closedReason;
-    }
-    ticket.updatedAt = new Date().toISOString();
-    await this.writeKanban(board);
+
+    await store.moveTicket(ticketId, column as never, closedReason);
+    await this.broadcast();
     log.info(`[API] Ticket ${ticketId} → ${column}${closedReason ? ` (${closedReason})` : ''}`);
     if (column === 'closed') {
       this.unblockDependents(ticketId).catch(() => {});
@@ -100,34 +85,33 @@ export class KanbanManager {
   }
 
   async addTicketComment(ticketId: string, author: string, text: string): Promise<void> {
-    if (!this.kanbanPath) return;
-    const board  = await this.readKanban();
-    const ticket = board.tickets[ticketId];
-    if (!ticket) return;
-    ticket.comments.push({ id: `c${Date.now()}`, author, text, ts: new Date().toISOString() });
-    ticket.updatedAt = new Date().toISOString();
-    await this.writeKanban(board);
+    const store = this.store;
+    if (!store) return;
+    try {
+      await store.addComment(ticketId, author, text);
+      await this.broadcast();
+    } catch { /* an unknown ticket is not worth failing a turn over */ }
+  }
+
+  /** Tell whoever is watching that the board moved. */
+  private async broadcast(): Promise<void> {
+    try {
+      this.deps.sseBroadcast({ type: 'kanban_update', tickets: await this.readTickets() });
+    } catch { /* the board still changed; the UI catches up on reload */ }
   }
 
   async unblockDependents(completedId: string): Promise<void> {
-    if (!this.kanbanPath) return;
-    const board = await this.readKanban();
-    const unblocked: Array<typeof board.tickets[string]> = [];
-    let changed = false;
-    for (const ticket of Object.values(board.tickets)) {
-      if (!(ticket.blockedBy ?? []).includes(completedId)) continue;
-      ticket.blockedBy = ticket.blockedBy!.filter(b => b !== completedId);
-      ticket.updatedAt = new Date().toISOString();
-      changed = true;
-      if (ticket.blockedBy.length === 0 && ticket.column === 'blocked') {
-        ticket.column = 'ready';
-        unblocked.push(ticket);
-        log.info(`[API] ${ticket.id} unblocked by completion of ${completedId} → ready`);
-      }
-    }
-    if (changed) await this.writeKanban(board);
+    const store = this.store;
+    if (!store) return;
+
+    // The store already works out which tickets this frees and hands them
+    // back. This method used to repeat that whole loop against its own copy
+    // of the file.
+    const unblocked = await store.unblockDependents(completedId);
+    if (unblocked.length) await this.broadcast();
 
     for (const ticket of unblocked) {
+      log.info(`[API] ${ticket.id} unblocked by completion of ${completedId} → ready`);
       if (!ticket.assignee) continue;
       this.notifyAgent(ticket.assignee,
         `Good news! ${completedId} has been completed, which unblocks your ticket ${ticket.id}: "${ticket.title}". It's now ready to start.`,
