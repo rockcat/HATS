@@ -57,18 +57,30 @@ const MIME: Record<string, string> = {
 
 // 1 day for immutable binary assets; 1 hour for mutable web source files
 const AVATAR_CACHE  = { 'Cache-Control': 'public, max-age=86400' };
-const STATIC_CACHE  = { 'Cache-Control': 'public, max-age=3600' };
+// The dashboard itself: revalidated on every load (a cheap 304 when nothing
+// changed). max-age=3600 kept a browser on the old scripts for an hour after
+// a rebuild, so a fixed bug looked unfixed.
+const STATIC_CACHE  = { 'Cache-Control': 'no-cache' };
 
 const AVATARS_DIR     = runtimeDir('avatars');
 const BACKGROUNDS_DIR = runtimeDir('avatars', 'backgrounds');
 const NM_DIR          = path.join(process.cwd(), 'node_modules');
 
-function serveFile(filePath: string, dir: string, res: ServerResponse, defaultMime = 'application/octet-stream', extra?: Record<string, string>): void {
+/** A validator that changes whenever the file does. */
+export const etagOf = (stat: { size: number; mtimeMs: number }): string =>
+  `"${stat.size.toString(36)}-${Math.floor(stat.mtimeMs).toString(36)}"`;
+
+function serveFile(filePath: string, dir: string, res: ServerResponse, defaultMime = 'application/octet-stream', extra?: Record<string, string>, req?: IncomingMessage): void {
   if (!filePath.startsWith(dir)) { res.writeHead(403); res.end('Forbidden'); return; }
-  fs.readFile(filePath, (err, data) => {
-    if (err) { res.writeHead(404); res.end('Not found'); return; }
-    res.writeHead(200, { 'Content-Type': MIME[path.extname(filePath)] ?? defaultMime, ...extra });
-    res.end(data);
+  fs.stat(filePath, (statErr, stat) => {
+    if (statErr || !stat.isFile()) { res.writeHead(404); res.end('Not found'); return; }
+    const etag = etagOf(stat);
+    if (req && req.headers['if-none-match'] === etag) { res.writeHead(304, { ETag: etag, ...extra }); res.end(); return; }
+    fs.readFile(filePath, (err, data) => {
+      if (err) { res.writeHead(404); res.end('Not found'); return; }
+      res.writeHead(200, { 'Content-Type': MIME[path.extname(filePath)] ?? defaultMime, ETag: etag, ...extra });
+      res.end(data);
+    });
   });
 }
 
@@ -688,7 +700,7 @@ export class APIServer {
     }
     if (pathname.startsWith('/avatars/'))     { serveFile(path.join(AVATARS_DIR,     pathname.slice(9)),  AVATARS_DIR,     res, 'application/octet-stream', AVATAR_CACHE); return; }
     if (pathname.startsWith('/backgrounds/')) { serveFile(path.join(BACKGROUNDS_DIR, pathname.slice(13)), BACKGROUNDS_DIR, res, 'image/png', AVATAR_CACHE); return; }
-    serveFile(path.join(PUBLIC_DIR, pathname === '/' ? 'index.html' : pathname.slice(1)), PUBLIC_DIR, res, 'application/octet-stream', STATIC_CACHE);
+    serveFile(path.join(PUBLIC_DIR, pathname === '/' ? 'index.html' : pathname.slice(1)), PUBLIC_DIR, res, 'application/octet-stream', STATIC_CACHE, req);
   }
 
   // ── Shared helpers ────────────────────────────────────────────────────────
