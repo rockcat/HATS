@@ -8,6 +8,7 @@ import { getVoices, findVoiceForAgent, getSpeakerOverrides, setVoiceOverride, ge
 import { setSpeechAgent, clearSpeechQueue, setActiveSpeechTarget, ensureAudioCtx } from './voice.js';
 import { getAvatars, findAvatarForAgent, applyAvatarBackground, getAvatarOverrides } from './avatars.js';
 import { refreshProviderModels } from './providers.js';
+import { bindAgentAgenda } from './agent-agenda.js';
 
 export let activeDetailAgent = null;
 let activeChatAgent          = null;
@@ -452,6 +453,7 @@ export function openAgentDetail(name, chatOnly = false) {
   document.getElementById('agent-detail-hat').style.color = c.bar;
   document.getElementById('agent-config-email').value = agent?.email || '';
   bindAgentMemory(name);
+  bindAgentAgenda(name);
 
   const ticketsEl     = document.getElementById('agent-detail-tickets');
   ticketsEl.innerHTML = '';

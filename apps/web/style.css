@@ -4341,6 +4341,20 @@ body.has-expanded-panel main > section:not(.panel--expanded) {
 }
 .schedules-row:hover { background: var(--surface-2); }
 
+/* Agent panel — the agent's own schedule */
+.agenda-row { padding: 6px 4px; align-items: center; }
+.agenda-row input[type="checkbox"] { flex-shrink: 0; cursor: pointer; }
+.agenda-row--off .schedules-row-body { opacity: 0.5; }
+.agenda-edit { display: flex; flex-direction: column; gap: 6px; padding: 8px 4px; border-bottom: 1px solid var(--border); font-size: 12px; }
+.agenda-edit input, .agenda-edit textarea {
+  background: var(--surface-2); color: var(--text); border: 1px solid var(--border);
+  border-radius: 4px; padding: 4px 6px; font: inherit;
+}
+.agenda-edit-interval { display: flex; align-items: center; gap: 6px; color: var(--text-muted); }
+.agenda-edit-interval input { width: 70px; }
+.agenda-hint { font-size: 11px; }
+.agenda-edit-btns { display: flex; gap: 6px; }
+
 .schedules-row-body { flex: 1; min-width: 0; }
 
 .schedules-row-label { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
