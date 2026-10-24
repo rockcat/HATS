@@ -1,7 +1,9 @@
 import { readFile, mkdir } from 'fs/promises';
 import * as path from 'path';
 import type { DatabaseSync } from 'node:sqlite';
-import { dbPathFor, ensureSchema, inTransaction, isEmpty, openProjectDb } from './project-db.js';
+import {
+  dbPathFor, ensureSchema, hasImported, inTransaction, markImported, openProjectDb,
+} from './project-db.js';
 
 export interface TelemetryRecord {
   id:           string;
@@ -66,7 +68,10 @@ export class TelemetryStore {
       'CREATE INDEX IF NOT EXISTS telemetry_model ON telemetry (model)',
     ]);
 
-    if (isEmpty(this.db, 'telemetry')) await this.importLegacy();
+    if (!hasImported(this.db, 'telemetry.jsonl')) {
+      await this.importLegacy();
+      markImported(this.db, 'telemetry.jsonl');
+    }
     this.seq = this.highestSeq();
   }
 

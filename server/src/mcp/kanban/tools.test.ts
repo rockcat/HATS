@@ -10,6 +10,7 @@ import { mkdtemp, rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import * as path from 'path';
 import { KanbanStore } from './store.js';
+import { closeAllProjectDbs } from '../../store/project-db.js';
 import {
   KANBAN_TOOL_NAMES, UPFRONT_KANBAN_TOOLS, handleKanbanCall, kanbanTools,
 } from './tools.js';
@@ -24,6 +25,9 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  // The board lives in the project database now, and Windows will not remove
+  // a file while a handle is open on it.
+  closeAllProjectDbs();
   await rm(dir, { recursive: true, force: true });
 });
 

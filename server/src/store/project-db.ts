@@ -75,10 +75,31 @@ export function ensureSchema(db: DatabaseSync, statements: string[]): void {
   for (const statement of statements) db.exec(statement);
 }
 
-/** Is this table empty? Used to decide whether a legacy file needs importing. */
+/** Is this table empty? */
 export function isEmpty(db: DatabaseSync, table: string): boolean {
   const row = db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as { n: number };
   return row.n === 0;
+}
+
+/**
+ * Has this legacy file already been imported?
+ *
+ * Recorded, rather than inferred from the table being empty. Emptiness is
+ * the wrong signal and fails in a nasty way: delete the last ticket on a
+ * board and the table is empty again, so the next open re-imports the old
+ * JSON and the ticket comes back from the dead. An event log that was
+ * deliberately cleared would refill itself the same way.
+ */
+export function hasImported(db: DatabaseSync, what: string): boolean {
+  db.exec('CREATE TABLE IF NOT EXISTS imported (what TEXT PRIMARY KEY, at TEXT NOT NULL)');
+  return db.prepare('SELECT 1 FROM imported WHERE what = ?').get(what) !== undefined;
+}
+
+/** Record that it has, so it never happens twice. */
+export function markImported(db: DatabaseSync, what: string): void {
+  db.exec('CREATE TABLE IF NOT EXISTS imported (what TEXT PRIMARY KEY, at TEXT NOT NULL)');
+  db.prepare('INSERT OR REPLACE INTO imported (what, at) VALUES (?, ?)')
+    .run(what, new Date().toISOString());
 }
 
 /**

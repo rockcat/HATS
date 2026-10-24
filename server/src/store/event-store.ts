@@ -2,7 +2,9 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import type { DatabaseSync } from 'node:sqlite';
-import { dbPathFor, ensureSchema, inTransaction, isEmpty, openProjectDb } from './project-db.js';
+import {
+  dbPathFor, ensureSchema, hasImported, inTransaction, markImported, openProjectDb,
+} from './project-db.js';
 
 export interface StoredEvent {
   id: string;
@@ -51,7 +53,10 @@ export class EventStore {
       'CREATE INDEX IF NOT EXISTS events_type_ts ON events (type, ts)',
     ]);
 
-    if (isEmpty(this.db, 'events')) await this.importLegacy();
+    if (!hasImported(this.db, 'team-events.jsonl')) {
+      await this.importLegacy();
+      markImported(this.db, 'team-events.jsonl');
+    }
   }
 
   /** Subscribe to every new event as it is appended. */
