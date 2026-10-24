@@ -82,7 +82,10 @@ export function buildMcpParamFields(container, toolName) {
       lbl.appendChild(hint);
     }
     let inp;
-    if (schema.enum) {
+    // A yes/no parameter gets a choice too: typed into a text box, "false"
+    // looked exactly like a value nobody had set.
+    const choices = schema.enum ?? (schema.type === 'boolean' ? ['true', 'false'] : null);
+    if (choices) {
       inp = document.createElement('select');
       inp.className = 'schedules-input';
       if (!required.has(key)) {
@@ -90,7 +93,7 @@ export function buildMcpParamFields(container, toolName) {
         empty.value = ''; empty.textContent = '— none —';
         inp.appendChild(empty);
       }
-      for (const v of schema.enum) {
+      for (const v of choices) {
         const opt = document.createElement('option');
         opt.value = v; opt.textContent = v;
         inp.appendChild(opt);
@@ -117,7 +120,8 @@ export function collectMcpArgs(container) {
     if (val === '') continue;
     const type    = inp.dataset.paramType;
     const coerced = (type === 'number' || type === 'integer') ? Number(val) : type === 'boolean' ? val === 'true' : val;
-    if (coerced === false || (typeof coerced === 'number' && isNaN(coerced))) continue;
+    // An unset field is already skipped above; false is a real answer (seen: false).
+    if (typeof coerced === 'number' && isNaN(coerced)) continue;
     args[inp.dataset.paramKey] = coerced;
   }
   return args;
@@ -214,6 +218,8 @@ export async function openScheduleModal(action) {
   const modal   = document.getElementById('schedule-modal');
   const titleEl = document.getElementById('schedule-modal-title');
   const saveBtn = document.getElementById('schedules-add-btn');
+  // A successful save closes the modal with the button still disabled ('…').
+  saveBtn.disabled = false;
 
   document.getElementById('schedules-add-label').value       = '';
   document.getElementById('schedules-add-description').value = '';
