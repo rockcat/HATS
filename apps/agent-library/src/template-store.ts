@@ -118,6 +118,19 @@ export class TemplateStore {
     return this.persist(replaceAgentTemplate(current, input));
   }
 
+  /**
+   * Replace the template, or create it under this id if there is none.
+   *
+   * Importing a project brings its agents with it, and they must keep their
+   * ids: credentials, conversation threads and the project definition are all
+   * keyed by them.
+   */
+  async upsert(id: string, input: AgentTemplateInput): Promise<{ template: AgentTemplate; created: boolean }> {
+    const replaced = await this.replace(id, input);
+    if (replaced) return { template: replaced, created: false };
+    return { template: await this.persist(createAgentTemplate(input, id)), created: true };
+  }
+
   async duplicate(id: string, name?: string): Promise<AgentTemplate | undefined> {
     const source = this.store.get(id);
     if (!source) return undefined;

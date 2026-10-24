@@ -10,6 +10,9 @@ import { renderTemplatePrompt } from '../prompt-preview.js';
 
 const BASE = '/api/v1/agent-templates';
 
+/** Ids become file names, so only these are accepted from a caller. */
+const VALID_ID = /^[A-Za-z0-9_-]{1,100}$/;
+
 function detailsOf(err: unknown): Array<{ path: string; message: string }> | undefined {
   const detail = (err as { details?: unknown }).details;
   return Array.isArray(detail) ? detail as Array<{ path: string; message: string }> : undefined;
@@ -51,9 +54,17 @@ export function templateRoutes(store: TemplateStore): Route[] {
     put(`${BASE}/:id`, async (ctx) => {
       const body = await readJsonBody<AgentTemplateInput>(ctx.req);
       if (!body?.name?.trim()) { badRequest(ctx.res, 'name is required'); return; }
+      const id = ctx.params['id'] as string;
+      if (!VALID_ID.test(id)) { badRequest(ctx.res, `"${id}" is not a valid template id`); return; }
       // PUT replaces: an omitted field is cleared, which is how the editor
       // turns an explicit MCP allow-list back into "every team server".
-      await write(ctx, () => store.replace(ctx.params['id'] as string, body), 200);
+      // A template that does not exist yet is created with this id.
+      try {
+        const { template, created } = await store.upsert(id, body);
+        json(ctx.res, created ? 201 : 200, template);
+      } catch (err) {
+        badRequest(ctx.res, (err as Error).message, detailsOf(err));
+      }
     }),
 
     patch(`${BASE}/:id`, async (ctx) => {
