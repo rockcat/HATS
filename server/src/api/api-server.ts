@@ -13,6 +13,7 @@ import { log } from '../../../packages/core/src/logger.js';
 import { KanbanManager } from './kanban-manager.js';
 import { MeetingRouter } from './meeting-router.js';
 import { SpeechRouter } from './speech-router.js';
+import { ServiceStatusRouter, serviceTargets } from './service-status.js';
 import { ProjectManager, AgentStatus } from './project-manager.js';
 import { AgentRouter } from './agent-router.js';
 import { handleCLICommand } from './cli-handler.js';
@@ -94,6 +95,9 @@ export interface APIServerConfig {
   projectSource?:   'project-server' | 'local';
   /** Speech Service base URL. Absent means agents simply do not speak. */
   speechServiceUrl?: string;
+  /** Agent Library / Project Server URLs; null when standalone. Shown in the header. */
+  agentLibraryUrl?:  string | null;
+  projectServerUrl?: string | null;
 }
 
 export class APIServer {
@@ -135,6 +139,7 @@ export class APIServer {
   private kanbanManager: KanbanManager;
   private meetingRouter: MeetingRouter;
   private speechRouter: SpeechRouter;
+  private serviceStatusRouter: ServiceStatusRouter;
   private projectManager: ProjectManager;
   private agentRouter: AgentRouter;
   private mcpCatalogueRouter: MCPCatalogueRouter;
@@ -195,6 +200,14 @@ export class APIServer {
       json: (r, s, b) => self.json(r, s, b),
       readBody,
       readBodyBuffer,
+    });
+    this.serviceStatusRouter = new ServiceStatusRouter({
+      targets: () => serviceTargets({
+        agentLibraryUrl:  config.agentLibraryUrl ?? null,
+        projectServerUrl: config.projectServerUrl ?? null,
+        speechServiceUrl: self.speech.serviceUrl,
+      }, () => self.speech.refresh(), process.env),
+      json: (r, s, b) => self.json(r, s, b),
     });
     this.projectManager = new ProjectManager({
       getOrchestrator:  () => self.orchestrator,
@@ -603,6 +616,7 @@ export class APIServer {
     if (await this.kanbanManager.handleRoutes(pathname, method, url, req, res))       return;
     if (await this.meetingRouter.handleRoutes(pathname, method, req, res))            return;
     if (await this.speechRouter.handleRoutes(pathname, method, req, res))             return;
+    if (await this.serviceStatusRouter.handleRoutes(pathname, method, req, res))      return;
     if (await this.projectManager.handleRoutes(pathname, method, url, req, res))      return;
     if (await this.agentRouter.handleRoutes(pathname, method, url, req, res))         return;
     if (await this.mcpCatalogueRouter.handleRoutes(pathname, method, req, res))       return;

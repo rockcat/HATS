@@ -310,6 +310,31 @@ header h1 {
   transition: background 0.3s;
 }
 .status-dot.connected { background: var(--hat-green); }
+.status-dot.down      { background: var(--hat-red); }
+.status-dot.off       { background: transparent; border: 1px solid var(--text-muted); box-sizing: border-box; }
+
+/* External services — one pill per service, beside the telemetry bar */
+.service-status {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
+}
+.service-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px 7px;
+  white-space: nowrap;
+  cursor: default;
+}
+.service-pill .status-dot { flex-shrink: 0; }
 
 /* ── Layout ──────────────────────────────────────────── */
 main {

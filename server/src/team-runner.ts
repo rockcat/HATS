@@ -292,6 +292,8 @@ async function main() {
     projectDir:     PROJECT_DIR,
     projectsRoot:   PROJECTS_ROOT,
     projectLoader:  loader,
+    agentLibraryUrl:  AGENT_LIBRARY_URL,
+    projectServerUrl: PROJECT_SERVER_URL,
     agentStore,
     actionStore,
     userStore,

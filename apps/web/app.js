@@ -18,6 +18,7 @@ import { initSettings }                                from './modules/settings.
 import { initAddAgent, openLibraryEdit }               from './modules/add-agent.js';
 import { initLibraryTab, fetchGlobalAgents }           from './modules/library.js';
 import { initSchedulesTab }                            from './modules/schedules.js';
+import { initServiceStatus }                           from './modules/services.js';
 import { initMCPEditor }                               from './modules/mcp.js';
 import { initAgentDetail, closeAgentDetail }           from './modules/agent-detail.js';
 import { initCLI }                                     from './modules/cli.js';
@@ -68,6 +69,7 @@ initFileUpload();
 initFileViewer();
 initGenBgModal();
 initSchedulesTab();
+initServiceStatus();
 
 // A sign-in that ran in this tab rather than a popup comes back with its
 // result in the query string, and nobody listening for the message that a

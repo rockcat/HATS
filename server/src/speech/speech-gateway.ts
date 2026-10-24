@@ -46,10 +46,12 @@ export class SpeechGateway {
     if (this.timer) { clearInterval(this.timer); this.timer = null; }
   }
 
-  private async refresh(): Promise<void> {
+  /** Re-probe the service and reload its voices; returns whether it answered. */
+  async refresh(): Promise<boolean> {
     this.available = await this.client.isAvailable();
     this.voices = this.available ? await this.client.voices() : [];
     this.lastRefresh = Date.now();
+    return this.available;
   }
 
   /** Cached voice list; empty when no service or no models. */
