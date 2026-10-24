@@ -1,0 +1,15 @@
+# The image installs its own Linux node_modules; the host's (Windows) ones
+# would be slow to send and wrong to run.
+node_modules
+**/node_modules
+
+# Built inside the image.
+server/dist
+
+# Mounted at runtime, never baked in.
+runtime_data
+
+# Secrets reach the container through env_file, not the image.
+.env
+
+.git
