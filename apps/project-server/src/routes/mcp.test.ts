@@ -42,7 +42,8 @@ describe('sharedCatalogue', () => {
   });
 
   it('includes the built-in shared servers', () => {
-    expect(sharedCatalogue().map((e) => e.id)).toContain('kanban');
+    // Kanban was one of these until it became a built-in tool.
+    expect(sharedCatalogue().map((e) => e.id)).toContain('brave-search');
   });
 });
 
@@ -57,7 +58,7 @@ describe('resolveServerIds', () => {
   it('names the server after the catalogue id, which is what an agent refers to', () => {
     // enabledMcpServers on a deployed agent holds catalogue ids, so the stored
     // name has to match or the agent silently gets no tools.
-    expect(resolveServerIds(['kanban']).servers[0]?.name).toBe('kanban');
+    expect(resolveServerIds(['brave-search']).servers[0]?.name).toBe('brave-search');
   });
 
   it('reports an id that is not a shared server rather than storing it', () => {
