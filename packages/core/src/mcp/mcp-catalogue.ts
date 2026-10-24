@@ -144,6 +144,14 @@ export function resolvePersonalConfig(
   credentials: Record<string, string>,
   agentDir?: string,
 ): MCPServerConfig {
+  // A blank credential means "not set", so it must not override a default.
+  // The agent form saves every field it shows, filled or not, and a catalogue
+  // default of MCP_EMAIL_SEND_SAVE_TO_SENT=true would otherwise be beaten by
+  // an empty box — which email-mcp reads as `'' === 'true'`, i.e. false.
+  credentials = Object.fromEntries(
+    Object.entries(credentials).filter(([, v]) => v !== '' && v != null),
+  );
+
   if (entry.config.transport === 'http') {
     const vars = { ...(process.env as Record<string, string>), ...credentials };
     return entry.config.headers

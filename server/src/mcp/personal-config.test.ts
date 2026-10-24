@@ -67,3 +67,41 @@ describe('where an agent keeps its memory', () => {
     expect(pathOf(resolved)).toBe('/somewhere/else.json');
   });
 });
+
+// ── Defaults the catalogue sets, and blanks an agent's form saves ────────────
+
+const email: MCPCatalogueEntry = {
+  id: 'email-imap',
+  name: 'Email',
+  description: 'IMAP and SMTP.',
+  category: 'productivity',
+  users: ['agent'],
+  config: {
+    transport: 'stdio',
+    command: 'npx',
+    args: ['-y', '@codefuturist/email-mcp'],
+    env: { MCP_EMAIL_SEND_SAVE_TO_SENT: 'true' },
+  },
+};
+
+const saveToSent = (config: MCPServerConfig) =>
+  'env' in config ? config.env?.MCP_EMAIL_SEND_SAVE_TO_SENT : undefined;
+
+describe('a catalogue default and an agent\'s own setting', () => {
+  it('uses the default when the agent says nothing', () => {
+    expect(saveToSent(resolvePersonalConfig(email, {}))).toBe('true');
+  });
+
+  it('lets the agent turn it off', () => {
+    // Gmail files SMTP mail in Sent itself, so saving again doubles it.
+    expect(saveToSent(resolvePersonalConfig(email, { MCP_EMAIL_SEND_SAVE_TO_SENT: 'false' })))
+      .toBe('false');
+  });
+
+  it('does not let an empty box override the default', () => {
+    // The agent form saves every field it shows, filled or not. email-mcp
+    // reads `'' === 'true'` as false, so a blank used to switch it off.
+    expect(saveToSent(resolvePersonalConfig(email, { MCP_EMAIL_SEND_SAVE_TO_SENT: '' })))
+      .toBe('true');
+  });
+});
