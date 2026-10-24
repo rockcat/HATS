@@ -34,6 +34,7 @@ import { UserStore } from './user-store.js';
 import { AuthRouter } from './auth-router.js';
 import { UserManagementRouter } from './user-management-router.js';
 import { parseRequestAuth } from './auth-middleware.js';
+import { ProjectTransferRouter, transferDepsFrom } from './project-transfer-router.js';
 import { EmbodimentRouter } from '../embodiment/embodiment-router.js';
 import { DeviceToolBridge } from '../device/device-tool-bridge.js';
 import { canonicalModel, configFromEnv } from '../people/embedder.js';
@@ -124,6 +125,7 @@ export class APIServer {
   private humanRequestStore: HumanRequestStore;
   private emailAllowlistStore: EmailAllowlistStore;
   private emailAllowlistRouter: EmailAllowlistRouter;
+  private projectTransferRouter: ProjectTransferRouter;
   private agentFeeds = new Map<string, StoredEvent[]>();
   private readonly FEED_LIMIT = 200;
   private nudgeScheduler: ReturnType<typeof setInterval> | null = null;
@@ -203,6 +205,21 @@ export class APIServer {
       speech:         self.speech,
       json: (r, s, b) => self.json(r, s, b),
       readBody,
+      readBodyBuffer,
+    });
+    this.projectTransferRouter = new ProjectTransferRouter({
+      getTransfer: () => transferDepsFrom({
+        projectServerUrl: config.projectServerUrl ?? null,
+        agentLibraryUrl:  config.agentLibraryUrl ?? null,
+        projectsRoot:     self.projectsRoot,
+        agentStore:       self.agentStore,
+        actionStore:      self.actionStore,
+      }),
+      getProjectId:     () => self.projectId,
+      saveCurrentState: () => self.saveCurrentState(),
+      reloadAgents:     async () => { await self.agentStore?.load(); },
+      isAdmin:          (req) => parseRequestAuth(req, self.userStore)?.role === 'admin',
+      json: (r, s, b) => self.json(r, s, b),
       readBodyBuffer,
     });
     this.serviceStatusRouter = new ServiceStatusRouter({
@@ -619,6 +636,7 @@ export class APIServer {
     if (await this.meetingRouter.handleRoutes(pathname, method, req, res))            return;
     if (await this.speechRouter.handleRoutes(pathname, method, req, res))             return;
     if (await this.serviceStatusRouter.handleRoutes(pathname, method, req, res))      return;
+    if (await this.projectTransferRouter.handleRoutes(pathname, method, url, req, res)) return;
     if (await this.projectManager.handleRoutes(pathname, method, url, req, res))      return;
     if (await this.agentRouter.handleRoutes(pathname, method, url, req, res))         return;
     if (await this.mcpCatalogueRouter.handleRoutes(pathname, method, req, res))       return;
