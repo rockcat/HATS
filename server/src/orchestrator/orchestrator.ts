@@ -44,6 +44,7 @@ import { resolvePersonalConfig, isAgentMcp } from '../../../packages/core/src/mc
 import { parseMemoryGraph, type MemoryGraph } from '../mcp/memory-graph.js';
 import { PeopleStore } from '../people/store.js';
 import { KanbanStore } from '../mcp/kanban/store.js';
+import { closeAllProjectDbs, closeProjectDb, dbPathFor } from '../store/project-db.js';
 import {
   KANBAN_TOOL_NAMES, UPFRONT_KANBAN_TOOLS, handleKanbanCall, kanbanTools,
 } from '../mcp/kanban/tools.js';
@@ -307,6 +308,8 @@ export class TeamOrchestrator {
     await Promise.all(Array.from(this.personalMcpByAgent.values()).map(r => r.disconnectAll()));
     this.personalMcpByAgent.clear();
     await this.store.append('session_end', {});
+    // Last, and after that final append: the event store writes into it.
+    closeAllProjectDbs();
   }
 
   // ── State persistence ──────────────────────────────────────────────────────
@@ -694,6 +697,9 @@ export class TeamOrchestrator {
     // The register lives in the project, so moving project has to drop it —
     // otherwise the team carries the last project's faces into this one.
     if (dir !== this.projectDir) {
+      if (this.projectDir) {
+        closeProjectDb(dbPathFor(nodePath.join(this.projectDir, 'team-events.jsonl')));
+      }
       this.people = null;
       this.kanban = null;
       this.kanbanLoaded = null;

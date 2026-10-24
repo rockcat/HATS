@@ -12,6 +12,7 @@ import * as path from 'path';
 import { TeamOrchestrator } from './orchestrator.js';
 import { PEOPLE_TOOL_NAMES } from '../people/tools.js';
 import { DEFAULT_EMBEDDING_MODEL } from '../device/capabilities.js';
+import { closeAllProjectDbs } from '../store/project-db.js';
 
 let dir: string;
 let orch: TeamOrchestrator;
@@ -33,6 +34,9 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  // The event store holds the project database open, and Windows will not
+  // remove a file underneath an open handle.
+  closeAllProjectDbs();
   await rm(dir, { recursive: true, force: true });
 });
 
