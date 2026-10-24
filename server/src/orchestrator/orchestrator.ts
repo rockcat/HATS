@@ -43,6 +43,10 @@ import { AgendaRunner } from './agenda-runner.js';
 import { resolvePersonalConfig, isAgentMcp } from '../../../packages/core/src/mcp/mcp-catalogue.js';
 import { parseMemoryGraph, type MemoryGraph } from '../mcp/memory-graph.js';
 import { PeopleStore } from '../people/store.js';
+import { KanbanStore } from '../mcp/kanban/store.js';
+import {
+  KANBAN_TOOL_NAMES, UPFRONT_KANBAN_TOOLS, handleKanbanCall, kanbanTools,
+} from '../mcp/kanban/tools.js';
 import {
   PEOPLE_TOOL_NAMES, handlePeopleCall, peopleTools, type PeopleToolsContext,
 } from '../people/tools.js';
@@ -105,6 +109,17 @@ export class TeamOrchestrator {
    * about the world, not about one agent's relationship with somebody. Built
    * lazily because most projects never ask.
    */
+  /**
+   * The project's board.
+   *
+   * One store, held here, because there used to be two: a subprocess with a
+   * KanbanStore and the API server with its own copy of the file handling,
+   * plus a watcher so each could notice the other's writes. One writer needs
+   * none of that.
+   */
+  private kanban: KanbanStore | null = null;
+  private kanbanLoaded: Promise<void> | null = null;
+
   private people: PeopleStore | null = null;
   private faceEmbedder: FaceEmbedder | null = null;
   private faceEmbedderTried = false;
@@ -187,6 +202,30 @@ export class TeamOrchestrator {
   }
 
   setDeviceTools(bridge: DeviceToolBridge): void { this.deviceTools = bridge; }
+
+  /** The project's board, or null when there is no project yet. */
+  kanbanStore(): KanbanStore | null {
+    if (!this.projectDir) return null;
+    if (!this.kanban) {
+      this.kanban = new KanbanStore(nodePath.join(this.projectDir, 'kanban-board.json'));
+      this.kanbanLoaded = this.kanban.load();
+    }
+    return this.kanban;
+  }
+
+  /** Is this one of the board tools, and is there a board to run it against? */
+  isKanbanTool(name: string): boolean {
+    return KANBAN_TOOL_NAMES.includes(name) && this.kanbanStore() !== null;
+  }
+
+  /** Run one of the board tools. */
+  async callKanbanTool(name: string, args: Record<string, unknown>): Promise<string> {
+    const store = this.kanbanStore();
+    if (!store) return 'There is no project open, so there is no board.';
+    await this.kanbanLoaded;
+    const result = await handleKanbanCall(name, args, store);
+    return typeof result === 'string' ? result : JSON.stringify(result, null, 2);
+  }
 
   /** The project's register of people, or null when there is no project yet. */
   peopleStore(): PeopleStore | null {
@@ -654,7 +693,11 @@ export class TeamOrchestrator {
   setProjectDir(dir: string | null): void {
     // The register lives in the project, so moving project has to drop it —
     // otherwise the team carries the last project's faces into this one.
-    if (dir !== this.projectDir) this.people = null;
+    if (dir !== this.projectDir) {
+      this.people = null;
+      this.kanban = null;
+      this.kanbanLoaded = null;
+    }
     this.projectDir = dir;
     for (const agent of this.agents.values()) agent.updateProjectDir(dir);
   }
@@ -690,12 +733,26 @@ export class TeamOrchestrator {
       agent.setToolExecutor(buildToolExecutor(this.makeToolCallContext(), this.mcp));
       let warnedSelectors = false;
       agent.setExtraToolsProvider(() => {
-        const ids    = agent.config.enabledMcpServers;
-        const shared = ids == null ? this.mcp.getAllTools() : this.mcp.getToolsForServers(ids);
+        const ids = agent.config.enabledMcpServers;
+
+        // Split by which list they go in rather than by asking every project
+        // to configure selectors: personal is upfront, shared is searchable.
+        const board = this.kanbanStore();
+        const kanban = board ? kanbanTools().map((t) => ({
+          name: t.name, description: t.description, parameters: t.inputSchema,
+        })) : [];
+        const upfrontKanban = new Set<string>(UPFRONT_KANBAN_TOOLS);
+
+        const shared = [
+          ...(ids == null ? this.mcp.getAllTools() : this.mcp.getToolsForServers(ids)),
+          ...kanban.filter((t) => !upfrontKanban.has(t.name)),
+        ];
+
         // A device tool counts as personal: it belongs to this user's own
         // phone, there are few of them, and an agent that has to discover
         // the camera will not think to look.
         const context = this.peopleContext(agent.name);
+
         const personal = [
           ...(this.personalMcpByAgent.get(agent.name.toLowerCase())?.getAllTools() ?? []),
           ...(this.deviceTools?.toolDefinitions() ?? []),
@@ -704,6 +761,10 @@ export class TeamOrchestrator {
           ...(context ? peopleTools(context).map((t) => ({
             name: t.name, description: t.description, parameters: t.inputSchema,
           })) : []),
+          // Reading the board and moving a ticket across it are the hot path.
+          // The rest — blockers, deletion, reassignment — are occasional, and
+          // tool search finds them when they are wanted.
+          ...kanban.filter((t) => upfrontKanban.has(t.name)),
         ];
 
         // Checked here rather than at registration because this is the first
@@ -1064,6 +1125,9 @@ export class TeamOrchestrator {
       emailAllowlistRef: this.emailAllowlistRef,
       getPersonalMcp: (agentName) => this.personalMcpByAgent.get(agentName.toLowerCase()) ?? null,
       getDeviceTools: () => this.deviceTools,
+      isKanbanTool: (name: string) => this.isKanbanTool(name),
+      callKanbanTool: (name: string, args: Record<string, unknown>) =>
+        this.callKanbanTool(name, args),
       isPeopleTool: (name: string) => this.isPeopleTool(name),
       callPeopleTool: (agent: string, name: string, args: Record<string, unknown>) =>
         this.callPeopleTool(agent, name, args),

@@ -6,8 +6,10 @@ services:
     ports:
       - "3001:3001"
     volumes:
-      # Bind-mount runtime data — survives container restarts and rebuilds
-      - ./runtime_data:/app/runtime_data
+      # The installation's data directory. Default is this repo's own, which
+      # is right for a standalone runner; set HATS_DATA to share one with
+      # the services rather than keeping two that silently diverge.
+      - ${HATS_DATA:-./runtime_data}:/app/runtime_data
     env_file:
       # Docker injects these directly; no --env-file flag needed in CMD
       - .env
@@ -28,7 +30,15 @@ services:
       # Docker Desktop provides host.docker.internal; plain Linux Docker needs this.
       - "host.docker.internal:host-gateway"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3001/api/state"]
+      # Two things this had wrong. It ran curl, which node:22-slim does not
+      # carry, so the check could not execute at all. And every /api/ route
+      # requires authentication, so even once it ran it got a 401 and called
+      # a perfectly healthy runner unhealthy.
+      #
+      # Any reply under 500 means alive: a 401 proves the HTTP server and the
+      # auth layer are both up, which is a better liveness signal than a
+      # static file would be. Only a 5xx or a refused connection is a failure.
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3001/api/state').then(r => process.exit(r.status < 500 ? 0 : 1)).catch(() => process.exit(1))"]
       interval: 30s
       timeout: 5s
       retries: 3

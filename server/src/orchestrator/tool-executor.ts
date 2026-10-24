@@ -39,6 +39,9 @@ export interface ToolCallContext {
   getDeviceTools?(): DeviceToolBridge | null;
   /** Recognising people. Absent, or false, when no face model is configured. */
   isPeopleTool?(name: string): boolean;
+  /** The project's kanban board, which the runner serves in-process. */
+  isKanbanTool?(name: string): boolean;
+  callKanbanTool?(name: string, args: Record<string, unknown>): Promise<string>;
   callPeopleTool?(agentName: string, name: string, args: Record<string, unknown>): Promise<string>;
   /** Mutable ref so the store stays live after context creation. */
   agendaStore: { store: AgendaStore | null };
@@ -172,6 +175,12 @@ export function buildToolExecutor(ctx: ToolCallContext, mcp: MCPRegistry) {
       // built-in, and the bridge answers for itself when no device has it.
       // Ahead of MCP too: a project could name an MCP tool "list_people"
       // and we would still mean this one.
+      if (ctx.isKanbanTool?.(call.name) && ctx.callKanbanTool) {
+        result = await ctx.callKanbanTool(call.name, call.arguments ?? {});
+        await ctx.store.append('tool_result', { agent: agentName, tool: call.name, result });
+        return result;
+      }
+
       if (ctx.isPeopleTool?.(call.name) && ctx.callPeopleTool) {
         result = await ctx.callPeopleTool(agentName, call.name, call.arguments ?? {});
         // The face vector is not logged — the result is a sentence about a
