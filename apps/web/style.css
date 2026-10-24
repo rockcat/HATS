@@ -4356,6 +4356,7 @@ body.has-expanded-panel main > section:not(.panel--expanded) {
 .agenda-row { padding: 6px 4px; align-items: center; }
 .agenda-row input[type="checkbox"] { flex-shrink: 0; cursor: pointer; }
 .agenda-row--off .schedules-row-body { opacity: 0.5; }
+.agenda-row-error { color: var(--hat-red); font-size: 11px; margin-top: 2px; white-space: normal; }
 .agenda-edit { display: flex; flex-direction: column; gap: 6px; padding: 8px 4px; border-bottom: 1px solid var(--border); font-size: 12px; }
 .agenda-edit input, .agenda-edit textarea {
   background: var(--surface-2); color: var(--text); border: 1px solid var(--border);

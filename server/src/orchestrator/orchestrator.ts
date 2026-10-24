@@ -156,7 +156,12 @@ export class TeamOrchestrator {
     this.agendaRunner?.stop();
     this.agendaRunner = new AgendaRunner(
       store,
-      (name, msg) => { this.deliverToAgent(name, msg); return Promise.resolve(); },
+      (name, msg) => {
+        // Delivery to nobody only logs; for a scheduled run that is a failure to retry.
+        if (!this.hasAgentWithName(name)) return Promise.reject(new Error(`there is no agent "${name}" in this team`));
+        this.deliverToAgent(name, msg);
+        return Promise.resolve();
+      },
       this.mcp,
       (agentName) => this.personalMcpByAgent.get(agentName.toLowerCase()) ?? null,
     );

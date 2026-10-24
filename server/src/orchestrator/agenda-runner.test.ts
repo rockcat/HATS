@@ -1,6 +1,7 @@
-import { describe, it, expect } from 'vitest';
-import { AgendaStore } from '../api/agenda-store.js';
-import { AgendaRunner } from './agenda-runner.js';
+import { describe, it, expect, vi } from 'vitest';
+import { AgendaStore, type AgendaEntry } from '../api/agenda-store.js';
+import { AgendaRunner, failureUpdate } from './agenda-runner.js';
+import type { MCPRegistry } from '../mcp/mcp-registry.js';
 
 describe('recording when an entry ran', () => {
   it('stamps a repeating entry and schedules its next run', async () => {
@@ -25,11 +26,98 @@ describe('recording when an entry ran', () => {
     expect(store.get(e.id)!.lastRunAt).toBeTypeOf('number');
   });
 
-  it('leaves it unstamped when firing fails', async () => {
+  it('leaves it unstamped when firing fails, records why, and retries on the next check', async () => {
     const store = new AgendaStore(null);
     const e = await store.add({ agentName: 'Rhoda', label: 'x', description: 'y', intervalSeconds: 600 });
-    await new AgendaRunner(store, async () => { throw new Error('no agent'); }).tick(true);
+    const before = Date.now();
+    await new AgendaRunner(store, async () => { throw new Error('no agent'); }, null, () => null, 60_000).tick(true);
 
+    const after = store.get(e.id)!;
+    expect(after.lastRunAt).toBeUndefined();
+    expect(after).toMatchObject({ lastError: 'no agent', failures: 1 });
+    expect(after.nextRunAt).toBeLessThanOrEqual(before + 61_000);
+  });
+
+  it('clears the error once it succeeds', async () => {
+    const store = new AgendaStore(null);
+    const e = await store.add({ agentName: 'Rhoda', label: 'x', description: 'y', intervalSeconds: 600 });
+    await new AgendaRunner(store, async () => { throw new Error('not yet'); }).tick(true);
+    await new AgendaRunner(store, async () => {}).tick(true);
+
+    expect(store.get(e.id)).toMatchObject({ failures: 0 });
+    expect(store.get(e.id)!.lastError).toBeUndefined();
+    expect(store.get(e.id)!.lastRunAt).toBeTypeOf('number');
+  });
+});
+
+describe('an MCP check', () => {
+  const imapEntry = (store: AgendaStore) => store.add({
+    agentName: 'Poppy', label: 'imap check', description: '', intervalSeconds: 600, type: 'mcp_tool_call',
+    mcpToolCall: {
+      serverName: 'email-imap', toolName: 'mcp__email-imap__list_emails', args: {},
+      condition: '!result.startsWith("No ")', messageTemplate: 'You have new email', personalMcpAgentName: 'Poppy',
+    },
+  });
+  const registry = (result: string) => ({ callTool: async () => result }) as unknown as MCPRegistry;
+
+  it('uses the agent\'s personal servers even when there are no shared ones', async () => {
+    const store = new AgendaStore(null);
+    await imapEntry(store);
+    const sent: string[] = [];
+    await new AgendaRunner(store, async (_n, m) => { sent.push(m.content); }, null, () => registry('1 unread')).tick(true);
+    expect(sent).toEqual(['You have new email']);
+  });
+
+  it('does not message the agent when the condition is not met — and that still counts as a run', async () => {
+    const store = new AgendaStore(null);
+    const e = await imapEntry(store);
+    const sent: string[] = [];
+    await new AgendaRunner(store, async (_n, m) => { sent.push(m.content); }, null, () => registry('No emails')).tick(true);
+    expect(sent).toEqual([]);
+    expect(store.get(e.id)!.lastRunAt).toBeTypeOf('number');
+  });
+
+  it('fails, rather than counting as run, when no server has the tool yet', async () => {
+    const store = new AgendaStore(null);
+    const e = await imapEntry(store);
+    await new AgendaRunner(store, async () => {}, null, () => null).tick(true);
     expect(store.get(e.id)!.lastRunAt).toBeUndefined();
+    expect(store.get(e.id)!.lastError).toMatch(/no MCP servers/);
+  });
+});
+
+describe('starting up', () => {
+  it('waits for the first check before firing, so the team is there to receive it', async () => {
+    vi.useFakeTimers();
+    try {
+      const store = new AgendaStore(null);
+      await store.add({ agentName: 'Rhoda', label: 'x', description: 'y', intervalSeconds: 600 });
+      const sent: string[] = [];
+      const runner = new AgendaRunner(store, async (n) => { sent.push(n); }, null, () => null, 60_000);
+      runner.start();
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(sent).toEqual([]);
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(sent).toEqual(['Rhoda']);
+      runner.stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe('backing off', () => {
+  const entry = (extra: Partial<AgendaEntry>): AgendaEntry => ({
+    id: 'e', agentName: 'Rhoda', label: 'x', description: '', intervalSeconds: 600,
+    nextRunAt: 0, enabled: true, createdAt: '', ...extra,
+  });
+
+  it('retries quickly at first, then falls back to the normal interval', () => {
+    expect(failureUpdate(entry({}), 'x', 0, 60_000)).toMatchObject({ failures: 1, nextRunAt: 60_000 });
+    expect(failureUpdate(entry({ failures: 2 }), 'x', 0, 60_000)).toMatchObject({ failures: 3, nextRunAt: 600_000 });
+  });
+
+  it('switches off a one-off that keeps failing', () => {
+    expect(failureUpdate(entry({ intervalSeconds: null, failures: 2 }), 'x', 0, 60_000)).toMatchObject({ enabled: false });
   });
 });

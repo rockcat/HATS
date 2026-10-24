@@ -17,6 +17,11 @@ export interface AgendaEntry {
   actionId?: string;
   /** When it last fired successfully (ms since epoch). */
   lastRunAt?: number;
+  /** Why the most recent attempt failed, if it did; cleared by a success. */
+  lastError?: string;
+  lastErrorAt?: number;
+  /** Failed attempts in a row. */
+  failures?: number;
 }
 
 export class AgendaStore {

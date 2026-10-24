@@ -4,6 +4,23 @@ import { TeamMessage } from './types.js';
 import { buildMessage } from './orchestrator-utils.js';
 import { log } from '../../../packages/core/src/logger.js';
 
+/** Quick retries before a failing entry falls back to its normal interval. */
+const QUICK_RETRIES = 3;
+
+/**
+ * What to record when an entry fails. The first few failures retry on the next
+ * check — usually a server that has not finished connecting. After that it
+ * waits its normal interval, so a broken entry does not fail every minute
+ * forever; a one-off that keeps failing is switched off.
+ */
+export function failureUpdate(entry: AgendaEntry, message: string, now: number, checkIntervalMs: number): Partial<AgendaEntry> {
+  const failures = (entry.failures ?? 0) + 1;
+  const base = { lastError: message, lastErrorAt: now, failures };
+  if (failures < QUICK_RETRIES) return { ...base, nextRunAt: now + checkIntervalMs };
+  if (!entry.intervalSeconds) return { ...base, enabled: false };
+  return { ...base, nextRunAt: now + entry.intervalSeconds * 1000 };
+}
+
 export class AgendaRunner {
   private store: AgendaStore;
   private deliverMessage: (agentName: string, msg: TeamMessage) => Promise<void>;
@@ -28,9 +45,12 @@ export class AgendaRunner {
 
   start(): void {
     if (this.timer) return;
-    // Fire all enabled tasks immediately on startup, then continue on the regular interval.
-    void this.tick(true);
-    this.timer = setInterval(() => void this.tick(), this.checkIntervalMs);
+    // Every enabled task fires once at startup — but on the first check, not
+    // immediately. The runner starts before the team is restored and before
+    // personal MCP servers connect, so an immediate run reached no agent and
+    // no tools, failed, and was not tried again for a whole interval.
+    let first = true;
+    this.timer = setInterval(() => { void this.tick(first); first = false; }, this.checkIntervalMs);
     log.info(`[Agenda] Runner started — checking every ${this.checkIntervalMs / 1000}s`);
   }
 
@@ -47,18 +67,21 @@ export class AgendaRunner {
     for (const entry of due) {
       try {
         log.info(`[Agenda] Firing "${entry.label}" for ${entry.agentName}`);
-        if (entry.type === 'mcp_tool_call' && entry.mcpToolCall && this.mcp) {
+        if (entry.type === 'mcp_tool_call' && entry.mcpToolCall) {
           await this.fireMcpToolCall(entry);
         } else {
           await this.firePrompt(entry);
         }
+        const done = { lastRunAt: now, lastError: undefined, lastErrorAt: undefined, failures: 0 };
         if (entry.intervalSeconds) {
-          await this.store.update(entry.id, { nextRunAt: now + entry.intervalSeconds * 1000, lastRunAt: now });
+          await this.store.update(entry.id, { ...done, nextRunAt: now + entry.intervalSeconds * 1000 });
         } else {
-          await this.store.update(entry.id, { enabled: false, lastRunAt: now });
+          await this.store.update(entry.id, { ...done, enabled: false });
         }
       } catch (err) {
-        log.error(`[Agenda] Error firing action ${entry.id}:`, (err as Error).message);
+        const message = (err as Error).message;
+        log.error(`[Agenda] "${entry.label}" for ${entry.agentName} failed: ${message}`);
+        await this.store.update(entry.id, failureUpdate(entry, message, now, this.checkIntervalMs));
       }
     }
   }
@@ -78,17 +101,10 @@ export class AgendaRunner {
     const registry = spec.personalMcpAgentName
       ? (this.getPersonalMcp(spec.personalMcpAgentName) ?? this.mcp)
       : this.mcp;
-    if (!registry) {
-      log.error(`[Agenda] No MCP registry available for "${entry.label}"`);
-      return;
-    }
-    let result: string;
-    try {
-      result = await registry.callTool(spec.toolName, spec.args);
-    } catch (err) {
-      log.error(`[Agenda] MCP tool call failed for "${entry.label}":`, (err as Error).message);
-      return;
-    }
+    if (!registry) throw new Error('no MCP servers are running');
+    // A failed call is a failed run: thrown so tick() retries it soon rather
+    // than recording it as done.
+    const result = await registry.callTool(spec.toolName, spec.args);
 
     let shouldMessage = true;
     if (spec.condition.trim()) {
