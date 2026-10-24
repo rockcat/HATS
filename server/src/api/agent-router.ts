@@ -18,6 +18,7 @@ import { getToolsForHat } from '../tools/definitions.js';
 import { AnthropicProvider } from '../providers/anthropic.js';
 import { makeProvider, KNOWN_PROVIDERS, probeLocalLLM, getCachedModels, getModelCacheEntry, clearModelCache } from './providers.js';
 import { EXTERNAL_PROVIDER } from '../agent/external-agent.js';
+import { SCHEDULED_THREAD } from '../agent/agent.js';
 import { AgentStatus } from './project-manager.js';
 import { AgentDefinitionStore } from './agent-store.js';
 import { ScheduledActionStore } from './scheduled-action-store.js';
@@ -26,6 +27,7 @@ import { Task } from '../orchestrator/types.js';
 
 function labelForThread(key: string, tasks: Task[]): string {
   if (key === 'general') return 'general';
+  if (key === SCHEDULED_THREAD) return 'Scheduled runs';
   const task = tasks.find(t => t.id === key);
   if (!task) return key;
   const m = task.description.match(/^Work on ticket (TKT-\d+): ([^\n]+)/);

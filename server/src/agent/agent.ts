@@ -25,6 +25,10 @@ const MAX_HISTORY_MESSAGES = 20;  // what is SENT when no maxContextTokens is se
 // matters, but bounded: threads are serialised into team-state.json on every
 // save. The event log keeps everything regardless.
 const MAX_STORED_MESSAGES = 500;
+// Scheduled runs are kept in a thread of their own so they can be seen without
+// cluttering — or feeding into — the agent's real conversations.
+export const SCHEDULED_THREAD = 'scheduled';
+const MAX_SCHEDULED_MESSAGES = 200;
 
 export class Agent implements IAgent {
   readonly id: string;
@@ -266,7 +270,7 @@ export class Agent implements IAgent {
 
     // Explicit threadId on the message always wins.
     // Human direct/reply messages default to 'general'; everything else uses the active task thread.
-    const historyKey = message.threadId
+    const historyKey = message.isScheduled ? SCHEDULED_THREAD : message.threadId
       ?? ((message.from === 'human' && (message.type === 'direct' || message.type === 'human_reply'))
         ? 'general'
         : this.activeThreadKey);
@@ -291,9 +295,16 @@ export class Agent implements IAgent {
           this.config.maxContextTokens, MAX_HISTORY_MESSAGES)), ...working.slice(turnStart)]
       : working.slice(turnStart);
 
+    // A scheduled run is sent to the model on its own, but recorded after the
+    // earlier runs in its thread rather than replacing them.
+    const earlierRuns = message.isScheduled ? this.fromStored(this.threads.get(SCHEDULED_THREAD) ?? []) : [];
+    const record = (): void => message.isScheduled
+      ? this.persistHistory([...earlierRuns, ...working], historyKey, MAX_SCHEDULED_MESSAGES)
+      : this.persistHistory(working, historyKey);
+
     // Persist user message immediately so it appears in the UI while the agent is thinking.
     // persistHistory is called again after the response to add the agent's reply.
-    if (!message.isScheduled) this.persistHistory(working, historyKey);
+    record();
 
     // Tool loop — run until text response or max rounds
     for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
@@ -346,12 +357,10 @@ export class Agent implements IAgent {
       } else {
         // Final text response
         working.push({ role: 'assistant', content: response.content });
-        // Scheduled messages are fire-and-forget — don't overwrite the active thread
-        if (!message.isScheduled) {
-          this.persistHistory(working, historyKey);
-        }
+        record();
 
-        // Route the response back via handler (suppress for scheduled tasks)
+        // Route the response back via handler (suppress for scheduled tasks — the
+        // reply is kept in the scheduled thread, not sent to anyone)
         if (this.responseHandler && response.content.trim() && !message.isScheduled) {
           await this.responseHandler(this.name, message, response.content);
         }
@@ -561,9 +570,9 @@ export class Agent implements IAgent {
    * model is shown is decided per request by toSend(); this is what the agent
    * remembers, and it is no longer the same number.
    */
-  private persistHistory(working: Message[], historyKey: string): void {
+  private persistHistory(working: Message[], historyKey: string, limit = MAX_STORED_MESSAGES): void {
     const now = new Date();
-    const kept = sanitizeHistory(working.slice(-MAX_STORED_MESSAGES));
+    const kept = sanitizeHistory(working.slice(-limit));
     this.threads.set(historyKey, kept.map((m): AgentMessage => ({
       role: m.role,
       content: m.content,

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { Agent } from './agent.js';
+import { Agent, SCHEDULED_THREAD } from './agent.js';
 import { AgentState } from './types.js';
 import { HatType } from '../../../packages/core/src/hats/types.js';
 import { MockProvider } from '../providers/mock.js';
@@ -156,6 +156,33 @@ const withTools = (agent: Agent, upfrontTools?: string[]) =>
 
 const toolsSent = (provider: MockProvider, call = 0) =>
   provider.calls[call]?.tools?.map(t => t.name) ?? [];
+
+describe('Scheduled runs', () => {
+  const scheduled = (content: string): TeamMessage => ({ ...makeDirectMessage(content), isScheduled: true });
+
+  it('are kept in their own thread, not the general chat', async () => {
+    const agent = makeAgent();
+    agent.receive(scheduled('You have new email'));
+    await waitForProcessing();
+
+    const run = agent.getThreadHistory(SCHEDULED_THREAD);
+    expect(run.map((m) => m.role)).toEqual(['user', 'assistant']);
+    expect(run[0]?.content).toContain('You have new email');
+    expect(agent.getThreadHistory('general')).toEqual([]);
+  });
+
+  it('pile up rather than replace each other, but the model only sees the current one', async () => {
+    const provider = new MockProvider({ content: 'done' });
+    const agent = makeAgent({ provider });
+    agent.receive(scheduled('first check'));
+    await waitForProcessing();
+    agent.receive(scheduled('second check'));
+    await waitForProcessing();
+
+    expect(agent.getThreadHistory(SCHEDULED_THREAD)).toHaveLength(4);
+    expect(provider.calls.at(-1)?.messages).toHaveLength(1);
+  });
+});
 
 describe('Which tools reach the model', () => {
   it('sends the agent its own MCP tools without making it search first', async () => {
