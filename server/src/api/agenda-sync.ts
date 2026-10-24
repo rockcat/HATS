@@ -95,6 +95,18 @@ export async function propagateEdit(agenda: AgendaStore, before: ScheduledAction
   return copies.length;
 }
 
+/** The most recent run of any agent's copy of an action, and whose it was. */
+export function lastRunOf(
+  entries: AgendaEntry[],
+  action: Pick<ScheduledActionDef, 'id' | 'label'>,
+): { lastRunAt: number; lastRunBy: string } | null {
+  let latest: AgendaEntry | null = null;
+  for (const e of entries) {
+    if (e.lastRunAt && isCopyOf(e, action) && (!latest || e.lastRunAt > latest.lastRunAt!)) latest = e;
+  }
+  return latest ? { lastRunAt: latest.lastRunAt!, lastRunBy: latest.agentName } : null;
+}
+
 /** Remove every agent's copy of a deleted action. */
 export async function removeCopies(agenda: AgendaStore, action: ScheduledActionDef): Promise<number> {
   const copies = agenda.list().filter((e) => isCopyOf(e, action));

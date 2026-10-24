@@ -15,6 +15,8 @@ export interface AgendaEntry {
   mcpToolCall?: McpToolCallSpec;
   /** The global scheduled action this entry was assigned from, if any. */
   actionId?: string;
+  /** When it last fired successfully (ms since epoch). */
+  lastRunAt?: number;
 }
 
 export class AgendaStore {

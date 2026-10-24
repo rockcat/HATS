@@ -1,6 +1,6 @@
 // ── Add Agent modal / Library editor ─────────────────────────────────────────
 
-import { esc } from './utils.js';
+import { esc, fmtLastRun } from './utils.js';
 import { hat } from './hat.js';
 import { populateHatGroup, getSelectedHats } from './hat.js';
 import { getVoices } from './voice.js';
@@ -371,7 +371,9 @@ export async function openLibraryEdit(agent) {
   const schedSection = document.getElementById('add-agent-schedules-section');
   const schedList    = document.getElementById('add-agent-schedules-list');
   try {
-    const actions  = await fetch('/api/scheduled-actions').then(r => r.json());
+    // Last run is this agent's own, so ask for its copies only.
+    const name     = agent.identity?.name ?? '';
+    const actions  = await fetch(`/api/scheduled-actions?agent=${encodeURIComponent(name)}`).then(r => r.json());
     const assigned = new Set(agent.scheduledActionIds ?? []);
     if (actions.length === 0) {
       schedList.innerHTML = '<span style="color:var(--text-muted);font-size:12px">No global scheduled actions defined yet.</span>';
@@ -380,6 +382,7 @@ export async function openLibraryEdit(agent) {
         <label class="add-agent-sched-label">
           <input type="checkbox" class="add-agent-sched-cb" value="${esc(a.id)}"${assigned.has(a.id) ? ' checked' : ''}>
           <span>${esc(a.label)}</span>
+          ${assigned.has(a.id) ? `<span class="add-agent-sched-last"${a.lastRunAt ? ` title="${esc(new Date(a.lastRunAt).toLocaleString())}"` : ''}>${esc(fmtLastRun(a.lastRunAt))}</span>` : ''}
         </label>`).join('');
     }
     schedSection.hidden = false;

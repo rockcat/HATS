@@ -23,6 +23,21 @@ export function truncate(s, n) {
   return s.length > n ? s.slice(0, n) + '…' : s;
 }
 
+/** "just now", "5 min ago", "3 h ago", "2 d ago" — for a ms timestamp. */
+export function fmtAgo(ms, now = Date.now()) {
+  const mins = Math.floor((now - ms) / 60_000);
+  if (mins < 1)  return 'just now';
+  if (mins < 60) return `${mins} min ago`;
+  const hours = Math.floor(mins / 60);
+  return hours < 24 ? `${hours} h ago` : `${Math.floor(hours / 24)} d ago`;
+}
+
+/** "Last run 5 min ago" / "Never run", with an optional "by" for shared actions. */
+export function fmtLastRun(lastRunAt, by) {
+  if (!lastRunAt) return 'Never run';
+  return `Last run ${fmtAgo(lastRunAt)}${by ? ` · ${by}` : ''}`;
+}
+
 export function fmtTokens(n) {
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(2) + 'M';
   if (n >= 1_000)     return (n / 1_000).toFixed(1) + 'k';

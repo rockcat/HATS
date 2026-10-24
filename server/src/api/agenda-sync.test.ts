@@ -3,7 +3,7 @@ import { mkdtemp } from 'fs/promises';
 import { tmpdir } from 'os';
 import * as path from 'path';
 import { AgendaStore, type AgendaEntry } from './agenda-store.js';
-import { isCopyOf, planAssignment, applyAssignment, propagateEdit, removeCopies } from './agenda-sync.js';
+import { isCopyOf, planAssignment, applyAssignment, propagateEdit, removeCopies, lastRunOf } from './agenda-sync.js';
 import type { ScheduledActionDef } from '../store/team-snapshot.js';
 
 const action = (id: string, label: string, intervalSeconds: number | null = 3600): ScheduledActionDef =>
@@ -96,6 +96,21 @@ describe('keeping copies in step with the store', () => {
     await agenda.add({ agentName: 'Rhoda', label: 'Weather', description: '', intervalSeconds: 3600 });
     expect(await removeCopies(agenda, kanban)).toBe(1);
     expect(agenda.list().map((e) => e.label)).toEqual(['Weather']);
+  });
+});
+
+describe('when an action last ran', () => {
+  it('is the latest run of any agent\'s copy', () => {
+    const entries = [
+      entry('e1', 'Check Kanban', { actionId: 'a1', agentName: 'Rhoda', lastRunAt: 100 }),
+      entry('e2', 'Check Kanban', { actionId: 'a1', agentName: 'Poppy', lastRunAt: 300 }),
+      entry('e3', 'Check email',  { actionId: 'a2', agentName: 'Poppy', lastRunAt: 900 }),
+    ];
+    expect(lastRunOf(entries, kanban)).toEqual({ lastRunAt: 300, lastRunBy: 'Poppy' });
+  });
+
+  it('is nothing when no copy has run yet', () => {
+    expect(lastRunOf([entry('e1', 'Check Kanban', { actionId: 'a1' })], kanban)).toBeNull();
   });
 });
 

@@ -1,6 +1,6 @@
 // ── Scheduled Actions tab ─────────────────────────────────────────────────────
 
-import { esc } from './utils.js';
+import { esc, fmtLastRun } from './utils.js';
 
 let _mcpToolSchemas = null;
 
@@ -156,6 +156,15 @@ export function buildScheduleRow(action) {
   intervalBadge.className   = 'schedules-row-interval';
   intervalBadge.textContent = intervalText;
 
+  const lastRun = document.createElement('span');
+  lastRun.className   = 'schedules-row-lastrun';
+  lastRun.textContent = fmtLastRun(action.lastRunAt, action.lastRunBy);
+  if (action.lastRunAt) lastRun.title = new Date(action.lastRunAt).toLocaleString();
+
+  const timing = document.createElement('div');
+  timing.className = 'schedules-row-timing';
+  timing.append(intervalBadge, lastRun);
+
   const delBtn  = document.createElement('button');
   delBtn.className  = 'library-btn library-btn--del';
   delBtn.title      = 'Delete';
@@ -166,7 +175,7 @@ export function buildScheduleRow(action) {
   rowActions.appendChild(delBtn);
 
   row.appendChild(viewBody);
-  row.appendChild(intervalBadge);
+  row.appendChild(timing);
   row.appendChild(rowActions);
 
   viewBody.addEventListener('click', () => openScheduleModal(action));

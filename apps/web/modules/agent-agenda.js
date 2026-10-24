@@ -6,7 +6,7 @@
 // action — editing it opens that action, so every agent it is assigned to
 // changes together — while the agent's own entries are edited in place.
 
-import { esc } from './utils.js';
+import { esc, fmtLastRun } from './utils.js';
 import { openScheduleModal } from './schedules.js';
 
 function intervalText(seconds) {
@@ -77,7 +77,8 @@ function entryRow(entry, action, reload) {
 
   const when = document.createElement('span');
   when.className = 'schedules-row-interval';
-  when.textContent = `${intervalText(entry.intervalSeconds)} · ${nextText(entry)}`;
+  when.textContent = `${intervalText(entry.intervalSeconds)} · ${nextText(entry)} · ${fmtLastRun(entry.lastRunAt)}`;
+  if (entry.lastRunAt) when.title = `Last run ${new Date(entry.lastRunAt).toLocaleString()}`;
 
   const edit = document.createElement('button');
   edit.className = 'library-btn';

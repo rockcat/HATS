@@ -4311,6 +4311,7 @@ body.has-expanded-panel main > section:not(.panel--expanded) {
 .add-agent-schedules-list { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
 .add-agent-sched-label { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; cursor: pointer; }
 .add-agent-sched-label input[type="checkbox"] { margin-top: 2px; flex-shrink: 0; }
+.add-agent-sched-last { margin-left: auto; font-size: 11px; color: var(--text-muted); white-space: nowrap; }
 
 /* Library editor modal — two-panel layout: form left, prompt right */
 #add-agent-modal { gap: 16px; align-items: flex-start; }
@@ -4347,6 +4348,9 @@ body.has-expanded-panel main > section:not(.panel--expanded) {
   padding: 8px 12px; border-bottom: 1px solid var(--border); font-size: 13px;
 }
 .schedules-row:hover { background: var(--surface-2); }
+
+.schedules-row-timing { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex-shrink: 0; }
+.schedules-row-lastrun { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
 
 /* Agent panel — the agent's own schedule */
 .agenda-row { padding: 6px 4px; align-items: center; }

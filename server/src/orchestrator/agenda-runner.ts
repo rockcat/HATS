@@ -53,9 +53,9 @@ export class AgendaRunner {
           await this.firePrompt(entry);
         }
         if (entry.intervalSeconds) {
-          await this.store.update(entry.id, { nextRunAt: now + entry.intervalSeconds * 1000 });
+          await this.store.update(entry.id, { nextRunAt: now + entry.intervalSeconds * 1000, lastRunAt: now });
         } else {
-          await this.store.update(entry.id, { enabled: false });
+          await this.store.update(entry.id, { enabled: false, lastRunAt: now });
         }
       } catch (err) {
         log.error(`[Agenda] Error firing action ${entry.id}:`, (err as Error).message);

@@ -21,7 +21,7 @@ import { EXTERNAL_PROVIDER } from '../agent/external-agent.js';
 import { AgentStatus } from './project-manager.js';
 import { AgentDefinitionStore } from './agent-store.js';
 import { ScheduledActionStore } from './scheduled-action-store.js';
-import { planAssignment, applyAssignment, propagateEdit, removeCopies } from './agenda-sync.js';
+import { planAssignment, applyAssignment, propagateEdit, removeCopies, lastRunOf } from './agenda-sync.js';
 import { Task } from '../orchestrator/types.js';
 
 function labelForThread(key: string, tasks: Task[]): string {
@@ -873,8 +873,10 @@ export class AgentRouter {
     // ── Global scheduled actions ───────────────────────────────────────────
 
     if (pathname === '/api/scheduled-actions' && method === 'GET') {
-      const store = this.deps.getActionStore();
-      json(res, 200, store ? store.list() : []);
+      // ?agent=Name narrows "last run" to that agent's own copy of each action.
+      const store   = this.deps.getActionStore();
+      const entries = orch.getAgendaStore()?.list(url.searchParams.get('agent') ?? undefined) ?? [];
+      json(res, 200, (store?.list() ?? []).map(a => ({ ...a, ...lastRunOf(entries, a) })));
       return true;
     }
 
