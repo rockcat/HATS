@@ -51,6 +51,22 @@ export function openProjectDb(dbPath: string): DatabaseSync {
   return db;
 }
 
+/**
+ * Write a consistent copy of a project's database to `dest`.
+ *
+ * Copying project.db itself would miss whatever is still in the WAL, and the
+ * WAL of a running project is rarely empty.
+ */
+export function snapshotProjectDb(dbPath: string, dest: string): void {
+  const wasOpen = open.has(dbPath);
+  const db = openProjectDb(dbPath);
+  try {
+    db.exec(`VACUUM INTO '${dest.replace(/'/g, "''")}'`);
+  } finally {
+    if (!wasOpen) closeProjectDb(dbPath);
+  }
+}
+
 /** Close a project's database. Called when switching project. */
 export function closeProjectDb(dbPath: string): void {
   const db = open.get(dbPath);

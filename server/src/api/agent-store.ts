@@ -30,7 +30,15 @@ export interface AgentDefinitionStore {
    * Per-agent MCP credentials, which never travel in a project definition or a
    * shared library. Returns an empty object when the store keeps none.
    */
-  secretsFor?(id: string, templateId?: string): { personalMcpCredentials?: Record<string, Record<string, string>> };
+  secretsFor?(id: string, templateId?: string): AgentSecrets;
+  /** Store an agent's credentials on this machine only. */
+  setSecrets?(id: string, secrets: AgentSecrets): Promise<void>;
+}
+
+/** What an agent keeps on this machine rather than in the shared library. */
+export interface AgentSecrets {
+  personalMcpCredentials?: Record<string, Record<string, string>>;
+  teamContext?: string;
 }
 
 /** File-backed store — the fallback used when no Agent Library service is reachable. */

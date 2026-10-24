@@ -39,7 +39,11 @@ export class ProjectServerClient {
     return this.http.put<{ project: ProjectDefinition }>(`${BASE}/active`, { id });
   }
 
-  createProject(input: { id?: string; name: string; goal?: string; humanName?: string }): Promise<ProjectDefinition | undefined> {
+  /** The server also accepts a whole team and its servers, which is how an import arrives. */
+  createProject(
+    input: { id?: string; name: string } & Partial<Pick<ProjectDefinition,
+      'description' | 'goal' | 'humanName' | 'team' | 'mcpServers' | 'settings'>>,
+  ): Promise<ProjectDefinition | undefined> {
     return this.http.post<ProjectDefinition>(`${BASE}/projects`, input);
   }
 

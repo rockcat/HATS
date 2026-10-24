@@ -32,6 +32,11 @@ export class AgentLibraryClient {
     return this.http.post<AgentTemplate>(`${BASE}/agent-templates`, input);
   }
 
+  /** Replace a template, or create it under this id if there is none. */
+  putTemplate(id: string, input: AgentTemplateInput): Promise<AgentTemplate | undefined> {
+    return this.http.put<AgentTemplate>(`${BASE}/agent-templates/${encodeURIComponent(id)}`, input);
+  }
+
   updateTemplate(id: string, patch: Partial<AgentTemplateInput>): Promise<AgentTemplate | undefined> {
     return this.http.patch<AgentTemplate>(`${BASE}/agent-templates/${encodeURIComponent(id)}`, patch);
   }

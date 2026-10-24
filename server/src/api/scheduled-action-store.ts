@@ -48,6 +48,14 @@ export class ScheduledActionStore {
     return def;
   }
 
+  /** Add an action under its own id, unless one already has it. True if added. */
+  async addIfMissing(def: ScheduledActionDef): Promise<boolean> {
+    if (this.actions.has(def.id)) return false;
+    this.actions.set(def.id, def);
+    await this.save();
+    return true;
+  }
+
   async update(id: string, patch: Partial<ScheduledActionDef>): Promise<ScheduledActionDef | undefined> {
     const existing = this.actions.get(id);
     if (!existing) return undefined;
