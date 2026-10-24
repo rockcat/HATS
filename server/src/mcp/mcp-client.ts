@@ -1,3 +1,5 @@
+import { existsSync } from 'fs';
+import * as path from 'path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
@@ -22,6 +24,22 @@ export interface MCPServerDef {
   toolArgMappings?: Record<string, Record<string, string>>;
 }
 
+const SCRIPT_EXT = /\.(c|m)?(js|ts)$|\.py$/;
+
+/**
+ * The script a stdio server would run, if it names one by absolute path and
+ * that file is not here.
+ *
+ * Catalogue entries can point at things installed on one machine only — the
+ * Gemini workspace extension under ~/.gemini, say — and spawning one anyway in
+ * a container ends in a stack trace from the child process. Only absolute
+ * script paths are checked: a relative one depends on the child's cwd, and
+ * anything else (an npx package name, a flag) is not a file at all.
+ */
+export function missingScript(args: string[], exists: (p: string) => boolean = existsSync): string | null {
+  return args.find((a) => path.isAbsolute(a) && SCRIPT_EXT.test(a) && !exists(a)) ?? null;
+}
+
 /**
  * Manages one MCP server connection.
  * Tools are exposed as ToolDefinitions with name prefix `mcp__<serverName>__<toolName>`.
@@ -44,6 +62,8 @@ export class MCPClient {
     this._def = { name: this.serverName, config, toolArgMappings };
     let transport;
     if (config.transport === 'stdio') {
+      const missing = missingScript(config.args ?? []);
+      if (missing) throw new Error(`${missing} is not installed in this environment — skipped`);
       transport = new StdioClientTransport({ command: config.command, args: config.args ?? [], env: config.env });
     } else if (config.transport === 'http') {
       const headers = config.headers
