@@ -159,7 +159,12 @@ export const BUILTIN_CATALOGUE: MCPCatalogueEntry[] = [
     description: 'Read, search, compose, send, and manage email via IMAP and SMTP — works with Gmail, Outlook, and any standard mail server',
     category: 'productivity',
     users: ['agent'],
-    config: { transport: 'stdio', command: 'npx', args: ['-y', '@codefuturist/email-mcp'], env: { MCP_EMAIL_ADDRESS: '', MCP_EMAIL_PASSWORD: '', MCP_EMAIL_IMAP_HOST: '', MCP_EMAIL_SMTP_HOST: '' } },
+    // MCP_EMAIL_SEND_SAVE_TO_SENT files a copy of each sent message in the
+    // IMAP Sent folder. On by default; an agent turns it off with its own
+    // credential. Set here rather than through the catalogue API because
+    // normalise() replaces every built-in entry with this definition on
+    // startup — an edit made through the API lasts until the next restart.
+    config: { transport: 'stdio', command: 'npx', args: ['-y', '@codefuturist/email-mcp'], env: { MCP_EMAIL_ADDRESS: '', MCP_EMAIL_PASSWORD: '', MCP_EMAIL_IMAP_HOST: '', MCP_EMAIL_SMTP_HOST: '', MCP_EMAIL_SEND_SAVE_TO_SENT: 'true' } },
     envVars: [
       { name: 'MCP_EMAIL_ADDRESS',                  placeholder: 'required — email address' },
       { name: 'MCP_EMAIL_PASSWORD',                  placeholder: 'required — password or app password' },
@@ -178,6 +183,8 @@ export const BUILTIN_CATALOGUE: MCPCatalogueEntry[] = [
       { name: 'MCP_EMAIL_SMTP_POOL_MAX_CONNECTIONS', placeholder: '1' },
       { name: 'MCP_EMAIL_SMTP_POOL_MAX_MESSAGES',    placeholder: '100' },
       { name: 'MCP_EMAIL_RATE_LIMIT',                placeholder: '10' },
+      // Gmail already files SMTP mail in Sent itself, so saving again doubles it.
+      { name: 'MCP_EMAIL_SEND_SAVE_TO_SENT',         placeholder: 'true — set false for Gmail, which saves sent mail itself' },
     ],
     notes: 'Run "npx @codefuturist/email-mcp setup" for a guided wizard that auto-detects server settings. For Gmail use an App Password (not your main password) and set IMAP host to imap.gmail.com, SMTP host to smtp.gmail.com.',
     url: 'https://www.npmjs.com/package/@codefuturist/email-mcp',

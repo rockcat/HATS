@@ -1,15 +1,20 @@
 # syntax=docker/dockerfile:1
 
 # ─── Stage 1: builder ────────────────────────────────────────────────────────
-FROM node:22-slim AS builder
+FROM node:24-slim AS builder
 WORKDIR /build
 
 # Build-time deps for native Node addons:
 #   @napi-rs/canvas → Cairo + Pango
 #   gl              → Mesa OpenGL (headless rendering)
 #   @kmamal/sdl     → SDL2
+#
+# python-is-python3 because gl publishes prebuilt binaries for Node 22 but
+# not 24, so on 24 it compiles ANGLE from source — and ANGLE's gyp files
+# call `python`, which Debian does not provide. Without it the build dies
+# with "python: not found" deep inside node-gyp.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      python3 build-essential pkg-config \
+      python3 python-is-python3 build-essential pkg-config \
       libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev \
       libgl1-mesa-dev libglu1-mesa-dev libxi-dev libxext-dev \
       libsdl2-dev \
@@ -32,7 +37,7 @@ RUN npm run build
 
 
 # ─── Stage 2: runner ─────────────────────────────────────────────────────────
-FROM node:22-slim AS runner
+FROM node:24-slim AS runner
 WORKDIR /app
 
 # Runtime shared libraries (not -dev headers)
