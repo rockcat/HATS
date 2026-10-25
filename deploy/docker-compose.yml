@@ -13,9 +13,14 @@
 #
 # install.ps1 / install.sh set that up. For development, build from source
 # with the compose files in each repository instead.
+#
+# The images are published for linux/amd64 only. On an Apple Silicon Mac,
+# Docker Desktop runs them through Rosetta — slower than native, but it
+# works. HATS_PLATFORM in .env overrides this once arm64 images exist.
 
 x-service: &service
   image: ghcr.io/rockcat/hats-services:${HATS_VERSION:-latest}
+  platform: &platform ${HATS_PLATFORM:-linux/amd64}
   restart: unless-stopped
   env_file: [.env]
   volumes:
@@ -41,6 +46,7 @@ x-health: &health
 services:
   hats:
     image: ghcr.io/rockcat/hats-runner:${HATS_VERSION:-latest}
+    platform: *platform
     restart: unless-stopped
     ports: ["3001:3001"]
     env_file: [.env]
