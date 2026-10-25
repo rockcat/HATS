@@ -40,6 +40,7 @@ import { LibraryAgentStore } from './api/library-agent-store.js';
 import { ScheduledActionStore } from './api/scheduled-action-store.js';
 import { seedBuiltIns } from './store/built-in-agents.js';
 import { runtimeDir } from '../../packages/core/src/runtime-dir.js';
+import { seedMissing } from './util/seed-data.js';
 import { UserStore } from './api/user-store.js';
 import { AgentLibraryClient } from '../../packages/clients/src/agent-library-client.js';
 import { resolveProjectSource } from './project/project-source.js';
@@ -224,6 +225,13 @@ function makeProjectLoader(
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 async function main() {
+  // The image sets this; a source checkout already has its defaults in place.
+  const defaults = process.env['HATS_DEFAULTS_DIR'];
+  if (defaults) {
+    const seeded = await seedMissing(defaults, runtimeDir());
+    if (seeded.length > 0) console.log(`[Team] First run: copied ${seeded.length} default file(s) into the data directory`);
+  }
+
   await mkdir(PROJECTS_ROOT, { recursive: true });
   await initCatalogue(CATALOGUE_FILE);
 

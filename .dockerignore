@@ -6,8 +6,22 @@ node_modules
 # Built inside the image.
 server/dist
 
-# Mounted at runtime, never baked in.
-runtime_data
+# Mounted at runtime, never baked in — except the defaults the repository
+# ships, which the runner copies into a new installation's data directory.
+# Allowed one by one so local state (users, tokens, projects) never gets in.
+runtime_data/*
+!runtime_data/avatars
+runtime_data/avatars/*
+!runtime_data/avatars/*.glb
+!runtime_data/avatars/*.vrm
+!runtime_data/avatars/avatars.json
+!runtime_data/avatars/backgrounds
+!runtime_data/config
+runtime_data/config/*
+!runtime_data/config/mcp-catalogue.json
+!runtime_data/data
+runtime_data/data/*
+!runtime_data/data/model-pricing.json
 
 # Secrets reach the container through env_file, not the image.
 .env

@@ -63,7 +63,11 @@ COPY --from=builder /build/apps/web     ./server/dist/apps/web
 COPY package.json ./
 
 # runtime_data/ is always mounted — never bake project data into the image.
-# The volume must contain at minimum: avatars/, config/, data/
+# What the repository ships there (avatars, backgrounds, model pricing — see
+# .dockerignore) is carried as defaults instead, and copied into the data
+# directory on startup wherever it is missing: a new installation starts with
+# them and an existing one keeps its own.
+COPY runtime_data/ ./defaults/
 VOLUME ["/app/runtime_data"]
 
 # Speech, the Agent Library and the Project Server are separate services — see
@@ -74,6 +78,7 @@ EXPOSE 3001
 # Headless: no terminal is attached, so no chat CLI — it would read EOF and exit.
 ENV NODE_ENV=production \
     RUNTIME_DIR=/app/runtime_data \
+    HATS_DEFAULTS_DIR=/app/defaults \
     HATS_HEADLESS=1
 
 # The compilation root is the repo (the server imports packages/), so the
