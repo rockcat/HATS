@@ -96,7 +96,7 @@ async function importProject(args) {
   console.log(`Imported "${r.projectId}".`);
   console.log(`  Agents added to the library:  ${r.templates.created.join(', ') || 'none'}`);
   if (r.templates.kept.length) console.log(`  Already in the library, kept: ${r.templates.kept.join(', ')}`);
-  console.log(`  Agents given credentials:     ${r.secrets.length}`);
+  console.log(`  Agents' private settings set: ${r.secrets.length} (team context, and credentials if exported)`);
   console.log(`  Scheduled actions added:      ${r.scheduledActions.added} (${r.scheduledActions.kept} already here)`);
   console.log(`  Avatars added:                ${r.assets.added.length} (${r.assets.kept.length} already here)`);
   if (r.missingVoices.length) console.log(`  Voices to install:            ${r.missingVoices.join(', ')}`);
