@@ -1,0 +1,119 @@
+# A complete installation from published images: no source, no build.
+#
+#   docker compose up -d          start everything
+#   docker compose pull           fetch newer images, then `up -d` again
+#   docker compose logs -f hats   follow the runner
+#
+# Lives in one folder beside its .env and, by default, its data:
+#
+#   hats/
+#     docker-compose.yml   this file
+#     .env                 keys and passwords — the only one
+#     data/                everything the installation keeps
+#
+# install.ps1 / install.sh set that up. For development, build from source
+# with the compose files in each repository instead.
+
+x-service: &service
+  image: ghcr.io/rockcat/hats-services:${HATS_VERSION:-latest}
+  restart: unless-stopped
+  env_file: [.env]
+  volumes:
+    - ${HATS_DATA:-./data}:/workspace/HATS/runtime_data
+  environment: &service-env
+    NODE_ENV: production
+    RUNTIME_DIR: /workspace/HATS/runtime_data
+    # Service names: inside a container, localhost is the container itself.
+    AGENT_LIBRARY_URL: http://agent-library:3010
+    PROJECT_SERVER_URL: http://project-server:3020
+    SPEECH_SERVICE_URL: http://speech-service:3050
+    TEAM_RUNNER_URL: http://hats:3001
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+
+# Every service answers /api/v1/health without a login.
+x-health: &health
+  interval: 10s
+  timeout: 5s
+  retries: 6
+  start_period: 10s
+
+services:
+  hats:
+    image: ghcr.io/rockcat/hats-runner:${HATS_VERSION:-latest}
+    restart: unless-stopped
+    ports: ["3001:3001"]
+    env_file: [.env]
+    volumes:
+      - ${HATS_DATA:-./data}:/app/runtime_data
+    environment:
+      NODE_ENV: production
+      RUNTIME_DIR: /app/runtime_data
+      AGENT_LIBRARY_URL: http://agent-library:3010
+      PROJECT_SERVER_URL: http://project-server:3020
+      SPEECH_SERVICE_URL: http://speech-service:3050
+      # Local model servers run on the host, not in this project.
+      OLLAMA_BASE_URL: ${DOCKER_OLLAMA_BASE_URL:-http://host.docker.internal:11434/v1}
+      LM_STUDIO_BASE_URL: ${DOCKER_LM_STUDIO_BASE_URL:-http://host.docker.internal:1234/v1}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    # The runner decides once, at startup, whether to use the library and the
+    # project server or fall back to local files. Starting it before they
+    # answer would leave it on the fallback for the whole session.
+    depends_on:
+      agent-library: { condition: service_healthy }
+      project-server: { condition: service_healthy }
+    healthcheck:
+      # Any reply under 500 is alive: /api/ needs a login, so a 401 proves
+      # the server and its auth layer are both up.
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3001/api/state').then(r => process.exit(r.status < 500 ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  agent-library:
+    <<: *service
+    ports: ["3010:3010"]
+    command: ["node", "--import", "tsx/esm", "apps/agent-library/src/main.ts"]
+    healthcheck:
+      <<: *health
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3010/api/v1/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+
+  project-server:
+    <<: *service
+    ports: ["3020:3020"]
+    command: ["node", "--import", "tsx/esm", "apps/project-server/src/main.ts"]
+    healthcheck:
+      <<: *health
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3020/api/v1/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+
+  project-designer:
+    <<: *service
+    ports: ["3030:3030"]
+    command: ["node", "--import", "tsx/esm", "apps/project-designer/src/main.ts"]
+
+  embodiment-test:
+    <<: *service
+    ports: ["3040:3040"]
+    command: ["node", "--import", "tsx/esm", "apps/embodiment-test/src/main.ts"]
+
+  companion:
+    <<: *service
+    ports: ["3060:3060"]
+    command: ["node", "--import", "tsx/esm", "apps/companion/src/main.ts"]
+
+  project-view:
+    <<: *service
+    ports: ["3070:3070"]
+    command: ["node", "--import", "tsx/esm", "apps/project-view/src/main.ts"]
+
+  speech-service:
+    <<: *service
+    image: ghcr.io/rockcat/hats-speech:${HATS_VERSION:-latest}
+    ports: ["3050:3050"]
+    environment:
+      <<: *service-env
+      PYTHON_BIN: python3
+      PIPER_VOICES_DIR: /workspace/HATS/runtime_data/piper_voices
+    command: ["node", "--import", "tsx/esm", "apps/speech-service/src/main.ts"]

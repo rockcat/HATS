@@ -54,3 +54,6 @@ runtime_data/data/users.json
 # place set by HATS_DATA. Avatars were 136MB tracked here and duplicated
 # in the runner repo; outputs/ is work agents produced, not source.
 runtime_data/
+
+# A test install run from inside the repository.
+deploy/data/
