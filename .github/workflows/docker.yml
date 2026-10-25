@@ -1,0 +1,83 @@
+# Build the services images and publish them to GitHub Container Registry.
+#
+#   ghcr.io/rockcat/hats-services   the six Node services
+#   ghcr.io/rockcat/hats-speech     the Speech Service, with Python and Piper
+#
+# Tagged :latest on every push to main, :0.1.3 and :0.1 for a tag v0.1.3,
+# and :sha-abc1234 always. Both are private, like this repository: a machine
+# that pulls them logs in to ghcr.io first — deploy/install.ps1 does that.
+#
+# The Dockerfile expects this repository and hats-runner side by side, as
+# they are on a development machine, because the services are built against
+# the runner's shared packages. So both are checked out, and the context is
+# the directory holding them.
+
+name: Docker images
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      runner_ref:
+        description: hats-runner branch, tag or commit to build against
+        default: main
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  images:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - target: services
+            image: hats-services
+          - target: speech
+            image: hats-speech
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: HATS
+
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/HATS-runner
+          ref: ${{ inputs.runner_ref || 'main' }}
+          path: hats-runner
+          # Public, so the workflow's own token is enough. If hats-runner is
+          # ever made private, add a RUNNER_REPO_TOKEN secret that can read it.
+          token: ${{ secrets.RUNNER_REPO_TOKEN || github.token }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: HATS/Dockerfile
+          target: ${{ matrix.target }}
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
