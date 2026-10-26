@@ -63,3 +63,22 @@ describe('the same agent arriving twice', () => {
     expect(orch.listAgents()[0]!.getHistory()[0]?.content).toBe('first');
   });
 });
+
+describe('an agent\'s limits', () => {
+  it('survive a save and a restore', async () => {
+    const store = new AgentStore(path.join(dir, 'agents.json'));
+    await store.load();
+    orch.setAgentStore(store);
+    orch.registerAgent({ ...poppy('poppy-1'), maxCostPerHour: 0.5, maxContextTokens: 8000 });
+    const state = path.join(dir, 'team-state.json');
+    await orch.saveState(state);
+
+    expect(store.get('poppy-1')).toMatchObject({ maxCostPerHour: 0.5, maxContextTokens: 8000 });
+
+    const again = new TeamOrchestrator({ storePath: path.join(dir, 'events2.jsonl'), projectsRoot: dir });
+    await again.init();
+    again.setAgentStore(store);
+    await again.loadState(state, () => provider);
+    expect(again.getAgent('Poppy')?.config).toMatchObject({ maxCostPerHour: 0.5, maxContextTokens: 8000 });
+  });
+});

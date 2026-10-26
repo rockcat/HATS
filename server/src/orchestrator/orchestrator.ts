@@ -365,6 +365,10 @@ export class TeamOrchestrator {
           personalMcpCredentials:     agent.config.personalMcpCredentials,
           disabledPersonalMcpServers: agent.config.disabledPersonalMcpServers,
           scheduledActionIds:         existingDef?.scheduledActionIds ?? [],
+          // Left out, every save stored the agent without its limits, and the
+          // next time it was built — a project switch, a restore — it had none.
+          maxContextTokens:           agent.config.maxContextTokens,
+          maxCostPerHour:             agent.config.maxCostPerHour,
           externalEndpoint:           agent.config.externalEndpoint,
         };
         await this.agentStore.syncRunningAgent(def);
