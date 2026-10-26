@@ -101,7 +101,7 @@ export function applyCardData(el, agent) {
     if (!costEl) {
       costEl = document.createElement('div');
       costEl.className = 'agent-cost-idle';
-      el.querySelector('.agent-activity').appendChild(costEl);
+      el.appendChild(costEl);
     }
     const spent = agent.hourlyCost != null ? `$${agent.hourlyCost.toFixed(3)}/hr` : '';
     costEl.textContent = `Cost limit reached (${spent}) — waiting for next hour`;
@@ -109,7 +109,7 @@ export function applyCardData(el, agent) {
     if (!costEl) {
       costEl = document.createElement('div');
       costEl.className = 'agent-cost-idle';
-      el.querySelector('.agent-activity').appendChild(costEl);
+      el.appendChild(costEl);
     }
     costEl.textContent = `$${agent.hourlyCost.toFixed(3)} / $${agent.maxCostPerHour}/hr`;
   } else {
