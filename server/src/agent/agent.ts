@@ -534,10 +534,14 @@ export class Agent implements IAgent {
   /**
    * Whether a board is within reach.
    *
-   * An absent allow-list means every team server, and the runner starts
-   * kanban for every project — so the honest default is yes.
+   * The board is built into the runner now, and the orchestrator hands its
+   * tools to every agent in a project — whatever the agent's MCP list says.
+   * Asking that list for 'kanban' told an agent with, say, only brave-search
+   * enabled that it had no board, while the board tools sat in its tool list.
+   * Without a project the old rule stands.
    */
   private hasTicketing(): boolean {
+    if (this.config.projectDir) return true;
     const allowed = this.config.enabledMcpServers;
     return allowed === undefined || allowed.includes('kanban');
   }

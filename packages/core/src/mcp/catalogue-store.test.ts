@@ -191,3 +191,20 @@ describe('sharing the file with another process', () => {
     expect(entry(BUILTIN)?.knownTools).toHaveLength(2);
   });
 });
+
+describe('a server that is now part of the runner', () => {
+  it('is dropped from a catalogue written before it was built in', async () => {
+    const d = await mkdtemp(path.join(tmpdir(), 'hats-cat-'));
+    const cat = path.join(d, 'mcp-catalogue.json');
+    await writeFile(cat, JSON.stringify([{
+      id: 'kanban', name: 'Kanban', description: 'Old board server.', category: 'productivity',
+      users: ['agent'], config: { transport: 'stdio', command: 'node', args: ['builtin:mcp/kanban/server'] },
+    }]));
+    await initCatalogue(cat);
+
+    expect(getCatalogue().some((e) => e.id === 'kanban')).toBe(false);
+    const written = JSON.parse(await readFile(cat, 'utf-8')) as MCPCatalogueEntry[];
+    expect(written.some((e) => e.id === 'kanban')).toBe(false);
+    await rm(d, { recursive: true, force: true });
+  });
+});

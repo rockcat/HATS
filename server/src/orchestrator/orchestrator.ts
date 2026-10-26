@@ -52,7 +52,7 @@ import {
   PEOPLE_TOOL_NAMES, handlePeopleCall, peopleTools, type PeopleToolsContext,
 } from '../people/tools.js';
 import { canonicalModel, configFromEnv, createEmbedder, type FaceEmbedder } from '../people/embedder.js';
-import { getCatalogue, recordDiscoveredTools } from '../../../packages/core/src/mcp/catalogue-store.js';
+import { getCatalogue, recordDiscoveredTools, RETIRED_SERVER_IDS } from '../../../packages/core/src/mcp/catalogue-store.js';
 import {
   startMeeting as startMeetingFn,
   makeResponseHandler as makeResponseHandlerFn,
@@ -176,6 +176,11 @@ export class TeamOrchestrator {
   getAgentStore(): AgentDefinitionStore | null { return this.agentStore; }
 
   async addMCPServer(def: MCPServerDef): Promise<void> {
+    // Saved state and old definitions still name servers that are built in now.
+    if (RETIRED_SERVER_IDS.includes(def.name)) {
+      log.info(`[MCP] "${def.name}" is built into the runner now — not starting it as a server.`);
+      return;
+    }
     await this.mcp.add(def);
     await this.noteDiscoveredTools(def.name, this.mcp.getToolsForServers([def.name]));
     await this.store.append('mcp_server_added', { name: def.name });

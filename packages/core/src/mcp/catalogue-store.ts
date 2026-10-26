@@ -488,9 +488,16 @@ const toolsFileFor = (cataloguePath: string): string =>
  * reaches every machine. What was observed at runtime survives, because
  * nothing in the code could regenerate it.
  */
+/**
+ * Servers that used to be catalogue entries and are now part of the runner.
+ * Kanban became a library inside the runner; a catalogue that still lists it
+ * offers a toggle that can only fail, starting a server file that is gone.
+ */
+export const RETIRED_SERVER_IDS: readonly string[] = ['kanban'];
+
 function normalise(entries: MCPCatalogueEntry[]): MCPCatalogueEntry[] {
   const builtinById = new Map(BUILTIN_CATALOGUE.map(e => [e.id, e]));
-  const merged = entries.map(e => {
+  const merged = entries.filter(e => !RETIRED_SERVER_IDS.includes(e.id)).map(e => {
     const builtin = builtinById.get(e.id);
     // Strip any observation an older build wrote into the catalogue; it has
     // already been lifted into the sidecar by then.

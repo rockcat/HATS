@@ -712,9 +712,6 @@ export class APIServer {
 
   private resolveMCPConfig(id: string, entry: MCPCatalogueEntry) {
     const config = resolveConfig(entry.config, this.projectDir);
-    if (id === 'kanban' && this.kanbanManager.kanbanPath && config.transport === 'stdio') {
-      return { ...config, args: [...(config.args ?? []), this.kanbanManager.kanbanPath] };
-    }
     if (id === 'filesystem' && this.projectDir && config.transport === 'stdio') {
       return { ...config, args: [...(config.args ?? []), this.projectDir] };
     }

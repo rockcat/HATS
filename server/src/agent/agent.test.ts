@@ -157,6 +157,27 @@ const withTools = (agent: Agent, upfrontTools?: string[]) =>
 const toolsSent = (provider: MockProvider, call = 0) =>
   provider.calls[call]?.tools?.map(t => t.name) ?? [];
 
+describe('Knowing there is a board', () => {
+  const promptOf = async (agent: Agent, provider: MockProvider) => {
+    agent.receive(makeDirectMessage('Hello'));
+    await waitForProcessing();
+    return provider.calls[0]?.systemPrompt ?? '';
+  };
+
+  it('is told about the board in a project even when kanban is not in its MCP list', async () => {
+    // Poppy: only brave-search enabled, yet the runner gives her the board tools.
+    const provider = new MockProvider({ content: 'ok' });
+    const agent = makeAgent({ provider, projectDir: '/projects/paige', enabledMcpServers: ['brave-search'] });
+    expect(await promptOf(agent, provider)).toContain('## Tracking work');
+  });
+
+  it('is not told about one outside a project when kanban is not allowed', async () => {
+    const provider = new MockProvider({ content: 'ok' });
+    const agent = makeAgent({ provider, enabledMcpServers: ['brave-search'] });
+    expect(await promptOf(agent, provider)).not.toContain('## Tracking work');
+  });
+});
+
 describe('Scheduled runs', () => {
   const scheduled = (content: string): TeamMessage => ({ ...makeDirectMessage(content), isScheduled: true });
 

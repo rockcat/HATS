@@ -1,21 +1,5 @@
 [
   {
-    "id": "kanban",
-    "name": "Kanban Board",
-    "description": "Built-in kanban board for ticket and task tracking",
-    "category": "productivity",
-    "users": [
-      "human"
-    ],
-    "config": {
-      "transport": "stdio",
-      "command": "node",
-      "args": [
-        "builtin:mcp/kanban/server"
-      ]
-    }
-  },
-  {
     "id": "filesystem",
     "name": "Filesystem",
     "description": "Read, write, and list files in the project folder — sources/ for inputs, outputs/ for deliverables",
