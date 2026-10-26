@@ -39,3 +39,5 @@
 .voice-text .muted { font-size: 12px; }
 
 .tag.warn { color: var(--warn); align-self: flex-start; }
+
+.voice select.speaker { width: auto; max-width: 140px; padding: 3px 6px; font-size: 12px; }

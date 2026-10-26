@@ -17,6 +17,8 @@ const state = {
   catalogueError: '',
   installing: new Set(),
   playing: null,
+  /** Speaker picked per multi-speaker voice, kept across re-renders. */
+  speaker: new Map(),
 };
 
 // ── Loading ──────────────────────────────────────────────────────────────────
@@ -69,6 +71,7 @@ function renderInstalled() {
         el('span', { class: 'muted' }, details(v) || 'Not in the Piper catalogue'),
         v.running ? '' : el('span', { class: 'tag warn' }, 'not running'),
       ),
+      v.speakerNames.length > 1 ? speakerPicker(v) : '',
       el('button', {
         class: 'small', disabled: !v.running, title: v.running ? 'Play the sample' : 'This voice has not started',
         onclick: (e) => play(v.name, e.currentTarget),
@@ -76,6 +79,17 @@ function renderInstalled() {
       el('button', { class: 'small danger', onclick: () => remove(v.name) }, 'Remove'),
     ));
   }
+}
+
+/** Which of a multi-speaker voice's speakers the sample uses. */
+function speakerPicker(v) {
+  if (!state.speaker.has(v.name)) state.speaker.set(v.name, v.defaultSpeaker || v.speakerNames[0]);
+  const select = el('select', {
+    class: 'speaker', title: 'Speaker',
+    onchange: (e) => state.speaker.set(v.name, e.currentTarget.value),
+  }, ...v.speakerNames.map((s) => el('option', { value: s }, s === v.defaultSpeaker ? `${s} (default)` : s)));
+  select.value = state.speaker.get(v.name);
+  return select;
 }
 
 function renderAvailable() {
@@ -142,7 +156,7 @@ async function play(name, button) {
     const res = await fetch('/api/v1/speech/preview', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ voice: name, text: $('#sample-text').value }),
+      body: JSON.stringify({ voice: name, speakerName: state.speaker.get(name), text: $('#sample-text').value }),
     });
     if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `HTTP ${res.status}`);
     const audio = new Audio(URL.createObjectURL(await res.blob()));

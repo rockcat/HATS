@@ -37,12 +37,18 @@ export function describeInstalled(running, catalogue) {
   const known = new Map(catalogue.map((v) => [v.name, v]));
   const runningNames = new Set(running.map((v) => v.name));
   const names = new Set([...runningNames, ...catalogue.filter((v) => v.installed).map((v) => v.name)]);
-  return [...names].sort().map((name) => ({
-    name,
-    ...(known.get(name) ?? {}),
-    speakerCount: running.find((v) => v.name === name)?.speakers?.length ?? known.get(name)?.speakers ?? 1,
-    running: runningNames.has(name),
-  }));
+  return [...names].sort().map((name) => {
+    const live = running.find((v) => v.name === name);
+    return {
+      name,
+      ...(known.get(name) ?? {}),
+      speakerCount: live?.speakers?.length || known.get(name)?.speakers || 1,
+      // Only a running voice can be asked for a speaker, so only it has these.
+      speakerNames: (live?.speakers ?? []).map((s) => s.name),
+      defaultSpeaker: live?.speakers?.find((s) => s.id === live.speakerId)?.name ?? '',
+      running: !!live,
+    };
+  });
 }
 
 /** A starting language for the filter: the browser's own, if the catalogue has it. */

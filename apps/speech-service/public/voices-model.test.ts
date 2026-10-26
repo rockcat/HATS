@@ -41,6 +41,17 @@ describe('describeInstalled', () => {
     expect(rows).toEqual([expect.objectContaining({ name: 'en_GB-semaine-medium', language: 'English', speakerCount: 4, running: true })]);
   });
 
+  it('offers a multi-speaker voice its speakers, starting on its default', () => {
+    const speakers = [{ name: '01', id: 3 }, { name: '02', id: 9 }];
+    const [row] = describeInstalled([{ name: 'en_GB-semaine-medium', speakerId: 9, speakers }], catalogue);
+    expect(row).toEqual(expect.objectContaining({ speakerNames: ['01', '02'], defaultSpeaker: '02', speakerCount: 2 }));
+  });
+
+  it('offers no speakers for a single-speaker voice', () => {
+    const [row] = describeInstalled([{ name: 'en_GB-semaine-medium', speakerId: null, speakers: [] }], catalogue);
+    expect(row).toEqual(expect.objectContaining({ speakerNames: [], defaultSpeaker: '' }));
+  });
+
   it('lists a voice the catalogue does not know, by name', () => {
     const rows = describeInstalled([{ name: 'my-own-voice', speakers: [] }], catalogue);
     expect(rows.map((r: { name: string }) => r.name)).toEqual(['en_GB-semaine-medium', 'my-own-voice']);
