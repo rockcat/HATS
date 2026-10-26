@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { probeServices, serviceTargets, type ServiceTarget } from './service-status.js';
+import { designerUrl, probeServices, serviceTargets, type ServiceTarget } from './service-status.js';
 
 const urls = {
   agentLibraryUrl:  'http://library:3010',
@@ -31,6 +31,26 @@ describe('which services to show', () => {
     const lib = serviceTargets({ ...urls, agentLibraryUrl: null }, speechUp, {})
       .find((t) => t.id === 'agent-library');
     expect(lib?.url).toBeNull();
+  });
+});
+
+describe('a page to open', () => {
+  it('is the Agent Library itself, unless a public URL is given', () => {
+    const lib = (env: Record<string, string>) => serviceTargets(urls, speechUp, env).find((t) => t.id === 'agent-library');
+    expect(lib({})?.openUrl).toBe('http://library:3010');
+    expect(lib({ AGENT_LIBRARY_PUBLIC_URL: 'https://lib.example' })?.openUrl).toBe('https://lib.example');
+  });
+
+  it('is the Project Designer for the Project Server, which has no page of its own', () => {
+    expect(designerUrl('http://host.docker.internal:3020', {})).toBe('http://host.docker.internal:3030/');
+    expect(designerUrl('http://projects:3020', { PROJECT_DESIGNER_PORT: '4000' })).toBe('http://projects:4000/');
+    expect(designerUrl(null, { PROJECT_DESIGNER_URL: 'https://designer.example' })).toBe('https://designer.example');
+    expect(designerUrl(null, {})).toBeNull();
+  });
+
+  it('is withheld for a service switched off', async () => {
+    const [s] = await probeServices([{ id: 'x', label: 'X', url: null, openUrl: 'http://x', probe: async () => true }]);
+    expect(s?.openUrl).toBeNull();
   });
 });
 

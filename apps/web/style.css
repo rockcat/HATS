@@ -335,6 +335,8 @@ header h1 {
   cursor: default;
 }
 .service-pill .status-dot { flex-shrink: 0; }
+.service-open { color: var(--text-muted); text-decoration: none; font-size: 12px; line-height: 1; }
+.service-open:hover { color: var(--text); }
 
 /* ── Layout ──────────────────────────────────────────── */
 main {

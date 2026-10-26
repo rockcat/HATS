@@ -15,7 +15,7 @@ import { updateGoalBar, initGoalBar,
          initProjectBadge, initProject }               from './modules/project.js';
 import { initKanban }                                  from './modules/kanban.js';
 import { initSettings }                                from './modules/settings.js';
-import { initAddAgent, openLibraryEdit }               from './modules/add-agent.js';
+import { initAddAgent, openLibraryEdit, openAddAgent } from './modules/add-agent.js';
 import { initLibraryTab, fetchGlobalAgents }           from './modules/library.js';
 import { initSchedulesTab }                            from './modules/schedules.js';
 import { initServiceStatus }                           from './modules/services.js';
@@ -47,7 +47,7 @@ initProject({
 
 initKanban({ updateGoalBar });
 
-initLibraryTab({ openLibraryEdit });
+initLibraryTab({ openLibraryEdit, openAddAgent });
 
 initAddAgent({ fetchGlobalAgentsOverride: fetchGlobalAgents });
 

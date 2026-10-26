@@ -20,6 +20,8 @@ export interface ServiceTarget {
   label: string;
   /** Null when the runner was told not to use this service (standalone). */
   url: string | null;
+  /** A page a person can open for it, if it has one. */
+  openUrl?: string | null;
   probe(url: string): Promise<boolean>;
 }
 
@@ -27,6 +29,7 @@ export interface ServiceStatus {
   id: string;
   label: string;
   url: string | null;
+  openUrl: string | null;
   enabled: boolean;
   connected: boolean;
 }
@@ -48,6 +51,24 @@ async function modelServerAnswers(baseUrl: string): Promise<boolean> {
 }
 
 /**
+ * The Project Server is API-only; the page for projects is the Project Designer.
+ * Without PROJECT_DESIGNER_URL it is assumed to sit beside the Project Server,
+ * on PROJECT_DESIGNER_PORT (3030 by default).
+ */
+export function designerUrl(projectServerUrl: string | null, env: Record<string, string | undefined>): string | null {
+  if (env['PROJECT_DESIGNER_URL']) return env['PROJECT_DESIGNER_URL'];
+  if (!projectServerUrl) return null;
+  try {
+    const u = new URL(projectServerUrl);
+    u.port = env['PROJECT_DESIGNER_PORT'] ?? '3030';
+    u.pathname = '/';
+    return u.toString();
+  } catch {
+    return null;
+  }
+}
+
+/**
  * The services to show. Local model servers appear only when configured: the
  * provider list gives every one a default URL, and a dot that is always red
  * for a server nobody runs would only teach people to ignore the row.
@@ -60,10 +81,12 @@ export function serviceTargets(
   const targets: ServiceTarget[] = [
     {
       id: 'agent-library', label: 'Agent Library', url: urls.agentLibraryUrl,
+      openUrl: env['AGENT_LIBRARY_PUBLIC_URL'] ?? urls.agentLibraryUrl,
       probe: (url) => new AgentLibraryClient(url, PROBE_TIMEOUT_MS).isHealthy(),
     },
     {
       id: 'project-server', label: 'Project Server', url: urls.projectServerUrl,
+      openUrl: designerUrl(urls.projectServerUrl, env),
       probe: (url) => new ProjectServerClient(url, PROBE_TIMEOUT_MS).isHealthy(),
     },
     { id: 'speech', label: 'Speech', url: urls.speechServiceUrl, probe: () => speechProbe() },
@@ -86,6 +109,7 @@ export async function probeServices(targets: ServiceTarget[]): Promise<ServiceSt
     id: t.id,
     label: t.label,
     url: t.url,
+    openUrl: t.url !== null ? (t.openUrl ?? null) : null,
     enabled: t.url !== null,
     connected: t.url !== null && await t.probe(t.url).catch(() => false),
   })));
