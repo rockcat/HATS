@@ -483,6 +483,12 @@ export class TeamOrchestrator {
         log.warn(`[Team] Agent "${agentId}" not found in global store — skipping`);
         continue;
       }
+      // A copy saved under another id: skip it whole rather than let its
+      // history overwrite the first one's. The next save drops it.
+      if (this.findByName(def.identity.name)) {
+        log.warn(`[Team] Dropping a duplicate of "${def.identity.name}" (${agentId}) from the saved team`);
+        continue;
+      }
       const isExternal = !!def.externalEndpoint;
       const provider = isExternal ? EXTERNAL_PROVIDER : providerFactory(def.providerName);
       const config: AgentConfig = {
@@ -736,6 +742,14 @@ export class TeamOrchestrator {
   getHumanName(): string { return this.humanName; }
 
   registerAgent(config: AgentConfig): IAgent {
+    // Names identify agents everywhere — messages, mentions, findByName — so a
+    // second agent of the same name is the same agent arriving twice, not a
+    // new one. That is how one agent became five across project switches.
+    const existing = this.findByName(config.identity.name);
+    if (existing) {
+      log.warn(`[Team] "${config.identity.name}" is already in the team — not adding it again.`);
+      return existing;
+    }
     if (this.projectDir) config = { ...config, projectDir: this.projectDir };
     if (this.projectGoal) config = { ...config, projectGoal: this.projectGoal };
 

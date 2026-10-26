@@ -27,12 +27,10 @@
 import './load-settings.js';
 import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { settingsFile } from './settings-file.js';
-import { repointBuiltinServer } from '../../packages/core/src/mcp/builtin-server.js';
 import { mkdir } from 'fs/promises';
 import * as path from 'path';
-import { TeamOrchestrator } from './orchestrator/orchestrator.js';
 import { CLIInterface } from './human/cli-interface.js';
-import { APIServer, ProjectLoader } from './api/api-server.js';
+import { APIServer } from './api/api-server.js';
 import { AnthropicProvider } from './providers/anthropic.js';
 import { OpenAIProvider, OllamaProvider, LMStudioProvider } from './providers/openai.js';
 import { GeminiProvider } from './providers/gemini.js';
@@ -48,10 +46,7 @@ import { UserStore } from './api/user-store.js';
 import { AgentLibraryClient } from '../../packages/clients/src/agent-library-client.js';
 import { resolveProjectSource } from './project/project-source.js';
 import { ProjectSync } from './project/project-sync.js';
-import {
-  assembleDefaultTeam, assembleFromDefinition, attachDefinitionMcpServers,
-} from './project/team-assembler.js';
-import type { ProjectDefinition } from '../../packages/contracts/src/types.js';
+import { makeProjectLoader, type LoadedProject } from './project/project-loader.js';
 
 // ── Project layout ────────────────────────────────────────────────────────────
 
@@ -143,88 +138,6 @@ async function makeAgentStore(): Promise<AgentDefinitionStore> {
   return store;
 }
 
-// ── Project loader factory ────────────────────────────────────────────────────
-// Passed to APIServer so it can hot-switch projects without restarting.
-
-function makeProjectLoader(
-  agentStore: AgentDefinitionStore,
-  definition: ProjectDefinition | null,
-): ProjectLoader {
-  return async (projectDir: string, kanbanFile: string, stateFile: string) => {
-    const eventsFile   = path.join(projectDir, 'team-events.jsonl');
-    const meetingsFile = path.join(projectDir, 'meetings.json');
-    const agendaFile   = path.join(projectDir, 'agent-agenda.json');
-
-    const orchestrator = new TeamOrchestrator({
-      storePath:    eventsFile,
-      projectsRoot: projectDir,
-      humanName:    definition?.humanName ?? 'Boss',
-    });
-    orchestrator.setAgentStore(agentStore);
-    // Before restoring anything. The API server sets this too, but only once
-    // it starts — after state has been loaded and active tasks resumed. Until
-    // then the orchestrator has no project, so it has no board, so every
-    // ticket looks absent and a task whose ticket was closed gets resumed
-    // anyway. That is how TKT-009 kept coming back.
-    orchestrator.setProjectDir(projectDir);
-    await orchestrator.init();
-    await orchestrator.initMeetingStore(meetingsFile);
-    await orchestrator.initAgendaStore(agendaFile);
-
-    if (existsSync(stateFile)) {
-      console.log(`[Team] Restoring conversation state from ${stateFile}`);
-      const mcpDefs = await orchestrator.loadState(stateFile, providerFactory);
-      for (const def of mcpDefs) {
-        // Always repoint the kanban MCP at this project's board — a saved path
-        // may be stale (e.g. './kanban-board.json' from the repo root).
-        // Saved state carries the launcher that was right when it was
-        // written, as well as a board path that may be from another
-        // checkout. Both are repointed.
-        const builtinServer = repointBuiltinServer(def.name, def.config,
-          def.name === 'kanban' ? kanbanFile : undefined);
-        if (builtinServer) Object.assign(def.config, builtinServer);
-
-        // One server failing must not stop the runner starting. An expired
-        // credential on an optional MCP — a Google token nobody has refreshed
-        // for a week — would otherwise reject here, go unhandled, and take the
-        // whole process down before it ever listens. The team is still worth
-        // running without that server, and the agent is told the tool is
-        // missing rather than the operator being told nothing at all.
-        await orchestrator.addMCPServer(def).catch((err: Error) =>
-          console.log(`[Team] MCP server "${def.name}" failed to start: ${err.message}`));
-      }
-
-      // The definition still owns goal, human name, and any agents added in the
-      // Designer since the snapshot was written.
-      if (definition) {
-        if (definition.goal) orchestrator.setProjectGoal(definition.goal);
-        orchestrator.setHumanName(definition.humanName);
-        const running = new Set(orchestrator.listAgents().map(a => a.id));
-        const added = definition.team.filter(a => a.enabled !== false && !running.has(a.instanceId));
-        if (added.length > 0) {
-          console.log(`[Team] Adding ${added.length} agent(s) deployed since the last run`);
-          assembleFromDefinition(orchestrator, { ...definition, team: added }, providerFactory);
-        }
-      }
-
-      const { resumed } = await orchestrator.resumeActiveTasks();
-      if (resumed.length > 0) console.log(`[Team] Resumed ${resumed.length} active task(s)`);
-      return orchestrator;
-    }
-
-    if (definition && definition.team.length > 0) {
-      assembleFromDefinition(orchestrator, definition, providerFactory);
-      await attachDefinitionMcpServers(orchestrator, definition, kanbanFile);
-      return orchestrator;
-    }
-
-    console.log(`[Team] No team defined for ${projectDir} — assembling a default team.`);
-    const names = assembleDefaultTeam(orchestrator, providerFactory, 'anthropic', DEFAULT_MODEL);
-    console.log(`[Team] Team assembled: ${names.join(' · ')}`);
-    return orchestrator;
-  };
-}
-
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -279,7 +192,48 @@ async function main() {
     }
   }
 
-  const loader = makeProjectLoader(agentStore, project.definition);
+  // Mirror runtime team changes back into the open project's definition. One
+  // sync per open project: it used to stay bound to the startup project and
+  // its orchestrator, and after a switch went on writing teams into the
+  // wrong definition.
+  let sync: ProjectSync | null = null;
+  const bindSync = async ({ orchestrator: orch, definition, client }: LoadedProject): Promise<void> => {
+    const previous = sync;
+    sync = null;
+    if (previous) { previous.stop(); await previous.flush().catch(() => {}); }
+    if (!client || !definition) return;
+    const next = new ProjectSync(client, definition, () => orch);
+    sync = next;
+    await next.flush();
+    orch.onEvent((ev) => {
+      if (['task_complete', 'state_saved', 'agent_disengaged'].includes(ev.type) && sync === next) next.schedule();
+    });
+  };
+
+  // The startup project was read a moment ago; every later visit reads afresh.
+  let startupSource: { id: string; definition: typeof project.definition; client: typeof project.client } | null =
+    { id: project.projectId, definition: project.definition, client: project.client };
+  const loader = makeProjectLoader({
+    agentStore,
+    providerFactory,
+    defaultModel: DEFAULT_MODEL,
+    // Read for each project as it is opened — never the startup project's.
+    sourceFor: async (projectId) => {
+      if (startupSource && startupSource.id === projectId) {
+        const { definition, client } = startupSource;
+        startupSource = null;
+        return { definition, client };
+      }
+      const resolved = await resolveProjectSource({
+        projectServerUrl:   PROJECT_SERVER_URL,
+        requestedProjectId: projectId,
+        projectsRoot:       PROJECTS_ROOT,
+        fallbackProjectId:  projectId,
+      });
+      return { definition: resolved.definition, client: resolved.client };
+    },
+    onLoaded: bindSync,
+  });
   const orchestrator = await loader(PROJECT_DIR, KANBAN_FILE, STATE_FILE);
 
   console.log(`[Team] Events → ${EVENTS_FILE}`);
@@ -307,15 +261,6 @@ async function main() {
   });
   api.start();
 
-  // Mirror runtime team changes back into the project definition.
-  let sync: ProjectSync | null = null;
-  if (project.client && project.definition) {
-    sync = new ProjectSync(project.client, project.definition, () => orchestrator);
-    await sync.flush();
-    orchestrator.onEvent((ev) => {
-      if (['task_complete', 'state_saved', 'agent_disengaged'].includes(ev.type)) sync?.schedule();
-    });
-  }
 
   // SIGTERM as well as SIGINT. Ctrl+C sends SIGINT, but `docker stop` — and
   // so every compose restart and recreate — sends SIGTERM, which nothing
