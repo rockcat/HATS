@@ -11,4 +11,7 @@ export const config = {
    * the same ports, or double the memory.
    */
   voicesDir: path.resolve(process.env['PIPER_VOICES_DIR'] ?? runtimeDir('piper_voices')),
+  /** Where the voices page installs from: Piper's published voices.json and models. */
+  catalogueUrl: (process.env['PIPER_CATALOGUE_URL'] ?? 'https://huggingface.co/rhasspy/piper-voices/resolve/main')
+    .replace(/\/$/, ''),
 } as const;

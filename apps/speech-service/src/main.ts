@@ -11,14 +11,21 @@
  * Start it with `npm run speech-service`.
  */
 
+import * as path from 'path';
+import { fileURLToPath } from 'url';
 import { startService } from '@hats/service-kit/index';
+import { uiKitMount } from '../../../packages/ui-kit/index.js';
 import { config } from './config.js';
 import { speechRoutes } from './routes.js';
 import { isSpeechAvailable } from './pipeline.js';
 import { VoiceManager } from './voice-manager.js';
+import { VoiceCatalogue } from './voice-catalogue.js';
+import { voiceAdminRoutes } from './voice-admin-routes.js';
+
+const PUBLIC_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
 
 async function main(): Promise<void> {
-  const voices = new VoiceManager();
+  const voices = new VoiceManager(config.voicesDir);
   // Spawning is slow, so it runs in the background; the service answers
   // immediately and reports however many voices are ready so far.
   voices.start().catch((err: Error) => console.warn(`[${config.name}] voice startup:`, err.message));
@@ -26,8 +33,11 @@ async function main(): Promise<void> {
   await startService({
     name: config.name,
     port: config.port,
-    routes: speechRoutes(voices),
+    publicDir: PUBLIC_DIR,
+    mounts: [uiKitMount()],
+    routes: [...speechRoutes(voices), ...voiceAdminRoutes(voices, new VoiceCatalogue(config.catalogueUrl))],
     banner: [
+      `voices page: http://localhost:${config.port}/`,
       `voices:    ${config.voicesDir}`,
       `synthesis: POST http://localhost:${config.port}/api/v1/speech  (NDJSON, one chunk per sentence)`,
     ],
