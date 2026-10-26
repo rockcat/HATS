@@ -657,6 +657,10 @@ export class TeamOrchestrator {
     // The memory server writes its file but will not create the folder, so a
     // first run would fail on a path that has never existed.
     if (agentDir) await mkdir(agentDir, { recursive: true }).catch(() => {});
+    else if (JSON.stringify(entry.config).includes('{AGENT_DIR}')) {
+      log.warn(`[Team] Personal MCP "${serverId}" for ${agentName} keeps per-agent files, but there is no `
+        + 'agent folder (no project open?) — what it saves will not be kept with the project.');
+    }
     const config = resolvePersonalConfig(entry, this.withBorrowedMail(agentName, serverId, credentials), agentDir);
     const credKeys = Object.keys(credentials);
     log.info(`[Team] Personal MCP "${serverId}" starting for ${agentName} — credential keys: [${credKeys.join(', ')}]`);
@@ -797,6 +801,12 @@ export class TeamOrchestrator {
       });
       agent.setLLMSemaphore(this.llmSemaphore);
       if (this.telemetryRecorder) agent.setTelemetryRecorder(this.telemetryRecorder);
+      // In the team before its servers start: startPersonalMcp finds the
+      // agent's folder by name, synchronously. Started first, it found no
+      // agent, {AGENT_DIR} was dropped, and the memory server was left with a
+      // bare "memory.json" — written inside the npx cache, shared by every
+      // agent, and gone whenever the container was recreated.
+      this.agents.set(agent.id, agent);
       if (config.personalMcpCredentials) {
         const disabled = new Set(config.disabledPersonalMcpServers ?? []);
         for (const [serverId, creds] of Object.entries(config.personalMcpCredentials)) {
