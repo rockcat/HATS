@@ -1,0 +1,41 @@
+/* Voices page. Shared look from /ui-kit/hats-ui.css. */
+
+.sample {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.sample input { flex: 1; }
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.filters input { flex: 1 1 200px; }
+
+.voice-list { list-style: none; margin: 0; padding: 0; }
+
+.voice-list .empty { padding: 16px 14px; color: var(--text-muted); }
+
+.voice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.voice:last-child { border-bottom: none; }
+
+.voice-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.voice-text .name { overflow-wrap: anywhere; }
+.voice-text .muted { font-size: 12px; }
+
+.tag.warn { color: var(--warn); align-self: flex-start; }

@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Voices</title>
+  <link rel="stylesheet" href="/ui-kit/hats-ui.css">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<header class="app-header">
+  <h1>Voices</h1>
+  <span class="subtitle">The Piper voices agents can speak with</span>
+  <span class="spacer"></span>
+  <span class="row" style="gap:6px">
+    <span class="status-dot" id="health-dot"></span>
+    <span class="muted mono" id="health-label">speech</span>
+  </span>
+</header>
+
+<main class="layout split">
+  <section class="panel">
+    <header>Installed <span class="muted" id="installed-count"></span></header>
+    <div class="panel-body sample">
+      <label for="sample-text" class="muted">Sample</label>
+      <input id="sample-text" value="Hello. I am ready to help with your project.">
+    </div>
+    <div class="panel-body flush scroll">
+      <ul class="voice-list" id="installed"></ul>
+    </div>
+  </section>
+
+  <section class="panel">
+    <header>Add a voice <span class="spacer"></span><span class="muted" id="available-count"></span></header>
+    <div class="panel-body filters">
+      <input id="filter-query" type="search" placeholder="Search name, language or country">
+      <select id="filter-language"><option value="">All languages</option></select>
+      <select id="filter-quality">
+        <option value="">Any quality</option>
+        <option value="x_low">x_low</option>
+        <option value="low">low</option>
+        <option value="medium">medium</option>
+        <option value="high">high</option>
+      </select>
+    </div>
+    <div class="panel-body flush scroll">
+      <ul class="voice-list" id="available"></ul>
+    </div>
+  </section>
+</main>
+
+<script type="module" src="/app.js"></script>
+</body>
+</html>
