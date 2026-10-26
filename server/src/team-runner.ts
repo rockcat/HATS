@@ -23,7 +23,10 @@
  *     <ticket-id>/       — agent outputs per ticket (e.g. TKT-001/)
  */
 
+// First: saved settings must be in the environment before anything reads it.
+import './load-settings.js';
 import { existsSync, readFileSync, writeFileSync } from 'fs';
+import { settingsFile } from './settings-file.js';
 import { repointBuiltinServer } from '../../packages/core/src/mcp/builtin-server.js';
 import { mkdir } from 'fs/promises';
 import * as path from 'path';
@@ -289,7 +292,7 @@ async function main() {
     allowlistPath:  ALLOWLIST_FILE,
     mcpEnabledPath: MCP_FILE,
     meetingsPath:   MEETINGS_FILE,
-    envPath:        './.env',
+    envPath:        settingsFile(),
     projectId:      project.projectId,
     projectName:    project.projectName,
     projectSource:  project.source,

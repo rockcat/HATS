@@ -12,7 +12,25 @@ export interface EnvEntry {
 export async function readEnvFile(filePath: string): Promise<EnvEntry[]> {
   let raw = '';
   try { raw = await readFile(filePath, 'utf-8'); } catch { return []; }
+  return parseEnv(raw);
+}
 
+/**
+ * The file's entries plus, for each asked-for key it does not mention, the
+ * value the process is actually running with. In a container the settings
+ * file starts empty while .env arrives through the environment, and a panel
+ * showing only the file would look as though nothing were configured.
+ */
+export function withEffective(entries: EnvEntry[], keys: string[], env: Record<string, string | undefined>): EnvEntry[] {
+  const inFile = new Set(entries.map(e => e.key));
+  const extra = keys
+    .filter(k => !inFile.has(k) && env[k] !== undefined)
+    .map(k => ({ key: k, value: env[k]!, isSecret: SECRET_PATTERN.test(k) }));
+  return [...entries, ...extra];
+}
+
+/** The entries in a .env file's text — the part that does not touch the disk. */
+export function parseEnv(raw: string): EnvEntry[] {
   const entries: EnvEntry[] = [];
   for (const line of raw.split(/\r?\n/)) {
     const trimmed = line.trim();

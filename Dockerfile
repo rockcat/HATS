@@ -76,10 +76,21 @@ VOLUME ["/app/runtime_data"]
 EXPOSE 3001
 
 # Headless: no terminal is attached, so no chat CLI — it would read EOF and exit.
+#
+# Everything that must outlive the container goes under the mounted data
+# directory; anything else here is lost when it is recreated.
+#   HATS_SETTINGS_FILE  what the Settings panel saves (it wrote /app/.env,
+#                       which nothing reloaded — a setting lasted one run)
+#   XDG_STATE_HOME      MCP servers' own state — email-mcp keeps scheduled
+#   XDG_CACHE_HOME      sends and its mail cache there, under ~/.local/state
+#                       and ~/.cache by default
 ENV NODE_ENV=production \
     RUNTIME_DIR=/app/runtime_data \
     HATS_DEFAULTS_DIR=/app/defaults \
-    HATS_HEADLESS=1
+    HATS_HEADLESS=1 \
+    HATS_SETTINGS_FILE=/app/runtime_data/config/settings.env \
+    XDG_STATE_HOME=/app/runtime_data/state \
+    XDG_CACHE_HOME=/app/runtime_data/cache
 
 # The compilation root is the repo (the server imports packages/), so the
 # emitted entry point keeps its server/src/ path inside dist.

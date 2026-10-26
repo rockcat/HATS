@@ -4,7 +4,8 @@ import { readFile, writeFile, mkdir, readdir, stat, rm } from 'fs/promises';
 import * as path from 'path';
 import { TeamOrchestrator } from '../orchestrator/orchestrator.js';
 import { TelemetryStore } from '../store/telemetry-store.js';
-import { readEnvFile, writeEnvFile } from './env-manager.js';
+import { readEnvFile, writeEnvFile, withEffective } from './env-manager.js';
+import { applicable, lockedKeys } from '../settings-file.js';
 import { listFilesRecursive } from './api-utils.js';
 import { log } from '../../../packages/core/src/logger.js';
 
@@ -250,7 +251,9 @@ export class ProjectManager {
     }
 
     if (pathname === '/api/env' && method === 'GET') {
-      json(res, 200, await readEnvFile(this.deps.getEnvPath()));
+      // ?keys=A,B — also report the running value of keys the file leaves out.
+      const keys = (url.searchParams.get('keys') ?? '').split(',').filter(Boolean);
+      json(res, 200, withEffective(await readEnvFile(this.deps.getEnvPath()), keys, process.env));
       return true;
     }
 
@@ -258,8 +261,10 @@ export class ProjectManager {
       const body    = await readBody(req);
       const updates = JSON.parse(body) as Record<string, string>;
       await writeEnvFile(this.deps.getEnvPath(), updates);
-      for (const [key, value] of Object.entries(updates)) process.env[key] = value;
-      json(res, 200, { ok: true });
+      // Locked keys are kept on file but not applied — see settings-file.ts.
+      const locked = lockedKeys();
+      Object.assign(process.env, applicable(updates, locked));
+      json(res, 200, { ok: true, locked: Object.keys(updates).filter(k => locked.has(k)) });
       return true;
     }
 

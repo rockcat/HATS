@@ -75,7 +75,8 @@ export function openSettings() {
   document.getElementById('settings-cancel').hidden = false;
 
   Promise.all([
-    fetch('/api/env').then(r => r.json()),
+    // Ask for the running value of every setting shown, not just what is on file.
+    fetch(`/api/env?keys=${encodeURIComponent(Object.keys(ENV_META).join(','))}`).then(r => r.json()),
     fetch('/api/providers').then(r => r.json()),
     fetch('/api/project/human-name').then(r => r.json()).catch(() => ({ humanName: 'Human' })),
     fetch('/api/debug/logging').then(r => r.json()).catch(() => ({ logPrompts: false })),
