@@ -1,12 +1,13 @@
 /**
  * Exactly what the agent will be handed, and what it will have to look for.
  *
- * The runner builds an agent's tool list from three places: its own core
- * tools, which every agent gets; the agent's own servers, with the everyday
- * board tools beside them; and the team's servers with the rest of the board.
- * The people tools join the agent's own side only on a runner with face
- * recognition set up, which the library cannot see, so they are shown apart. The editor decides only part of that, so this shows
- * the whole of it, in the order the runner sends it — the interesting question
+ * The runner builds an agent's tool list from four places: its own core
+ * tools and the everyday board tools, which every agent gets whatever its
+ * template selects; the agent's own servers; and the team's servers with the
+ * rest of the board. The people tools join the agent's own side only on a
+ * runner with face recognition set up, which the library cannot see, so they
+ * are shown apart. The editor decides only part of that, so this shows the
+ * whole of it, in the order the runner sends it — the interesting question
  * is not "what did I tick" but "what will the model see".
  *
  * The split matters. A tool sent upfront costs its schema on every single

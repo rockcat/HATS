@@ -59,22 +59,19 @@ export function toolTokens(tool) {
  * Exactly what the model will be sent, and what it will have to search for.
  *
  * Mirrors the runner: `getToolsForHat` first, always; then `splitToolSet`
- * over the agent's own servers plus the everyday board tools against the
- * team's servers plus the rest of the board. Same selector forms too: an
- * absent list means everything on the personal side, an empty one means
- * none, and a selector can name a whole server, one tool, the namespaced name
- * search results print, or a bare tool name.
- *
- * Note what follows from that, because the runner does it: once a template
- * picks its upfront tools, the everyday board tools are sent only if picked
- * too.
+ * over the agent's own servers against the team's servers plus the rest of
+ * the board, followed by the everyday board tools, which are sent whatever
+ * is selected. Same selector forms too: an absent list means everything on
+ * the personal side, an empty one means none, and a selector can name a
+ * whole server, one tool, the namespaced name search results print, or a
+ * bare tool name.
  *
  * `unknown` catches a selector that matches nothing, which is otherwise
  * silent — the tool simply never appears and nobody is told why.
  *
  * @param {Array} sources  catalogue entries this agent can draw on
  * @param {string[]|undefined} upfrontTools  the template's choice
- * @param {{core?: Array, onDemand?: Array, personal?: Array, shared?: Array}} builtin
+ * @param {{core?: Array, onDemand?: Array, always?: Array, shared?: Array}} builtin
  *   the runner's own tools, from /api/v1/builtin-tools
  */
 export function splitForPreview(sources = [], upfrontTools, builtin = {}) {
@@ -85,14 +82,15 @@ export function splitForPreview(sources = [], upfrontTools, builtin = {}) {
     })));
   const runner = (tools = [], scope) => tools.map((t) => ({ ...t, bare: t.name, server: '', label: t.source, scope }));
 
-  const personal = [...mcp('personal'), ...runner(builtin.personal, 'personal')];
+  const personal = mcp('personal');
   const shared = [...mcp('team'), ...runner(builtin.shared, 'team')];
   const always = runner(builtin.core, 'runner');
+  const board = runner(builtin.always, 'personal');
   const onDemand = runner(builtin.onDemand, 'runner');
 
   // Absent means the default: everything on the agent's own side.
   if (upfrontTools === undefined) {
-    return { always, upfront: personal, searchable: [...shared, ...onDemand], unknown: [] };
+    return { always, upfront: [...personal, ...board], searchable: [...shared, ...onDemand], unknown: [] };
   }
 
   const chosen = new Set(upfrontTools.map((s) => s.trim().toLowerCase()).filter(Boolean));
@@ -110,11 +108,13 @@ export function splitForPreview(sources = [], upfrontTools, builtin = {}) {
   };
 
   const all = [...personal, ...shared];
-  const upfront = all.filter(isChosen);
+  const chosenTools = all.filter(isChosen);
+  // Naming a tool that is sent anyway is harmless, so not unknown.
+  board.forEach(isChosen);
   return {
     always,
-    upfront,
-    searchable: [...all.filter((t) => !upfront.includes(t)), ...onDemand],
+    upfront: [...chosenTools, ...board],
+    searchable: [...all.filter((t) => !chosenTools.includes(t)), ...onDemand],
     unknown: [...chosen].filter((c) => !matched.has(c)),
   };
 }

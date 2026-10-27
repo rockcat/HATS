@@ -7,12 +7,11 @@
  *
  *   core      always sent, whatever the template chooses
  *   onDemand  the rest of the runner's own tools, found with search_tools
- *   personal  the board's everyday tools — placed with the agent's own MCP
- *             servers, so upfront by default but subject to the template's
- *             upfront selection
+ *   always    the board's everyday tools, sent after the agent's chosen MCP
+ *             tools whatever the template selects
  *   shared    the rest of the board's tools, placed with the team's servers
- *   people    placed like `personal`, but only on a runner with face
- *             recognition set up, which the library cannot see
+ *   people    placed with the agent's own MCP servers, but only on a runner
+ *             with face recognition set up, which the library cannot see
  */
 
 import { getAllToolsForHat, getToolsForHat } from '@hats/core/tools/definitions';
@@ -29,7 +28,7 @@ export interface BuiltinTool extends ToolDefinition {
 export interface BuiltinTools {
   core: BuiltinTool[];
   onDemand: BuiltinTool[];
-  personal: BuiltinTool[];
+  always: BuiltinTool[];
   shared: BuiltinTool[];
   people: BuiltinTool[];
 }
@@ -51,7 +50,7 @@ export function builtinTools(hats: string[]): BuiltinTools {
   return {
     core: core.map(tagged('runner')),
     onDemand: getAllToolsForHat(hatTypes).filter((t) => !coreNames.has(t.name)).map(tagged('runner')),
-    personal: board.filter((t) => upfrontBoard.has(t.name)),
+    always: board.filter((t) => upfrontBoard.has(t.name)),
     shared: board.filter((t) => !upfrontBoard.has(t.name)),
     people: peopleToolDefinitions().map(tagged('people')),
   };

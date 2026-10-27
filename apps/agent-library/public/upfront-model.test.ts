@@ -201,7 +201,7 @@ describe("splitForPreview with the runner's own tools", () => {
   const builtin = {
     core: [tool('send_message', 'runner'), tool('search_tools', 'runner')],
     onDemand: [tool('read_file', 'runner')],
-    personal: [tool('get_board', 'board')],
+    always: [tool('get_board', 'board')],
     shared: [tool('delete_ticket', 'board')],
   };
   const names = (list: Array<{ name: string }>) => list.map((t) => t.name);
@@ -218,12 +218,13 @@ describe("splitForPreview with the runner's own tools", () => {
     expect(names(searchable)).toEqual(['mcp__brave-search__web_search', 'delete_ticket', 'read_file']);
   });
 
-  it('drops the board tools once the template picks, unless picked — as the runner does', () => {
-    const picked = splitForPreview(sources, ['email-imap'], builtin);
-    expect(names(picked.upfront)).toEqual(['mcp__email-imap__get_email']);
-    expect(names(picked.searchable)).toContain('get_board');
-    expect(names(splitForPreview(sources, ['email-imap', 'get_board'], builtin).upfront))
-      .toEqual(['mcp__email-imap__get_email', 'get_board']);
+  it('keeps the everyday board tools whatever the template picks', () => {
+    for (const selectors of [[], ['email-imap'], ['email-imap', 'get_board']]) {
+      const picked = splitForPreview(sources, selectors, builtin);
+      expect(names(picked.upfront).at(-1), String(selectors)).toBe('get_board');
+      expect(names(picked.searchable)).not.toContain('get_board');
+      expect(picked.unknown).toEqual([]);
+    }
   });
 
   it('names MCP tools the way the model sees them', () => {

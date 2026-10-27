@@ -18,9 +18,9 @@ describe('builtinTools', () => {
     expect(names(builtinTools(['blue', 'red']).onDemand)).toContain('schedule_meeting');
   });
 
-  it('puts the everyday board tools with the agent\'s own and the rest with the team\'s', () => {
+  it('always sends the everyday board tools and leaves the rest with the team\'s', () => {
     const tools = builtinTools(['white']);
-    expect(names(tools.personal)).toEqual(expect.arrayContaining(['get_board', 'move_ticket']));
+    expect(names(tools.always)).toEqual(expect.arrayContaining(['get_board', 'move_ticket']));
     expect(names(tools.shared)).not.toContain('get_board');
     expect(tools.shared.length).toBeGreaterThan(0);
     expect(tools.shared.every((t) => t.source === 'board')).toBe(true);
@@ -28,11 +28,11 @@ describe('builtinTools', () => {
 
   it('keeps the people tools apart, since they depend on the runner', () => {
     expect(names(builtinTools(['white']).people)).toContain('identify_person');
-    expect(names(builtinTools(['white']).personal)).not.toContain('identify_person');
+    expect(names(builtinTools(['white']).always)).not.toContain('identify_person');
   });
 
   it('carries each tool\'s schema, for counting what it costs', () => {
-    expect(builtinTools(['white']).personal.every((t) => t.parameters?.type === 'object')).toBe(true);
+    expect(builtinTools(['white']).always.every((t) => t.parameters?.type === 'object')).toBe(true);
   });
 
   it('ignores a hat it does not know', () => {
