@@ -23,10 +23,12 @@ export async function readEnvFile(filePath: string): Promise<EnvEntry[]> {
  */
 export function withEffective(entries: EnvEntry[], keys: string[], env: Record<string, string | undefined>): EnvEntry[] {
   const inFile = new Set(entries.map(e => e.key));
+  // A blank on file is not applied (see settings-file.ts), so show what runs.
+  const shown = entries.map(e => (e.value === '' && env[e.key] ? { ...e, value: env[e.key]! } : e));
   const extra = keys
     .filter(k => !inFile.has(k) && env[k] !== undefined)
     .map(k => ({ key: k, value: env[k]!, isSecret: SECRET_PATTERN.test(k) }));
-  return [...entries, ...extra];
+  return [...shown, ...extra];
 }
 
 /** The entries in a .env file's text — the part that does not touch the disk. */

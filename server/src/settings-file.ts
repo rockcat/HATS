@@ -28,9 +28,14 @@ export function lockedKeys(env: Record<string, string | undefined> = process.env
   return new Set((env['HATS_ENV_LOCKED'] ?? '').split(',').map(k => k.trim()).filter(Boolean));
 }
 
-/** Saved values to apply: everything but the locked keys. */
+/**
+ * Saved values to apply: everything but the locked keys and the blanks. The
+ * panel saves every field it shows, so a key that was not yet in .env the
+ * first time someone pressed Save sits in the file as KEY= — and applied, that
+ * blank would hide the key added to .env afterwards, on every start.
+ */
 export function applicable(saved: Record<string, string>, locked: Set<string>): Record<string, string> {
-  return Object.fromEntries(Object.entries(saved).filter(([k]) => !locked.has(k)));
+  return Object.fromEntries(Object.entries(saved).filter(([k, v]) => !locked.has(k) && v !== ''));
 }
 
 /**

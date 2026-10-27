@@ -41,6 +41,15 @@ describe('loading them at startup', () => {
     expect(env['OLLAMA_BASE_URL']).toBe('http://host.docker.internal:11434/v1');
   });
 
+  it('never lets a blank saved by the panel hide a key from .env', async () => {
+    const env: Record<string, string | undefined> = {
+      HATS_SETTINGS_FILE: await saved('BRAVE_API_KEY=\nOLLAMA_MODEL=llama3.2\n'),
+      BRAVE_API_KEY: 'from-dotenv',
+    };
+    expect(loadSettingsFile(env)).toEqual(['OLLAMA_MODEL']);
+    expect(env['BRAVE_API_KEY']).toBe('from-dotenv');
+  });
+
   it('does nothing without a named file — .env is already loaded by --env-file', () => {
     const env: Record<string, string | undefined> = { A: '1' };
     expect(loadSettingsFile(env)).toEqual([]);
@@ -70,5 +79,10 @@ describe('what the Settings panel is shown', () => {
       { key: 'ANTHROPIC_MODEL', value: 'saved', isSecret: false },
       { key: 'ANTHROPIC_API_KEY', value: 'sk-x', isSecret: true },
     ]);
+  });
+
+  it('shows the running value, not a blank on file that is never applied', () => {
+    const shown = withEffective([{ key: 'BRAVE_API_KEY', value: '', isSecret: true }], [], { BRAVE_API_KEY: 'b-1' });
+    expect(shown).toEqual([{ key: 'BRAVE_API_KEY', value: 'b-1', isSecret: true }]);
   });
 });
