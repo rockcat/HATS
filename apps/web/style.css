@@ -4361,6 +4361,8 @@ body.has-expanded-panel main > section:not(.panel--expanded) {
 .agenda-row input[type="checkbox"] { flex-shrink: 0; cursor: pointer; }
 .agenda-row--off .schedules-row-body { opacity: 0.5; }
 .agenda-row-error { color: var(--hat-red); font-size: 11px; margin-top: 2px; white-space: normal; }
+.run-now-outcome { font-size: 11px; margin-top: 2px; color: var(--text-muted); white-space: pre-wrap; word-break: break-word; }
+.run-now-outcome--failed { color: var(--hat-red); }
 .agenda-edit { display: flex; flex-direction: column; gap: 6px; padding: 8px 4px; border-bottom: 1px solid var(--border); font-size: 12px; }
 .agenda-assign { margin: 8px 4px 4px; font-size: 12px; max-width: 100%; }
 .agenda-edit input, .agenda-edit textarea {

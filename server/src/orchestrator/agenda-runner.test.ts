@@ -121,3 +121,45 @@ describe('backing off', () => {
     expect(failureUpdate(entry({ intervalSeconds: null, failures: 2 }), 'x', 0, 60_000)).toMatchObject({ enabled: false });
   });
 });
+
+describe('running an entry now, to test it', () => {
+  it('fires a paused one-off without using it up or moving its schedule', async () => {
+    const store = new AgendaStore(null);
+    const e = await store.add({ agentName: 'Rhoda', label: 'Once', description: 'now', intervalSeconds: null, delaySeconds: 3600 });
+    await store.update(e.id, { enabled: false });
+    const scheduled = store.get(e.id)!.nextRunAt;
+    const sent: string[] = [];
+
+    const outcome = await new AgendaRunner(store, async (n) => { sent.push(n); }).runNow(e.id);
+
+    expect(outcome).toEqual({ delivered: true });
+    expect(sent).toEqual(['Rhoda']);
+    expect(store.get(e.id)).toMatchObject({ enabled: false, nextRunAt: scheduled });
+    expect(store.get(e.id)!.lastRunAt).toBeTypeOf('number');
+  });
+
+  it('reports what an MCP check returned and that its condition held the message back', async () => {
+    const store = new AgendaStore(null);
+    const e = await store.add({
+      agentName: 'Poppy', label: 'imap', description: '', intervalSeconds: 600, type: 'mcp_tool_call',
+      mcpToolCall: { serverName: 's', toolName: 't', args: {}, condition: 'result !== "none"', messageTemplate: 'go' },
+    });
+    const registry = { callTool: async () => 'none' } as unknown as MCPRegistry;
+    expect(await new AgendaRunner(store, async () => {}, registry).runNow(e.id)).toEqual({ delivered: false, result: 'none' });
+  });
+
+  it('reports a failure without counting it towards the backoff', async () => {
+    const store = new AgendaStore(null);
+    const e = await store.add({ agentName: 'Rhoda', label: 'x', description: 'y', intervalSeconds: 600 });
+    const scheduled = store.get(e.id)!.nextRunAt;
+    const outcome = await new AgendaRunner(store, async () => { throw new Error('no agent'); }).runNow(e.id);
+
+    expect(outcome).toEqual({ delivered: false, error: 'no agent' });
+    expect(store.get(e.id)).toMatchObject({ lastError: 'no agent', nextRunAt: scheduled });
+    expect(store.get(e.id)!.failures ?? 0).toBe(0);
+  });
+
+  it('refuses an id it does not have', async () => {
+    await expect(new AgendaRunner(new AgendaStore(null), async () => {}).runNow('nope')).rejects.toThrow(/No such/);
+  });
+});

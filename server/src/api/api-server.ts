@@ -675,6 +675,14 @@ export class APIServer {
       this.json(res, 201, entry);
       return;
     }
+    // Fire one entry now, to try it
+    if (pathname.match(/^\/api\/agenda\/[^/]+\/run$/) && method === 'POST') {
+      const id = decodeURIComponent(pathname.slice('/api/agenda/'.length, -'/run'.length));
+      try {
+        this.json(res, 200, await this.orchestrator.runAgendaEntry(id));
+      } catch (err) { this.json(res, 404, { error: (err as Error).message }); }
+      return;
+    }
     if (pathname.startsWith('/api/agenda/') && method === 'DELETE') {
       const id = pathname.slice('/api/agenda/'.length);
       const store = this.orchestrator.getAgendaStore();

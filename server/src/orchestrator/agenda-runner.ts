@@ -4,6 +4,15 @@ import { TeamMessage } from './types.js';
 import { buildMessage } from './orchestrator-utils.js';
 import { log } from '../../../packages/core/src/logger.js';
 
+/** What one run did — shown to whoever pressed Run now. */
+export interface RunOutcome {
+  /** Whether the agent was sent a message. A tool call whose condition is not met sends none. */
+  delivered: boolean;
+  /** A tool call's result, so its condition can be checked against it. */
+  result?: string;
+  error?: string;
+}
+
 /** Quick retries before a failing entry falls back to its normal interval. */
 const QUICK_RETRIES = 3;
 
@@ -67,11 +76,7 @@ export class AgendaRunner {
     for (const entry of due) {
       try {
         log.info(`[Agenda] Firing "${entry.label}" for ${entry.agentName}`);
-        if (entry.type === 'mcp_tool_call' && entry.mcpToolCall) {
-          await this.fireMcpToolCall(entry);
-        } else {
-          await this.firePrompt(entry);
-        }
+        await this.fire(entry);
         const done = { lastRunAt: now, lastError: undefined, lastErrorAt: undefined, failures: 0 };
         if (entry.intervalSeconds) {
           await this.store.update(entry.id, { ...done, nextRunAt: now + entry.intervalSeconds * 1000 });
@@ -86,16 +91,45 @@ export class AgendaRunner {
     }
   }
 
-  private async firePrompt(entry: AgendaEntry): Promise<void> {
+  /**
+   * Fire one entry now, whether or not it is due or switched on — to try it
+   * out. Its schedule is left alone: the next run stays where it was and a
+   * one-off is not used up. The outcome is still recorded as its last run.
+   */
+  async runNow(id: string): Promise<RunOutcome> {
+    const entry = this.store.get(id);
+    if (!entry) throw new Error('No such scheduled task');
+    const now = Date.now();
+    log.info(`[Agenda] Running "${entry.label}" for ${entry.agentName} now, on request`);
+    try {
+      const outcome = await this.fire(entry);
+      await this.store.update(id, { lastRunAt: now, lastError: undefined, lastErrorAt: undefined });
+      return outcome;
+    } catch (err) {
+      const message = (err as Error).message;
+      log.error(`[Agenda] "${entry.label}" for ${entry.agentName} failed: ${message}`);
+      await this.store.update(id, { lastError: message, lastErrorAt: now });
+      return { delivered: false, error: message };
+    }
+  }
+
+  private fire(entry: AgendaEntry): Promise<RunOutcome> {
+    return entry.type === 'mcp_tool_call' && entry.mcpToolCall
+      ? this.fireMcpToolCall(entry)
+      : this.firePrompt(entry);
+  }
+
+  private async firePrompt(entry: AgendaEntry): Promise<RunOutcome> {
     const repeatNote = entry.intervalSeconds
       ? `This task runs automatically every ${Math.round(entry.intervalSeconds / 60)} minute(s) and has just fired. Do NOT schedule it again — just do it now.`
       : 'This is a one-off task. Do NOT schedule it again — just do it now.';
     const content = `Do this now — ${entry.label}:\n\n${entry.description}\n\n(${repeatNote})\n\nIf there is nothing to do right now, call disengage_conversation immediately and produce no text response.`;
     const msg = buildMessage('human', entry.agentName, 'direct', content, { isScheduled: true });
     await this.deliverMessage(entry.agentName, msg);
+    return { delivered: true };
   }
 
-  private async fireMcpToolCall(entry: AgendaEntry): Promise<void> {
+  private async fireMcpToolCall(entry: AgendaEntry): Promise<RunOutcome> {
     const spec = entry.mcpToolCall!;
     // Resolve registry: personal MCP takes priority if specified, else shared
     const registry = spec.personalMcpAgentName
@@ -120,11 +154,12 @@ export class AgendaRunner {
 
     if (!shouldMessage) {
       log.info(`[Agenda] Condition not met for "${entry.label}" — skipping agent message`);
-      return;
+      return { delivered: false, result };
     }
 
     const text = spec.messageTemplate.replace(/\$\{result\}/g, result);
     const msg = buildMessage('human', entry.agentName, 'direct', text, { isScheduled: true });
     await this.deliverMessage(entry.agentName, msg);
+    return { delivered: true, result };
   }
 }

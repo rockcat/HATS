@@ -1,6 +1,7 @@
 // ── Scheduled Actions tab ─────────────────────────────────────────────────────
 
 import { esc, fmtLastRun } from './utils.js';
+import { runNowButton, showRunOutcome } from './run-now.js';
 
 let _mcpToolSchemas = null;
 
@@ -176,7 +177,9 @@ export function buildScheduleRow(action) {
 
   const rowActions = document.createElement('div');
   rowActions.className = 'schedules-row-actions';
-  rowActions.appendChild(delBtn);
+  // Runs it for every agent in this project that has it.
+  rowActions.append(runNowButton(`/api/scheduled-actions/${encodeURIComponent(action.id)}/run`,
+    (text, failed) => showRunOutcome(viewBody, text, failed)), delBtn);
 
   row.appendChild(viewBody);
   row.appendChild(timing);

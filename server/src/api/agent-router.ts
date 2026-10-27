@@ -22,7 +22,7 @@ import { SCHEDULED_THREAD } from '../agent/agent.js';
 import { AgentStatus } from './project-manager.js';
 import { AgentDefinitionStore } from './agent-store.js';
 import { ScheduledActionStore } from './scheduled-action-store.js';
-import { propagateEdit, removeCopies, lastRunOf } from './agenda-sync.js';
+import { propagateEdit, removeCopies, lastRunOf, isCopyOf } from './agenda-sync.js';
 import { projectCopy, hasCopyOf, assignScheduledActions } from './project-agents.js';
 import { Task } from '../orchestrator/types.js';
 
@@ -851,6 +851,19 @@ export class AgentRouter {
     }
 
     // ── Global scheduled actions ───────────────────────────────────────────
+
+    // Fire every copy of an action in this project now, to try it
+    if (pathname.match(/^\/api\/scheduled-actions\/[^/]+\/run$/) && method === 'POST') {
+      const actionId = decodeURIComponent(pathname.slice('/api/scheduled-actions/'.length, -'/run'.length));
+      const action   = this.deps.getActionStore()?.get(actionId);
+      if (!action) { json(res, 404, { error: 'Scheduled action not found' }); return true; }
+      const copies = (orch.getAgendaStore()?.list() ?? []).filter(e => isCopyOf(e, action));
+      if (!copies.length) { json(res, 404, { error: 'No agent in this project has this action — assign it first' }); return true; }
+      const runs = [];
+      for (const copy of copies) runs.push({ agentName: copy.agentName, ...await orch.runAgendaEntry(copy.id) });
+      json(res, 200, runs);
+      return true;
+    }
 
     if (pathname === '/api/scheduled-actions' && method === 'GET') {
       // ?agent=Name narrows "last run" to that agent's own copy of each action.

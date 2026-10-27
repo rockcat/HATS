@@ -8,6 +8,7 @@
 
 import { esc, fmtAgo, fmtLastRun } from './utils.js';
 import { openScheduleModal } from './schedules.js';
+import { runNowButton, showRunOutcome } from './run-now.js';
 
 function intervalText(seconds) {
   if (!seconds) return 'Once';
@@ -101,7 +102,7 @@ function entryRow(entry, action, reload) {
   const del = document.createElement('button');
   del.className = 'library-btn library-btn--del';
   del.textContent = '✕';
-  del.title = action ? 'Remove from this agent (untick it in the library to keep it off)' : 'Delete';
+  del.title = action ? 'Remove from this agent in this project' : 'Delete';
   del.addEventListener('click', async () => {
     if (!confirm(`Remove "${entry.label}" from this agent?`)) return;
     await fetch(`/api/agenda/${encodeURIComponent(entry.id)}`, { method: 'DELETE' }).catch(() => {});
@@ -110,7 +111,9 @@ function entryRow(entry, action, reload) {
 
   const actions = document.createElement('div');
   actions.className = 'schedules-row-actions';
-  actions.append(edit, del);
+  // Not reloaded after: the outcome is shown in this row, and a reload would wipe it.
+  const run = runNowButton(`/api/agenda/${encodeURIComponent(entry.id)}/run`, (text, failed) => showRunOutcome(body, text, failed));
+  actions.append(run, edit, del);
 
   row.append(toggle, body, when, actions);
   return row;

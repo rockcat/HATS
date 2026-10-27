@@ -40,7 +40,7 @@ import {
 import { buildToolExecutor, ToolCallContext } from './tool-executor.js';
 import { EmailAllowlistStore } from '../api/email-allowlist-store.js';
 import { AgendaStore } from '../api/agenda-store.js';
-import { AgendaRunner } from './agenda-runner.js';
+import { AgendaRunner, type RunOutcome } from './agenda-runner.js';
 import { resolvePersonalConfig, isAgentMcp } from '../../../packages/core/src/mcp/mcp-catalogue.js';
 import { parseMemoryGraph, type MemoryGraph } from '../mcp/memory-graph.js';
 import { PeopleStore } from '../people/store.js';
@@ -172,6 +172,12 @@ export class TeamOrchestrator {
   getAgendaStore(): AgendaStore | null { return this.agendaStoreRef.store; }
 
   stopAgendaRunner(): void { this.agendaRunner?.stop(); }
+
+  /** Fire one agenda entry now, to try it — see AgendaRunner.runNow. */
+  runAgendaEntry(id: string): Promise<RunOutcome> {
+    if (!this.agendaRunner) return Promise.reject(new Error('The agenda is not running'));
+    return this.agendaRunner.runNow(id);
+  }
 
   setAgentStore(store: AgentDefinitionStore): void { this.agentStore = store; }
   getAgentStore(): AgentDefinitionStore | null { return this.agentStore; }
