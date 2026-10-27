@@ -148,13 +148,13 @@ export class AgentRouter {
         const hat    = mergeHatDefinitions(hatParams.length > 0 ? hatParams : ['white' as HatType]);
         const prompt = generateSystemPrompt({
           name: nameParam, visualDescription, backstory,
-          hatLabel: hat.label, thinkingStyle: hat.thinkingStyle,
+          hatLabel: hat.label, coreTrait: hat.coreTrait, thinkingStyle: hat.thinkingStyle,
           communicationTone: hat.communicationTone, directives: hat.directives,
           avoidances: hat.avoidances, teamRole: hat.teamRole,
           specialisation: specParam,
         });
         const toolsJson = JSON.stringify(getToolsForHat(hatParams.length > 0 ? hatParams : ['white' as HatType]));
-        json(res, 200, { prompt: prompt.text, sections: prompt.sections, toolsChars: toolsJson.length });
+        json(res, 200, { prompt: prompt.text, condensed: prompt.condensed, sections: prompt.sections, toolsChars: toolsJson.length });
       } catch (err) { json(res, 400, { error: (err as Error).message }); }
       return true;
     }
@@ -164,26 +164,36 @@ export class AgentRouter {
       const hatParams = url.searchParams.getAll('hat') as HatType[];
       const specParam = url.searchParams.get('specialisation') ?? undefined;
       const nameParam = url.searchParams.get('name') ?? undefined;
+      const instructionsParam = url.searchParams.get('instructions') ?? undefined;
       try {
         const resolved = resolveAgentName(agentName);
         const agent    = orch.getAgent(resolved);
         if (!agent) { json(res, 404, { error: `Agent "${agentName}" not found` }); return true; }
+        if (!agent.previewPrompt) { json(res, 400, { error: 'This agent has no prompt of its own' }); return true; }
         const hatTypes = hatParams.length > 0 ? hatParams : agent.hatType;
-        const hat      = mergeHatDefinitions(hatTypes);
-        const prompt   = generateSystemPrompt({
-          name: nameParam ?? agent.config.identity.name,
-          visualDescription: agent.config.identity.visualDescription,
-          backstory: agent.config.identity.backstory,
-          hatLabel: hat.label, thinkingStyle: hat.thinkingStyle,
-          communicationTone: hat.communicationTone, directives: hat.directives,
-          avoidances: hat.avoidances, teamRole: hat.teamRole,
-          teamContext: agent.config.teamContext, projectDir: agent.config.projectDir,
-          projectGoal: agent.config.projectGoal,
-          specialisation: specParam !== undefined ? specParam : agent.config.identity.specialisation,
-          email: agent.config.identity.email,
-        });
+        const prompt   = agent.previewPrompt({ hatTypes, name: nameParam, specialisation: specParam, instructions: instructionsParam });
         const toolsJson2 = JSON.stringify(getToolsForHat(hatTypes));
-        json(res, 200, { prompt: prompt.text, sections: prompt.sections, toolsChars: toolsJson2.length });
+        json(res, 200, {
+          prompt: prompt.text, condensed: prompt.condensed, sections: prompt.sections, toolsChars: toolsJson2.length,
+          promptMode: agent.config.promptMode ?? 'full',
+        });
+      } catch (err) { json(res, 400, { error: (err as Error).message }); }
+      return true;
+    }
+
+    // Free-text instructions, and which prompt the agent is given
+    if (pathname.match(/^\/api\/agents\/[^/]+\/prompt$/) && method === 'PATCH') {
+      const agentName = decodeURIComponent(pathname.slice('/api/agents/'.length, -'/prompt'.length));
+      const { instructions, promptMode } = JSON.parse(await readBody(req)) as { instructions?: string; promptMode?: string };
+      if (promptMode !== undefined && promptMode !== 'full' && promptMode !== 'condensed') {
+        json(res, 400, { error: 'promptMode must be "full" or "condensed"' }); return true;
+      }
+      try {
+        orch.updateAgentPromptSettings(resolveAgentName(agentName), instructions?.trim() || undefined,
+          promptMode === 'condensed' ? 'condensed' : undefined);
+        sseBroadcast({ type: 'agent_update', agents: this.deps.buildAgentStatuses() });
+        saveCurrentState().catch(() => {});
+        json(res, 200, { ok: true });
       } catch (err) { json(res, 400, { error: (err as Error).message }); }
       return true;
     }

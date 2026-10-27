@@ -2423,6 +2423,14 @@ main {
   font-family: inherit;
 }
 .agent-config-input:focus { outline: none; border-color: var(--hat-blue); }
+.agent-config-line--top { align-items: flex-start; }
+.agent-config-line--top .agent-config-label { padding-top: 5px; }
+.agent-config-textarea { resize: vertical; min-height: 44px; line-height: 1.4; }
+.agent-prompt-mode { flex: 1; display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-muted); }
+.agent-prompt-mode input[type="range"] { width: 44px; accent-color: var(--hat-blue); }
+.agent-prompt-sizes { margin-left: auto; }
+.agent-prompt-size--on { color: var(--text); font-weight: 600; }
+.agent-prompt-text { max-height: 240px; overflow: auto; margin: 4px 0 8px; padding: 6px 8px; background: var(--surface-2); border-radius: 4px; font-size: 11px; white-space: pre-wrap; }
 .agent-config-input::placeholder { color: var(--text-muted); }
 .agent-config-model-input { font-family: monospace; }
 .agent-config-textarea { resize: vertical; min-height: 42px; line-height: 1.4; }

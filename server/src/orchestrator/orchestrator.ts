@@ -6,6 +6,7 @@ import { ExternalAgent, EXTERNAL_PROVIDER } from '../agent/external-agent.js';
 import { IAgent } from '../agent/iagent.js';
 import { AgentConfig } from '../agent/types.js';
 import { HatType } from '../../../packages/core/src/hats/types.js';
+import type { PromptMode } from '../../../packages/core/src/prompt/types.js';
 import { getToolsForHat } from '../../../packages/core/src/tools/definitions.js';
 import { AIProvider } from '../providers/types.js';
 import { EventStore } from '../store/event-store.js';
@@ -373,6 +374,8 @@ export class TeamOrchestrator {
           // next time it was built — a project switch, a restore — it had none.
           maxContextTokens:           agent.config.maxContextTokens,
           maxCostPerHour:             agent.config.maxCostPerHour,
+          instructions:               agent.config.instructions,
+          promptMode:                 agent.config.promptMode,
           externalEndpoint:           agent.config.externalEndpoint,
         };
         agents[agent.id] = def;
@@ -502,6 +505,8 @@ export class TeamOrchestrator {
         disabledPersonalMcpServers: def.disabledPersonalMcpServers,
         maxContextTokens:      def.maxContextTokens,
         maxCostPerHour:        def.maxCostPerHour,
+        instructions:          def.instructions,
+        promptMode:            def.promptMode,
         externalEndpoint:      def.externalEndpoint,
       };
       const agent = this.registerAgent(config);
@@ -876,6 +881,10 @@ export class TeamOrchestrator {
 
   updateAgentMaxCostPerHour(name: string, maxCostPerHour: number | undefined): void {
     this.requireAgent(name).setMaxCostPerHour(maxCostPerHour);
+  }
+
+  updateAgentPromptSettings(name: string, instructions: string | undefined, promptMode: PromptMode | undefined): void {
+    this.requireAgent(name).setPromptSettings(instructions, promptMode);
   }
 
   changeAgentHat(name: string, hatTypes: HatType[]): void {

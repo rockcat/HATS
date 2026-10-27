@@ -314,6 +314,23 @@
           <label class="agent-config-label">Shared MCPs</label>
           <div id="agent-config-mcp-list" class="agent-config-mcp-list"></div>
         </div>
+        <div class="agent-config-line agent-config-line--top">
+          <label class="agent-config-label" for="agent-config-instructions">Instructions</label>
+          <textarea id="agent-config-instructions" class="agent-config-input agent-config-textarea" rows="3" spellcheck="true" placeholder="Anything else this agent should know or do — added to its prompt as written"></textarea>
+        </div>
+        <div class="agent-config-line" title="Condensed is a much shorter prompt for small local models — less context used, less nuance">
+          <label class="agent-config-label" for="agent-config-prompt-mode">Prompt</label>
+          <div class="agent-prompt-mode">
+            <span>Full</span>
+            <input type="range" id="agent-config-prompt-mode" min="0" max="1" step="1" value="0" aria-label="Full or condensed prompt">
+            <span>Condensed</span>
+            <span id="agent-prompt-sizes" class="agent-prompt-sizes"></span>
+          </div>
+        </div>
+        <details class="agent-config-details" id="agent-prompt-line">
+          <summary class="agent-config-details-summary">Prompt preview</summary>
+          <pre id="agent-prompt-text" class="agent-prompt-text"></pre>
+        </details>
         <details class="agent-config-details" id="agent-config-personal-mcp-line" hidden>
           <summary class="agent-config-details-summary">Personal MCPs</summary>
           <div id="agent-config-personal-mcp-list" class="agent-config-personal-mcp-list"></div>

@@ -87,6 +87,21 @@ describe('an agent\'s limits', () => {
   });
 });
 
+describe('an agent\'s prompt settings', () => {
+  it('survive a save and a restore', async () => {
+    const store = new AgentStore(path.join(dir, 'agents.json'));
+    await store.load();
+    orch.setAgentStore(store);
+    orch.registerAgent(poppy('poppy-1'));
+    orch.updateAgentPromptSettings('Poppy', 'Reply in French.', 'condensed');
+    const state = path.join(dir, 'team-state.json');
+    await orch.saveState(state);
+
+    const again = await restored(state, store);
+    expect(again.getAgent('Poppy')?.config).toMatchObject({ instructions: 'Reply in French.', promptMode: 'condensed' });
+  });
+});
+
 describe('an agent copied from the library into a project', () => {
   it('keeps its project changes through a restore and leaves the template alone', async () => {
     const store = new AgentStore(path.join(dir, 'agents.json'));

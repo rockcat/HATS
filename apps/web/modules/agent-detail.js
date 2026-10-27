@@ -9,6 +9,7 @@ import { setSpeechAgent, clearSpeechQueue, setActiveSpeechTarget, ensureAudioCtx
 import { getAvatars, findAvatarForAgent, applyAvatarBackground, getAvatarOverrides } from './avatars.js';
 import { refreshProviderModels } from './providers.js';
 import { bindAgentAgenda } from './agent-agenda.js';
+import { bindAgentPrompt, initAgentPrompt, saveAgentPrompt } from './agent-prompt.js';
 
 export let activeDetailAgent = null;
 let activeChatAgent          = null;
@@ -408,6 +409,8 @@ export function initAgentDetail() {
       .then(res => { if (res.error) { alert(res.error); return; } closeAgentDetail(); });
   });
 
+  initAgentPrompt();
+
   document.getElementById('agent-config-apply').addEventListener('click', async () => {
     if (!activeDetailAgent) return;
     const btn = document.getElementById('agent-config-apply');
@@ -419,6 +422,7 @@ export function initAgentDetail() {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
       }));
+      tasks.push(saveAgentPrompt(activeDetailAgent));
       const mcpLine = document.getElementById('agent-config-mcp-line');
       if (mcpLine && !mcpLine.hidden) {
         const checks     = Array.from(document.querySelectorAll('#agent-config-mcp-list input[type="checkbox"]'));
@@ -454,6 +458,7 @@ export function openAgentDetail(name, chatOnly = false) {
   document.getElementById('agent-config-email').value = agent?.email || '';
   bindAgentMemory(name);
   bindAgentAgenda(name);
+  bindAgentPrompt(name, agent);
 
   const ticketsEl     = document.getElementById('agent-detail-tickets');
   ticketsEl.innerHTML = '';

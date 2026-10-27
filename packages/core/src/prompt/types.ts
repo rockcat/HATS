@@ -3,6 +3,10 @@ export interface PromptContext {
   visualDescription: string;
   backstory?: string;
   hatLabel: string;
+  /** The hat in a phrase — what the condensed prompt says instead of the thinking style. */
+  coreTrait?: string;
+  /** Free text the user adds to this agent's prompt, used as written. */
+  instructions?: string;
   /**
    * Whether this agent has a board to write to.
    *
@@ -22,8 +26,13 @@ export interface PromptContext {
   email?: string;          // agent's own email address
 }
 
+/** Which system prompt an agent is given: the full one, or the condensed one for small models. */
+export type PromptMode = 'full' | 'condensed';
+
 export interface SystemPrompt {
   text: string;
+  /** The same prompt cut down for small local models. */
+  condensed: string;
   sections: {
     identityAnchor: string;
     hatRoleStatement: string;
@@ -31,6 +40,7 @@ export interface SystemPrompt {
     communicationTone: string;
     directives: string;
     avoidances: string;
+    instructions?: string;
     specialisation?: string;
     teamRole?: string;
     closingAnchor: string;

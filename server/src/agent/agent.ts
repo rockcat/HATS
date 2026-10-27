@@ -1,8 +1,9 @@
 import { v4 as uuidv4 } from 'uuid';
 import { log } from '../../../packages/core/src/logger.js';
 import { HatType } from '../../../packages/core/src/hats/types.js';
-import { mergeHatDefinitions } from '../../../packages/core/src/hats/definitions.js';
 import { generateSystemPrompt } from '../../../packages/core/src/prompt/generator.js';
+import type { PromptMode, SystemPrompt } from '../../../packages/core/src/prompt/types.js';
+import { promptContextFor, type PromptOverrides } from './prompt-context.js';
 import { AIProvider, CompletionRequest, Message, ProviderError, ToolCall, type ToolOutcome } from '../providers/types.js';
 import { getToolsForHat, getAllToolsForHat } from '../../../packages/core/src/tools/definitions.js';
 import { buildToolRegistry, searchTools, getTool, ToolRegistry } from '../tools/tool-search.js';
@@ -469,6 +470,12 @@ export class Agent implements IAgent {
 
   setMaxContextTokens(v: number | undefined): void { this.config.maxContextTokens = v; }
   setMaxCostPerHour(v: number | undefined): void { this.config.maxCostPerHour = v; }
+
+  setPromptSettings(instructions: string | undefined, promptMode: PromptMode | undefined): void {
+    this.config.instructions = instructions;
+    this.config.promptMode = promptMode;
+    this.systemPrompt = this.buildSystemPrompt();
+  }
   getHourlyCost(): number { return this.hourlyCost; }
   isCostIdled(): boolean { return this.costIdleTimer !== null; }
 
@@ -547,24 +554,13 @@ export class Agent implements IAgent {
   }
 
   private buildSystemPrompt(): string {
-    const hat = mergeHatDefinitions(this.config.hatType);
-    return generateSystemPrompt({
-      name: this.config.identity.name,
-      visualDescription: this.config.identity.visualDescription,
-      backstory: this.config.identity.backstory,
-      hatLabel: hat.label,
-      thinkingStyle: hat.thinkingStyle,
-      communicationTone: hat.communicationTone,
-      directives: hat.directives,
-      avoidances: hat.avoidances,
-      teamRole: hat.teamRole,
-      teamContext: this.config.teamContext,
-      projectDir: this.config.projectDir,
-      projectGoal: this.config.projectGoal,
-      specialisation: this.config.identity.specialisation,
-      email: this.config.identity.email,
-      hasTicketing: this.hasTicketing(),
-    }).text;
+    const prompt = generateSystemPrompt(promptContextFor(this.config, this.hasTicketing()));
+    return this.config.promptMode === 'condensed' ? prompt.condensed : prompt.text;
+  }
+
+  /** Both versions of the prompt, with unsaved edits applied — for the editor's preview. */
+  previewPrompt(overrides: PromptOverrides = {}): SystemPrompt {
+    return generateSystemPrompt(promptContextFor(this.config, this.hasTicketing(), overrides));
   }
 
   /**

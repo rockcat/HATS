@@ -90,6 +90,8 @@ export function buildAgentStatuses(
       threads: a.getThreadSummary(),
       maxContextTokens: a.config.maxContextTokens,
       maxCostPerHour: a.config.maxCostPerHour,
+      instructions: a.config.instructions,
+      promptMode: a.config.promptMode ?? 'full',
       hourlyCost: a.getHourlyCost(),
       costIdled: a.isCostIdled(),
     };

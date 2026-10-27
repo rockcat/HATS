@@ -1,4 +1,6 @@
 import { HatType } from '../../../packages/core/src/hats/types.js';
+import type { PromptMode, SystemPrompt } from '../../../packages/core/src/prompt/types.js';
+import type { PromptOverrides } from './prompt-context.js';
 import { AIProvider, ToolDefinition } from '../providers/types.js';
 import { TeamMessage } from '../orchestrator/types.js';
 import { Semaphore } from '../providers/semaphore.js';
@@ -61,6 +63,10 @@ export interface IAgent {
   setVoice(voice: string | undefined, speakerName: string | undefined): void;
   setMaxContextTokens(v: number | undefined): void;
   setMaxCostPerHour(v: number | undefined): void;
+  /** Change the free-text instructions and which prompt (full or condensed) the agent is given. */
+  setPromptSettings(instructions: string | undefined, promptMode: PromptMode | undefined): void;
+  /** Both versions of the system prompt, with unsaved edits applied. Absent when the agent has no prompt of its own. */
+  previewPrompt?(overrides?: PromptOverrides): SystemPrompt;
 
   // ── History ──────────────────────────────────────────────────────────────
   getHistory(): AgentMessage[];

@@ -1,5 +1,6 @@
 import { AgentIdentity, ExternalAgentEndpoint } from '../agent/types.js';
 import { HatType } from '../../../packages/core/src/hats/types.js';
+import type { PromptMode } from '../../../packages/core/src/prompt/types.js';
 import { MCPServerDef } from '../mcp/mcp-client.js';
 import { Task, Meeting } from '../orchestrator/types.js';
 
@@ -39,6 +40,9 @@ export interface AgentDefinition {
   scheduledActionIds: string[];
   maxContextTokens?: number;
   maxCostPerHour?: number;
+  /** Free text added to the agent's system prompt. */
+  instructions?: string;
+  promptMode?: PromptMode;
   /** If set, this is an external agent — no local LLM is used. */
   externalEndpoint?: ExternalAgentEndpoint;
 }

@@ -19,6 +19,8 @@ export interface AgentStatus {
   threads?: Record<string, number>;
   maxContextTokens?: number;
   maxCostPerHour?: number;
+  instructions?: string;
+  promptMode?: 'full' | 'condensed';
   hourlyCost?: number;
   costIdled?: boolean;
 }

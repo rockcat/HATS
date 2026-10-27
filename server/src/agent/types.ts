@@ -1,4 +1,5 @@
 import { HatType } from '../../../packages/core/src/hats/types.js';
+import type { PromptMode } from '../../../packages/core/src/prompt/types.js';
 import { AIProvider, ToolCall, type ToolOutcome } from '../providers/types.js';
 import { TeamMessage } from '../orchestrator/types.js';
 
@@ -99,6 +100,10 @@ export interface AgentConfig {
   maxContextTokens?: number;
   /** If set, agent idles until the next hour when hourly spend exceeds this value (USD). */
   maxCostPerHour?: number;
+  /** Free text added to this agent's system prompt. */
+  instructions?: string;
+  /** 'condensed' gives the agent the cut-down prompt meant for small local models. */
+  promptMode?: PromptMode;
   /** If set, this agent delegates all processing to an external HTTP service. */
   externalEndpoint?: ExternalAgentEndpoint;
 }

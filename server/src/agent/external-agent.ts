@@ -3,6 +3,7 @@ import { writeFile, mkdir, readFile } from 'fs/promises';
 import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { log } from '../../../packages/core/src/logger.js';
+import type { PromptMode } from '../../../packages/core/src/prompt/types.js';
 import { HatType } from '../../../packages/core/src/hats/types.js';
 import { AIProvider, ToolDefinition } from '../providers/types.js';
 import { TeamMessage } from '../orchestrator/types.js';
@@ -506,6 +507,11 @@ export class ExternalAgent implements IAgent {
   }
   setMaxContextTokens(_v: number | undefined): void {}
   setMaxCostPerHour(_v: number | undefined): void {}
+  // The external service writes its own prompt; kept so the settings survive a save.
+  setPromptSettings(instructions: string | undefined, promptMode: PromptMode | undefined): void {
+    this.config.instructions = instructions;
+    this.config.promptMode = promptMode;
+  }
 
   toJSON(): object {
     return { id: this.id, name: this.name, hatType: this.hatType, state: this._state, type: 'external' };
