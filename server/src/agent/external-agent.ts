@@ -64,6 +64,7 @@ export class ExternalAgent implements IAgent {
   get name(): string { return this.config.identity.name; }
   get hatType(): HatType[] { return this.config.hatType; }
   get state(): AgentState { return this._state; }
+  get busy(): boolean { return this.pendingMessages.size > 0; }
 
   // ── Wiring ──────────────────────────────────────────────────────────────────
 

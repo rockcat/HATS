@@ -11,6 +11,8 @@ import { log } from '../../../packages/core/src/logger.js';
 
 export interface AgentStatus {
   id?: string; name: string; hatType: string[]; state: string; activity: string;
+  /** Handling a message right now, so the chat can show it is thinking. */
+  busy?: boolean;
   /** The library template this agent was copied from. */
   templateId?: string;
   talkingTo?: string; model?: string; provider?: string;

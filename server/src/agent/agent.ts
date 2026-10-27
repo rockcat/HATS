@@ -457,6 +457,7 @@ export class Agent implements IAgent {
   // ── State ───────────────────────────────────────────────────────────────────
 
   get state(): AgentState { return this._state; }
+  get busy(): boolean { return this.processing; }
   get name(): string { return this.config.identity.name; }
   get hatType(): HatType[] { return this.config.hatType; }
 

@@ -14,7 +14,7 @@ class ConversationThreads extends HTMLElement {
     this._pendingThreadMessages = [];
     this._activeThread = null;
     this._activeMessages = [];
-    this._agentState = null;
+    this._agentBusy = false;
     this._pollTimer = null;
     this._newThreadMode = false;
     this._sending = false;
@@ -77,7 +77,7 @@ class ConversationThreads extends HTMLElement {
       if (agentsRes.ok) {
         const agents = await agentsRes.json();
         const found = agents.find(a => a.name === this._agentName);
-        this._agentState = found?.state ?? null;
+        this._agentBusy = !!found?.busy;
       }
       await this._loadGeneral();
       if (this._activeThread) await this._loadThread(this._activeThread);
@@ -300,7 +300,7 @@ class ConversationThreads extends HTMLElement {
         <div class="left-panel">
           <div class="panel-header"># general</div>
           <div class="messages-area" id="general-messages">
-            ${this._renderMessages([...this._generalMessages, ...this._pendingMessages], 'general', this._agentState)}
+            ${this._renderMessages([...this._generalMessages, ...this._pendingMessages], 'general', this._isThinking(this._pendingMessages))}
           </div>
           <div class="threads-section">
             <div class="threads-divider">
@@ -336,7 +336,7 @@ class ConversationThreads extends HTMLElement {
             <button class="panel-close" title="Close">&#x2715;</button>
           </div>
           <div class="messages-area" id="thread-messages">
-            ${this._renderMessages([...this._activeMessages, ...this._pendingThreadMessages], this._activeThread, this._agentState)}
+            ${this._renderMessages([...this._activeMessages, ...this._pendingThreadMessages], this._activeThread, this._isThinking(this._pendingThreadMessages))}
           </div>
           <div class="compose-bar" id="thread-compose" data-panel="thread">
             <textarea class="compose-input" rows="1" placeholder="Reply in thread… (Enter to send)"></textarea>
@@ -360,13 +360,22 @@ class ConversationThreads extends HTMLElement {
     if (root) root.innerHTML = `<div class="placeholder">${this._esc(msg)}</div>`;
   }
 
-  _renderMessages(messages, thread, agentState) {
+  /**
+   * Whether to show the agent thinking: while it handles a message, and from
+   * the moment one is sent — the next poll that would report it busy can be
+   * seconds away, and the gap is exactly when it looks as if nothing happened.
+   */
+  _isThinking(pending) {
+    return this._agentBusy || pending.length > 0;
+  }
+
+  _renderMessages(messages, thread, thinking) {
     const isGeneral = thread === 'general';
     const parts = [];
     let prevRole = null;
 
     if (!messages || messages.length === 0) {
-      if (agentState === 'working') parts.push(this._thinkingBubble());
+      if (thinking) parts.push(this._thinkingBubble());
       else parts.push('<div class="empty-msg">No messages yet</div>');
       return parts.join('');
     }
@@ -423,12 +432,7 @@ class ConversationThreads extends HTMLElement {
       }
     }
 
-    // Show thinking indicator when last real message is from user and agent is processing
-    const lastMsg = messages[messages.length - 1];
-    const hasPending = messages.some(m => m._pending);
-    if (!hasPending && agentState === 'working' && lastMsg?.role === 'user') {
-      parts.push(this._thinkingBubble());
-    }
+    if (thinking) parts.push(this._thinkingBubble());
 
     return parts.join('');
   }

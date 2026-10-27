@@ -29,6 +29,8 @@ export interface IAgent {
   readonly name: string;
   readonly hatType: HatType[];
   readonly state: AgentState;
+  /** Handling a message right now — a model call, its tools, the reply. */
+  readonly busy: boolean;
   readonly config: AgentConfig;
 
   // ── Inbox ───────────────────────────────────────────────────────────────────
