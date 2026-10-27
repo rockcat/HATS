@@ -1,5 +1,5 @@
 /**
- * HATS Agent Library service.
+ * HATS Agent Template Library service.
  *
  * Owns agent templates and nothing else — no projects, no orchestration, no
  * running agents. It depends on no other HATS service: everything it needs is

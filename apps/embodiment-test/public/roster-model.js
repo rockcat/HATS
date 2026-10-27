@@ -2,7 +2,7 @@
  * The roster, as data: two independent sources merged into one list.
  *
  * The Embodiment API only knows the agents the Team Runner has actually
- * deployed — the current project's team, and no more. The Agent Library knows
+ * deployed — the current project's team, and no more. The Agent Template Library knows
  * every agent that exists. Showing only the first makes the harness look broken
  * when a project has two members and the library has thirty; showing only the
  * second would prove nothing about the API.

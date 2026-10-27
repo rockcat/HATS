@@ -13,7 +13,7 @@ export const config = {
   projectsRoot: process.env['PROJECTS_ROOT']
     ? path.resolve(process.env['PROJECTS_ROOT'])
     : runtimeDir('projects'),
-  /** Shared with the Team Runner and Agent Library so all three agree on MCP servers. */
+  /** Shared with the Team Runner and Agent Template Library so all three agree on MCP servers. */
   catalogueFile: runtimeDir('config', 'mcp-catalogue.json'),
   /** Used to resolve templateId when deploying an agent into a project. */
   agentLibraryUrl: process.env['AGENT_LIBRARY_URL'] ?? 'http://localhost:3010',

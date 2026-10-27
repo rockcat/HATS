@@ -29,7 +29,7 @@ export function renderRoster(list, empty, count, rows, { selectedKey, onSelect }
         row.identity.avatar ? el('span', { class: 'tag', title: `avatar: ${row.identity.avatar}` }, '🙂') : null,
         row.live
           ? el('span', { class: 'tag ok', title: 'Deployed — the Embodiment API can talk to it' }, 'live')
-          : el('span', { class: 'tag', title: 'In the Agent Library but not deployed' }, 'lib'),
+          : el('span', { class: 'tag', title: 'In the Agent Template Library but not deployed' }, 'lib'),
       ),
     ));
   }

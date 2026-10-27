@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 /**
- * Populate the Agent Library and Project Server from the existing project data.
+ * Populate the Agent Template Library and Project Server from the existing project data.
  *
  *   node --env-file=.env scripts/import-legacy.mjs [--dry-run]
  *
  * Sources, in order of authority:
- *   <PROJECTS_ROOT>/agents.json          the flat agent library the runner used
+ *   <PROJECTS_ROOT>/agents.json          the flat Agent Template Library the runner used
  *   <PROJECTS_ROOT>/<project>/team-state.json
  *       v1 — agents are embedded in the snapshot
  *       v2 — agentIds reference agents.json
@@ -37,7 +37,7 @@ const readJson = (file, fallback) => {
 };
 
 /**
- * The flat library the runner used to own. The Agent Library service renames it
+ * The flat library the runner used to own. The Agent Template Library service renames it
  * to `.migrated` once it has imported it, so look for both.
  */
 function readLegacyAgents() {
@@ -235,7 +235,7 @@ function gatherProjectTeams(projectDirs, templates, idToKey) {
 
 async function main() {
   console.log(`Projects root : ${PROJECTS_ROOT}`);
-  console.log(`Agent Library : ${LIBRARY}`);
+  console.log(`Agent Template Library : ${LIBRARY}`);
   console.log(`Project Server: ${PROJECTS}`);
   if (DRY_RUN) console.log('\n*** DRY RUN — nothing will be written ***');
 

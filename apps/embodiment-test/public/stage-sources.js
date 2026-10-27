@@ -8,7 +8,7 @@
  * `avatars.json` is.
  *
  * A library-only agent has no instance to ask, so its model and framing come
- * from the Agent Library instead. Keeping the decision in one pure function
+ * from the Agent Template Library instead. Keeping the decision in one pure function
  * means it is always obvious which of the two is being exercised.
  *
  * No imports and no DOM, so this is directly testable.
@@ -37,7 +37,7 @@ export function sourcesFor(row, catalogue, runner) {
   }
 
   return {
-    label: 'Agent Library',
+    label: 'Agent Template Library',
     avatarUrl: avatar ? `/library/avatars/${encodeURIComponent(avatar)}` : null,
     backgroundUrl: background ? `/library/backgrounds/${encodeURIComponent(background)}` : null,
     framing: framingOf(entry),

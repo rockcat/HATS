@@ -31,7 +31,7 @@ It was inside them, and both had one. They diverged, and the way we found out
 was an agent losing her email login.
 
 `agent-credentials.json` is deliberately a runner-local sidecar — a shared
-agent library and a shared project store are the wrong place for a secret —
+Agent Template Library and a shared project store are the wrong place for a secret —
 so the runner reads it from whatever data directory it has mounted. The
 runner container was mounting the copy in its own repository, which had been
 created from nothing the day before:

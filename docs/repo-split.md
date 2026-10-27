@@ -41,7 +41,7 @@ npm run project-view
 
 The runner reaches them through `host.docker.internal`, because inside a
 container `localhost` is the container. Each is optional: with no project
-server the runner falls back to local disk, and with no agent library it uses
+server the runner falls back to local disk, and with no Agent Template Library it uses
 its own bundled `agents.json`, so `npm run runner` alone is a working system.
 
 ## Two things that bite in a container

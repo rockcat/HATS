@@ -81,7 +81,7 @@ export async function showRow(row, runner) {
     const known = catalogue.some((a) => a.file === row.identity.avatar);
     setHint(known
       ? `Could not load ${row.identity.avatar}: ${err.message}`
-      : `${row.identity.avatar} is not in the avatar catalogue — pick another in the Agent Library`);
+      : `${row.identity.avatar} is not in the avatar catalogue — pick another in the Agent Template Library`);
   }
 }
 

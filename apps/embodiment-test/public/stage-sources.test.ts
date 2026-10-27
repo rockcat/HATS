@@ -36,7 +36,7 @@ describe('sourcesFor', () => {
   it('serves a library-only agent from the library, framing included', () => {
     const source = sourcesFor(row({ avatar: 'max.glb', background: 'office.png' }), catalogue, runner);
     expect(source).toMatchObject({
-      label: 'Agent Library',
+      label: 'Agent Template Library',
       avatarUrl: '/library/avatars/max.glb',
       backgroundUrl: '/library/backgrounds/office.png',
       framing: { camera: [0, 1.7, 0.55], fov: 44 },

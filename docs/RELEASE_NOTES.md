@@ -63,7 +63,7 @@
 - **Kanban board** — filterable by user and tag; orange border distinguishes human-assigned tickets; review column for sign-off before close
 - **Agent cards** — hat badge, live state, talking indicator, cost bar; click to open the agent config modal
 - **Agent config modal** — live-updating system prompt preview with section highlighting; model, provider, specialisation, and MCP controls
-- **Agent library** — reusable agent definitions shared across projects; built-in Claude Code singleton
+- **Agent Template Library** — reusable agent definitions shared across projects; built-in Claude Code singleton
 - **Requests tab** — human escalations surface here with full context; reply inline and the agent resumes
 - **Threaded conversations** — Slack-style thread viewer per agent; one thread per task, readable history preserved across restarts
 - **@ mention popup** — autocomplete agent names in the CLI input and web compose box

@@ -3,7 +3,7 @@
  *
  * Conversation, state and speech go through the Embodiment API and nothing
  * else — that is what this app exists to prove, and the wire log on the right
- * is the proof. The Agent Library is read for one thing only: so the roster
+ * is the proof. The Agent Template Library is read for one thing only: so the roster
  * lists every agent that exists, not just the ones the current project happens
  * to be running. Both upstreams are optional and neither knows about the other.
  */

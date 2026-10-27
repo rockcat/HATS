@@ -2,7 +2,7 @@
  * A checkbox list of MCP servers, grouped by category.
  *
  * Shared because the same question is asked in two places: the Project Designer
- * asks which servers the *team* runs, and the Agent Library asks which of them
+ * asks which servers the *team* runs, and the Agent Template Library asks which of them
  * one agent may use. Both were free-text boxes at some point, which meant
  * guessing at ids that had to match exactly — so both now pick from the
  * catalogue the runner will actually read.

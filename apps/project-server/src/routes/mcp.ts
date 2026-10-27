@@ -7,7 +7,7 @@
  * project without anyone editing a stored document.
  *
  * Per-agent servers are not offered. Those carry one agent's own credentials
- * and belong to the Agent Library and the runner's local sidecar, never to a
+ * and belong to the Agent Template Library and the runner's local sidecar, never to a
  * project definition that gets shared around.
  */
 

@@ -6,7 +6,7 @@
  * the same in the library editor as it does when it is running.
  *
  * The model is addressed by URL rather than by filename, because the callers
- * fetch it from different places: the Agent Library serves `/avatars/<file>`,
+ * fetch it from different places: the Agent Template Library serves `/avatars/<file>`,
  * while an Embodiment API client gets `/agents/<id>/avatar`.
  *
  * Pair it with `avatar-stage.css`, which lays out the background and canvas.

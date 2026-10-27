@@ -54,7 +54,7 @@ async function main(): Promise<void> {
     banner: [
       `definitions:   ${config.definitionsDir} (${store.size} loaded)`,
       `projects root: ${config.projectsRoot}`,
-      `agent library: ${config.agentLibraryUrl}`,
+      `Agent Template Library: ${config.agentLibraryUrl}`,
       `mcp catalogue: ${config.catalogueFile}`,
       `active:        ${store.activeProjectId ?? '(none)'}`,
       `OpenAPI:       http://localhost:${config.port}/api/v1/openapi.yaml`,

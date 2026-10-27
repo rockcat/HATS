@@ -10,16 +10,16 @@
 
 Main system components exist but need to be restructured and separated to some degree
 
-### Agent Library
+### Agent Template Library
 
-Agent library management and agent template creation will be independant of team deployment
+Agent Template Library management and agent template creation will be independant of team deployment
 A formal spec for an agent description in JSON is needed and an API for the team runner to access agent definitions
-Separate the agent library code and UI into its own application with a dedicated user interface application - the existing UI code can be taken from the current application
+Separate the Agent Template Library code and UI into its own application with a dedicated user interface application - the existing UI code can be taken from the current application
 
 ### Project Designer
 
 A small project server will be needed to allow the front end to create /select a project and the an API to provide the project JSON data back and forth
-A new UI application to allow the design of a team - pulling agent definitions from the agent library API and allowing the user to define or edit a project - again most of this code exisst but I want to split it out into its own API and UI then sendign the result to the Project Server
+A new UI application to allow the design of a team - pulling agent definitions from the Agent Template Library API and allowing the user to define or edit a project - again most of this code exisst but I want to split it out into its own API and UI then sendign the result to the Project Server
 
 ### Team Runner
 

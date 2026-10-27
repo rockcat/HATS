@@ -1,4 +1,4 @@
-/* Agent Library specific tweaks on top of the shared UI kit. */
+/* Agent Template Library specific tweaks on top of the shared UI kit. */
 
 /* Templates | editor | preview — the preview needs real width for the prompt. */
 .layout.thirds { grid-template-columns: minmax(240px, 300px) minmax(380px, 1fr) minmax(320px, 460px); }

@@ -117,7 +117,7 @@ cat <<EOF
 HATS is running.
 
   Dashboard          http://localhost:3001
-  Agent Library      http://localhost:3010
+  Agent Template Library      http://localhost:3010
   Project Designer   http://localhost:3030
   Project View       http://localhost:3070
 

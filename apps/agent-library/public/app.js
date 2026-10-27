@@ -1,4 +1,4 @@
-/** HATS Agent Library — template browser, editor and live preview. */
+/** HATS Agent Template Library — template browser, editor and live preview. */
 
 import {
   $, $$, clear, debounce, el, guard, hatDots, makeClient, relativeTime, toastError, toastOk, trackHealth,

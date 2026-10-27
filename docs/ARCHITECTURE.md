@@ -123,7 +123,7 @@ The browser never writes directly to any file. All mutations go through the REST
 ```
 projects/
   last-project.json           ← which project was open last
-  agents.json                 ← global agent library (shared across projects)
+  agents.json                 ← global Agent Template Library (shared across projects)
   scheduled-actions.json      ← system-level scheduled actions
 
   <project-id>/

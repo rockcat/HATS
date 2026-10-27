@@ -63,7 +63,7 @@ Click for a demo video:
 - Voice + 3D avatar support
 - Four separable applications behind formal APIs — see [SERVICES.md](SERVICES.md)
 
-HATS is split into an **Agent Library** (reusable agent templates), a **Project
+HATS is split into an **Agent Template Library** (reusable agent templates), a **Project
 Server** (project definitions), a **Project Designer** (compose a team), and the
 **Team Runner** (embodies the team and runs the work). The runner exposes the
 **Embodiment API** — an OpenAPI-described contract any web site or app can use to
@@ -223,7 +223,7 @@ npm install
 cp .env.example .env
 # Edit .env and add at least one LLM provider API key
 
-# 3. Run the services (agent library, project server, designer, embodiment test)
+# 3. Run the services (Agent Template Library, project server, designer, embodiment test)
 npm run services
 
 # 4. Run the team, in another terminal
@@ -233,12 +233,12 @@ npm start
 | | URL |
 | --- | --- |
 | Operator dashboard | <http://localhost:3001> |
-| Agent Library | <http://localhost:3010> |
+| Agent Template Library | <http://localhost:3010> |
 | Project Designer | <http://localhost:3030> |
 | Embodiment API test | <http://localhost:3040> |
 | Embodiment API spec | <http://localhost:3001/api/embodiment/v1/openapi.yaml> |
 
-Create a few agents in the Agent Library, compose a team in the Project Designer,
+Create a few agents in the Agent Template Library, compose a team in the Project Designer,
 click **Set active**, then start the runner.
 
 To run without the services — the old single-process behaviour — use
@@ -258,14 +258,14 @@ scripts\setup.bat
 
 ```sh
 apps/
-  agent-library/    Agent Library service — API + UI (port 3010)
+  agent-library/    Agent Template Library service — API + UI (port 3010)
   project-server/   Project Server — project definitions API (port 3020)
   project-designer/ Project Designer UI (port 3030)
   embodiment-test/  Embodiment API test harness (port 3040)
 packages/
   contracts/      JSON Schemas, OpenAPI documents, shared types and validators
   service-kit/    HTTP shell shared by the services (router, SSE, JSON store, proxy)
-  clients/        Typed clients for the Agent Library and Project Server
+  clients/        Typed clients for the Agent Template Library and Project Server
   ui-kit/         Shared CSS and browser helpers, served at /ui-kit
 server/src/
   agent/          Agent execution loop and state machine
@@ -285,7 +285,7 @@ server/src/
   webui/          Web UI — HTML/CSS/JS + Three.js avatar renderer
 avatars/          GLB avatar models and avatars.json catalogue
 projects/         Per-project runtime data (kanban, meetings, agent state)
-runtime_data/     Agent Library and Project Server storage
+runtime_data/     Agent Template Library and Project Server storage
 scripts/          Setup scripts and the dev service launcher
 tools/            Developer utilities (glb-viewer.mjs)
 rhubarb/          Install rhubarb in here

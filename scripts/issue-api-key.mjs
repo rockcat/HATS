@@ -4,7 +4,7 @@
  *
  *   node --env-file=.env scripts/issue-api-key.mjs [username] [password]
  *
- * The runner authenticates all of /api/*, so the Agent Library's chat tab and
+ * The runner authenticates all of /api/*, so the Agent Template Library's chat tab and
  * the Embodiment API test harness both need a key in HATS_API_KEY. Keys are
  * issued by the mobile-pairing flow — this drives that flow from the terminal
  * so you do not have to scan a QR code to get one.
@@ -64,7 +64,7 @@ async function main() {
   const { apiKey, keyId } = await claimed.json();
   console.log(`\nAPI key issued for "${username}" (key id ${keyId}):\n`);
   console.log(`  HATS_API_KEY=${apiKey}\n`);
-  console.log('Paste that line into .env, then restart the Agent Library and the');
+  console.log('Paste that line into .env, then restart the Agent Template Library and the');
   console.log('Embodiment API test harness. Revoke it any time from the dashboard\'s');
   console.log('Settings → Users panel.');
 }

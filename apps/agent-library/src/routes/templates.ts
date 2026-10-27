@@ -1,4 +1,4 @@
-/** CRUD routes over the agent library. */
+/** CRUD routes over the Agent Template Library. */
 
 import {
   badRequest, json, noContent, notFound, readJsonBody,

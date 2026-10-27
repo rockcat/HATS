@@ -2,7 +2,7 @@
  * HATS Project Designer.
  *
  * A UI-only application: it holds no state of its own. Agent templates come
- * from the Agent Library, project definitions go to the Project Server, and
+ * from the Agent Template Library, project definitions go to the Project Server, and
  * both are reached through this server's proxy so the browser only ever talks
  * to one origin.
  */
@@ -38,11 +38,11 @@ await startService({
       agentLibraryUrl: config.agentLibraryUrl,
       projectServerUrl: config.projectServerUrl,
     })),
-    ...proxyRoutes({ prefix: '/proxy/library', target: config.agentLibraryUrl, label: 'Agent Library' }),
+    ...proxyRoutes({ prefix: '/proxy/library', target: config.agentLibraryUrl, label: 'Agent Template Library' }),
     ...proxyRoutes({ prefix: '/proxy/projects', target: config.projectServerUrl, label: 'Project Server' }),
   ],
   banner: [
-    `agent library:  ${config.agentLibraryUrl}`,
+    `Agent Template Library:  ${config.agentLibraryUrl}`,
     `project server: ${config.projectServerUrl}`,
   ],
 });

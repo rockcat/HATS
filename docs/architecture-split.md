@@ -52,7 +52,7 @@ called:
 | --- | --- | --- |
 | **Ephemeral** — restarted constantly | live agents, orchestration, MCP registry, the scheduler, Embodiment API | Team Runner |
 | **Durable** — should outlive a restart | board, diaries, human requests, allowlist, outputs, telemetry history | **Workspace** (missing) |
-| **Configuration** — rarely changes | agent templates, project definitions, credentials | Agent Library (3010), Project Server (3020) |
+| **Configuration** — rarely changes | agent templates, project definitions, credentials | Agent Template Library (3010), Project Server (3020) |
 
 The third row already exists. The gap is the second.
 

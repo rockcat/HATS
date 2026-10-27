@@ -5,7 +5,7 @@
  * roster, live state, conversation, voice and face — nothing borrowed from the
  * runner's own dashboard. If this app can drive a team, so can any third party.
  *
- * It reads the Agent Library too, so the roster shows every agent that exists
+ * It reads the Agent Template Library too, so the roster shows every agent that exists
  * and not only the handful the current project happens to be running. That is a
  * property of this harness, not of the Embodiment API: the runner still knows
  * nothing about the library, and the library still knows nothing about the
@@ -58,19 +58,19 @@ await startService({
       timeoutMs: 120_000,
       ...(config.apiKey && { headers: { 'X-API-Key': config.apiKey } }),
     }),
-    // The Agent Library, for the agents that exist but are not deployed. It
+    // The Agent Template Library, for the agents that exist but are not deployed. It
     // needs no credential, and its static /avatars and /backgrounds mounts come
     // through here too so a library-only agent still has a face.
     ...proxyRoutes({
       prefix: '/library',
       target: config.agentLibraryUrl,
-      label: 'Agent Library',
+      label: 'Agent Template Library',
       timeoutMs: 30_000,
     }),
   ],
   banner: [
     `team runner:   ${config.teamRunnerUrl}  →  /runner/api/embodiment/v1/*`,
-    `agent library: ${config.agentLibraryUrl}  →  /library/api/v1/*  (optional)`,
+    `Agent Template Library: ${config.agentLibraryUrl}  →  /library/api/v1/*  (optional)`,
     config.apiKey
       ? 'auth:          X-API-Key from HATS_API_KEY'
       : 'auth:          HATS_API_KEY not set — the runner will answer 401.'

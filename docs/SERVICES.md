@@ -11,7 +11,7 @@ one thing and reaches the others only through a published API.
 
 ```
 ┌──────────────────┐   AgentTemplate    ┌──────────────────┐
-│  Agent Library   │───────────────────▶│ Project Designer │
+│  Agent Template Library   │───────────────────▶│ Project Designer │
 │  API + UI :3010  │                    │     UI :3030     │
 └──────────────────┘                    └────────┬─────────┘
                                                  │ ProjectDefinition
@@ -33,7 +33,7 @@ one thing and reaches the others only through a published API.
 
 ## The applications
 
-### Agent Library — `apps/agent-library`, port 3010
+### Agent Template Library — `apps/agent-library`, port 3010
 
 Owns agent templates and nothing else: no projects, no orchestration, no running
 agents. Ships its own UI for browsing, authoring and previewing the system prompt
@@ -54,7 +54,7 @@ Owns project definitions: objective, team roster, shared MCP servers, and the
 pointer to which project is *active*. Creating a project also creates its working
 folder (`sources/`, `outputs/`) so the runner has somewhere to work.
 
-Deploying an agent resolves the template from the Agent Library and stores a
+Deploying an agent resolves the template from the Agent Template Library and stores a
 fully-resolved copy, so the runner never needs the library to start a team.
 
 Writes are optimistically concurrent: pass `expectedRevision` and a stale write
@@ -63,7 +63,7 @@ stops the Designer and a running team overwriting each other.
 
 ### Project Designer — `apps/project-designer`, port 3030
 
-A UI with no state of its own. It reads templates from the Agent Library, writes
+A UI with no state of its own. It reads templates from the Agent Template Library, writes
 definitions to the Project Server, and reaches both through its own reverse proxy
 (`/proxy/library`, `/proxy/projects`) so the browser only ever talks to one
 origin.
@@ -102,7 +102,7 @@ nothing upfront; an absent one keeps the default. This matters because a
 server can be much larger than an agent needs: the IMAP one offers around
 fifty tools, of which an assistant uses perhaps five.
 
-The Agent Library edits this as a checkbox list of real tool names. It starts
+The Agent Template Library edits this as a checkbox list of real tool names. It starts
 no MCP servers, so it cannot ask one what it offers — instead the runner
 records each server's tools into the shared MCP catalogue when it connects,
 and the library reads them from there. A server that has never run shows no
@@ -134,7 +134,7 @@ nothing else: roster, live state, conversation, voice and face. Its third panel
 logs every request and every stream event, so the API is the visible output. If
 this app can drive a team, so can any third party.
 
-It reads the Agent Library for one thing only — so the roster lists every agent
+It reads the Agent Template Library for one thing only — so the roster lists every agent
 that exists rather than just the handful the current project is running. A row
 the runner has deployed is marked **live** and can be talked to; the rest still
 show their avatar and play their voice. Both upstreams are optional, and neither
@@ -200,7 +200,7 @@ change one.
 
 | API | Spec | Served live at |
 | --- | --- | --- |
-| Agent Library | `agent-library.openapi.yaml` | `:3010/api/v1/openapi.yaml` |
+| Agent Template Library | `agent-library.openapi.yaml` | `:3010/api/v1/openapi.yaml` |
 | Project Server | `project-server.openapi.yaml` | `:3020/api/v1/openapi.yaml` |
 | Embodiment | `embodiment.openapi.yaml` | `:3001/api/embodiment/v1/openapi.yaml` |
 
@@ -262,7 +262,7 @@ Individually: `npm run agent-library`, `npm run project-server`,
 
 ### First run
 
-1. Open the Agent Library at <http://localhost:3010> and create a few agents.
+1. Open the Agent Template Library at <http://localhost:3010> and create a few agents.
 2. Open the Project Designer at <http://localhost:3030>, create a project, set a
    goal, deploy agents into the team, and click **Set active**.
 3. `npm start` — the runner loads the active project and embodies the team.
@@ -275,12 +275,12 @@ it and of each other's runtime:
 
 | Service | Depends on |
 | --- | --- |
-| Agent Library | nothing — templates, MCP catalogue, credentials and voice models are all on disk |
-| Project Server | the Agent Library, and only to resolve a templateId when deploying. It reads the MCP catalogue file, as the runner and the library do |
-| Project Designer | the Agent Library and Project Server, proxied |
-| Embodiment API Test | the Team Runner — that is its whole purpose. It also reads the Agent Library, so the roster shows every agent and not just the deployed team; without it the roster is simply the live team |
+| Agent Template Library | nothing — templates, MCP catalogue, credentials and voice models are all on disk |
+| Project Server | the Agent Template Library, and only to resolve a templateId when deploying. It reads the MCP catalogue file, as the runner and the library do |
+| Project Designer | the Agent Template Library and Project Server, proxied |
+| Embodiment API Test | the Team Runner — that is its whole purpose. It also reads the Agent Template Library, so the roster shows every agent and not just the deployed team; without it the roster is simply the live team |
 | Speech Service | nothing — it owns the Piper processes |
-| Team Runner | the Project Server, Agent Library and Speech Service, all optional |
+| Team Runner | the Project Server, Agent Template Library and Speech Service, all optional |
 
 Anything that needs a *running* agent — chat, speech synthesis — belongs to the
 runner and is reached through `packages/ui-kit/embodiment-client.js`, the shared
@@ -289,7 +289,7 @@ team simply does not import it, and so cannot acquire a dependency on the
 runner by accident.
 
 Voice and speaker *selection* is not such a case: it only reads the Piper model
-files, so the Agent Library offers it with no service running at all. *Hearing*
+files, so the Agent Template Library offers it with no service running at all. *Hearing*
 a voice does need synthesis, which is the Speech Service's job.
 
 ### Why speech is a service
@@ -312,7 +312,7 @@ Piper or Rhubarb.
 Nothing in the split is mandatory. The runner probes both services at startup:
 
 - **Project Server unreachable** → reads the project from the local folder, as before.
-- **Agent Library unreachable** → falls back to the local `projects/agents.json`.
+- **Agent Template Library unreachable** → falls back to the local `projects/agents.json`.
 - **`--standalone` or `HATS_STANDALONE=1`** → skips both probes entirely.
 
 So a single-machine install still works with nothing else started, and the split
@@ -322,7 +322,7 @@ is an upgrade rather than a new requirement.
 
 | State | Owner | Location |
 | --- | --- | --- |
-| Agent templates | Agent Library | `runtime_data/agent-library/templates/` |
+| Agent templates | Agent Template Library | `runtime_data/agent-library/templates/` |
 | Project definitions | Project Server | `runtime_data/project-server/definitions/` |
 | Active project pointer | Project Server | `runtime_data/project-server/active-project.json` |
 | Conversation history, tasks, meetings | Team Runner | `<project>/team-state.json` |
@@ -332,7 +332,7 @@ is an upgrade rather than a new requirement.
 | Per-agent MCP credentials | Team Runner | `<projects root>/agent-credentials.json` |
 
 Credentials never leave the runner. `LibraryAgentStore` holds them back from the
-Agent Library and keeps them in a local sidecar file, because a shared library is
+Agent Template Library and keeps them in a local sidecar file, because a shared library is
 the wrong place for a secret.
 
 ## Shared packages
@@ -341,7 +341,7 @@ the wrong place for a secret.
 | --- | --- |
 | `packages/contracts` | Schemas, OpenAPI documents, types, validators, factories |
 | `packages/service-kit` | The HTTP shell each service runs in: router, SSE hub, JSON store, proxy, meta routes |
-| `packages/clients` | Typed clients for the Agent Library and Project Server |
+| `packages/clients` | Typed clients for the Agent Template Library and Project Server |
 | `packages/ui-kit` | Shared CSS and browser helpers, served at `/ui-kit` by each UI |
 
 These are plain source directories imported by relative path — there is no
