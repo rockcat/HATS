@@ -257,7 +257,7 @@ function refreshToolSources() {
 
 /** What the agent will actually be handed, and what it must search for. */
 function refreshToolPreview() {
-  renderToolPreview(state.toolSources ?? [], readUpfront(ui.form));
+  void renderToolPreview(state.toolSources ?? [], readUpfront(ui.form), readForm(ui.form).hats);
 }
 
 function startNewTemplate() {
@@ -361,7 +361,8 @@ function init() {
     if (event.target.name === 'upfrontMode') syncMode(ui.form);
     // Changing which servers the agent may use changes what it can be given.
     if (['allMcpServers', 'mcpServer'].includes(event.target.name)) refreshToolSources();
-    if (['upfrontMode', 'upfrontServer', 'upfrontTool'].includes(event.target.name)) refreshToolPreview();
+    // The hats decide the runner's core tools, so they change the list too.
+    if (['upfrontMode', 'upfrontServer', 'upfrontTool', 'hats'].includes(event.target.name)) refreshToolPreview();
     setDirty(true);
     refreshPreview();
   });
@@ -384,7 +385,7 @@ function init() {
     const button = event.target.closest('button');
     if (!button) return;
     const tools = button.dataset.view === 'tools';
-    for (const b of $('#preview-tabs button')) b.classList.toggle('active', b === button);
+    for (const b of $$('#preview-tabs button')) b.classList.toggle('active', b === button);
     $('#prompt-scroll').hidden = tools;
     $('#tool-preview').hidden = !tools;
     if (tools) refreshToolPreview();

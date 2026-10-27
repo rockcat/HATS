@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 // @ts-expect-error — a browser module, deliberately free of imports so it can be tested here.
-import { combineSelection, isSelected, splitForPreview, toolSources } from './upfront-model.js';
+import { combineSelection, isSelected, splitForPreview, toolSources, toolTokens } from './upfront-model.js';
 
 const catalogue = {
   personal: [
@@ -95,7 +95,7 @@ describe('splitForPreview', () => {
     },
   ];
 
-  const names = (list: Array<{ name: string }>) => list.map((t) => t.name);
+  const names = (list: Array<{ bare: string }>) => list.map((t) => t.bare);
 
   it('defaults to the agent\'s own servers upfront, team servers by search', () => {
     const { upfront, searchable } = splitForPreview(sources, undefined);
@@ -139,7 +139,7 @@ describe('splitForPreview', () => {
 
   it('copes with a server that has never run', () => {
     const unseen = [{ id: 'brave-search', scope: 'team' }];
-    expect(splitForPreview(unseen, undefined)).toEqual({ upfront: [], searchable: [], unknown: [] });
+    expect(splitForPreview(unseen, undefined)).toEqual({ always: [], upfront: [], searchable: [], unknown: [] });
   });
 });
 
@@ -152,7 +152,7 @@ describe('splitForPreview agrees with the runner', () => {
     { id: 'kanban', scope: 'team', knownTools: [{ name: 'create_ticket', description: 'Raise one.' }] },
   ];
   const upfrontNames = (selectors?: string[]) =>
-    splitForPreview(sources, selectors).upfront.map((t: { name: string }) => t.name);
+    splitForPreview(sources, selectors).upfront.map((t: { bare: string }) => t.bare);
 
   it('accepts a whole server', () => {
     expect(upfrontNames(['email-imap'])).toEqual(['get_email', 'list_emails']);
@@ -189,5 +189,53 @@ describe('splitForPreview agrees with the runner', () => {
 
   it('an absent list means the agent keeps its own servers', () => {
     expect(upfrontNames(undefined)).toEqual(['get_email', 'list_emails']);
+  });
+});
+
+describe("splitForPreview with the runner's own tools", () => {
+  const sources = [
+    { id: 'email-imap', scope: 'personal', knownTools: [{ name: 'get_email', description: 'Read one.' }] },
+    { id: 'brave-search', scope: 'team', knownTools: [{ name: 'web_search', description: 'Search.' }] },
+  ];
+  const tool = (name: string, source: string) => ({ name, description: name, source, parameters: { type: 'object', properties: {} } });
+  const builtin = {
+    core: [tool('send_message', 'runner'), tool('search_tools', 'runner')],
+    onDemand: [tool('read_file', 'runner')],
+    personal: [tool('get_board', 'board')],
+    shared: [tool('delete_ticket', 'board')],
+  };
+  const names = (list: Array<{ name: string }>) => list.map((t) => t.name);
+
+  it('always sends the core tools, whatever is chosen', () => {
+    for (const selectors of [undefined, [], ['email-imap']]) {
+      expect(names(splitForPreview(sources, selectors, builtin).always)).toEqual(['send_message', 'search_tools']);
+    }
+  });
+
+  it("by default sends the agent's own servers, then the everyday board tools", () => {
+    const { upfront, searchable } = splitForPreview(sources, undefined, builtin);
+    expect(names(upfront)).toEqual(['mcp__email-imap__get_email', 'get_board']);
+    expect(names(searchable)).toEqual(['mcp__brave-search__web_search', 'delete_ticket', 'read_file']);
+  });
+
+  it('drops the board tools once the template picks, unless picked — as the runner does', () => {
+    const picked = splitForPreview(sources, ['email-imap'], builtin);
+    expect(names(picked.upfront)).toEqual(['mcp__email-imap__get_email']);
+    expect(names(picked.searchable)).toContain('get_board');
+    expect(names(splitForPreview(sources, ['email-imap', 'get_board'], builtin).upfront))
+      .toEqual(['mcp__email-imap__get_email', 'get_board']);
+  });
+
+  it('names MCP tools the way the model sees them', () => {
+    expect(splitForPreview(sources, undefined, builtin).upfront[0]).toEqual(
+      expect.objectContaining({ name: 'mcp__email-imap__get_email', label: 'email-imap' }));
+  });
+});
+
+describe('toolTokens', () => {
+  it('counts a known schema, and guesses for one the catalogue does not carry', () => {
+    const schema = { name: 'x', description: 'y'.repeat(400), parameters: { type: 'object', properties: {} } };
+    expect(toolTokens(schema)).toBeGreaterThan(100);
+    expect(toolTokens({ name: 'x', description: 'y' })).toBe(55);
   });
 });

@@ -45,52 +45,76 @@ export function combineSelection(servers = [], tools = []) {
   return [...servers, ...tools.filter((t) => !covered.has(serverOf(t)))];
 }
 
+/** Roughly what a tool costs in a request when its schema is not known. */
+const TOKENS_PER_TOOL = 55;
+
+/** Tokens a tool adds to every request it is sent in: its schema at ~4 characters a token. */
+export function toolTokens(tool) {
+  if (!tool.parameters) return TOKENS_PER_TOOL;
+  const { name, description, parameters } = tool;
+  return Math.ceil(JSON.stringify({ name, description, parameters }).length / 4);
+}
+
 /**
- * What the model will be sent, and what it will have to search for.
+ * Exactly what the model will be sent, and what it will have to search for.
  *
- * Mirrors `splitToolSet` in the runner, down to the selector forms it will
- * accept: an absent list means every tool from the agent's own servers, an
- * empty one means none, and a selector can name a whole server, one tool,
- * the namespaced name search results print, or a bare tool name.
+ * Mirrors the runner: `getToolsForHat` first, always; then `splitToolSet`
+ * over the agent's own servers plus the everyday board tools against the
+ * team's servers plus the rest of the board. Same selector forms too: an
+ * absent list means everything on the personal side, an empty one means
+ * none, and a selector can name a whole server, one tool, the namespaced name
+ * search results print, or a bare tool name.
+ *
+ * Note what follows from that, because the runner does it: once a template
+ * picks its upfront tools, the everyday board tools are sent only if picked
+ * too.
  *
  * `unknown` catches a selector that matches nothing, which is otherwise
  * silent — the tool simply never appears and nobody is told why.
+ *
+ * @param {Array} sources  catalogue entries this agent can draw on
+ * @param {string[]|undefined} upfrontTools  the template's choice
+ * @param {{core?: Array, onDemand?: Array, personal?: Array, shared?: Array}} builtin
+ *   the runner's own tools, from /api/v1/builtin-tools
  */
-export function splitForPreview(sources = [], upfrontTools) {
-  const all = [];
-  for (const server of sources) {
-    for (const tool of server.knownTools ?? []) {
-      all.push({ name: tool.name, description: tool.description, server: server.id, scope: server.scope });
-    }
-  }
+export function splitForPreview(sources = [], upfrontTools, builtin = {}) {
+  const mcp = (scope) => sources.filter((s) => (s.scope === 'personal') === (scope === 'personal'))
+    .flatMap((server) => (server.knownTools ?? []).map((tool) => ({
+      name: `mcp__${server.id}__${tool.name}`, bare: tool.name, description: tool.description,
+      server: server.id, label: server.id, scope,
+    })));
+  const runner = (tools = [], scope) => tools.map((t) => ({ ...t, bare: t.name, server: '', label: t.source, scope }));
 
-  // Absent means the default: everything from this agent's own servers.
+  const personal = [...mcp('personal'), ...runner(builtin.personal, 'personal')];
+  const shared = [...mcp('team'), ...runner(builtin.shared, 'team')];
+  const always = runner(builtin.core, 'runner');
+  const onDemand = runner(builtin.onDemand, 'runner');
+
+  // Absent means the default: everything on the agent's own side.
   if (upfrontTools === undefined) {
-    return {
-      upfront: all.filter((t) => t.scope === 'personal'),
-      searchable: all.filter((t) => t.scope !== 'personal'),
-      unknown: [],
-    };
+    return { always, upfront: personal, searchable: [...shared, ...onDemand], unknown: [] };
   }
 
   const chosen = new Set(upfrontTools.map((s) => s.trim().toLowerCase()).filter(Boolean));
   const matched = new Set();
   const isChosen = (tool) => {
     const server = tool.server.toLowerCase();
-    const bare = tool.name.toLowerCase();
+    const bare = tool.bare.toLowerCase();
     // Every form the runner honours. The editor only writes the first two,
     // but a hand-edited template may use either of the others — and this
     // panel exists for the person reading a hand-edited template.
-    const forms = [server, `${server}:${bare}`, `mcp__${server}__${bare}`, bare];
+    const forms = server ? [server, `${server}:${bare}`, `mcp__${server}__${bare}`, bare] : [bare];
     let hit = false;
     for (const form of forms) if (chosen.has(form)) { matched.add(form); hit = true; }
     return hit;
   };
 
+  const all = [...personal, ...shared];
   const upfront = all.filter(isChosen);
   return {
+    always,
     upfront,
-    searchable: all.filter((t) => !upfront.includes(t)),
+    searchable: [...all.filter((t) => !upfront.includes(t)), ...onDemand],
     unknown: [...chosen].filter((c) => !matched.has(c)),
   };
 }

@@ -11,6 +11,7 @@ import { personasByHat } from '@hats/core/hats/personas';
 import { SPECIALISATION_DIRECTIVES } from '@hats/core/prompt/generator';
 import { KNOWN_PROVIDERS } from '@hats/core/providers';
 import { listVoices } from '@hats/speech-core/voice-models';
+import { builtinTools } from '../builtin-tools.js';
 
 const BASE = '/api/v1';
 
@@ -34,6 +35,10 @@ export function catalogueRoutes(
     get(`${BASE}/personas`, ({ res }) => json(res, 200, personasByHat)),
 
     get(`${BASE}/hats`, ({ res }) => json(res, 200, { hats: Object.values(hatDefinitions) })),
+
+    // The runner's own tools for these hats: ?hat=blue&hat=red.
+    get(`${BASE}/builtin-tools`, ({ res, url }) =>
+      json(res, 200, builtinTools(url.searchParams.getAll('hat')))),
 
     get(`${BASE}/specialisations`, ({ res }) =>
       json(res, 200, { specialisations: Object.keys(SPECIALISATION_DIRECTIVES).sort() })),
