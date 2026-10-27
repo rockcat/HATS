@@ -162,11 +162,14 @@ export function resolvePersonalConfig(
   const expandAgentDir = (value: string) =>
     agentDir ? value.replace(/\{AGENT_DIR\}/g, agentDir) : value.replace(/\{AGENT_DIR\}[/\\]?/g, '');
 
+  // A blank catalogue value is a placeholder for a key, not a default: brave's
+  // BRAVE_API_KEY: '' would otherwise hide the real key in the runner's .env.
+  const declared = Object.entries(entry.config.env ?? {})
+    .filter(([, v]) => v !== '' && v != null)
+    .map(([k, v]) => [k, expandAgentDir(String(v))]);
   const env: Record<string, string> = {
     ...(process.env as Record<string, string>),
-    ...Object.fromEntries(
-      Object.entries(entry.config.env ?? {}).map(([k, v]) => [k, expandAgentDir(String(v))]),
-    ),
+    ...Object.fromEntries(declared),
     ...credentials,
   };
   let command = entry.config.command;

@@ -61,6 +61,24 @@ describe('where an agent keeps its memory', () => {
     expect('env' in resolved && resolved.env?.BRAVE_API_KEY).toBe('secret');
   });
 
+  it('takes a key from the environment when the catalogue leaves it blank', () => {
+    // The installed runner gets BRAVE_API_KEY from .env, and no agent has it
+    // as a credential. The catalogue's empty placeholder used to replace it.
+    const brave: MCPCatalogueEntry = {
+      ...memory,
+      id: 'brave-search',
+      config: { transport: 'stdio', command: 'npx', args: ['-y', 'brave'], env: { BRAVE_API_KEY: '' } },
+    };
+    const before = process.env.BRAVE_API_KEY;
+    process.env.BRAVE_API_KEY = 'from-env';
+    try {
+      const resolved = resolvePersonalConfig(brave, {}, '/projects/p/agents/aaa');
+      expect('env' in resolved && resolved.env?.BRAVE_API_KEY).toBe('from-env');
+    } finally {
+      if (before === undefined) delete process.env.BRAVE_API_KEY; else process.env.BRAVE_API_KEY = before;
+    }
+  });
+
   it('still lets a credential win over the declared default', () => {
     const resolved = resolvePersonalConfig(
       memory, { MEMORY_FILE_PATH: '/somewhere/else.json' }, `${PROJECT}/agents/aaa`);
