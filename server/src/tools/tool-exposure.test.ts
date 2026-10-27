@@ -99,9 +99,22 @@ describe('splitToolSet', () => {
     expect(names(splitToolSet(available, ['typo-server', 'email-imap:get_email']).upfront))
       .toEqual(['mcp__email-imap__get_email']);
   });
+
+  it('sends the always tools whatever is selected, after the chosen ones', () => {
+    const withBoard = { ...available, always: [tool('get_board')] };
+    for (const selectors of [undefined, [], ['email-imap:get_email']]) {
+      const { upfront, searchable } = splitToolSet(withBoard, selectors);
+      expect(names(upfront).at(-1), String(selectors)).toBe('get_board');
+      expect(names(searchable)).not.toContain('get_board');
+    }
+  });
 });
 
 describe('unmatchedSelectors', () => {
+  it('does not call a selector for an always tool unknown', () => {
+    expect(unmatchedSelectors({ ...available, always: [tool('get_board')] }, ['get_board'])).toEqual([]);
+  });
+
   it('names a typo, which would otherwise be silent', () => {
     expect(unmatchedSelectors(available, ['email-imap:get_emails', 'kanban']))
       .toEqual(['email-imap:get_emails']);

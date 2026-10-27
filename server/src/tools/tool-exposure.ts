@@ -29,6 +29,12 @@ export interface AvailableTools {
   personal: ToolDefinition[];
   /** Servers the whole team runs. */
   shared: ToolDefinition[];
+  /**
+   * Sent whatever the template selects. For the few tools every agent needs
+   * in hand — tuning an agent's mailbox down to five tools should not cost it
+   * its board.
+   */
+  always?: ToolDefinition[];
 }
 
 /** `mcp__email-imap__get_email` → `get_email`. */
@@ -70,6 +76,11 @@ function matches(selector: string, tool: ToolDefinition): boolean {
  * still finds its own mailbox.
  */
 export function splitToolSet(available: AvailableTools, selectors?: string[]): AgentToolSet {
+  const split = splitSelectable(available, selectors);
+  return { ...split, upfront: [...split.upfront, ...(available.always ?? [])] };
+}
+
+function splitSelectable(available: AvailableTools, selectors?: string[]): AgentToolSet {
   const { personal, shared } = available;
   // A personal server wins a name clash: it is this agent's own account.
   const personalNames = new Set(personal.map((t) => t.name));
@@ -98,6 +109,6 @@ export function splitToolSet(available: AvailableTools, selectors?: string[]): A
  */
 export function unmatchedSelectors(available: AvailableTools, selectors?: string[]): string[] {
   if (!selectors?.length) return [];
-  const all = [...available.personal, ...available.shared];
+  const all = [...available.personal, ...available.shared, ...(available.always ?? [])];
   return selectors.filter((selector) => !all.some((tool) => matches(selector, tool)));
 }

@@ -799,23 +799,25 @@ export class TeamOrchestrator {
           ...(context ? peopleTools(context).map((t) => ({
             name: t.name, description: t.description, parameters: t.inputSchema,
           })) : []),
-          // Reading the board and moving a ticket across it are the hot path.
-          // The rest — blockers, deletion, reassignment — are occasional, and
-          // tool search finds them when they are wanted.
-          ...kanban.filter((t) => upfrontKanban.has(t.name)),
         ];
+
+        // Reading the board and moving a ticket across it are the hot path,
+        // so they are sent whatever the template selects. The rest —
+        // blockers, deletion, reassignment — are occasional, and tool search
+        // finds them when they are wanted.
+        const always = kanban.filter((t) => upfrontKanban.has(t.name));
 
         // Checked here rather than at registration because this is the first
         // point where the servers have actually connected and reported.
         if (!warnedSelectors && (personal.length || shared.length)) {
           warnedSelectors = true;
-          const missing = unmatchedSelectors({ personal, shared }, agent.config.upfrontTools);
+          const missing = unmatchedSelectors({ personal, shared, always }, agent.config.upfrontTools);
           if (missing.length) {
             log.warn(`[Team] ${agent.name} asks for tools that do not exist: ${missing.join(', ')}.`
               + ' They will never be sent to the model.');
           }
         }
-        return splitToolSet({ personal, shared }, agent.config.upfrontTools);
+        return splitToolSet({ personal, shared, always }, agent.config.upfrontTools);
       });
       agent.setLLMSemaphore(this.llmSemaphore);
       if (this.telemetryRecorder) agent.setTelemetryRecorder(this.telemetryRecorder);
