@@ -1,6 +1,41 @@
 import { v4 as uuidv4 } from 'uuid';
 import { readFile, writeFile } from 'fs/promises';
 import { McpToolCallSpec, ScheduledActionType } from '../store/team-snapshot.js';
+import { nextCronRun, cronError } from '../../../packages/core/src/schedule/cron.js';
+
+/** How an entry repeats: at the times a cron expression names, every so many seconds, or not at all. */
+export interface Repeat {
+  intervalSeconds: number | null;
+  /** When set, this decides when it runs and the interval is ignored. */
+  cron?: string;
+}
+
+/** When a repeating entry next runs after `now`; null when it does not repeat. */
+export function nextRunAfter(repeat: Repeat, now: number): number | null {
+  if (repeat.cron) return nextCronRun(repeat.cron, now);
+  return repeat.intervalSeconds ? now + repeat.intervalSeconds * 1000 : null;
+}
+
+/**
+ * The repeat a request asks for. A cron expression wins over an interval;
+ * a bad one throws, saying what is wrong with it.
+ */
+export function repeatFromRequest(body: { intervalMinutes?: number | null; cron?: string | null }): Repeat {
+  const cron = body.cron?.trim();
+  if (cron) {
+    const problem = cronError(cron);
+    if (problem) throw new Error(`Bad cron expression: ${problem}`);
+    return { intervalSeconds: null, cron };
+  }
+  const mins = body.intervalMinutes;
+  return { intervalSeconds: mins && mins > 0 ? Math.round(mins * 60) : null };
+}
+
+/** When a new or rescheduled entry first runs: its first cron time, else after a delay. */
+function firstRun(repeat: Repeat, delaySeconds: number | undefined, now: number): number {
+  if (repeat.cron) return nextCronRun(repeat.cron, now) ?? now;
+  return now + (delaySeconds ?? repeat.intervalSeconds ?? 60) * 1000;
+}
 
 export interface AgendaEntry {
   id: string;
@@ -8,6 +43,8 @@ export interface AgendaEntry {
   label: string;
   description: string;
   intervalSeconds: number | null;
+  /** Run at these times instead of on an interval — see packages/core/src/schedule/cron.ts. */
+  cron?: string;
   nextRunAt: number;
   enabled: boolean;
   createdAt: string;
@@ -67,6 +104,7 @@ export class AgendaStore {
     label: string;
     description: string;
     intervalSeconds: number | null;
+    cron?: string;
     delaySeconds?: number;
     type?: ScheduledActionType;
     mcpToolCall?: McpToolCallSpec;
@@ -78,11 +116,11 @@ export class AgendaStore {
       e => e.agentName === data.agentName && e.label.trim().toLowerCase() === labelKey,
     );
     if (existing) {
-      const delay = data.delaySeconds ?? (data.intervalSeconds ?? 60);
       Object.assign(existing, {
         description:     data.description,
-        intervalSeconds: data.intervalSeconds,
-        nextRunAt:       Date.now() + delay * 1000,
+        intervalSeconds: data.cron ? null : data.intervalSeconds,
+        cron:            data.cron || undefined,
+        nextRunAt:       firstRun(data, data.delaySeconds, Date.now()),
         enabled:         true,
         type:            data.type,
         mcpToolCall:     data.mcpToolCall,
@@ -92,14 +130,14 @@ export class AgendaStore {
       return existing;
     }
 
-    const delay = data.delaySeconds ?? (data.intervalSeconds ?? 60);
     const entry: AgendaEntry = {
       id:              uuidv4(),
       agentName:       data.agentName,
       label:           data.label,
       description:     data.description,
-      intervalSeconds: data.intervalSeconds,
-      nextRunAt:       Date.now() + delay * 1000,
+      intervalSeconds: data.cron ? null : data.intervalSeconds,
+      ...(data.cron    && { cron: data.cron }),
+      nextRunAt:       firstRun(data, data.delaySeconds, Date.now()),
       enabled:         true,
       createdAt:       new Date().toISOString(),
       ...(data.type        && { type: data.type }),
@@ -115,11 +153,15 @@ export class AgendaStore {
     const entry = this.entries.get(id);
     if (!entry) return undefined;
     const { id: _id, agentName: _agent, createdAt: _created, ...editable } = patch;
-    // A new interval starts counting from now; otherwise an entry moved from
-    // daily to hourly would still wait out the rest of its day.
-    const rescheduled = editable.intervalSeconds !== undefined && editable.intervalSeconds !== entry.intervalSeconds;
+    // A new interval starts counting from now, and a new cron expression runs
+    // at its next time; otherwise an entry moved from daily to hourly would
+    // still wait out the rest of its day. Null or '' clears the cron.
+    const rescheduled = (editable.intervalSeconds !== undefined && editable.intervalSeconds !== entry.intervalSeconds)
+      || ('cron' in editable && (editable.cron || undefined) !== entry.cron);
     Object.assign(entry, editable);
-    if (rescheduled) entry.nextRunAt = Date.now() + (entry.intervalSeconds ?? 60) * 1000;
+    if (!entry.cron) delete entry.cron;
+    else entry.intervalSeconds = null;
+    if (rescheduled) entry.nextRunAt = firstRun(entry, undefined, Date.now());
     await this.save();
     return entry;
   }

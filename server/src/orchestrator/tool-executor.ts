@@ -11,6 +11,7 @@ import { MeetingRoom } from './meeting-room.js';
 import { MeetingStore } from './meeting-store.js';
 import { buildMessage } from './orchestrator-utils.js';
 import { EmailAllowlistStore } from '../api/email-allowlist-store.js';
+import { repeatFromRequest, type Repeat } from '../api/agenda-store.js';
 
 // Brave search: max 1 request/second — serialise behind a queued delay chain
 let _braveQueue = Promise.resolve();
@@ -532,16 +533,18 @@ export async function executeToolCall(ctx: ToolCallContext, agentName: string, c
     }
 
     case 'schedule_action': {
-      const { label, description, intervalMinutes, delayMinutes } = call.arguments as {
-        label: string; description: string; intervalMinutes?: number; delayMinutes?: number;
+      const { label, description, intervalMinutes, cron, delayMinutes } = call.arguments as {
+        label: string; description: string; intervalMinutes?: number; cron?: string; delayMinutes?: number;
       };
       const agenda = ctx.agendaStore.store;
       if (!agenda) return 'Agenda scheduling is not available in this project.';
-      const intervalSeconds = (intervalMinutes && intervalMinutes > 0) ? Math.round(intervalMinutes * 60) : null;
+      let repeat: Repeat;
+      try { repeat = repeatFromRequest({ intervalMinutes, cron }); } catch (err) { return (err as Error).message; }
       const delaySeconds    = delayMinutes != null ? Math.round(delayMinutes * 60) : undefined;
-      const entry = await agenda.add({ agentName, label, description, intervalSeconds, delaySeconds });
+      const entry = await agenda.add({ agentName, label, description, ...repeat, delaySeconds });
       const nextStr   = new Date(entry.nextRunAt).toLocaleString();
-      const repeatStr = intervalSeconds ? ` Repeats every ${intervalMinutes} minute(s).` : ' One-off.';
+      const repeatStr = repeat.cron ? ` Repeats on cron "${repeat.cron}".`
+        : repeat.intervalSeconds ? ` Repeats every ${intervalMinutes} minute(s).` : ' One-off.';
       return `Action "${label}" scheduled (id: ${entry.id}). First run: ${nextStr}.${repeatStr}`;
     }
 
@@ -552,7 +555,7 @@ export async function executeToolCall(ctx: ToolCallContext, agentName: string, c
       if (actions.length === 0) return 'You have no scheduled actions.';
       return actions.map(e => {
         const next   = new Date(e.nextRunAt).toLocaleString();
-        const repeat = e.intervalSeconds ? `every ${Math.round(e.intervalSeconds / 60)} min` : 'once';
+        const repeat = e.cron ? `cron "${e.cron}"` : e.intervalSeconds ? `every ${Math.round(e.intervalSeconds / 60)} min` : 'once';
         return `- [${e.id}] "${e.label}" (${repeat}) — next: ${next}`;
       }).join('\n');
     }

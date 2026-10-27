@@ -2,8 +2,19 @@
 
 import { esc, fmtLastRun } from './utils.js';
 import { runNowButton, showRunOutcome } from './run-now.js';
+import { repeatPicker, repeatText } from './repeat-picker.js';
 
 let _mcpToolSchemas = null;
+let _repeat = null;
+
+/** The modal's repeat picker, made the first time it is needed. */
+function repeat() {
+  if (!_repeat) {
+    _repeat = repeatPicker();
+    document.getElementById('schedules-add-repeat')?.appendChild(_repeat.el);
+  }
+  return _repeat;
+}
 
 // ── MCP tool schema cache ─────────────────────────────────────────────────────
 
@@ -138,8 +149,7 @@ export async function fetchScheduledActions() {
 }
 
 export function buildScheduleRow(action) {
-  const intervalMins = action.intervalSeconds ? Math.round(action.intervalSeconds / 60) : null;
-  const intervalText = intervalMins ? `Every ${intervalMins} min` : 'Once';
+  const intervalText = repeatText(action);
 
   const row = document.createElement('div');
   row.className = 'schedules-row';
@@ -226,7 +236,7 @@ export async function openScheduleModal(action) {
 
   document.getElementById('schedules-add-label').value       = '';
   document.getElementById('schedules-add-description').value = '';
-  document.getElementById('schedules-add-interval').value    = '';
+  repeat().set(action ?? {});
   document.getElementById('schedules-mcp-condition').value   = '';
   document.getElementById('schedules-mcp-message').value     = '';
   document.getElementById('schedules-mcp-params').innerHTML  = '';
@@ -245,8 +255,6 @@ export async function openScheduleModal(action) {
     saveBtn.textContent  = 'Save';
     modal.dataset.editId = action.id;
     document.getElementById('schedules-add-label').value = action.label;
-    const intervalMins = action.intervalSeconds ? Math.round(action.intervalSeconds / 60) : '';
-    document.getElementById('schedules-add-interval').value = String(intervalMins);
 
     if (action.type === 'mcp_tool_call' && action.mcpToolCall) {
       document.querySelector('input[name="schedules-type"][value="mcp_tool_call"]').checked = true;
@@ -364,9 +372,9 @@ export function initSchedulesTab() {
     const editId   = modal.dataset.editId ?? '';
     const type     = document.querySelector('input[name="schedules-type"]:checked')?.value ?? 'prompt';
     const label    = document.getElementById('schedules-add-label').value.trim();
-    const intervalRaw     = document.getElementById('schedules-add-interval').value;
-    const intervalMinutes = intervalRaw ? parseInt(intervalRaw, 10) : null;
     if (!label) { alert('Label is required'); return; }
+    let when;
+    try { when = repeat().read(); } catch (err) { alert(err.message); return; }
 
     let body;
     if (type === 'mcp_tool_call') {
@@ -380,11 +388,11 @@ export function initSchedulesTab() {
       const args        = collectMcpArgs(document.getElementById('schedules-mcp-params'));
       const mcpToolCall = { serverName, toolName, args, condition, messageTemplate };
       if (agentName) mcpToolCall.personalMcpAgentName = agentName;
-      body = { label, type: 'mcp_tool_call', mcpToolCall, intervalMinutes };
+      body = { label, type: 'mcp_tool_call', mcpToolCall, ...when };
     } else {
       const description = document.getElementById('schedules-add-description').value.trim();
       if (!description) { alert('Description is required'); return; }
-      body = { label, description, intervalMinutes };
+      body = { label, description, ...when };
     }
 
     const saveBtn = document.getElementById('schedules-add-btn');

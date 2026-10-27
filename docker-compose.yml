@@ -16,6 +16,9 @@ services:
     environment:
       NODE_ENV: production
       RUNTIME_DIR: /app/runtime_data
+      # Scheduled tasks set to a time of day run in this timezone. Set TZ in
+      # .env to yours (e.g. Europe/London) or "daily at 9:00" means 9:00 UTC.
+      TZ: ${TZ:-UTC}
       # localhost in .env means the container itself here, not your machine.
       # Overrides .env; set DOCKER_OLLAMA_BASE_URL to point somewhere else.
       OLLAMA_BASE_URL: ${DOCKER_OLLAMA_BASE_URL:-http://host.docker.internal:11434/v1}

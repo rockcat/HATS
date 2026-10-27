@@ -130,3 +130,20 @@ describe('editing an entry', () => {
     expect(agenda.get(e.id)?.agentName).toBe('Rhoda');
   });
 });
+
+describe('editing an action to run at set times', () => {
+  it('carries the cron to every copy, and clearing it puts the interval back', async () => {
+    const { AgendaStore } = await import('./agenda-store.js');
+    const { propagateEdit } = await import('./agenda-sync.js');
+    const agenda = new AgendaStore(null);
+    const action = { id: 'a1', label: 'Inbox', description: 'check', intervalSeconds: 600, createdAt: '' };
+    await agenda.add({ agentName: 'Poppy', label: 'Inbox', description: 'check', intervalSeconds: 600, actionId: 'a1' });
+
+    await propagateEdit(agenda, action, { ...action, intervalSeconds: null, cron: '0 9 * * *' });
+    expect(agenda.list()[0]).toMatchObject({ cron: '0 9 * * *', intervalSeconds: null });
+
+    await propagateEdit(agenda, action, { ...action, intervalSeconds: 600 });
+    expect(agenda.list()[0]!.cron).toBeUndefined();
+    expect(agenda.list()[0]!.intervalSeconds).toBe(600);
+  });
+});

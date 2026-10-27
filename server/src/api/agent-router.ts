@@ -23,6 +23,7 @@ import { AgentStatus } from './project-manager.js';
 import { AgentDefinitionStore } from './agent-store.js';
 import { ScheduledActionStore } from './scheduled-action-store.js';
 import { propagateEdit, removeCopies, lastRunOf, isCopyOf } from './agenda-sync.js';
+import { repeatFromRequest, type Repeat } from './agenda-store.js';
 import { projectCopy, hasCopyOf, assignScheduledActions } from './project-agents.js';
 import { Task } from '../orchestrator/types.js';
 
@@ -881,6 +882,7 @@ export class AgentRouter {
         label: string;
         description?: string;
         intervalMinutes?: number;
+        cron?: string;
         type?: import('../store/team-snapshot.js').ScheduledActionType;
         mcpToolCall?: import('../store/team-snapshot.js').McpToolCallSpec;
       };
@@ -891,12 +893,13 @@ export class AgentRouter {
       } else if (!parsed.description?.trim()) {
         json(res, 400, { error: 'description is required for prompt type' }); return true;
       }
-      const intervalSeconds = (parsed.intervalMinutes && parsed.intervalMinutes > 0) ? Math.round(parsed.intervalMinutes * 60) : null;
+      let repeat: Repeat;
+      try { repeat = repeatFromRequest(parsed); } catch (err) { json(res, 400, { error: (err as Error).message }); return true; }
       const description = parsed.description?.trim() ?? `MCP: ${parsed.mcpToolCall?.toolName ?? ''}`;
       const def = await store.add({
         label: parsed.label.trim(),
         description,
-        intervalSeconds,
+        ...repeat,
         type: parsed.type,
         mcpToolCall: parsed.mcpToolCall,
       });
@@ -913,14 +916,20 @@ export class AgentRouter {
         label?: string;
         description?: string;
         intervalMinutes?: number | null;
+        cron?: string | null;
         mcpToolCall?: import('../store/team-snapshot.js').McpToolCallSpec;
       };
       const patch: Record<string, unknown> = {};
       if (parsed.label       !== undefined) patch['label']       = parsed.label.trim();
       if (parsed.description !== undefined) patch['description'] = parsed.description.trim();
       if (parsed.mcpToolCall !== undefined) patch['mcpToolCall'] = parsed.mcpToolCall;
-      if (parsed.intervalMinutes !== undefined) {
-        patch['intervalSeconds'] = (parsed.intervalMinutes && parsed.intervalMinutes > 0) ? Math.round(parsed.intervalMinutes * 60) : null;
+      // Either one changes how it repeats; sent together, the cron wins.
+      if (parsed.intervalMinutes !== undefined || parsed.cron !== undefined) {
+        try {
+          const repeat = repeatFromRequest(parsed);
+          patch['intervalSeconds'] = repeat.intervalSeconds;
+          patch['cron'] = repeat.cron;
+        } catch (err) { json(res, 400, { error: (err as Error).message }); return true; }
       }
       const before  = store.get(actionId);
       const updated = await store.update(actionId, patch as never);

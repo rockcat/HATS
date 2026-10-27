@@ -55,6 +55,8 @@ export interface ScheduledActionDef {
   label: string;
   description: string;
   intervalSeconds: number | null;
+  /** Run at these times instead of on an interval. */
+  cron?: string;
   createdAt: string;
   type?: ScheduledActionType;
   mcpToolCall?: McpToolCallSpec;

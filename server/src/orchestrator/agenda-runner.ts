@@ -1,4 +1,4 @@
-import { AgendaEntry, AgendaStore } from '../api/agenda-store.js';
+import { AgendaEntry, AgendaStore, nextRunAfter } from '../api/agenda-store.js';
 import { MCPRegistry } from '../mcp/mcp-registry.js';
 import { TeamMessage } from './types.js';
 import { buildMessage } from './orchestrator-utils.js';
@@ -26,8 +26,8 @@ export function failureUpdate(entry: AgendaEntry, message: string, now: number, 
   const failures = (entry.failures ?? 0) + 1;
   const base = { lastError: message, lastErrorAt: now, failures };
   if (failures < QUICK_RETRIES) return { ...base, nextRunAt: now + checkIntervalMs };
-  if (!entry.intervalSeconds) return { ...base, enabled: false };
-  return { ...base, nextRunAt: now + entry.intervalSeconds * 1000 };
+  const next = nextRunAfter(entry, now);
+  return next === null ? { ...base, enabled: false } : { ...base, nextRunAt: next };
 }
 
 export class AgendaRunner {
@@ -78,11 +78,8 @@ export class AgendaRunner {
         log.info(`[Agenda] Firing "${entry.label}" for ${entry.agentName}`);
         await this.fire(entry);
         const done = { lastRunAt: now, lastError: undefined, lastErrorAt: undefined, failures: 0 };
-        if (entry.intervalSeconds) {
-          await this.store.update(entry.id, { ...done, nextRunAt: now + entry.intervalSeconds * 1000 });
-        } else {
-          await this.store.update(entry.id, { ...done, enabled: false });
-        }
+        const next = nextRunAfter(entry, now);
+        await this.store.update(entry.id, next === null ? { ...done, enabled: false } : { ...done, nextRunAt: next });
       } catch (err) {
         const message = (err as Error).message;
         log.error(`[Agenda] "${entry.label}" for ${entry.agentName} failed: ${message}`);
@@ -120,7 +117,9 @@ export class AgendaRunner {
   }
 
   private async firePrompt(entry: AgendaEntry): Promise<RunOutcome> {
-    const repeatNote = entry.intervalSeconds
+    const repeatNote = entry.cron
+      ? `This task runs automatically on a schedule (cron "${entry.cron}") and has just fired. Do NOT schedule it again — just do it now.`
+      : entry.intervalSeconds
       ? `This task runs automatically every ${Math.round(entry.intervalSeconds / 60)} minute(s) and has just fired. Do NOT schedule it again — just do it now.`
       : 'This is a one-off task. Do NOT schedule it again — just do it now.';
     const content = `Do this now — ${entry.label}:\n\n${entry.description}\n\n(${repeatNote})\n\nIf there is nothing to do right now, call disengage_conversation immediately and produce no text response.`;

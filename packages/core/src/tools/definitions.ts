@@ -223,6 +223,7 @@ const SCHEDULE_ACTION: ToolDefinition = {
       label:           { type: 'string', description: 'Short name shown in the UI (e.g. "Check inbox").' },
       description:     { type: 'string', description: 'Instructions sent to you when this action fires — describe exactly what you should do.' },
       intervalMinutes: { type: 'number', description: 'Repeat every N minutes. Omit or set to 0 for a one-off action.' },
+      cron:            { type: 'string', description: 'Run at set times instead of on an interval: a 5-field cron expression "minute hour day month weekday", e.g. "0 9 * * 1-5" for 9am on weekdays. Overrides intervalMinutes.' },
       delayMinutes:    { type: 'number', description: 'Minutes from now before the first run. Defaults to the interval (or 1 minute for one-off).' },
     },
     required: ['label', 'description'],

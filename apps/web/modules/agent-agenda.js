@@ -9,17 +9,18 @@
 import { esc, fmtAgo, fmtLastRun } from './utils.js';
 import { openScheduleModal } from './schedules.js';
 import { runNowButton, showRunOutcome } from './run-now.js';
-
-function intervalText(seconds) {
-  if (!seconds) return 'Once';
-  const mins = Math.round(seconds / 60);
-  return mins >= 60 && mins % 60 === 0 ? `Every ${mins / 60} h` : `Every ${mins} min`;
-}
+import { repeatPicker, repeatText } from './repeat-picker.js';
 
 function nextText(entry) {
   if (!entry.enabled) return 'off';
   const mins = Math.round((entry.nextRunAt - Date.now()) / 60_000);
-  return mins <= 0 ? 'due now' : `next in ${mins} min`;
+  if (mins <= 0) return 'due now';
+  if (mins < 60) return `next in ${mins} min`;
+  const at = new Date(entry.nextRunAt);
+  const time = at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return at.toDateString() === new Date().toDateString()
+    ? `next at ${time}`
+    : `next ${at.toLocaleDateString([], { weekday: 'short' })} ${time}`;
 }
 
 async function patch(id, body) {
@@ -35,21 +36,23 @@ function editForm(entry, onDone) {
   form.innerHTML = `
     <input class="agenda-edit-label" value="${esc(entry.label)}" placeholder="Label">
     <textarea class="agenda-edit-desc" rows="2" placeholder="What to do">${esc(entry.description)}</textarea>
-    <label class="agenda-edit-interval">Every
-      <input type="number" min="0" value="${entry.intervalSeconds ? Math.round(entry.intervalSeconds / 60) : ''}"> min
-      <span class="agenda-hint">(blank = once)</span></label>
+    <div class="agenda-edit-repeat"></div>
     <div class="agenda-edit-btns">
       <button class="library-btn library-btn--add" data-act="save">Save</button>
       <button class="library-btn" data-act="cancel">Cancel</button>
     </div>`;
+  const repeat = repeatPicker();
+  repeat.set(entry);
+  form.querySelector('.agenda-edit-repeat').appendChild(repeat.el);
   form.querySelector('[data-act="cancel"]').addEventListener('click', () => onDone(false));
   form.querySelector('[data-act="save"]').addEventListener('click', async () => {
-    const mins = parseFloat(form.querySelector('.agenda-edit-interval input').value);
     try {
+      const { intervalMinutes, cron } = repeat.read();
       await patch(entry.id, {
         label: form.querySelector('.agenda-edit-label').value.trim() || entry.label,
         description: form.querySelector('.agenda-edit-desc').value.trim(),
-        intervalSeconds: mins > 0 ? Math.round(mins * 60) : null,
+        intervalSeconds: intervalMinutes ? Math.round(intervalMinutes * 60) : null,
+        cron,
       });
       onDone(true);
     } catch (err) { alert(err.message); }
@@ -78,7 +81,7 @@ function entryRow(entry, action, reload) {
 
   const when = document.createElement('span');
   when.className = 'schedules-row-interval';
-  when.textContent = `${intervalText(entry.intervalSeconds)} · ${nextText(entry)} · ${fmtLastRun(entry.lastRunAt)}`;
+  when.textContent = `${repeatText(entry)} · ${nextText(entry)} · ${fmtLastRun(entry.lastRunAt)}`;
   if (entry.lastRunAt) when.title = `Last run ${new Date(entry.lastRunAt).toLocaleString()}`;
 
   // The latest attempt failed (a success clears lastError).

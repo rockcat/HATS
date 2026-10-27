@@ -31,6 +31,7 @@ export class ScheduledActionStore {
     label: string;
     description: string;
     intervalSeconds: number | null;
+    cron?: string;
     type?: import('../store/team-snapshot.js').ScheduledActionType;
     mcpToolCall?: import('../store/team-snapshot.js').McpToolCallSpec;
   }): Promise<ScheduledActionDef> {
@@ -39,6 +40,7 @@ export class ScheduledActionStore {
       label:           data.label,
       description:     data.description,
       intervalSeconds: data.intervalSeconds,
+      ...(data.cron        && { cron: data.cron }),
       createdAt:       new Date().toISOString(),
       ...(data.type        && { type: data.type }),
       ...(data.mcpToolCall && { mcpToolCall: data.mcpToolCall }),

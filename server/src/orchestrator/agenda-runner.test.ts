@@ -163,3 +163,52 @@ describe('running an entry now, to test it', () => {
     await expect(new AgendaRunner(new AgendaStore(null), async () => {}).runNow('nope')).rejects.toThrow(/No such/);
   });
 });
+
+describe('a task that runs at set times', () => {
+  const at = (h: number, mi = 0, dayOffset = 0) => {
+    const d = new Date();
+    d.setDate(d.getDate() + dayOffset);
+    d.setHours(h, mi, 0, 0);
+    return d.getTime();
+  };
+
+  it('waits for its first time rather than running after a delay', async () => {
+    const store = new AgendaStore(null);
+    const e = await store.add({ agentName: 'Poppy', label: 'Morning', description: 'inbox', intervalSeconds: 600, cron: '0 3 * * *' });
+    expect(e.intervalSeconds).toBeNull();
+    expect(new Date(e.nextRunAt).getHours()).toBe(3);
+    expect(e.nextRunAt).toBeGreaterThan(Date.now());
+  });
+
+  it('is next due at its following time once it has run', async () => {
+    const store = new AgendaStore(null);
+    const e = await store.add({ agentName: 'Poppy', label: 'Morning', description: 'inbox', intervalSeconds: null, cron: '0 3 * * *' });
+    await new AgendaRunner(store, async () => {}).tick(true);
+    const after = store.get(e.id)!;
+    expect(after.enabled).toBe(true);
+    expect(after.nextRunAt).toBe(after.lastRunAt! < at(3) ? at(3) : at(3, 0, 1));
+  });
+
+  it('moves to its next time when switched from an interval to cron, and back', async () => {
+    const store = new AgendaStore(null);
+    const e = await store.add({ agentName: 'Poppy', label: 'x', description: 'y', intervalSeconds: 600 });
+    await store.update(e.id, { cron: '0 3 * * *' });
+    expect(store.get(e.id)).toMatchObject({ cron: '0 3 * * *', intervalSeconds: null });
+    expect(new Date(store.get(e.id)!.nextRunAt).getHours()).toBe(3);
+
+    const before = Date.now();
+    await store.update(e.id, { cron: null as unknown as string, intervalSeconds: 600 });
+    expect(store.get(e.id)!.cron).toBeUndefined();
+    expect(store.get(e.id)!.nextRunAt).toBeGreaterThanOrEqual(before + 600_000);
+  });
+});
+
+describe('the repeat a request asks for', () => {
+  it('takes a cron over an interval, and refuses a bad one', async () => {
+    const { repeatFromRequest } = await import('../api/agenda-store.js');
+    expect(repeatFromRequest({ intervalMinutes: 5, cron: ' 0 9 * * 1-5 ' })).toEqual({ intervalSeconds: null, cron: '0 9 * * 1-5' });
+    expect(repeatFromRequest({ intervalMinutes: 5, cron: null })).toEqual({ intervalSeconds: 300 });
+    expect(repeatFromRequest({})).toEqual({ intervalSeconds: null });
+    expect(() => repeatFromRequest({ cron: '0 25 * * *' })).toThrow(/Bad cron expression: .*hour/);
+  });
+});

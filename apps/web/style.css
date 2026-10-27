@@ -4369,8 +4369,6 @@ body.has-expanded-panel main > section:not(.panel--expanded) {
   background: var(--surface-2); color: var(--text); border: 1px solid var(--border);
   border-radius: 4px; padding: 4px 6px; font: inherit;
 }
-.agenda-edit-interval { display: flex; align-items: center; gap: 6px; color: var(--text-muted); }
-.agenda-edit-interval input { width: 70px; }
 .agenda-hint { font-size: 11px; }
 .agenda-edit-btns { display: flex; gap: 6px; }
 
@@ -4408,7 +4406,12 @@ body.has-expanded-panel main > section:not(.panel--expanded) {
   resize: vertical; font-family: inherit; box-sizing: border-box;
 }
 .schedules-add-footer { display: flex; gap: 6px; align-items: center; }
-.schedules-interval { flex: 1; }
+.schedules-add-repeat { flex: 1; min-width: 0; }
+.repeat-picker { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12px; }
+.repeat-picker [hidden] { display: none !important; }
+.repeat-picker .schedules-input { width: auto; }
+.repeat-minutes { width: 70px !important; }
+.repeat-cron { flex: 1; min-width: 180px; font-family: monospace; }
 .schedules-add-btn {
   padding: 5px 12px; border-radius: 4px; border: 1px solid var(--accent);
   background: transparent; color: var(--accent); font-size: 12px; cursor: pointer; white-space: nowrap;

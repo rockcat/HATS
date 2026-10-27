@@ -39,6 +39,8 @@ import { EmbodimentRouter } from '../embodiment/embodiment-router.js';
 import { DeviceToolBridge } from '../device/device-tool-bridge.js';
 import { canonicalModel, configFromEnv } from '../people/embedder.js';
 import { keepDeviceImage } from '../device/image-store.js';
+import { repeatFromRequest, type Repeat } from './agenda-store.js';
+import { cronError } from '../../../packages/core/src/schedule/cron.js';
 
 const __dirname  = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(__dirname, '..', '..', '..', 'apps', 'web');
@@ -663,15 +665,16 @@ export class APIServer {
       return;
     }
     if (pathname === '/api/agenda' && method === 'POST') {
-      const body = JSON.parse(await readBody(req)) as { agentName: string; label: string; description: string; intervalMinutes?: number; delayMinutes?: number };
+      const body = JSON.parse(await readBody(req)) as { agentName: string; label: string; description: string; intervalMinutes?: number; cron?: string; delayMinutes?: number };
       const store = this.orchestrator.getAgendaStore();
       if (!store) { this.json(res, 503, { error: 'Agenda store not ready' }); return; }
       if (!body.agentName || !body.label || !body.description) {
         this.json(res, 400, { error: 'agentName, label, and description are required' }); return;
       }
-      const intervalSeconds = (body.intervalMinutes && body.intervalMinutes > 0) ? Math.round(body.intervalMinutes * 60) : null;
+      let repeat: Repeat;
+      try { repeat = repeatFromRequest(body); } catch (err) { this.json(res, 400, { error: (err as Error).message }); return; }
       const delaySeconds    = body.delayMinutes != null ? Math.round(body.delayMinutes * 60) : undefined;
-      const entry = await store.add({ agentName: body.agentName, label: body.label, description: body.description, intervalSeconds, delaySeconds });
+      const entry = await store.add({ agentName: body.agentName, label: body.label, description: body.description, ...repeat, delaySeconds });
       this.json(res, 201, entry);
       return;
     }
@@ -695,6 +698,8 @@ export class APIServer {
       const body  = JSON.parse(await readBody(req)) as Partial<import('./agenda-store.js').AgendaEntry>;
       const store = this.orchestrator.getAgendaStore();
       if (!store) { this.json(res, 503, { error: 'Agenda store not ready' }); return; }
+      const badCron = body.cron?.trim() ? cronError(body.cron.trim()) : null;
+      if (badCron) { this.json(res, 400, { error: `Bad cron expression: ${badCron}` }); return; }
       const updated = await store.update(id, body);
       this.json(res, updated ? 200 : 404, updated ?? { error: 'Not found' });
       return;
