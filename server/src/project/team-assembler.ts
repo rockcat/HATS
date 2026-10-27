@@ -14,6 +14,7 @@ import { HatType } from '../../../packages/core/src/hats/types.js';
 import { getRandomPersona } from '../../../packages/core/src/hats/personas.js';
 import { toAgentConfig } from '../embodiment/agent-mapper.js';
 import { log } from '../../../packages/core/src/logger.js';
+import { forThisMachine } from '../../../packages/core/src/mcp/saved-config.js';
 
 /**
  * Register every enabled agent from a project definition.
@@ -42,6 +43,18 @@ export function assembleFromDefinition(
   return enabled.length;
 }
 
+/**
+ * A saved shared server, made to run here. It carries whatever was right when
+ * it was written — the launcher, our own servers' paths, the board, the keys —
+ * and any of those may have changed or come from another machine.
+ */
+export function savedServerForHere(saved: MCPServerDef, kanbanFile: string): MCPServerDef {
+  const config = forThisMachine(saved.config);
+  const builtinServer = repointBuiltinServer(saved.name, config,
+    saved.name === 'kanban' ? kanbanFile : undefined);
+  return { ...saved, config: builtinServer ? { ...config, ...builtinServer } as MCPServerDef['config'] : config };
+}
+
 /** Attach the shared MCP servers a definition asks for, repointing kanban at this project's board. */
 export async function attachDefinitionMcpServers(
   orchestrator: TeamOrchestrator,
@@ -49,12 +62,7 @@ export async function attachDefinitionMcpServers(
   kanbanFile: string,
 ): Promise<void> {
   for (const server of definition.mcpServers ?? []) {
-    const def = { name: server.name, config: { ...server.config } } as MCPServerDef;
-    // A saved definition carries whatever path was right when it was
-    // written, and ours move. Repoint it rather than trusting it.
-    const builtinServer = repointBuiltinServer(def.name, def.config,
-      def.name === 'kanban' ? kanbanFile : undefined);
-    if (builtinServer) Object.assign(def.config, builtinServer);
+    const def = savedServerForHere({ name: server.name, config: server.config } as MCPServerDef, kanbanFile);
     await orchestrator.addMCPServer(def).catch((err: Error) =>
       log.warn(`[Team] MCP server "${def.name}" failed to start: ${err.message}`));
   }

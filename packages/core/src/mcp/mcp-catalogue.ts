@@ -2,6 +2,7 @@ import os from 'os';
 import path from 'path';
 import { MCPServerConfig, interpolateHeaders } from './config.js';
 import { expandBuiltin } from './builtin-server.js';
+import { platformCommand } from './saved-config.js';
 
 const expandTilde = (s: string) =>
   s.startsWith('~/') ? path.join(os.homedir(), s.slice(2)) : s;
@@ -115,14 +116,9 @@ export function resolveConfig(config: MCPServerConfig, projectDir?: string | nul
     resolved[k] = expandPlaceholders(raw);
   }
 
-  let command = config.command;
-  if (process.platform === 'win32' && (command === 'npx' || command === 'npm')) {
-    command = command + '.cmd';
-  }
-
   const resolvedConfig = {
     ...config,
-    command,
+    command: platformCommand(config.command),
     args: config.args?.map(a => expandPlaceholders(expandTilde(a))),
     ...(Object.keys(resolved).length > 0 ? { env: resolved } : {}),
   };
@@ -172,13 +168,9 @@ export function resolvePersonalConfig(
     ...Object.fromEntries(declared),
     ...credentials,
   };
-  let command = entry.config.command;
-  if (process.platform === 'win32' && (command === 'npx' || command === 'npm')) {
-    command = command + '.cmd';
-  }
   return {
     ...entry.config,
-    command,
+    command: platformCommand(entry.config.command),
     args: entry.config.args?.map((a) => expandAgentDir(expandTilde(a))),
     env,
   };

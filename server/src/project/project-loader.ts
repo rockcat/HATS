@@ -16,8 +16,7 @@ import type { ProjectLoader } from '../api/api-server.js';
 import type { AgentDefinitionStore } from '../api/agent-store.js';
 import type { ProjectDefinition } from '../../../packages/contracts/src/types.js';
 import type { ProjectServerClient } from '../../../packages/clients/src/project-server-client.js';
-import { repointBuiltinServer } from '../../../packages/core/src/mcp/builtin-server.js';
-import { assembleDefaultTeam, assembleFromDefinition, attachDefinitionMcpServers } from './team-assembler.js';
+import { assembleDefaultTeam, assembleFromDefinition, attachDefinitionMcpServers, savedServerForHere } from './team-assembler.js';
 
 export interface ProjectSource {
   /** Null when the project is local, or the Project Server does not know it. */
@@ -77,13 +76,8 @@ export function makeProjectLoader(deps: ProjectLoaderDeps): ProjectLoader {
     if (existsSync(stateFile)) {
       console.log(`[Team] Restoring conversation state from ${stateFile}`);
       const mcpDefs = await orchestrator.loadState(stateFile, providerFactory);
-      for (const def of mcpDefs) {
-        // Saved state carries the launcher that was right when it was
-        // written, as well as a board path that may be from another
-        // checkout. Both are repointed.
-        const builtinServer = repointBuiltinServer(def.name, def.config,
-          def.name === 'kanban' ? kanbanFile : undefined);
-        if (builtinServer) Object.assign(def.config, builtinServer);
+      for (const saved of mcpDefs) {
+        const def = savedServerForHere(saved, kanbanFile);
 
         // One server failing must not stop the runner starting. An expired
         // credential on an optional MCP — a Google token nobody has refreshed
