@@ -48,8 +48,18 @@ export async function handleKanbanCall(
     }
 
     case 'get_ticket': {
-      const ticket = await store.getTicket(args['id'] as string);
-      if (!ticket || ticket.column === 'closed') throw new Error(`Ticket "${args['id']}" not found`);
+      // Models reach for ticket_id as often as id; answering "undefined not
+      // found" sends them round again with the same mistake.
+      const id = (args['id'] ?? args['ticket_id'] ?? args['ticket']) as string | undefined;
+      if (!id) throw new Error('id is required, e.g. { "id": "TKT-001" }');
+      const ticket = await store.getTicket(id);
+      if (!ticket) throw new Error(`Ticket "${id}" not found`);
+      // Closed tickets stay off the board, but "not found" for one that
+      // existed reads as a fault, and agents retried it.
+      if (ticket.column === 'closed') {
+        return `${ticket.id} "${ticket.title}" is closed (${ticket.closedReason ?? 'completed'}). `
+          + 'There is nothing left to do on it.';
+      }
       return ticket;
     }
 

@@ -20,15 +20,17 @@ export interface KanbanTool {
 /**
  * The ones worth spending prompt on.
  *
- * Reading the board and moving a ticket across it are the hot path, and an
- * agent that has to go looking for them will not bother. The other seven —
+ * Reading the board, reading a ticket and moving it across are the hot path,
+ * and an agent that has to go looking for them will not bother — get_board
+ * and list_tickets give titles, so the work itself is in get_ticket. The
+ * other six —
  * blockers, deletion, reassignment — are occasional, and tool search finds
  * them when they are wanted. As an MCP server all eleven were namespaced
  * into the searchable pool, which made that choice by accident rather than
  * on purpose.
  */
 export const UPFRONT_KANBAN_TOOLS = [
-  'get_board', 'list_tickets', 'create_ticket', 'move_ticket',
+  'get_board', 'list_tickets', 'get_ticket', 'create_ticket', 'move_ticket',
 ] as const;
 
 export const kanbanTools = (): KanbanTool[] => [
@@ -56,7 +58,7 @@ export const kanbanTools = (): KanbanTool[] => [
   },
   {
     name: 'get_ticket',
-    description: 'Get full details of a ticket including comments.',
+    description: 'Get full details of a ticket — its description, comments and blockers. Use this to read the work itself; the board and list only give titles.',
     inputSchema: {
       type: 'object',
       properties: {

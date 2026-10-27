@@ -96,14 +96,14 @@ describe('what the agent is offered', () => {
 describe('which tools are worth prompt space', () => {
   it('puts the hot path upfront', () => {
     expect([...UPFRONT_KANBAN_TOOLS].sort())
-      .toEqual(['create_ticket', 'get_board', 'list_tickets', 'move_ticket']);
+      .toEqual(['create_ticket', 'get_board', 'get_ticket', 'list_tickets', 'move_ticket']);
   });
 
   it('leaves the occasional ones to tool search', () => {
     const searchable = kanbanTools()
       .map((t) => t.name)
       .filter((n) => !(UPFRONT_KANBAN_TOOLS as readonly string[]).includes(n));
-    expect(searchable).toHaveLength(7);
+    expect(searchable).toHaveLength(6);
     expect(searchable).toContain('add_blocker');
     expect(searchable).toContain('delete_ticket');
   });
@@ -124,6 +124,21 @@ describe('running them', () => {
 
     const board = await call('get_board') as Record<string, { count: number }>;
     expect(board['backlog']?.count).toBe(1);
+  });
+
+  it('reads a ticket by ticket_id as well as id', async () => {
+    const id = await makeTicket('Read me');
+    for (const key of ['id', 'ticket_id', 'ticket']) {
+      expect((await call('get_ticket', { [key]: id }) as { id: string }).id, key).toBe(id);
+    }
+    await expect(call('get_ticket', {})).rejects.toThrow(/id is required/);
+  });
+
+  it('says a closed ticket is closed, rather than not found', async () => {
+    const id = await makeTicket('Done already');
+    await call('move_ticket', { id, column: 'closed', closed_reason: 'completed' });
+    expect(await call('get_ticket', { id })).toMatch(/is closed \(completed\)/);
+    await expect(call('get_ticket', { id: 'TKT-999' })).rejects.toThrow(/not found/);
   });
 
   it('moves a ticket across columns', async () => {
