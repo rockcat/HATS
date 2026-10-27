@@ -6,7 +6,7 @@ import { ExternalAgent, EXTERNAL_PROVIDER } from '../agent/external-agent.js';
 import { IAgent } from '../agent/iagent.js';
 import { AgentConfig } from '../agent/types.js';
 import { HatType } from '../../../packages/core/src/hats/types.js';
-import { getToolsForHat } from '../tools/definitions.js';
+import { getToolsForHat } from '../../../packages/core/src/tools/definitions.js';
 import { AIProvider } from '../providers/types.js';
 import { EventStore } from '../store/event-store.js';
 import { MCPRegistry } from '../mcp/mcp-registry.js';

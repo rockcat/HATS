@@ -4,7 +4,7 @@ import { HatType } from '../../../packages/core/src/hats/types.js';
 import { mergeHatDefinitions } from '../../../packages/core/src/hats/definitions.js';
 import { generateSystemPrompt } from '../../../packages/core/src/prompt/generator.js';
 import { AIProvider, CompletionRequest, Message, ProviderError, ToolCall, type ToolOutcome } from '../providers/types.js';
-import { getToolsForHat, getAllToolsForHat } from '../tools/definitions.js';
+import { getToolsForHat, getAllToolsForHat } from '../../../packages/core/src/tools/definitions.js';
 import { buildToolRegistry, searchTools, getTool, ToolRegistry } from '../tools/tool-search.js';
 import { TeamMessage } from '../orchestrator/types.js';
 import { AgentConfig, AgentMessage, AgentState, AgentEvent, ToolExecutor, ResponseHandler } from './types.js';

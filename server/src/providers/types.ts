@@ -1,17 +1,6 @@
-export interface ToolDefinition {
-  name: string;
-  description: string;
-  parameters: {
-    type: 'object';
-    properties: Record<string, {
-      type: string;
-      description: string;
-      enum?: string[];
-      items?: { type: string };
-    }>;
-    required?: string[];
-  };
-}
+import type { ToolDefinition } from '../../../packages/core/src/tools/types.js';
+
+export type { ToolDefinition };
 
 export interface ToolCall {
   id: string;

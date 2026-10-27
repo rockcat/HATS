@@ -14,7 +14,7 @@ import { SPECIALISATION_DIRECTIVES, generateSystemPrompt } from '../../../packag
 import { mergeHatDefinitions } from '../../../packages/core/src/hats/definitions.js';
 import { personasByHat } from '../../../packages/core/src/hats/personas.js';
 import { getPricingTable, FREE_PROVIDERS, reloadPricingFromFile } from '../providers/pricing.js';
-import { getToolsForHat } from '../tools/definitions.js';
+import { getToolsForHat } from '../../../packages/core/src/tools/definitions.js';
 import { AnthropicProvider } from '../providers/anthropic.js';
 import { makeProvider, KNOWN_PROVIDERS, probeLocalLLM, getCachedModels, getModelCacheEntry, clearModelCache } from './providers.js';
 import { EXTERNAL_PROVIDER } from '../agent/external-agent.js';

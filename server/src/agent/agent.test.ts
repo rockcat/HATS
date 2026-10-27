@@ -5,7 +5,7 @@ import { HatType } from '../../../packages/core/src/hats/types.js';
 import { MockProvider } from '../providers/mock.js';
 import { TeamMessage } from '../orchestrator/types.js';
 import { searchTools, getTool, buildToolRegistry } from '../tools/tool-search.js';
-import { getAllToolsForHat, SEARCH_TOOLS, GET_TOOL } from '../tools/definitions.js';
+import { getAllToolsForHat, SEARCH_TOOLS, GET_TOOL } from '../../../packages/core/src/tools/definitions.js';
 import { splitToolSet } from '../tools/tool-exposure.js';
 
 function makeAgent(overrides: Partial<ConstructorParameters<typeof Agent>[0]> = {}): Agent {
