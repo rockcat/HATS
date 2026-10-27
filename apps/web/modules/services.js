@@ -5,9 +5,6 @@
 
 const POLL_MS = 15_000;
 
-/** The latest statuses, for other modules that want to know what is up. */
-let _latest = [];
-
 /**
  * A service URL the browser can use. Inside Docker the runner reaches the
  * host as host.docker.internal, which the browser may not resolve — the
@@ -21,13 +18,6 @@ export function browserUrl(url, here = window.location) {
   } catch {
     return null;
   }
-}
-
-/** A service's page, if it is connected and has one; fetches when nothing is known yet. */
-export async function openableService(id) {
-  if (!_latest.length) await refresh(document.getElementById('service-status'));
-  const s = _latest.find(x => x.id === id);
-  return s?.connected && s.openUrl ? browserUrl(s.openUrl) : null;
 }
 
 function describe(s) {
@@ -68,8 +58,7 @@ async function refresh(container) {
   try {
     const r = await fetch('/api/services');
     if (!r.ok) return; // signed out — keep whatever was last shown
-    _latest = await r.json();
-    if (container) render(container, _latest);
+    render(container, await r.json());
   } catch {
     // The runner itself is unreachable; the connection dot already says so.
   }

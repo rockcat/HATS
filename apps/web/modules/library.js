@@ -1,22 +1,12 @@
 // ── Agent Library tab ─────────────────────────────────────────────────────────
 
 import { esc } from './utils.js';
-import { openableService } from './services.js';
 
 // Injected to break library ↔ add-agent circular dep.
 let _openLibraryEdit = () => {};
-let _openAddAgent    = () => {};
 
-export function initLibraryTab({ openLibraryEdit, openAddAgent }) {
+export function initLibraryTab({ openLibraryEdit }) {
   _openLibraryEdit = openLibraryEdit;
-  _openAddAgent    = openAddAgent ?? _openAddAgent;
-  // New templates belong in the Agent Library, so open it when it is there;
-  // without it, fall back to the runner's own Add Agent form.
-  document.getElementById('library-new-agent-btn')?.addEventListener('click', async () => {
-    const libraryPage = await openableService('agent-library');
-    if (libraryPage) window.open(libraryPage, '_blank', 'noopener');
-    else _openAddAgent();
-  });
 }
 
 export async function fetchGlobalAgents() {
