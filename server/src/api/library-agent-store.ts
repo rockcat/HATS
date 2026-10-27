@@ -31,6 +31,9 @@ export function templateToDefinition(template: AgentTemplate, secrets: LocalAgen
     providerName: template.model.provider,
     scheduledActionIds: template.scheduledActionIds ?? [],
   };
+  // Without it an external agent such as Claude Code comes back as an
+  // ordinary one on a provider called "external", which runs nothing.
+  if (template.externalEndpoint) def.externalEndpoint = template.externalEndpoint as AgentDefinition['externalEndpoint'];
   if (template.tools?.enabledMcpServers) def.enabledMcpServers = template.tools.enabledMcpServers;
   if (template.tools?.disabledPersonalMcpServers) def.disabledPersonalMcpServers = template.tools.disabledPersonalMcpServers;
   if (template.limits?.maxContextTokens !== undefined) def.maxContextTokens = template.limits.maxContextTokens;
@@ -63,6 +66,7 @@ function definitionToTemplateInput(def: AgentDefinition) {
     hats: def.hatType as unknown as HatTypeName[],
     identity: { ...identity, visualDescription: identity.visualDescription || 'a focused, capable team member' },
     model: { provider: def.providerName as ProviderName, model: def.model },
+    ...(def.externalEndpoint && { externalEndpoint: def.externalEndpoint as AgentTemplate['externalEndpoint'] }),
     ...(Object.keys(limits).length > 0 && { limits }),
     ...(Object.keys(tools).length > 0 && { tools }),
     scheduledActionIds: def.scheduledActionIds ?? [],
@@ -136,11 +140,16 @@ export class LibraryAgentStore implements AgentDefinitionStore {
     const secrets = extractSecrets(def);
     const input = definitionToTemplateInput(def);
 
+    // A new agent that brings its own id keeps it. The built-in Claude Code is
+    // found again by its id at every start; given a fresh one by the library
+    // it was never found, and each start added another.
     let saved: AgentTemplate | undefined;
     try {
-      saved = def.id && this.templates.has(def.id)
-        ? await this.serialised(def.id, () => this.client.updateTemplate(def.id!, input))
-        : await this.client.createTemplate(input);
+      saved = !def.id
+        ? await this.client.createTemplate(input)
+        : this.templates.has(def.id)
+          ? await this.serialised(def.id, () => this.client.updateTemplate(def.id!, input))
+          : await this.serialised(def.id, () => this.client.putTemplate(def.id!, input));
     } catch (err) {
       log.warn(`[AgentLibrary] could not save "${def.identity.name}": ${(err as Error).message}`);
     }

@@ -3,6 +3,7 @@ import { mkdtemp } from 'fs/promises';
 import { tmpdir } from 'os';
 import * as path from 'path';
 import { LibraryAgentStore } from './library-agent-store.js';
+import { seedBuiltIns, BUILTIN_CLAUDE_CODE_ID } from '../store/built-in-agents.js';
 import type { AgentLibraryClient } from '../../../packages/clients/src/agent-library-client.js';
 import type { AgentTemplate } from '../../../packages/contracts/src/types.js';
 
@@ -55,5 +56,49 @@ describe('saving one template twice at once', () => {
     ]);
     expect(seen.maxOverlap).toBe(1);
     expect(seen.writes.at(-1)).toEqual(['second']);
+  });
+});
+
+/** A library that hands out its own ids on create, as the real one does. */
+function memoryLibrary() {
+  const templates = new Map<string, AgentTemplate>();
+  let next = 0;
+  const save = (id: string, input: Partial<AgentTemplate>) => {
+    const template = { ...poppy, ...input, id, revision: 1 } as AgentTemplate;
+    templates.set(id, template);
+    return template;
+  };
+  const client = {
+    baseUrl: 'http://library',
+    listTemplates: async () => [...templates.values()],
+    createTemplate: async (input: Partial<AgentTemplate>) => save(`generated-${++next}`, input),
+    putTemplate: async (id: string, input: Partial<AgentTemplate>) => save(id, input),
+    updateTemplate: async (id: string, input: Partial<AgentTemplate>) => save(id, { ...templates.get(id), ...input }),
+  } as unknown as AgentLibraryClient;
+  return { client, templates };
+}
+
+describe('the built-in Claude Code agent', () => {
+  it('is added once, however often the runner starts', async () => {
+    const { client, templates } = memoryLibrary();
+    for (let start = 0; start < 3; start++) await seedBuiltIns(await storeFor(client));
+
+    expect([...templates.values()].filter((t) => t.name === 'Claude Code')).toHaveLength(1);
+    expect(templates.has(BUILTIN_CLAUDE_CODE_ID)).toBe(true);
+  });
+
+  it('keeps the command that runs it', async () => {
+    const { client } = memoryLibrary();
+    await seedBuiltIns(await storeFor(client));
+
+    const again = await storeFor(client);
+    expect(again.get(BUILTIN_CLAUDE_CODE_ID)?.externalEndpoint).toMatchObject({ mode: 'subprocess', command: 'claude' });
+  });
+
+  it('still lets the library choose the id of an agent that brings none', async () => {
+    const { client } = memoryLibrary();
+    const store = await storeFor(client);
+    const saved = await store.addOrUpdate({ identity: { name: 'New', visualDescription: 'x' }, hatType: [], model: 'm', providerName: 'anthropic', scheduledActionIds: [] });
+    expect(saved.id).toMatch(/^generated-/);
   });
 });
