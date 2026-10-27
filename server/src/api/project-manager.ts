@@ -11,6 +11,8 @@ import { log } from '../../../packages/core/src/logger.js';
 
 export interface AgentStatus {
   id?: string; name: string; hatType: string[]; state: string; activity: string;
+  /** The library template this agent was copied from. */
+  templateId?: string;
   talkingTo?: string; model?: string; provider?: string;
   specialisation?: string; visualDescription?: string; backstory?: string;
   email?: string; avatar?: string; voice?: string; speakerName?: string; enabledMcpServers?: string[];

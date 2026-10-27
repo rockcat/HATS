@@ -15,7 +15,8 @@ export async function fetchGlobalAgents() {
       fetch('/api/global-agents').then(r => r.json()),
       fetch('/api/agents').then(r => r.json()),
     ]);
-    renderGlobalAgents(globalAgents, new Set(projectAgents.map(a => a.id ?? a.name)));
+    // A project's agent is a copy that points back at its template.
+    renderGlobalAgents(globalAgents, new Set(projectAgents.map(a => a.templateId ?? a.id ?? a.name)));
   } catch { /* ignore */ }
 }
 
@@ -35,7 +36,7 @@ function renderGlobalAgents(agents, projectIds) {
     const hats   = (agent.hatType ?? []).filter(h => h !== 'none').map(h => h.charAt(0).toUpperCase() + h.slice(1)).join('+') || 'No Hat';
     const active = projectIds.has(agent.id);
     return `
-      <div class="library-agent-row${active ? ' library-agent-row--active' : ''}" data-agent-id="${agent.id}" style="cursor:pointer" title="Click to edit">
+      <div class="library-agent-row${active ? ' library-agent-row--active' : ''}" data-agent-id="${agent.id}" style="cursor:pointer" title="Click to edit the library template — agents already in projects keep their own settings">
         <div class="library-agent-body" style="flex:1;min-width:0">
           <div class="library-agent-name">${esc(agent.identity?.name ?? 'Unnamed')}</div>
           <div class="library-agent-meta">${esc(hats)} · ${esc(agent.model ?? '')}</div>

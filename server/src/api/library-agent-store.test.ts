@@ -43,30 +43,17 @@ async function storeFor(client: AgentLibraryClient) {
   return store;
 }
 
-describe('saving an agent while a state save is running', () => {
-  it('never has two writes to one template in flight', async () => {
+describe('saving one template twice at once', () => {
+  it('never has two writes to one template in flight, and the last one wins', async () => {
     const { client, seen } = slowLibrary(poppy);
     const store = await storeFor(client);
     const def = store.get('poppy')!;
 
-    // The background state save and the editor's save, at the same moment.
     await Promise.all([
-      store.syncRunningAgent(def),
-      store.addOrUpdate({ ...def, scheduledActionIds: ['new'] }),
+      store.addOrUpdate({ ...def, scheduledActionIds: ['first'] }),
+      store.addOrUpdate({ ...def, scheduledActionIds: ['second'] }),
     ]);
     expect(seen.maxOverlap).toBe(1);
-  });
-
-  it('does not write the old assignments back over a newer save', async () => {
-    const { client, seen } = slowLibrary(poppy);
-    const store = await storeFor(client);
-    const running = store.get('poppy')!;
-
-    await store.syncRunningAgent(running);                                   // agent is running
-    await store.addOrUpdate({ ...running, scheduledActionIds: ['new'] });   // ticked in the editor
-    await store.syncRunningAgent({ ...running, scheduledActionIds: ['old'] }); // next autosave, stale copy
-
-    expect(seen.writes.at(-1)).toEqual(['new']);
-    expect(store.get('poppy')!.scheduledActionIds).toEqual(['new']);
+    expect(seen.writes.at(-1)).toEqual(['second']);
   });
 });

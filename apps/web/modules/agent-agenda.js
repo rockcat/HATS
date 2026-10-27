@@ -116,6 +116,30 @@ function entryRow(entry, action, reload) {
   return row;
 }
 
+/**
+ * Assign another global action to this agent, in this project only — the
+ * library template's own assignments are where a new copy starts, not a link.
+ */
+function assignPicker(name, entries, actions, reload) {
+  const assigned = entries.flatMap(e => e.actionId ? [e.actionId] : []);
+  const free = actions.filter(a => !assigned.includes(a.id));
+  if (!free.length) return null;
+  const sel = document.createElement('select');
+  sel.className = 'agenda-assign';
+  sel.innerHTML = '<option value="">+ Assign a scheduled action…</option>'
+    + free.map(a => `<option value="${esc(a.id)}">${esc(a.label)}</option>`).join('');
+  sel.addEventListener('change', async () => {
+    if (!sel.value) return;
+    sel.disabled = true;
+    await fetch(`/api/agents/${encodeURIComponent(name)}/scheduled-actions`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ scheduledActionIds: [...assigned, sel.value] }),
+    }).catch(() => {});
+    reload();
+  });
+  return sel;
+}
+
 async function loadAgenda(name, el) {
   el.innerHTML = '<p class="memory-empty">Loading…</p>';
   try {
@@ -124,12 +148,11 @@ async function loadAgenda(name, el) {
       fetch('/api/scheduled-actions').then(r => r.json()).catch(() => []),
     ]);
     const byId = new Map(actions.map(a => [a.id, a]));
-    el.innerHTML = '';
-    if (!entries.length) {
-      el.innerHTML = `<p class="memory-empty">${esc(name)} has nothing scheduled.</p>`;
-      return;
-    }
-    for (const e of entries) el.appendChild(entryRow(e, e.actionId ? byId.get(e.actionId) : undefined, () => loadAgenda(name, el)));
+    const reload = () => loadAgenda(name, el);
+    el.innerHTML = entries.length ? '' : `<p class="memory-empty">${esc(name)} has nothing scheduled.</p>`;
+    for (const e of entries) el.appendChild(entryRow(e, e.actionId ? byId.get(e.actionId) : undefined, reload));
+    const picker = assignPicker(name, entries, actions, reload);
+    if (picker) el.appendChild(picker);
   } catch {
     el.innerHTML = '<p class="memory-empty">Failed to load.</p>';
   }

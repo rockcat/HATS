@@ -26,6 +26,8 @@ export interface HistoryEntry {
 // Global agent definition (config only — no history)
 export interface AgentDefinition {
   id: string;
+  /** The library template a project's agent was copied from, when there is one. */
+  templateId?: string;
   identity: AgentIdentity;
   hatType: HatType[];
   model: string;
@@ -82,6 +84,13 @@ export interface TeamSnapshotV2 {
   savedAt: string;
   humanName: string;
   agentIds: string[];
+  /**
+   * Each agent's config as it is in this project, keyed by agent id. An agent
+   * starts as a copy of its library template and is tailored from there, so
+   * this, not the library, is what a restore builds it from. Older snapshots
+   * lack it and fall back to the store.
+   */
+  agents?: Record<string, AgentDefinition>;
   /** @deprecated single 'general' thread only — use agentThreads when present */
   agentHistories: Record<string, HistoryEntry[]>;
   /** All threads keyed by agentId → threadKey → messages */

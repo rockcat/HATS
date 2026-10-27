@@ -22,7 +22,8 @@ import { SCHEDULED_THREAD } from '../agent/agent.js';
 import { AgentStatus } from './project-manager.js';
 import { AgentDefinitionStore } from './agent-store.js';
 import { ScheduledActionStore } from './scheduled-action-store.js';
-import { planAssignment, applyAssignment, propagateEdit, removeCopies, lastRunOf } from './agenda-sync.js';
+import { propagateEdit, removeCopies, lastRunOf } from './agenda-sync.js';
+import { projectCopy, hasCopyOf, assignScheduledActions } from './project-agents.js';
 import { Task } from '../orchestrator/types.js';
 
 function labelForThread(key: string, tasks: Task[]): string {
@@ -212,13 +213,6 @@ export class AgentRouter {
         const resolved = resolveAgentName(oldName);
         orch.renameAgent(resolved, newName.trim());
         // Maps are keyed by stable agent ID — no migration needed on rename.
-        // Sync new name to global agent store if present.
-        const agentStore = this.deps.getAgentStore();
-        const agent = orch.listAgents().find(a => a.name === newName.trim());
-        if (agentStore && agent) {
-          const def = agentStore.get(agent.id);
-          if (def) agentStore.addOrUpdate({ ...def, identity: { ...def.identity, name: newName.trim() } }).catch(() => {});
-        }
         sseBroadcast({ type: 'agent_update', agents: this.deps.buildAgentStatuses() });
         saveCurrentState().catch(() => {});
         json(res, 200, { ok: true, name: newName.trim() });
@@ -268,14 +262,6 @@ export class AgentRouter {
       try {
         const resolved = resolveAgentName(agentName);
         orch.updateAgentMcpServers(resolved, servers ?? undefined);
-        const agentStore = this.deps.getAgentStore();
-        if (agentStore) {
-          const agent = orch.getAgent(resolved);
-          if (agent) {
-            const def = agentStore.get(agent.id);
-            if (def) agentStore.addOrUpdate({ ...def, enabledMcpServers: servers ?? undefined }).catch(() => {});
-          }
-        }
         sseBroadcast({ type: 'agent_update', agents: this.deps.buildAgentStatuses() }); saveCurrentState().catch(() => {}); json(res, 200, { ok: true });
       } catch (err) { json(res, 400, { error: (err as Error).message }); }
       return true;
@@ -752,7 +738,7 @@ export class AgentRouter {
       return true;
     }
 
-    // Add a global agent into the current project's running team
+    // Add a copy of a library agent to the current project's running team
     if (pathname === '/api/project/add-agent' && method === 'POST') {
       const agentStore = this.deps.getAgentStore();
       if (!agentStore) { json(res, 503, { error: 'Agent store not ready' }); return true; }
@@ -760,12 +746,15 @@ export class AgentRouter {
       const { agentId } = JSON.parse(body) as { agentId: string };
       const def = agentStore.get(agentId);
       if (!def) { json(res, 404, { error: 'Agent not found in library' }); return true; }
-      if (orch.listAgents().some(a => a.id === agentId)) {
+      const running = orch.listAgents();
+      if (hasCopyOf(running, agentId) || running.some(a => a.name.toLowerCase() === def.identity.name.toLowerCase())) {
         json(res, 409, { error: 'Agent is already in this project' }); return true;
       }
       const isExternal = def.providerName === 'external' || !!def.externalEndpoint;
       const provider = isExternal ? EXTERNAL_PROVIDER : (makeProvider(def.providerName) ?? new AnthropicProvider());
-      orch.registerAgent({ id: def.id, identity: def.identity, hatType: def.hatType, provider, model: def.model, enabledMcpServers: def.enabledMcpServers, personalMcpCredentials: def.personalMcpCredentials, maxContextTokens: def.maxContextTokens, maxCostPerHour: def.maxCostPerHour, externalEndpoint: def.externalEndpoint });
+      const agent = orch.registerAgent(projectCopy(def, provider));
+      // The template's scheduled actions are where the copy's agenda starts.
+      await assignScheduledActions(orch.getAgendaStore(), this.deps.getActionStore(), agent.name, def.scheduledActionIds ?? []);
       sseBroadcast({ type: 'agent_update', agents: this.deps.buildAgentStatuses() });
       saveCurrentState().catch(() => {});
       json(res, 200, { ok: true });
@@ -775,23 +764,25 @@ export class AgentRouter {
     if (pathname.match(/^\/api\/global-agents\/[^/]+\/scheduled-actions$/) && method === 'PUT') {
       const agentId    = decodeURIComponent(pathname.slice('/api/global-agents/'.length, -'/scheduled-actions'.length));
       const agentStore = this.deps.getAgentStore();
-      const actionStore = this.deps.getActionStore();
       if (!agentStore) { json(res, 503, { error: 'Agent store not ready' }); return true; }
       const def = agentStore.get(agentId);
       if (!def) { json(res, 404, { error: 'Agent not found' }); return true; }
       const body = await readBody(req);
       const { scheduledActionIds } = JSON.parse(body) as { scheduledActionIds: string[] };
-      const ids = scheduledActionIds ?? [];
-      await agentStore.addOrUpdate({ ...def, scheduledActionIds: ids });
-      // Make the running agent's agenda match: add newly ticked actions, drop unticked ones.
-      if (actionStore) {
-        const agendaStore = orch.getAgendaStore();
-        const agent       = orch.listAgents().find(a => a.id === agentId || a.name === def.identity?.name);
-        if (agendaStore && agent) {
-          const plan = planAssignment(agendaStore.list(agent.name), actionStore.list(), ids);
-          await applyAssignment(agendaStore, agent.name, plan);
-        }
-      }
+      // The template only: agents already copied into projects keep their own.
+      await agentStore.addOrUpdate({ ...def, scheduledActionIds: scheduledActionIds ?? [] });
+      json(res, 200, { ok: true });
+      return true;
+    }
+
+    // Set which scheduled actions one agent in this project runs
+    if (pathname.match(/^\/api\/agents\/[^/]+\/scheduled-actions$/) && method === 'PUT') {
+      const name  = decodeURIComponent(pathname.slice('/api/agents/'.length, -'/scheduled-actions'.length));
+      const agent = orch.getAgent(resolveAgentName(name));
+      if (!agent) { json(res, 404, { error: 'Agent not found' }); return true; }
+      const { scheduledActionIds } = JSON.parse(await readBody(req)) as { scheduledActionIds?: string[] };
+      await assignScheduledActions(orch.getAgendaStore(), this.deps.getActionStore(), agent.name, scheduledActionIds ?? []);
+      saveCurrentState().catch(() => {});
       json(res, 200, { ok: true });
       return true;
     }
@@ -833,31 +824,8 @@ export class AgentRouter {
         ...(patch.maxContextTokens  !== undefined && { maxContextTokens: patch.maxContextTokens ?? undefined }),
         ...(patch.maxCostPerHour    !== undefined && { maxCostPerHour: patch.maxCostPerHour ?? undefined }),
       };
+      // The template only: agents already copied into projects keep their own settings.
       await store.addOrUpdate(updated);
-      // Sync all changed fields to the running agent if it's in the current project.
-      // Look up by stable UUID so duplicate names can't cause a mismatch.
-      const runningAgent = orch.listAgents().find(a => a.id === agentId);
-      if (runningAgent) {
-        if (patch.name && patch.name.trim() !== runningAgent.name) {
-          try { orch.renameAgent(runningAgent.name, patch.name.trim()); } catch { /* non-fatal */ }
-          // runningAgent.name now reflects the new name (live reference)
-        }
-        if (patch.hatTypes)                         orch.changeAgentHat(runningAgent.name, updated.hatType);
-        if (patch.visualDescription !== undefined || patch.backstory !== undefined)
-          orch.updateAgentIdentity(runningAgent.name, updated.identity.visualDescription, updated.identity.backstory);
-        if (patch.specialisation !== undefined)     orch.updateAgentSpecialisation(runningAgent.name, updated.identity.specialisation);
-        if (patch.avatar !== undefined)             orch.updateAgentAvatar(runningAgent.name, updated.identity.avatar);
-        if (patch.background !== undefined)         orch.updateAgentBackground(runningAgent.name, updated.identity.background);
-        if (patch.voice !== undefined || patch.speakerName !== undefined)
-          orch.updateAgentVoice(runningAgent.name, updated.identity.voice, updated.identity.speakerName);
-        if (patch.provider !== undefined || patch.model !== undefined) {
-          const provider = makeProvider(updated.providerName) ?? runningAgent.config.provider;
-          orch.updateAgentConfig(runningAgent.name, provider, updated.model);
-        }
-        if (patch.maxContextTokens !== undefined) orch.updateAgentMaxContextTokens(runningAgent.name, updated.maxContextTokens);
-        if (patch.maxCostPerHour   !== undefined) orch.updateAgentMaxCostPerHour(runningAgent.name, updated.maxCostPerHour);
-      }
-      saveCurrentState().catch(() => {});
       sseBroadcast({ type: 'agent_update', agents: this.deps.buildAgentStatuses() });
       json(res, 200, updated);
       return true;

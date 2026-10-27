@@ -11,6 +11,7 @@ import { AgentStore } from '../api/agent-store.js';
 import { MockProvider } from '../providers/mock.js';
 import { HatType } from '../../../packages/core/src/hats/types.js';
 import { closeAllProjectDbs } from '../store/project-db.js';
+import { projectCopy } from '../api/project-agents.js';
 
 let dir = '';
 let orch: TeamOrchestrator;
@@ -64,6 +65,14 @@ describe('the same agent arriving twice', () => {
   });
 });
 
+async function restored(state: string, store: AgentStore): Promise<TeamOrchestrator> {
+  const again = new TeamOrchestrator({ storePath: path.join(dir, 'events2.jsonl'), projectsRoot: dir });
+  await again.init();
+  again.setAgentStore(store);
+  await again.loadState(state, () => provider);
+  return again;
+}
+
 describe('an agent\'s limits', () => {
   it('survive a save and a restore', async () => {
     const store = new AgentStore(path.join(dir, 'agents.json'));
@@ -73,12 +82,31 @@ describe('an agent\'s limits', () => {
     const state = path.join(dir, 'team-state.json');
     await orch.saveState(state);
 
-    expect(store.get('poppy-1')).toMatchObject({ maxCostPerHour: 0.5, maxContextTokens: 8000 });
-
-    const again = new TeamOrchestrator({ storePath: path.join(dir, 'events2.jsonl'), projectsRoot: dir });
-    await again.init();
-    again.setAgentStore(store);
-    await again.loadState(state, () => provider);
+    const again = await restored(state, store);
     expect(again.getAgent('Poppy')?.config).toMatchObject({ maxCostPerHour: 0.5, maxContextTokens: 8000 });
+  });
+});
+
+describe('an agent copied from the library into a project', () => {
+  it('keeps its project changes through a restore and leaves the template alone', async () => {
+    const store = new AgentStore(path.join(dir, 'agents.json'));
+    await store.load();
+    const template = await store.addOrUpdate({ id: 'tpl', identity: { name: 'Poppy', visualDescription: 'x' },
+      hatType: [HatType.Blue], model: 'mock-model', providerName: 'anthropic', scheduledActionIds: [], maxCostPerHour: 0.5 });
+    orch.setAgentStore(store);
+    orch.registerAgent(projectCopy(template, provider, 'poppy-in-project'));
+    orch.updateAgentMaxCostPerHour('Poppy', 2);
+    orch.updateAgentSpecialisation('Poppy', 'Inbox triage');
+    const state = path.join(dir, 'team-state.json');
+    await orch.saveState(state);
+
+    const again = await restored(state, store);
+    expect(again.getAgent('Poppy')?.id).toBe('poppy-in-project');
+    expect(again.getAgent('Poppy')?.config).toMatchObject({
+      templateId: 'tpl', maxCostPerHour: 2, identity: { specialisation: 'Inbox triage' },
+    });
+    expect(store.get('tpl')).toMatchObject({ maxCostPerHour: 0.5, identity: { name: 'Poppy' } });
+    expect(store.get('tpl')?.identity.specialisation).toBeUndefined();
+    expect(store.list()).toHaveLength(1);
   });
 });

@@ -15,16 +15,12 @@ export interface AgentDefinitionStore {
   list(): AgentDefinition[];
   get(id: string): AgentDefinition | undefined;
   has(id: string): boolean;
-  /** Create or edit a library entry. */
-  addOrUpdate(def: AgentDefinition): Promise<AgentDefinition>;
   /**
-   * Persist a *running* agent's current config.
-   *
-   * A running agent is identified by its project instance id, not a library id,
-   * so this must never create a new library entry — the project definition, not
-   * the library, is where a deployed agent belongs.
+   * Create or edit a library entry. Running agents never come through here:
+   * each is a copy kept in its project, so the library only changes when a
+   * template is edited.
    */
-  syncRunningAgent(def: AgentDefinition): Promise<void>;
+  addOrUpdate(def: AgentDefinition): Promise<AgentDefinition>;
   remove(id: string): Promise<boolean>;
   /**
    * Per-agent MCP credentials, which never travel in a project definition or a
@@ -76,11 +72,6 @@ export class AgentStore implements AgentDefinitionStore {
     this.agents.set(entry.id, entry);
     await this.save();
     return entry;
-  }
-
-  /** Standalone mode keeps one flat file, so a running agent is stored like any other. */
-  async syncRunningAgent(def: AgentDefinition): Promise<void> {
-    await this.addOrUpdate(def);
   }
 
   async remove(id: string): Promise<boolean> {

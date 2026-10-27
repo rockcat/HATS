@@ -74,8 +74,6 @@ export class LibraryAgentStore implements AgentDefinitionStore {
   private readonly secretsPath: string;
   /** Library entries, keyed by template id. This is what `list()` exposes. */
   private readonly templates = new Map<string, AgentDefinition>();
-  /** Configs of agents running right now, keyed by project instance id. */
-  private readonly runtime = new Map<string, AgentDefinition>();
   private secrets: Record<string, LocalAgentSecrets> = {};
   /** The write in flight for each template, so writes to one template queue up. */
   private readonly writes = new Map<string, Promise<unknown>>();
@@ -126,11 +124,11 @@ export class LibraryAgentStore implements AgentDefinitionStore {
   list(): AgentDefinition[] { return [...this.templates.values()]; }
 
   get(id: string): AgentDefinition | undefined {
-    return this.runtime.get(id) ?? this.templates.get(id);
+    return this.templates.get(id);
   }
 
   has(id: string): boolean {
-    return this.runtime.has(id) || this.templates.has(id);
+    return this.templates.has(id);
   }
 
   /** Create or edit a library template. */
@@ -151,20 +149,14 @@ export class LibraryAgentStore implements AgentDefinitionStore {
     if (id) { this.secrets[id] = secrets; await this.writeSecrets(); }
 
     const stored = saved ? templateToDefinition(saved, secrets) : { ...def, ...(id && { id }) };
-    if (stored.id) {
-      this.templates.set(stored.id, stored);
-      // The running copy must not carry the old assignments into the next state save.
-      const running = this.runtime.get(stored.id);
-      if (running) this.runtime.set(stored.id, { ...running, scheduledActionIds: stored.scheduledActionIds });
-    }
+    if (stored.id) this.templates.set(stored.id, stored);
     return stored;
   }
 
   /**
    * Run writes to one template one at a time.
    *
-   * Saving an agent is two requests (the edit, then its scheduled actions), and
-   * the edit also starts a background state save that rewrites the template.
+   * Saving an agent is two requests (the edit, then its scheduled actions).
    * Overlapping writes to one template collide in the library's temp file —
    * "ENOENT … .json.tmp" — and the loser is lost.
    */
@@ -175,36 +167,7 @@ export class LibraryAgentStore implements AgentDefinitionStore {
     return next;
   }
 
-  /**
-   * A running agent's id is its project instance id. If it happens to match a
-   * template — an agent deployed before instance ids existed, or edited through
-   * the library UI — the template is updated; otherwise the config is kept in
-   * memory only. Either way no new library entry is minted, and the roster
-   * itself is persisted by ProjectSync into the project definition.
-   */
-  async syncRunningAgent(def: AgentDefinition): Promise<void> {
-    if (!def.id) return;
-    const assigned = this.templates.get(def.id)?.scheduledActionIds;
-    this.runtime.set(def.id, assigned ? { ...def, scheduledActionIds: assigned } : def);
-    this.secrets[def.id] = extractSecrets(def);
-    await this.writeSecrets();
-    if (!this.templates.has(def.id)) return;
-    const id = def.id;
-    try {
-      // Assignments belong to the template, edited in the library editor; a
-      // running agent has no say in them. Read them when the write runs, not
-      // when it was queued, so a save just ahead of it is not undone.
-      const saved = await this.serialised(id, () => this.client.updateTemplate(id, definitionToTemplateInput({
-        ...def, scheduledActionIds: this.templates.get(id)?.scheduledActionIds ?? def.scheduledActionIds,
-      })));
-      if (saved) this.templates.set(saved.id, templateToDefinition(saved, this.secrets[def.id] ?? {}));
-    } catch (err) {
-      log.warn(`[AgentLibrary] could not update template ${def.id}: ${(err as Error).message}`);
-    }
-  }
-
   async remove(id: string): Promise<boolean> {
-    this.runtime.delete(id);
     if (!this.templates.has(id)) return false;
     try {
       await this.client.deleteTemplate(id);

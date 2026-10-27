@@ -344,8 +344,11 @@ export class TeamOrchestrator {
     };
 
     if (this.agentStore) {
-      // V2: persist agent configs to global store; only histories go in the project file
+      // V2: each agent's config goes in the project file with its history. It
+      // used to go back into the library, which kept every project's copy of an
+      // agent identical to its template — no project could tailor one.
       const agentIds: string[]                      = [];
+      const agents: Record<string, AgentDefinition> = {};
       const agentHistories: Record<string, HistoryEntry[]> = {};
       const agentThreads: Record<string, Record<string, HistoryEntry[]>> = {};
       for (const agent of this.agents.values()) {
@@ -353,9 +356,10 @@ export class TeamOrchestrator {
         const threads = serializeAllThreads(agent);
         agentHistories[agent.id] = threads['general'] ?? [];
         agentThreads[agent.id]   = threads;
-        const existingDef = this.agentStore.get(agent.id);
+        const assigned = (this.agendaStoreRef.store?.list(agent.name) ?? []).flatMap(e => e.actionId ? [e.actionId] : []);
         const def: AgentDefinition = {
           id:                    agent.id,
+          ...(agent.config.templateId && { templateId: agent.config.templateId }),
           identity:              agent.config.identity,
           hatType:               agent.config.hatType,
           model:                 agent.config.model,
@@ -364,20 +368,29 @@ export class TeamOrchestrator {
           enabledMcpServers:          agent.config.enabledMcpServers,
           personalMcpCredentials:     agent.config.personalMcpCredentials,
           disabledPersonalMcpServers: agent.config.disabledPersonalMcpServers,
-          scheduledActionIds:         existingDef?.scheduledActionIds ?? [],
+          scheduledActionIds:         assigned,
           // Left out, every save stored the agent without its limits, and the
           // next time it was built — a project switch, a restore — it had none.
           maxContextTokens:           agent.config.maxContextTokens,
           maxCostPerHour:             agent.config.maxCostPerHour,
           externalEndpoint:           agent.config.externalEndpoint,
         };
-        await this.agentStore.syncRunningAgent(def);
+        agents[agent.id] = def;
+        // Credentials stay on this machine; a team built from the project
+        // definition picks them up from here by instance id.
+        if (def.personalMcpCredentials || def.teamContext) {
+          await this.agentStore.setSecrets?.(agent.id, {
+            personalMcpCredentials: def.personalMcpCredentials,
+            teamContext: def.teamContext,
+          });
+        }
       }
       const snapshot: TeamSnapshotV2 = {
         version: 2,
         savedAt: new Date().toISOString(),
         humanName: this.humanName,
         agentIds,
+        agents,
         agentHistories,
         agentThreads,
         tasks: Array.from(this.tasks.values()),
@@ -448,27 +461,7 @@ export class TeamOrchestrator {
         const agent = this.registerAgent(config);
         agent.setHistory(snap.history);
       }
-      // Migrate to the agent store if available — configs without history.
-      // Goes through syncRunningAgent rather than addOrUpdate: a v1 snapshot id
-      // is a running-agent id, not a library id, so creating a library entry
-      // from it mints a duplicate of whatever template it was deployed from.
-      if (this.agentStore) {
-        for (const snap of (snapshot as TeamSnapshotV1).agents) {
-          if (!this.agentStore.has(snap.id)) {
-            await this.agentStore.syncRunningAgent({
-              id:                    snap.id,
-              identity:              snap.identity,
-              hatType:               Array.isArray(snap.hatType) ? snap.hatType : [snap.hatType as HatType],
-              model:                 snap.model,
-              providerName:          snap.providerName,
-              teamContext:           snap.teamContext,
-              enabledMcpServers:     snap.enabledMcpServers,
-              personalMcpCredentials: snap.personalMcpCredentials,
-              scheduledActionIds:    [],
-            });
-          }
-        }
-      }
+      // The next save writes a v2 snapshot, which carries these configs itself.
       const s = snapshot as TeamSnapshotV1;
       for (const task of s.tasks) this.tasks.set(task.id, task);
       for (const meeting of s.meetings) this.meetings.set(meeting.id, meeting);
@@ -478,13 +471,14 @@ export class TeamOrchestrator {
       return s.mcpServers;
     }
 
-    // V2: load agent configs from global store, histories from snapshot
+    // V2: configs and histories from the snapshot; older snapshots kept their
+    // configs in the store
     const s = snapshot as TeamSnapshotV2;
     let loadedCount = 0;
     for (const agentId of s.agentIds) {
-      const def = this.agentStore?.get(agentId);
+      const def = s.agents?.[agentId] ?? this.agentStore?.get(agentId);
       if (!def) {
-        log.warn(`[Team] Agent "${agentId}" not found in global store — skipping`);
+        log.warn(`[Team] Agent "${agentId}" not found in the snapshot or the store — skipping`);
         continue;
       }
       // A copy saved under another id: skip it whole rather than let its
@@ -497,6 +491,7 @@ export class TeamOrchestrator {
       const provider = isExternal ? EXTERNAL_PROVIDER : providerFactory(def.providerName);
       const config: AgentConfig = {
         id:                    def.id,
+        ...(def.templateId && { templateId: def.templateId }),
         identity:              def.identity,
         hatType:               def.hatType,
         provider,
