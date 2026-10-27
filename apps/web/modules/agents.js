@@ -40,6 +40,7 @@ export function createCard(agent) {
     <div class="agent-state">
       <div class="state-dot"></div>
       <span class="state-label"></span>
+      <div class="agent-cost-idle"></div>
     </div>
     <div class="agent-meta"></div>
     <div class="agent-activity">
@@ -97,23 +98,15 @@ export function applyCardData(el, agent) {
   }
 
   let costEl = el.querySelector('.agent-cost-idle');
-  if (agent.costIdled) {
-    if (!costEl) {
-      costEl = document.createElement('div');
-      costEl.className = 'agent-cost-idle';
-      el.appendChild(costEl);
+  if (costEl) {
+    if (agent.costIdled) {
+      const spent = agent.hourlyCost != null ? `$${agent.hourlyCost.toFixed(3)}/hr` : '';
+      costEl.textContent = `Cost limit reached (${spent}) — waiting for next hour`;
+    } else if (agent.maxCostPerHour && agent.hourlyCost != null && agent.hourlyCost > 0) {
+      costEl.textContent = `$${agent.hourlyCost.toFixed(3)} / $${agent.maxCostPerHour}/hr`;
+    } else {
+      costEl.textContent = '';
     }
-    const spent = agent.hourlyCost != null ? `$${agent.hourlyCost.toFixed(3)}/hr` : '';
-    costEl.textContent = `Cost limit reached (${spent}) — waiting for next hour`;
-  } else if (agent.maxCostPerHour && agent.hourlyCost != null && agent.hourlyCost > 0) {
-    if (!costEl) {
-      costEl = document.createElement('div');
-      costEl.className = 'agent-cost-idle';
-      el.appendChild(costEl);
-    }
-    costEl.textContent = `$${agent.hourlyCost.toFixed(3)} / $${agent.maxCostPerHour}/hr`;
-  } else {
-    if (costEl) costEl.remove();
   }
 }
 

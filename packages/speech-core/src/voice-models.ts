@@ -1,7 +1,7 @@
 /**
  * Discovering Piper voice models on disk.
  *
- * Shared so the Speech Service and the Agent Library agree on what a voice is
+ * Shared so the Speech Service and the Agent Template Library agree on what a voice is
  * and which speakers it offers. The library only ever needs this — listing
  * voices for a dropdown requires no TTS process, which is why it can populate
  * its editor with no other service running.

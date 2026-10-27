@@ -620,7 +620,7 @@ components:
         templateId:
           type: string
           description: >
-            The Agent Library template this instance was deployed from, when
+            The Agent Template Library template this instance was deployed from, when
             it came from one. A deployed agent is a copy rather than a
             reference, so this is provenance only.
         name: { type: string }

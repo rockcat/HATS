@@ -132,7 +132,7 @@ describe('sharing the file with another process', () => {
   };
 
   it('picks up a tool list recorded after this process started', async () => {
-    // What the Agent Library saw: the runner recorded 49 tools and the library
+    // What the Agent Template Library saw: the runner recorded 49 tools and the library
     // went on reporting none until it was restarted.
     expect(entry(BUILTIN)?.knownTools).toBeUndefined();
 

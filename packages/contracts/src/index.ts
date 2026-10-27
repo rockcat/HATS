@@ -1,7 +1,7 @@
 /**
  * @hats/contracts — the formal interface between the HATS services.
  *
- *   Agent Library  ──AgentTemplate──▶  Project Designer
+ *   Agent Template Library  ──AgentTemplate──▶  Project Designer
  *   Project Designer ──ProjectDefinition──▶ Project Server
  *   Project Server ──ProjectDefinition──▶ Team Runner
  *   Team Runner    ──Embodiment API──▶ any UI or app

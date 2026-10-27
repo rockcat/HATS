@@ -612,9 +612,6 @@ main {
 }
 
 .agent-cost-idle {
-  position: absolute;
-  top: 11px;
-  right: 6px;
   font-size: 10px;
   color: var(--text-muted);
   font-weight: 500;

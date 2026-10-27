@@ -1,7 +1,7 @@
 {
   "name": "@hats/clients",
   "version": "0.1.0",
-  "description": "HTTP clients for the agent library, project server and speech service.",
+  "description": "HTTP clients for the Agent Template Library, project server and speech service.",
   "type": "module",
   "exports": {
     "./package.json": "./package.json",

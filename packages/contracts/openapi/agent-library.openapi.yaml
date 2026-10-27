@@ -1,6 +1,6 @@
 openapi: 3.1.0
 info:
-  title: HATS Agent Library API
+  title: HATS Agent Template Library API
   version: 1.0.0
   description: |
     Management of reusable agent templates, independent of any project or team
@@ -13,11 +13,11 @@ info:
     name: SEE LICENSE IN LICENSE.txt
 servers:
   - url: http://localhost:3010
-    description: Local Agent Library service
+    description: Local Agent Template Library service
 
 tags:
   - name: Templates
-    description: CRUD over the agent library
+    description: CRUD over the Agent Template Library
   - name: Catalogue
     description: Read-only reference data used when authoring a template
   - name: Meta

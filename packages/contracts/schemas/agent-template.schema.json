@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://hats.elyhouse25.com/schemas/agent-template.schema.json",
   "title": "HATS Agent Template",
-  "description": "A reusable agent definition held in the Agent Library. Templates are project-independent: they describe who an agent is and what it can do, never where it is deployed. Deploying a template into a project produces a Deployed Agent.",
+  "description": "A reusable agent definition held in the Agent Template Library. Templates are project-independent: they describe who an agent is and what it can do, never where it is deployed. Deploying a template into a project produces a Deployed Agent.",
   "type": "object",
   "properties": {
     "schemaVersion": {

@@ -15,7 +15,7 @@ src/validate.ts   Ajv-backed validators
 
 | Document | Schema | Owner | Meaning |
 | --- | --- | --- | --- |
-| **Agent Template** | `agent-template.schema.json` | Agent Library | A reusable agent, independent of any project. |
+| **Agent Template** | `agent-template.schema.json` | Agent Template Library | A reusable agent, independent of any project. |
 | **Deployed Agent** | `deployed-agent.schema.json` | Project Server | That agent as it exists inside one project — fully resolved. |
 | **Project Definition** | `project.schema.json` | Project Server | Objective, team roster and shared tools. No runtime state. |
 
@@ -28,7 +28,7 @@ the Project Designer shows drift.
 
 | Service | Document | Default |
 | --- | --- | --- |
-| Agent Library | `openapi/agent-library.openapi.yaml` | `http://localhost:3010` |
+| Agent Template Library | `openapi/agent-library.openapi.yaml` | `http://localhost:3010` |
 | Project Server | `openapi/project-server.openapi.yaml` | `http://localhost:3020` |
 | Embodiment API | `openapi/embodiment.openapi.yaml` | `http://localhost:3001/api/embodiment/v1` |
 

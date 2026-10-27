@@ -83,7 +83,7 @@ export interface McpServerDefinition {
   };
 }
 
-/** A reusable, project-independent agent definition held in the Agent Library. */
+/** A reusable, project-independent agent definition held in the Agent Template Library. */
 export interface AgentTemplate {
   schemaVersion: typeof SCHEMA_VERSION;
   id: string;
@@ -202,7 +202,7 @@ export interface AvatarFraming {
 /** How an agent appears to a client of the Embodiment API. */
 export interface EmbodiedAgent {
   id: string;
-  /** The Agent Library template this instance was deployed from, if any. */
+  /** The Agent Template Library template this instance was deployed from, if any. */
   templateId?: string;
   name: string;
   hats: HatTypeName[];

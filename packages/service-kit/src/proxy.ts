@@ -2,7 +2,7 @@
  * A reverse proxy route for the UI-only apps.
  *
  * The front-ends talk to one origin — their own — and this forwards to the
- * Agent Library, Project Server or Team Runner. That keeps CORS, cookies and
+ * Agent Template Library, Project Server or Team Runner. That keeps CORS, cookies and
  * mixed-content out of the browser's way, and means an operator only has to
  * expose the UI port.
  */

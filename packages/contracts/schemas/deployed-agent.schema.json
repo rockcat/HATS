@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://hats.elyhouse25.com/schemas/deployed-agent.schema.json",
   "title": "HATS Deployed Agent",
-  "description": "An agent as it exists inside one project. Produced by deploying an Agent Template and then applying project-local edits. The document is fully resolved — the Team Runner can embody it without contacting the Agent Library.",
+  "description": "An agent as it exists inside one project. Produced by deploying an Agent Template and then applying project-local edits. The document is fully resolved — the Team Runner can embody it without contacting the Agent Template Library.",
   "type": "object",
   "properties": {
     "schemaVersion": { "type": "integer", "const": 1 },

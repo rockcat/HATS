@@ -242,7 +242,7 @@ paths:
       tags: [Team]
       summary: Deploy an agent into the project
       description: |
-        Supply `templateId` to deploy a template resolved from the Agent Library,
+        Supply `templateId` to deploy a template resolved from the Agent Template Library,
         or `agent` to add a fully specified deployed agent authored in place.
       operationId: deployAgent
       requestBody:
@@ -265,7 +265,7 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '404': { $ref: '#/components/responses/NotFound' }
         '502':
-          description: The Agent Library could not be reached
+          description: The Agent Template Library could not be reached
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }

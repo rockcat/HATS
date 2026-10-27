@@ -616,7 +616,7 @@ export function getCatalogue(): MCPCatalogueEntry[] {
 /**
  * Record what a server offered when the runner connected to it.
  *
- * Goes to the sidecar beside the catalogue, so the Agent Library — which
+ * Goes to the sidecar beside the catalogue, so the Agent Template Library — which
  * never starts an MCP server — can list a server's tools without the tracked
  * configuration gaining a diff every time the runner boots. Unchanged lists
  * are not rewritten, so a restart does not churn the file either.

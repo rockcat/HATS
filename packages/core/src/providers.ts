@@ -1,6 +1,6 @@
 // ── The models an agent can be pointed at ────────────────────────────────────
 //
-// A list, not an implementation. The agent library offers these for selection
+// A list, not an implementation. The Agent Template Library offers these for selection
 // and never calls one, so it has no business importing the runner's provider
 // classes — which would drag in every SDK the runner speaks to.
 

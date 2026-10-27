@@ -1,4 +1,4 @@
-/** Typed client for the Agent Library API. */
+/** Typed client for the Agent Template Library API. */
 
 import { HttpClient } from './http-client.js';
 import type { AgentTemplate, AgentTemplateInput } from '../../contracts/src/types.js';
@@ -9,7 +9,7 @@ export class AgentLibraryClient {
   private readonly http: HttpClient;
 
   constructor(baseUrl: string, timeoutMs?: number) {
-    this.http = new HttpClient({ service: 'Agent Library', baseUrl, ...(timeoutMs !== undefined && { timeoutMs }) });
+    this.http = new HttpClient({ service: 'Agent Template Library', baseUrl, ...(timeoutMs !== undefined && { timeoutMs }) });
   }
 
   get baseUrl(): string { return this.http.baseUrl; }

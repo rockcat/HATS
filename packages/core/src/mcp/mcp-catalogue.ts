@@ -53,7 +53,7 @@ export interface MCPCatalogueEntry {
    * What this server offered the last time the runner connected to it.
    *
    * Only the runner can know — it is the only process that starts MCP
-   * servers. Recording it here is how the Agent Library, which starts
+   * servers. Recording it here is how the Agent Template Library, which starts
    * nothing, can offer a real list of tools to choose from instead of a text
    * box. Absent until the server has run at least once.
    */
