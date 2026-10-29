@@ -3123,6 +3123,15 @@ main {
   transition: color 0.15s, border-color 0.15s;
 }
 .files-open-folder-btn:hover { color: var(--text); border-color: var(--border-hover); }
+.files-open-folder-note {
+  font-size: 10px; color: var(--text-muted); margin-left: 8px;
+  overflow-wrap: anywhere;
+}
+.files-open-folder-copy {
+  font-size: 10px; color: var(--text-muted); background: none; cursor: pointer;
+  border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px;
+}
+.files-open-folder-copy:hover { color: var(--text); }
 
 .files-clear-btn {
   font-size: 10px; font-weight: 600; color: var(--hat-red);

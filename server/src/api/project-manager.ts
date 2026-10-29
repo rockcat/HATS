@@ -1,5 +1,4 @@
 import { IncomingMessage, ServerResponse } from 'http';
-import { spawn } from 'child_process';
 import { readFile, writeFile, mkdir, readdir, stat, rm } from 'fs/promises';
 import * as path from 'path';
 import { TeamOrchestrator } from '../orchestrator/orchestrator.js';
@@ -7,6 +6,7 @@ import { TelemetryStore } from '../store/telemetry-store.js';
 import { readEnvFile, writeEnvFile, withEffective } from './env-manager.js';
 import { applicable, lockedKeys } from '../settings-file.js';
 import { listFilesRecursive } from './api-utils.js';
+import { openFolder } from './open-folder.js';
 import { log } from '../../../packages/core/src/logger.js';
 
 export interface AgentStatus {
@@ -176,13 +176,7 @@ export class ProjectManager {
     if (pathname === '/api/project/open-folder' && method === 'POST') {
       const dir = this.deps.getProjectDir();
       if (!dir) { json(res, 400, { error: 'No project folder is set' }); return true; }
-      const { platform } = process;
-      const [cmd, args] =
-        platform === 'win32'  ? ['explorer.exe', [dir]] :
-        platform === 'darwin' ? ['open',          [dir]] :
-                                ['xdg-open',      [dir]];
-      spawn(cmd, args, { detached: true, stdio: 'ignore' }).unref();
-      json(res, 200, { ok: true });
+      json(res, 200, await openFolder(dir));
       return true;
     }
 

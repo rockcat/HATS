@@ -16,6 +16,9 @@ services:
     environment:
       NODE_ENV: production
       RUNTIME_DIR: /app/runtime_data
+      # Where that data folder is on this machine. The container cannot open a
+      # folder on your desktop, so "Open folder" shows you this path instead.
+      HATS_HOST_DATA: ${HATS_DATA:-./runtime_data}
       # Scheduled tasks set to a time of day run in this timezone. Set TZ in
       # .env to yours (e.g. Europe/London) or "daily at 9:00" means 9:00 UTC.
       TZ: ${TZ:-UTC}

@@ -231,8 +231,16 @@ export function startFilesRefresh() {
 }
 
 export function initFileUpload() {
-  document.getElementById('files-open-folder-btn')?.addEventListener('click', () => {
-    fetch('/api/project/open-folder', { method: 'POST' }).catch(() => {});
+  document.getElementById('files-open-folder-btn')?.addEventListener('click', async () => {
+    try {
+      const r = await fetch('/api/project/open-folder', { method: 'POST' });
+      const body = await r.json();
+      if (!r.ok) showFolderNote(body.error ?? 'Could not open the folder');
+      else if (!body.opened) showFolderNote(folderNoteText(body), body.path);
+      else showFolderNote(null);
+    } catch {
+      showFolderNote('Could not reach the runner');
+    }
   });
 
   document.getElementById('files-clear-btn')?.addEventListener('click', async () => {
@@ -268,4 +276,29 @@ export function initFileUpload() {
     }
     fetchFiles();
   });
+}
+
+/**
+ * What to say when the runner could not open the folder itself — in Docker it
+ * never can, as there is no desktop in the container to open it on.
+ */
+export function folderNoteText({ path, inDataFolder, error }) {
+  if (error) return `Could not open it (${error}). It is at ${path}`;
+  return inDataFolder
+    ? `In your HATS data folder, at ${path}`
+    : `The runner has no desktop to open it on. It is at ${path}`;
+}
+
+function showFolderNote(text, copyable) {
+  const note = document.getElementById('files-open-folder-note');
+  if (!note) return;
+  note.hidden = !text;
+  note.textContent = text ?? '';
+  if (!text || !copyable || !navigator.clipboard) return;
+  const copy = document.createElement('button');
+  copy.className = 'files-open-folder-copy';
+  copy.textContent = 'Copy';
+  copy.addEventListener('click', () =>
+    navigator.clipboard.writeText(copyable).then(() => { copy.textContent = 'Copied'; }).catch(() => {}));
+  note.append(' ', copy);
 }
