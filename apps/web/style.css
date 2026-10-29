@@ -3686,7 +3686,6 @@ main {
   margin-left: auto;
 }
 .panel-header-action-btn:hover { opacity: 1; color: var(--text); }
-.panel-header-action-btn + .panel-expand-btn { margin-left: 0; }
 
 .panel-expand-btn {
   background: none;
