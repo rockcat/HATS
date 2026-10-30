@@ -459,7 +459,7 @@ class ConversationThreads extends HTMLElement {
     const who  = this._esc(this._agentName || 'This agent');
     return `<div class="cost-pause" role="status">
       <strong>${who} is paused</strong>: it has used ${this._esc(used)}.
-      It will pick up messages again ${this._esc(when)}. Raise the limit in its settings to resume sooner.
+      It will pick up messages again ${this._esc(when)}. Raise its limit under Configure to resume sooner.
     </div>`;
   }
 
