@@ -15,6 +15,7 @@ class ConversationThreads extends HTMLElement {
     this._activeThread = null;
     this._activeMessages = [];
     this._agentBusy = false;
+    this._costPause = null;            // { until, spent, max } while over the hourly budget
     this._pollTimer = null;
     this._newThreadMode = false;
     this._sending = false;
@@ -78,6 +79,9 @@ class ConversationThreads extends HTMLElement {
         const agents = await agentsRes.json();
         const found = agents.find(a => a.name === this._agentName);
         this._agentBusy = !!found?.busy;
+        this._costPause = found?.costIdled
+          ? { until: found.costIdleUntil, spent: found.hourlyCost, max: found.maxCostPerHour }
+          : null;
       }
       await this._loadGeneral();
       if (this._activeThread) await this._loadThread(this._activeThread);
@@ -366,6 +370,7 @@ class ConversationThreads extends HTMLElement {
    * seconds away, and the gap is exactly when it looks as if nothing happened.
    */
   _isThinking(pending) {
+    if (this._costPause) return false;   // it is not thinking: it is waiting, and says so
     return this._agentBusy || pending.length > 0;
   }
 
@@ -375,7 +380,8 @@ class ConversationThreads extends HTMLElement {
     let prevRole = null;
 
     if (!messages || messages.length === 0) {
-      if (thinking) parts.push(this._thinkingBubble());
+      if (this._costPause) parts.push(this._costPauseNotice());
+      else if (thinking) parts.push(this._thinkingBubble());
       else parts.push('<div class="empty-msg">No messages yet</div>');
       return parts.join('');
     }
@@ -432,9 +438,29 @@ class ConversationThreads extends HTMLElement {
       }
     }
 
-    if (thinking) parts.push(this._thinkingBubble());
+    if (this._costPause) parts.push(this._costPauseNotice());
+    else if (thinking) parts.push(this._thinkingBubble());
 
     return parts.join('');
+  }
+
+  /**
+   * Over its hourly budget the agent stops taking messages until the hour is
+   * up. Without saying so, a message sent then just sits there and the chat
+   * looks broken.
+   */
+  _costPauseNotice() {
+    const { until, spent, max } = this._costPause;
+    const money = (n) => '$' + Number(n).toFixed(2);
+    const used = max ? `its ${money(max)} hourly budget` + (spent ? ` (${money(spent)} spent)` : '') : 'its hourly budget';
+    const when = until
+      ? `at ${new Date(until).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+      : 'when the hour is up';
+    const who  = this._esc(this._agentName || 'This agent');
+    return `<div class="cost-pause" role="status">
+      <strong>${who} is paused</strong>: it has used ${this._esc(used)}.
+      It will pick up messages again ${this._esc(when)}. Raise the limit in its settings to resume sooner.
+    </div>`;
   }
 
   _thinkingBubble() {
@@ -805,6 +831,18 @@ class ConversationThreads extends HTMLElement {
         .hat-thinking-content p { margin: 0 0 4px; }
         .hat-thinking-content p:last-child { margin-bottom: 0; }
         .hat-synthesis { margin-top: 4px; }
+
+        /* ── Budget pause ── */
+        .cost-pause {
+          margin: 8px 0;
+          padding: 8px 10px;
+          font-size: 12px;
+          line-height: 1.45;
+          color: #e3b341;
+          background: rgba(227, 179, 65, 0.08);
+          border: 1px solid rgba(227, 179, 65, 0.35);
+          border-radius: 6px;
+        }
 
         /* ── Pending / thinking ── */
         .msg--pending { opacity: 0.55; }

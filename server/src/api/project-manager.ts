@@ -25,6 +25,8 @@ export interface AgentStatus {
   promptMode?: 'full' | 'condensed';
   hourlyCost?: number;
   costIdled?: boolean;
+  /** When the budget pause ends, in ms since the epoch. */
+  costIdleUntil?: number | null;
 }
 
 export interface ProjectManagerDeps {

@@ -94,6 +94,7 @@ export function buildAgentStatuses(
       promptMode: a.config.promptMode ?? 'full',
       hourlyCost: a.getHourlyCost(),
       costIdled: a.isCostIdled(),
+      costIdleUntil: a.getCostIdleUntil(),
     };
   });
 }

@@ -78,6 +78,8 @@ export interface IAgent {
   getActiveThreadKey(): string;
   getHourlyCost(): number;
   isCostIdled(): boolean;
+  /** When a budget pause ends (ms since epoch), or null when not paused. */
+  getCostIdleUntil(): number | null;
   clearAllThreads(): void;
   setHistory(history: HistoryEntryLike[]): void;
   setAllThreadHistories(allThreads: Record<string, HistoryEntryLike[]>): void;

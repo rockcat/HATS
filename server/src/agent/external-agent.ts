@@ -527,6 +527,7 @@ export class ExternalAgent implements IAgent {
   getActiveThreadKey(): string { return 'general'; }
   getHourlyCost(): number { return 0; }
   isCostIdled(): boolean { return false; }
+  getCostIdleUntil(): number | null { return null; }
   clearAllThreads(): void { this.subprocessHistory = []; }
 
   setHistory(history: HistoryEntryLike[]): void {

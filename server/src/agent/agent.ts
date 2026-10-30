@@ -66,6 +66,7 @@ export class Agent implements IAgent {
   private hourlyCost = 0;
   private hourWindowStart = Date.now();
   private costIdleTimer: ReturnType<typeof setTimeout> | null = null;
+  private costIdleUntil: number | null = null;
   private toolExecutor: ToolExecutor | null = null;
   private responseHandler: ResponseHandler | null = null;
   private extraToolsProvider: (() => import('./types.js').AgentToolSet) | null = null;
@@ -180,6 +181,7 @@ export class Agent implements IAgent {
     this.inbox.length = 0;
     this.priorityInbox.length = 0;
     if (this.costIdleTimer) { clearTimeout(this.costIdleTimer); this.costIdleTimer = null; }
+    this.costIdleUntil = null;
   }
 
   /** Deliver a message to this agent's inbox and trigger processing. */
@@ -470,7 +472,10 @@ export class Agent implements IAgent {
   }
 
   setMaxContextTokens(v: number | undefined): void { this.config.maxContextTokens = v; }
-  setMaxCostPerHour(v: number | undefined): void { this.config.maxCostPerHour = v; }
+  setMaxCostPerHour(v: number | undefined): void {
+    this.config.maxCostPerHour = v;
+    if (this.costIdleTimer && !this.isHourlyCostExceeded()) this.endCostIdle();
+  }
 
   setPromptSettings(instructions: string | undefined, promptMode: PromptMode | undefined): void {
     this.config.instructions = instructions;
@@ -479,6 +484,7 @@ export class Agent implements IAgent {
   }
   getHourlyCost(): number { return this.hourlyCost; }
   isCostIdled(): boolean { return this.costIdleTimer !== null; }
+  getCostIdleUntil(): number | null { return this.costIdleUntil; }
 
   markTaskComplete(): void {
     this.applyEvent('task_complete');
@@ -512,14 +518,23 @@ export class Agent implements IAgent {
 
   private scheduleCostIdleResume(msUntilReset: number): void {
     if (this.costIdleTimer) clearTimeout(this.costIdleTimer);
+    const wait = Math.max(msUntilReset, 1000);
+    this.costIdleUntil = Date.now() + wait;
     this.costIdleTimer = setTimeout(() => {
-      this.costIdleTimer = null;
       this.hourlyCost = 0;
       this.hourWindowStart = Date.now();
-      if (this.inbox.length > 0 && !this.stopped) {
-        this.processInbox().catch((err) => log.error(`[${this.name}] cost-idle resume error:`, err));
-      }
-    }, Math.max(msUntilReset, 1000));
+      this.endCostIdle();
+    }, wait);
+  }
+
+  /** Take messages again — the hour is up, or the limit was raised past what was spent. */
+  private endCostIdle(): void {
+    if (this.costIdleTimer) clearTimeout(this.costIdleTimer);
+    this.costIdleTimer = null;
+    this.costIdleUntil = null;
+    if (this.inbox.length > 0 && !this.stopped) {
+      this.processInbox().catch((err) => log.error(`[${this.name}] cost-idle resume error:`, err));
+    }
   }
 
   private recordTelemetry(req: CompletionRequest, inputTokens: number, outputTokens: number): void {
