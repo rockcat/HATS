@@ -2419,6 +2419,11 @@ main {
   font-size: 11px;
   font-family: inherit;
 }
+.agent-config-limit {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11px; color: var(--text-muted); white-space: nowrap;
+}
+.agent-config-limit-input { flex: 0 0 auto; width: 72px; }
 .agent-config-input:focus { outline: none; border-color: var(--hat-blue); }
 .agent-config-line--top { align-items: flex-start; }
 .agent-config-line--top .agent-config-label { padding-top: 5px; }

@@ -315,6 +315,11 @@
           <label class="agent-config-label">Shared MCPs</label>
           <div id="agent-config-mcp-list" class="agent-config-mcp-list"></div>
         </div>
+        <div class="agent-config-line" title="This agent's own limits in this project — it started with its template's. Leave empty for no limit.">
+          <label class="agent-config-label" for="agent-config-max-cost">Limits</label>
+          <span class="agent-config-limit">$<input type="number" id="agent-config-max-cost" class="agent-config-input agent-config-limit-input" min="0" step="0.05" placeholder="none"> / hour</span>
+          <span class="agent-config-limit"><input type="number" id="agent-config-max-context" class="agent-config-input agent-config-limit-input" min="1000" step="1000" placeholder="none"> context tokens</span>
+        </div>
         <div class="agent-config-line agent-config-line--top">
           <label class="agent-config-label" for="agent-config-instructions">Instructions</label>
           <textarea id="agent-config-instructions" class="agent-config-input agent-config-textarea" rows="3" spellcheck="true" placeholder="Anything else this agent should know or do — added to its prompt as written"></textarea>

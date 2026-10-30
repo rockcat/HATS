@@ -25,6 +25,7 @@ import { ScheduledActionStore } from './scheduled-action-store.js';
 import { propagateEdit, removeCopies, lastRunOf, isCopyOf } from './agenda-sync.js';
 import { repeatFromRequest, type Repeat } from './agenda-store.js';
 import { projectCopy, hasCopyOf, assignScheduledActions } from './project-agents.js';
+import { parseLimits } from './agent-limits.js';
 import { Task } from '../orchestrator/types.js';
 
 function labelForThread(key: string, tasks: Task[]): string {
@@ -192,6 +193,22 @@ export class AgentRouter {
       try {
         orch.updateAgentPromptSettings(resolveAgentName(agentName), instructions?.trim() || undefined,
           promptMode === 'condensed' ? 'condensed' : undefined);
+        sseBroadcast({ type: 'agent_update', agents: this.deps.buildAgentStatuses() });
+        saveCurrentState().catch(() => {});
+        json(res, 200, { ok: true });
+      } catch (err) { json(res, 400, { error: (err as Error).message }); }
+      return true;
+    }
+
+    // This project's copy only: it started with its template's limits, and the
+    // library editor changes the template, which the copy no longer follows.
+    if (pathname.match(/^\/api\/agents\/[^/]+\/limits$/) && method === 'PATCH') {
+      const agentName = decodeURIComponent(pathname.slice('/api/agents/'.length, -'/limits'.length));
+      try {
+        const name  = resolveAgentName(agentName);
+        const patch = parseLimits(JSON.parse(await readBody(req)) as Record<string, unknown>);
+        if ('maxCostPerHour' in patch) orch.updateAgentMaxCostPerHour(name, patch.maxCostPerHour);
+        if ('maxContextTokens' in patch) orch.updateAgentMaxContextTokens(name, patch.maxContextTokens);
         sseBroadcast({ type: 'agent_update', agents: this.deps.buildAgentStatuses() });
         saveCurrentState().catch(() => {});
         json(res, 200, { ok: true });
