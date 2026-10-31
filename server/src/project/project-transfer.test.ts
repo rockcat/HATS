@@ -192,6 +192,49 @@ describe('credentials', () => {
     expect(to.secrets.get(POPPY)?.personalMcpCredentials?.['email-imap']?.['MCP_EMAIL_PASSWORD']).toBe('newer');
     expect(to.secrets.get(POPPY)?.teamContext).toBe('Paul’s assistant');
   });
+  // As saved before credentials moved out of the project: a copy added from
+  // the dashboard, its password in team-state.json, and a key in each server.
+  const COPY = 'd2b1a0c4-0000-0000-0000-000000000000';
+  const COPY_PASSWORD = 'copy-only-password';
+  const BRAVE = 'brave-key-from-env';
+  async function olderSave(m: Machine): Promise<void> {
+    process.env['BRAVE_API_KEY'] = BRAVE;
+    const brave = { name: 'brave-search', config: { transport: 'stdio', command: 'npx', env: { BRAVE_API_KEY: BRAVE } } };
+    m.projects.get('paige')!.mcpServers = [brave] as ProjectDefinition['mcpServers'];
+    await writeFile(path.join(m.deps.projectsRoot, 'paige', 'team-state.json'), JSON.stringify({
+      version: 2, agentIds: [COPY],
+      agents: { [COPY]: { id: COPY, templateId: POPPY, identity: { name: 'Pip', ...identity },
+        personalMcpCredentials: { 'email-imap': { MCP_EMAIL_PASSWORD: COPY_PASSWORD } } } },
+      mcpServers: [brave],
+    }));
+  }
+  async function everything(bytes: Uint8Array): Promise<string> {
+    const archive = await unpackArchive(bytes);
+    const files = [...archive.projectFiles.values()].map((d) => new TextDecoder().decode(d));
+    return JSON.stringify(archive) + files.join('');
+  }
+
+  it('saved in the project by an older runner do not travel unless asked for', async () => {
+    const from = await machine();
+    await seed(from);
+    await olderSave(from);
+    const { bytes } = await exportProject(from.deps, 'paige', { includeCredentials: false });
+    const all = await everything(bytes);
+    expect(all).not.toContain(COPY_PASSWORD);
+    expect(all).not.toContain(BRAVE);
+  });
+
+  it('of an agent added from the dashboard travel when asked for, outside the project', async () => {
+    const from = await machine();
+    await seed(from);
+    await olderSave(from);
+    const { bytes } = await exportProject(from.deps, 'paige', { includeCredentials: true });
+    const to = await machine();
+    await importProject(to.deps, bytes);
+    expect(to.secrets.get(COPY)?.personalMcpCredentials?.['email-imap']?.['MCP_EMAIL_PASSWORD']).toBe(COPY_PASSWORD);
+    const state = await readFile(path.join(to.deps.projectsRoot, 'paige', 'team-state.json'), 'utf8');
+    expect(state).not.toContain(COPY_PASSWORD);
+  });
 });
 
 describe('what is already there', () => {

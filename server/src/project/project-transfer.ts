@@ -18,6 +18,8 @@ import type { ProjectServerClient } from '../../../packages/clients/src/project-
 import type { AgentSecrets } from '../api/agent-store.js';
 import type { ScheduledActionDef } from '../store/team-snapshot.js';
 import { snapshotProjectDb } from '../store/project-db.js';
+import type { MCPServerDef } from '../mcp/mcp-client.js';
+import { cleanSnapshot, cleanServers, SNAPSHOT_FILE, type CleanSnapshot, type SnapshotAgent } from './snapshot-scrub.js';
 import {
   ARCHIVE_FORMAT, ARCHIVE_VERSION, ArchiveError, isSafeRelativePath,
   packArchive, unpackArchive, type ArchiveManifest, type ProjectArchive,
@@ -63,36 +65,56 @@ export async function exportProject(
   projectId: string,
   options: { includeCredentials: boolean },
 ): Promise<{ bytes: Uint8Array; manifest: ArchiveManifest }> {
-  const definition = await deps.projectServer.getProject(projectId);
-  if (!definition) throw new TransferNotFound(`There is no project "${projectId}"`);
+  const found = await deps.projectServer.getProject(projectId);
+  if (!found) throw new TransferNotFound(`There is no project "${projectId}"`);
   const warnings: string[] = [];
+  const includeCredentials = options.includeCredentials;
+
+  // The folder first: its saved team holds agents added here, which the
+  // definition does not, and keys that must be taken out before it travels.
+  const projectFiles = await readProjectFolder(path.join(deps.projectsRoot, projectId));
+  const { agents: running, credentials: savedCredentials } = cleanProjectSnapshots(projectFiles, includeCredentials);
+  const definition: ProjectDefinition = {
+    ...found,
+    ...(found.mcpServers && {
+      mcpServers: cleanServers(found.mcpServers as MCPServerDef[], process.env, includeCredentials) as ProjectDefinition['mcpServers'],
+    }),
+  };
 
   const templates: AgentTemplate[] = [];
-  for (const templateId of unique(definition.team.map((a) => a.templateId).filter((id): id is string => !!id))) {
+  const templateIds = [...definition.team.map((a) => a.templateId), ...running.map((a) => a.templateId)];
+  for (const templateId of unique(templateIds.filter((id): id is string => !!id))) {
     const template = await deps.library.getTemplate(templateId);
     if (template) templates.push(template);
     else warnings.push(`Template ${templateId} is not in the library; its agent travels in the definition only.`);
   }
 
   const secrets: Record<string, AgentSecrets> = {};
-  for (const id of unique(definition.team.flatMap((a) => [a.instanceId, a.templateId ?? a.instanceId]))) {
+  const secretIds = [
+    ...definition.team.flatMap((a) => [a.instanceId, a.templateId ?? a.instanceId]),
+    ...running.map((a) => a.id),
+  ];
+  for (const id of unique(secretIds)) {
     const { personalMcpCredentials, teamContext } = deps.secrets.get(id);
+    // Credentials an older save kept in the snapshot count too; this machine's file wins.
+    const credentials = personalMcpCredentials ?? savedCredentials[id];
     const kept: AgentSecrets = {
       ...(teamContext && { teamContext }),
-      ...(options.includeCredentials && personalMcpCredentials && { personalMcpCredentials }),
+      ...(includeCredentials && credentials && { personalMcpCredentials: credentials }),
     };
     if (Object.keys(kept).length > 0) secrets[id] = kept;
   }
 
   const scheduledActions: ScheduledActionDef[] = [];
-  const actionOwners = [...definition.team, ...templates];
+  const actionOwners = [...definition.team, ...templates, ...running];
   for (const id of unique(actionOwners.flatMap((a) => a.scheduledActionIds ?? []))) {
     const action = deps.actions.get(id);
     if (action) scheduledActions.push(action);
     else warnings.push(`Scheduled action ${id} is referenced by an agent but no longer exists.`);
   }
 
-  const identities: Identity[] = [...definition.team, ...templates].map((a) => a.identity);
+  const identities: Identity[] = [...definition.team, ...templates, ...running]
+    .flatMap((a) => (a.identity ? [a.identity] : []));
   const assets = new Map<string, Uint8Array>();
   for (const rel of unique(identities.flatMap(assetPaths))) {
     const file = path.join(deps.dataRoot, ...rel.split('/'));
@@ -113,9 +135,28 @@ export async function exportProject(
     warnings,
   };
 
-  const projectFiles = await readProjectFolder(path.join(deps.projectsRoot, projectId));
   const bytes = await packArchive({ manifest, definition, templates, secrets, scheduledActions, assets, projectFiles });
   return { bytes, manifest };
+}
+
+/**
+ * Take credentials and this machine's keys out of every saved team state in
+ * the folder, in place. Returns the agents they hold and what was taken.
+ */
+function cleanProjectSnapshots(
+  files: Map<string, Uint8Array>, includeCredentials: boolean,
+): { agents: SnapshotAgent[]; credentials: CleanSnapshot['credentials'] } {
+  const agents: SnapshotAgent[] = [];
+  const credentials: CleanSnapshot['credentials'] = {};
+  for (const [rel, data] of files) {
+    if (!SNAPSHOT_FILE.test(rel)) continue;
+    const clean = cleanSnapshot(new TextDecoder().decode(data), { includeCredentials });
+    files.set(rel, new TextEncoder().encode(clean.text));
+    // The current team; copies kept beside it only lend credentials.
+    if (rel === 'team-state.json') agents.push(...clean.agents);
+    for (const [id, creds] of Object.entries(clean.credentials)) credentials[id] ??= creds;
+  }
+  return { agents, credentials };
 }
 
 async function readProjectFolder(dir: string): Promise<Map<string, Uint8Array>> {
