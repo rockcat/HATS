@@ -11,7 +11,7 @@ import { getToolsForHat } from '../../../packages/core/src/tools/definitions.js'
 import { AIProvider } from '../providers/types.js';
 import { EventStore } from '../store/event-store.js';
 import { MCPRegistry } from '../mcp/mcp-registry.js';
-import { splitToolSet, unmatchedSelectors } from '../tools/tool-exposure.js';
+import { splitToolSet, unmatchedSelectors, type AvailableTools, type AgentToolSet } from '../tools/tool-exposure.js';
 import { DEVICE_PREFIX } from '../device/device-tool-bridge.js';
 import type { DeviceToolBridge } from '../device/device-tool-bridge.js';
 
@@ -375,6 +375,7 @@ export class TeamOrchestrator {
           enabledMcpServers:          agent.config.enabledMcpServers,
           personalMcpCredentials:     agent.config.personalMcpCredentials,
           disabledPersonalMcpServers: agent.config.disabledPersonalMcpServers,
+          upfrontTools:               agent.config.upfrontTools,
           scheduledActionIds:         assigned,
           // Left out, every save stored the agent without its limits, and the
           // next time it was built — a project switch, a restore — it had none.
@@ -509,6 +510,7 @@ export class TeamOrchestrator {
         enabledMcpServers:          def.enabledMcpServers,
         personalMcpCredentials:     def.personalMcpCredentials,
         disabledPersonalMcpServers: def.disabledPersonalMcpServers,
+        upfrontTools:          def.upfrontTools,
         maxContextTokens:      def.maxContextTokens,
         maxCostPerHour:        def.maxCostPerHour,
         instructions:          def.instructions,
@@ -692,6 +694,57 @@ export class TeamOrchestrator {
     }
   }
 
+  /** Every MCP tool this agent can reach, by where it comes from. */
+  private availableToolsFor(agent: IAgent): AvailableTools {
+    const ids = agent.config.enabledMcpServers;
+
+    // Split by which list they go in rather than by asking every project
+    // to configure selectors: personal is upfront, shared is searchable.
+    const board = this.kanbanStore();
+    const kanban = board ? kanbanTools().map((t) => ({
+      name: t.name, description: t.description, parameters: t.inputSchema,
+    })) : [];
+    const upfrontKanban = new Set<string>(UPFRONT_KANBAN_TOOLS);
+
+    const shared = [
+      ...(ids == null ? this.mcp.getAllTools() : this.mcp.getToolsForServers(ids)),
+      ...kanban.filter((t) => !upfrontKanban.has(t.name)),
+    ];
+
+    // A device tool counts as personal: it belongs to this user's own
+    // phone, there are few of them, and an agent that has to discover
+    // the camera will not think to look.
+    const context = this.peopleContext(agent.name);
+
+    const personal = [
+      ...(this.personalMcpByAgent.get(agent.name.toLowerCase())?.getAllTools() ?? []),
+      ...(this.deviceTools?.toolDefinitions() ?? []),
+      // Knowing who you are speaking to is not something to go looking
+      // for mid-conversation, so these sit upfront with the device tools.
+      ...(context ? peopleTools(context).map((t) => ({
+        name: t.name, description: t.description, parameters: t.inputSchema,
+      })) : []),
+    ];
+
+    // Reading the board and moving a ticket across it are the hot path,
+    // so they are sent whatever the template selects. The rest —
+    // blockers, deletion, reassignment — are occasional, and tool search
+    // finds them when they are wanted.
+    const always = kanban.filter((t) => upfrontKanban.has(t.name));
+    return { personal, shared, always };
+  }
+
+  /**
+   * What an agent can reach, and what goes in every call — with the
+   * selection it has, or with `selectors` to see what a change would do.
+   */
+  agentToolSet(name: string, selectors?: string[] | null): { available: AvailableTools; split: AgentToolSet } {
+    const agent = this.requireAgent(name);
+    const available = this.availableToolsFor(agent);
+    const chosen = selectors === undefined ? agent.config.upfrontTools : (selectors ?? undefined);
+    return { available, split: splitToolSet(available, chosen) };
+  }
+
   /**
    * Where one agent's own files live — its memory, and whatever else only it
    * owns. Keyed by instance id rather than name, so renaming an agent does
@@ -777,41 +830,8 @@ export class TeamOrchestrator {
       agent.setToolExecutor(buildToolExecutor(this.makeToolCallContext(), this.mcp));
       let warnedSelectors = false;
       agent.setExtraToolsProvider(() => {
-        const ids = agent.config.enabledMcpServers;
-
-        // Split by which list they go in rather than by asking every project
-        // to configure selectors: personal is upfront, shared is searchable.
-        const board = this.kanbanStore();
-        const kanban = board ? kanbanTools().map((t) => ({
-          name: t.name, description: t.description, parameters: t.inputSchema,
-        })) : [];
-        const upfrontKanban = new Set<string>(UPFRONT_KANBAN_TOOLS);
-
-        const shared = [
-          ...(ids == null ? this.mcp.getAllTools() : this.mcp.getToolsForServers(ids)),
-          ...kanban.filter((t) => !upfrontKanban.has(t.name)),
-        ];
-
-        // A device tool counts as personal: it belongs to this user's own
-        // phone, there are few of them, and an agent that has to discover
-        // the camera will not think to look.
-        const context = this.peopleContext(agent.name);
-
-        const personal = [
-          ...(this.personalMcpByAgent.get(agent.name.toLowerCase())?.getAllTools() ?? []),
-          ...(this.deviceTools?.toolDefinitions() ?? []),
-          // Knowing who you are speaking to is not something to go looking
-          // for mid-conversation, so these sit upfront with the device tools.
-          ...(context ? peopleTools(context).map((t) => ({
-            name: t.name, description: t.description, parameters: t.inputSchema,
-          })) : []),
-        ];
-
-        // Reading the board and moving a ticket across it are the hot path,
-        // so they are sent whatever the template selects. The rest —
-        // blockers, deletion, reassignment — are occasional, and tool search
-        // finds them when they are wanted.
-        const always = kanban.filter((t) => upfrontKanban.has(t.name));
+        const available = this.availableToolsFor(agent);
+        const { personal, shared, always } = available;
 
         // Checked here rather than at registration because this is the first
         // point where the servers have actually connected and reported.
@@ -823,7 +843,7 @@ export class TeamOrchestrator {
               + ' They will never be sent to the model.');
           }
         }
-        return splitToolSet({ personal, shared, always }, agent.config.upfrontTools);
+        return splitToolSet(available, agent.config.upfrontTools);
       });
       agent.setLLMSemaphore(this.llmSemaphore);
       if (this.telemetryRecorder) agent.setTelemetryRecorder(this.telemetryRecorder);
@@ -887,6 +907,10 @@ export class TeamOrchestrator {
 
   updateAgentMaxCostPerHour(name: string, maxCostPerHour: number | undefined): void {
     this.requireAgent(name).setMaxCostPerHour(maxCostPerHour);
+  }
+
+  updateAgentUpfrontTools(name: string, selectors: string[] | undefined): void {
+    this.requireAgent(name).setUpfrontTools(selectors);
   }
 
   updateAgentPromptSettings(name: string, instructions: string | undefined, promptMode: PromptMode | undefined): void {

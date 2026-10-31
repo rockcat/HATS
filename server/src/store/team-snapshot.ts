@@ -37,6 +37,8 @@ export interface AgentDefinition {
   enabledMcpServers?: string[];
   personalMcpCredentials?: Record<string, Record<string, string>>;
   disabledPersonalMcpServers?: string[];
+  /** MCP tools sent in every call; the rest are found with search_tools. Unset: the default. */
+  upfrontTools?: string[];
   scheduledActionIds: string[];
   maxContextTokens?: number;
   maxCostPerHour?: number;

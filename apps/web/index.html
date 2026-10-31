@@ -337,6 +337,12 @@
           <summary class="agent-config-details-summary">Prompt preview</summary>
           <pre id="agent-prompt-text" class="agent-prompt-text"></pre>
         </details>
+        <details class="agent-config-details" id="agent-tools-line">
+          <summary class="agent-config-details-summary" id="agent-tools-summary">Tools</summary>
+          <p class="agent-tools-help">Ticked tools are sent with every request. The rest are still usable: the agent finds them with tool search, which saves their size in every call. Changes apply to this project's agent only.</p>
+          <div id="agent-tools-list" class="agent-tools-list"></div>
+          <button type="button" id="agent-tools-default" class="agent-tools-default">Use default (own accounts sent, shared servers by search)</button>
+        </details>
         <details class="agent-config-details" id="agent-config-personal-mcp-line" hidden>
           <summary class="agent-config-details-summary">Personal MCPs</summary>
           <div id="agent-config-personal-mcp-list" class="agent-config-personal-mcp-list"></div>

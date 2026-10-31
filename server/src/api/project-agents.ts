@@ -26,6 +26,7 @@ export function projectCopy(template: AgentDefinition, provider: AIProvider, id:
     model: template.model,
     enabledMcpServers: template.enabledMcpServers && [...template.enabledMcpServers],
     disabledPersonalMcpServers: template.disabledPersonalMcpServers && [...template.disabledPersonalMcpServers],
+    upfrontTools: template.upfrontTools && [...template.upfrontTools],
     personalMcpCredentials: template.personalMcpCredentials,
     maxContextTokens: template.maxContextTokens,
     maxCostPerHour: template.maxCostPerHour,

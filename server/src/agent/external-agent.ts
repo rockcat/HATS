@@ -508,6 +508,7 @@ export class ExternalAgent implements IAgent {
   }
   setMaxContextTokens(_v: number | undefined): void {}
   setMaxCostPerHour(_v: number | undefined): void {}
+  setUpfrontTools(_selectors: string[] | undefined): void {}
   // The external service writes its own prompt; kept so the settings survive a save.
   setPromptSettings(instructions: string | undefined, promptMode: PromptMode | undefined): void {
     this.config.instructions = instructions;

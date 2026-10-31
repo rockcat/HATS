@@ -472,6 +472,7 @@ export class Agent implements IAgent {
   }
 
   setMaxContextTokens(v: number | undefined): void { this.config.maxContextTokens = v; }
+  setUpfrontTools(selectors: string[] | undefined): void { this.config.upfrontTools = selectors; }
   setMaxCostPerHour(v: number | undefined): void {
     this.config.maxCostPerHour = v;
     if (this.costIdleTimer && !this.isHourlyCostExceeded()) this.endCostIdle();

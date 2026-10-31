@@ -65,6 +65,8 @@ export interface IAgent {
   setVoice(voice: string | undefined, speakerName: string | undefined): void;
   setMaxContextTokens(v: number | undefined): void;
   setMaxCostPerHour(v: number | undefined): void;
+  /** Which MCP tools go in every call; undefined for the default. */
+  setUpfrontTools(selectors: string[] | undefined): void;
   /** Change the free-text instructions and which prompt (full or condensed) the agent is given. */
   setPromptSettings(instructions: string | undefined, promptMode: PromptMode | undefined): void;
   /** Both versions of the system prompt, with unsaved edits applied. Absent when the agent has no prompt of its own. */

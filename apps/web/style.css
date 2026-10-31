@@ -2426,6 +2426,26 @@ main {
   font-size: 11px; color: var(--text-muted); white-space: nowrap;
 }
 .agent-config-limit-input { flex: 0 0 auto; width: 72px; }
+
+/* Tools sent in every call, in the Configure panel */
+.agent-tools-help { font-size: 11px; color: var(--text-muted); margin: 4px 0 6px; line-height: 1.4; }
+.agent-tools-list { max-height: 280px; overflow-y: auto; border: 1px solid var(--border); border-radius: 4px; }
+.agent-tools-empty { font-size: 11px; color: var(--text-muted); padding: 6px 8px; }
+.agent-tools-group + .agent-tools-group { border-top: 1px solid var(--border); }
+.agent-tools-group-head {
+  display: flex; align-items: center; gap: 6px; padding: 4px 8px;
+  font-size: 11px; font-weight: 600; background: var(--surface-2); position: sticky; top: 0;
+}
+.agent-tools-group-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.agent-tools-row { display: flex; align-items: center; gap: 6px; padding: 2px 8px 2px 22px; font-size: 11px; cursor: pointer; }
+.agent-tools-row:hover { background: var(--surface-2); }
+.agent-tools-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ui-monospace, monospace; }
+.agent-tools-meta { font-size: 10px; color: var(--text-muted); font-weight: 400; white-space: nowrap; }
+.agent-tools-default {
+  margin-top: 6px; font-size: 10px; color: var(--text-muted); background: none; cursor: pointer;
+  border: 1px solid var(--border); border-radius: 4px; padding: 2px 8px;
+}
+.agent-tools-default:hover { color: var(--text); }
 .agent-config-input:focus { outline: none; border-color: var(--hat-blue); }
 .agent-config-line--top { align-items: flex-start; }
 .agent-config-line--top .agent-config-label { padding-top: 5px; }

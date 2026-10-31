@@ -8,6 +8,7 @@ const template: AgentDefinition = {
   id: 'tpl', identity: { name: 'Poppy', visualDescription: 'x' }, hatType: [HatType.Blue],
   model: 'm', providerName: 'anthropic', scheduledActionIds: ['a1'],
   enabledMcpServers: ['imap'], maxCostPerHour: 0.5, maxContextTokens: 32000,
+  upfrontTools: ['imap:get_email'],
 };
 
 describe('copying a template into a project', () => {
@@ -26,6 +27,13 @@ describe('copying a template into a project', () => {
     expect(template.identity.name).toBe('Poppy');
     expect(template.enabledMcpServers).toEqual(['imap']);
     expect(template.hatType).toEqual([HatType.Blue]);
+  });
+
+  it("starts with the template's choice of tools, and changing it leaves the template's alone", () => {
+    const copy = projectCopy(template, new MockProvider({ content: '' }));
+    expect(copy.upfrontTools).toEqual(['imap:get_email']);
+    copy.upfrontTools!.push('imap');
+    expect(template.upfrontTools).toEqual(['imap:get_email']);
   });
 });
 

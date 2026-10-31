@@ -36,6 +36,7 @@ export function templateToDefinition(template: AgentTemplate, secrets: LocalAgen
   if (template.externalEndpoint) def.externalEndpoint = template.externalEndpoint as AgentDefinition['externalEndpoint'];
   if (template.tools?.enabledMcpServers) def.enabledMcpServers = template.tools.enabledMcpServers;
   if (template.tools?.disabledPersonalMcpServers) def.disabledPersonalMcpServers = template.tools.disabledPersonalMcpServers;
+  if (template.tools?.upfrontTools) def.upfrontTools = template.tools.upfrontTools;
   if (template.limits?.maxContextTokens !== undefined) def.maxContextTokens = template.limits.maxContextTokens;
   if (template.limits?.maxCostPerHour !== undefined) def.maxCostPerHour = template.limits.maxCostPerHour;
   if (secrets.personalMcpCredentials) def.personalMcpCredentials = secrets.personalMcpCredentials;
@@ -60,6 +61,8 @@ function definitionToTemplateInput(def: AgentDefinition) {
   const tools: Record<string, string[]> = {};
   if (def.enabledMcpServers) tools['enabledMcpServers'] = def.enabledMcpServers;
   if (def.disabledPersonalMcpServers) tools['disabledPersonalMcpServers'] = def.disabledPersonalMcpServers;
+  // Left out, saving a template from here dropped the tools chosen for it.
+  if (def.upfrontTools) tools['upfrontTools'] = def.upfrontTools;
 
   return {
     name,

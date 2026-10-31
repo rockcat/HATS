@@ -26,6 +26,7 @@ import { propagateEdit, removeCopies, lastRunOf, isCopyOf } from './agenda-sync.
 import { repeatFromRequest, type Repeat } from './agenda-store.js';
 import { projectCopy, hasCopyOf, assignScheduledActions } from './project-agents.js';
 import { parseLimits } from './agent-limits.js';
+import { toolRows, selectorsFor } from '../tools/tool-listing.js';
 import { Task } from '../orchestrator/types.js';
 
 function labelForThread(key: string, tasks: Task[]): string {
@@ -210,6 +211,32 @@ export class AgentRouter {
         if ('maxCostPerHour' in patch) orch.updateAgentMaxCostPerHour(name, patch.maxCostPerHour);
         if ('maxContextTokens' in patch) orch.updateAgentMaxContextTokens(name, patch.maxContextTokens);
         sseBroadcast({ type: 'agent_update', agents: this.deps.buildAgentStatuses() });
+        saveCurrentState().catch(() => {});
+        json(res, 200, { ok: true });
+      } catch (err) { json(res, 400, { error: (err as Error).message }); }
+      return true;
+    }
+
+    // Every tool this project's copy can reach, its size, and whether it is
+    // sent in every call or found with search_tools.
+    if (pathname.match(/^\/api\/agents\/[^/]+\/tools$/) && (method === 'GET' || method === 'PATCH')) {
+      const agentName = decodeURIComponent(pathname.slice('/api/agents/'.length, -'/tools'.length));
+      try {
+        const name  = resolveAgentName(agentName);
+        const agent = orch.getAgent(name);
+        if (!agent) { json(res, 404, { error: `Agent "${agentName}" not found` }); return true; }
+        // ?default=1 shows what the default selection would send, before choosing it.
+        const asDefault = method === 'GET' && url.searchParams.get('default') === '1';
+        const { available, split } = orch.agentToolSet(name, asDefault ? null : undefined);
+        const rows = toolRows(getToolsForHat(agent.hatType), available, split);
+        if (method === 'GET') {
+          json(res, 200, { rows, custom: agent.config.upfrontTools !== undefined });
+          return true;
+        }
+        // { upfront: [tool names] } to choose, or { upfront: null } for the default.
+        const { upfront } = JSON.parse(await readBody(req)) as { upfront?: string[] | null };
+        if (upfront !== null && !Array.isArray(upfront)) { json(res, 400, { error: 'upfront must be a list of tool names, or null' }); return true; }
+        orch.updateAgentUpfrontTools(name, upfront === null ? undefined : selectorsFor(rows, upfront));
         saveCurrentState().catch(() => {});
         json(res, 200, { ok: true });
       } catch (err) { json(res, 400, { error: (err as Error).message }); }

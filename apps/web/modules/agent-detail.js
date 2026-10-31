@@ -11,6 +11,7 @@ import { refreshProviderModels } from './providers.js';
 import { bindAgentAgenda } from './agent-agenda.js';
 import { bindAgentPrompt, initAgentPrompt, saveAgentPrompt } from './agent-prompt.js';
 import { bindAgentLimits, saveAgentLimits } from './agent-limits.js';
+import { bindAgentTools, initAgentTools, saveAgentTools } from './agent-tools.js';
 
 export let activeDetailAgent = null;
 let activeChatAgent          = null;
@@ -412,6 +413,7 @@ export function initAgentDetail() {
   });
 
   initAgentPrompt();
+  initAgentTools();
 
   document.getElementById('agent-config-apply').addEventListener('click', async () => {
     if (!activeDetailAgent) return;
@@ -426,6 +428,7 @@ export function initAgentDetail() {
       }));
       tasks.push(saveAgentPrompt(activeDetailAgent));
       tasks.push(saveAgentLimits(activeDetailAgent));
+      tasks.push(saveAgentTools(activeDetailAgent));
       const mcpLine = document.getElementById('agent-config-mcp-line');
       if (mcpLine && !mcpLine.hidden) {
         const checks     = Array.from(document.querySelectorAll('#agent-config-mcp-list input[type="checkbox"]'));
@@ -463,6 +466,7 @@ export function openAgentDetail(name, chatOnly = false) {
   bindAgentAgenda(name);
   bindAgentPrompt(name, agent);
   bindAgentLimits(agent);
+  bindAgentTools(name);
 
   const ticketsEl     = document.getElementById('agent-detail-tickets');
   ticketsEl.innerHTML = '';
