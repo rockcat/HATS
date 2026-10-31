@@ -112,6 +112,9 @@ Every HATS project is isolated — its own Kanban board, meeting calendar, agent
 state snapshot. Projects can be created, switched, and loaded without restarting. A project goal set by the team lead is automatically injected into
 every agent's system prompt to keep all thinking anchored to the objective.
 
+A runner works on one project at a time. To run several at once, give each its
+own runner against the same services — see [MULTIPLE-PROJECTS.md](MULTIPLE-PROJECTS.md).
+
 ## The Dashboard
 
 The HATS web UI is a four-panel dashboard:

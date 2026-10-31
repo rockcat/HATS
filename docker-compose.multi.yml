@@ -1,0 +1,69 @@
+# Several projects at once: one runner per project, all using the same
+# services (Agent Template Library, Project Server, Speech), which run once,
+# as they do for a single runner. See docs/MULTIPLE-PROJECTS.md.
+#
+#   docker compose -f docker-compose.multi.yml up -d --build
+#
+# Each runner has:
+#   - its own port, the same inside the container as on this machine: Google
+#     sign-in sends you back to localhost:<the runner's own port>
+#   - its project, fixed (TEAM_PROJECT + HATS_PROJECT_LOCKED)
+#   - its own data folder under ./runners — logins, Google tokens, the MCP
+#     catalogue and telemetry are written by every runner, and two runners
+#     sharing one copy would lose each other's changes
+#   - its project's folder mounted from the shared data folder, so the project
+#     stays where it is and nothing needs copying
+#
+# To add a project, copy a runner block, then change its name, the port (in
+# both places), the project, and the two paths that name the project.
+
+x-runner: &runner
+  build: .
+  image: hats:latest
+  restart: unless-stopped
+  env_file: [.env]
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+  healthcheck:
+    # Any reply under 500 is alive: /api/ needs a login, so a 401 is fine.
+    test: ["CMD", "node", "-e", "fetch('http://localhost:' + (process.env.TEAM_RUNNER_PORT || 3001) + '/api/state').then(r => process.exit(r.status < 500 ? 0 : 1)).catch(() => process.exit(1))"]
+    interval: 30s
+    timeout: 5s
+    retries: 3
+    start_period: 15s
+
+x-runner-env: &runner-env
+  NODE_ENV: production
+  RUNTIME_DIR: /app/runtime_data
+  TZ: ${TZ:-UTC}
+  HATS_PROJECT_LOCKED: "1"
+  # "Open folder" shows the project's path in the shared data folder.
+  HATS_HOST_DATA: ${HATS_DATA:-./runtime_data}
+  OLLAMA_BASE_URL: ${DOCKER_OLLAMA_BASE_URL:-http://host.docker.internal:11434/v1}
+  SPEECH_SERVICE_URL: ${DOCKER_SPEECH_SERVICE_URL:-http://host.docker.internal:3050}
+  AGENT_LIBRARY_URL: ${DOCKER_AGENT_LIBRARY_URL:-http://host.docker.internal:3010}
+  PROJECT_SERVER_URL: ${DOCKER_PROJECT_SERVER_URL:-http://host.docker.internal:3020}
+  HATS_ENV_LOCKED: RUNTIME_DIR,OLLAMA_BASE_URL,SPEECH_SERVICE_URL,AGENT_LIBRARY_URL,PROJECT_SERVER_URL,TEAM_PROJECT,HATS_PROJECT_LOCKED
+
+services:
+  runner-evan:
+    <<: *runner
+    ports: ["3001:3001"]
+    environment:
+      <<: *runner-env
+      TEAM_RUNNER_PORT: 3001
+      TEAM_PROJECT: evan
+    volumes:
+      - ${HATS_RUNNERS:-./runners}/evan:/app/runtime_data
+      - ${HATS_DATA:-./runtime_data}/projects/evan:/app/runtime_data/projects/evan
+
+  runner-paige:
+    <<: *runner
+    ports: ["3002:3002"]
+    environment:
+      <<: *runner-env
+      TEAM_RUNNER_PORT: 3002
+      TEAM_PROJECT: paige
+    volumes:
+      - ${HATS_RUNNERS:-./runners}/paige:/app/runtime_data
+      - ${HATS_DATA:-./runtime_data}/projects/paige:/app/runtime_data/projects/paige
