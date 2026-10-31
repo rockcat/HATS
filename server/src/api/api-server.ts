@@ -41,6 +41,7 @@ import { canonicalModel, configFromEnv } from '../people/embedder.js';
 import { keepDeviceImage } from '../device/image-store.js';
 import { repeatFromRequest, type Repeat } from './agenda-store.js';
 import { cronError } from '../../../packages/core/src/schedule/cron.js';
+import { projectLocked, PROJECT_LOCKED_MESSAGE } from '../project/project-lock.js';
 
 const __dirname  = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(__dirname, '..', '..', '..', 'apps', 'web');
@@ -815,6 +816,7 @@ export class APIServer {
 
   private async switchProject(newId: string): Promise<void> {
     if (!this.projectLoader || !this.projectsRoot) throw new Error('Project loader not configured');
+    if (projectLocked()) throw new Error(PROJECT_LOCKED_MESSAGE);
     await executeProjectSwitch(newId, {
       projectLoader:        this.projectLoader,
       projectsRoot:         this.projectsRoot,

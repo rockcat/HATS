@@ -89,13 +89,18 @@ export function initGoalBar() {
 
 export function updateProjectBadge(id, dir) {
   const badge = document.getElementById('project-badge');
-  if (badge) { badge.textContent = id; badge.title = dir ?? id; }
+  if (!badge) return;
+  badge.textContent = id;
+  if (!badge.dataset.locked) badge.title = dir ?? id;
 }
 
 export function initProjectBadge() {
   fetch('/api/project')
     .then(r => r.json())
-    .then(({ id, dir }) => updateProjectBadge(id, dir))
+    .then(({ id, dir, locked }) => {
+      updateProjectBadge(id, dir);
+      if (locked) lockProjectBadge();
+    })
     .catch(() => {});
 
   const badge    = document.getElementById('project-badge');
@@ -103,6 +108,7 @@ export function initProjectBadge() {
 
   badge.addEventListener('click', e => {
     e.stopPropagation();
+    if (badge.dataset.locked) return;
     const open = !switcher.hidden;
     if (open) { switcher.hidden = true; return; }
     switcher.hidden = false;
@@ -127,6 +133,14 @@ export function initProjectBadge() {
       switcher.hidden = true;
     }
   });
+}
+
+/** A runner kept on one project: the badge names it but no longer switches. */
+function lockProjectBadge() {
+  const badge = document.getElementById('project-badge');
+  badge.dataset.locked = 'true';
+  badge.classList.add('project-badge--locked');
+  badge.title = 'This runner is kept on this project. Other projects run on their own runners.';
 }
 
 export function loadProjectList() {

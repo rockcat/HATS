@@ -192,6 +192,8 @@ header h1 {
   padding-right: 10px;
 }
 
+.project-badge.project-badge--locked { cursor: default; }
+
 .project-badge-wrap {
   position: relative;
   display: inline-block;
