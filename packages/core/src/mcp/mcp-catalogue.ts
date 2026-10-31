@@ -93,11 +93,10 @@ export function isProjectScoped(config: MCPServerConfig): boolean {
 /** Resolves env vars and platform-specific command names at connect time.
  *  Expands {CWD}, {HOME}, and {PROJECT_DIR} placeholders in args and env values. */
 export function resolveConfig(config: MCPServerConfig, projectDir?: string | null): MCPServerConfig {
-  if (config.transport === 'http') {
-    return config.headers
-      ? { ...config, headers: interpolateHeaders(config.headers, process.env as Record<string, string>) }
-      : config;
-  }
+  // Headers keep their ${NAME} placeholders: the client fills them in when it
+  // connects, so a token is never written into a saved project, and a
+  // refreshed one is picked up on the next connect.
+  if (config.transport === 'http') return config;
   if (config.transport !== 'stdio') return config;
 
   const expandPlaceholders = (v: string) =>

@@ -3,7 +3,7 @@
 // restoring one must keep the first and drop the rest.
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtemp, rm, writeFile } from 'fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import * as path from 'path';
 import { TeamOrchestrator } from './orchestrator.js';
@@ -123,5 +123,39 @@ describe('an agent copied from the library into a project', () => {
     expect(store.get('tpl')).toMatchObject({ maxCostPerHour: 0.5, identity: { name: 'Poppy' } });
     expect(store.get('tpl')?.identity.specialisation).toBeUndefined();
     expect(store.list()).toHaveLength(1);
+  });
+});
+
+describe("an agent's credentials", () => {
+  const creds = { 'no-such-server': { PASSWORD: 'hunter22' } };
+
+  it('are kept out of the saved project, and come back from this machine on restore', async () => {
+    const file = new AgentStore(path.join(dir, 'agents.json'));
+    await file.load();
+    const secrets = new Map<string, object>();
+    const store = Object.assign(file, {
+      secretsFor: (id: string) => secrets.get(id) ?? {},
+      setSecrets: async (id: string, s: object) => { secrets.set(id, s); },
+    });
+    orch.setAgentStore(store);
+    orch.registerAgent({ ...poppy('poppy-1'), personalMcpCredentials: creds });
+    const state = path.join(dir, 'team-state.json');
+    await orch.saveState(state);
+
+    expect(await readFile(state, 'utf8')).not.toContain('hunter22');
+    const again = await restored(state, store);
+    expect(again.getAgent('Poppy')?.config.personalMcpCredentials).toEqual(creds);
+  });
+
+  it('stay in the project when the store has nowhere else to keep them', async () => {
+    const store = new AgentStore(path.join(dir, 'agents.json'));
+    await store.load();
+    orch.setAgentStore(store);
+    orch.registerAgent({ ...poppy('poppy-1'), personalMcpCredentials: creds });
+    const state = path.join(dir, 'team-state.json');
+    await orch.saveState(state);
+
+    const again = await restored(state, store);
+    expect(again.getAgent('Poppy')?.config.personalMcpCredentials).toEqual(creds);
   });
 });

@@ -24,6 +24,7 @@ import type { DeviceToolBridge } from '../device/device-tool-bridge.js';
  */
 const FACE_TOOL = 'embed_face';
 import { MCPServerDef } from '../mcp/mcp-client.js';
+import { portableConfig } from '../../../packages/core/src/mcp/saved-config.js';
 import { Semaphore } from '../providers/semaphore.js';
 import { TeamSnapshot, TeamSnapshotV1, TeamSnapshotV2, AgentSnapshot, AgentDefinition, HistoryEntry } from '../store/team-snapshot.js';
 import { AgentDefinitionStore } from '../api/agent-store.js';
@@ -358,6 +359,7 @@ export class TeamOrchestrator {
       const agents: Record<string, AgentDefinition> = {};
       const agentHistories: Record<string, HistoryEntry[]> = {};
       const agentThreads: Record<string, Record<string, HistoryEntry[]>> = {};
+      const keepsSecrets = !!(this.agentStore.setSecrets && this.agentStore.secretsFor);
       for (const agent of this.agents.values()) {
         agentIds.push(agent.id);
         const threads = serializeAllThreads(agent);
@@ -373,7 +375,10 @@ export class TeamOrchestrator {
           providerName:          agent.config.provider.name,
           teamContext:           agent.config.teamContext,
           enabledMcpServers:          agent.config.enabledMcpServers,
-          personalMcpCredentials:     agent.config.personalMcpCredentials,
+          // Kept in this machine's secrets file rather than the project, which
+          // travels: every export would otherwise carry the agents' passwords.
+          // Only a store without one keeps them here.
+          ...(!keepsSecrets && { personalMcpCredentials: agent.config.personalMcpCredentials }),
           disabledPersonalMcpServers: agent.config.disabledPersonalMcpServers,
           upfrontTools:               agent.config.upfrontTools,
           scheduledActionIds:         assigned,
@@ -386,14 +391,9 @@ export class TeamOrchestrator {
           externalEndpoint:           agent.config.externalEndpoint,
         };
         agents[agent.id] = def;
-        // Credentials stay on this machine; a team built from the project
-        // definition picks them up from here by instance id.
-        if (def.personalMcpCredentials || def.teamContext) {
-          await this.agentStore.setSecrets?.(agent.id, {
-            personalMcpCredentials: def.personalMcpCredentials,
-            teamContext: def.teamContext,
-          });
-        }
+        // Credentials stay on this machine; a restore, and a team built from
+        // the project definition, pick them up from here by instance id.
+        await this.keepSecrets(agent);
       }
       const snapshot: TeamSnapshotV2 = {
         version: 2,
@@ -405,7 +405,7 @@ export class TeamOrchestrator {
         agentThreads,
         tasks: Array.from(this.tasks.values()),
         meetings: Array.from(this.meetings.values()),
-        mcpServers: this.mcp.getServerDefs(),
+        mcpServers: this.portableServerDefs(),
       };
       const tmp = filePath + '.tmp';
       await writeFile(tmp, JSON.stringify(snapshot, null, 2), 'utf-8');
@@ -431,7 +431,7 @@ export class TeamOrchestrator {
         agents: agentSnapshots,
         tasks: Array.from(this.tasks.values()),
         meetings: Array.from(this.meetings.values()),
-        mcpServers: this.mcp.getServerDefs(),
+        mcpServers: this.portableServerDefs(),
       };
       const tmp = filePath + '.tmp';
       await writeFile(tmp, JSON.stringify(snapshot, null, 2), 'utf-8');
@@ -508,7 +508,9 @@ export class TeamOrchestrator {
         model:                 def.model,
         teamContext:           def.teamContext,
         enabledMcpServers:          def.enabledMcpServers,
-        personalMcpCredentials:     def.personalMcpCredentials,
+        // Older snapshots carry them; newer ones leave them in the secrets file.
+        personalMcpCredentials:     def.personalMcpCredentials
+          ?? this.agentStore?.secretsFor?.(def.id, def.templateId).personalMcpCredentials,
         disabledPersonalMcpServers: def.disabledPersonalMcpServers,
         upfrontTools:          def.upfrontTools,
         maxContextTokens:      def.maxContextTokens,
@@ -692,6 +694,25 @@ export class TeamOrchestrator {
       log.warn(`[Team] "${serverId}" is large: ${toolCount} tool schemas ride on every one of ${agentName}'s requests.`
         + ' Set "tools sent to the model" on the agent template to send only the ones it uses.');
     }
+  }
+
+  /** Shared servers as saved: nothing in them that came from this runner's environment. */
+  private portableServerDefs(): MCPServerDef[] {
+    return this.mcp.getServerDefs().map((d) => ({ ...d, config: portableConfig(d.config) }));
+  }
+
+  /** File an agent's credentials and team context in this machine's secrets, when they changed. */
+  private async keepSecrets(agent: IAgent): Promise<void> {
+    const store = this.agentStore;
+    if (!store?.setSecrets) return;
+    const wanted = {
+      ...(agent.config.personalMcpCredentials && { personalMcpCredentials: agent.config.personalMcpCredentials }),
+      ...(agent.config.teamContext && { teamContext: agent.config.teamContext }),
+    };
+    const held = store.secretsFor?.(agent.id) ?? {};
+    if (Object.keys(wanted).length === 0 && Object.keys(held).length === 0) return;
+    if (JSON.stringify(wanted) === JSON.stringify(held)) return;
+    await store.setSecrets(agent.id, wanted);
   }
 
   /** Every MCP tool this agent can reach, by where it comes from. */
