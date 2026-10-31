@@ -34,7 +34,7 @@ export function createCard(agent) {
     <div class="agent-header">
       <span class="agent-name"></span>
       <span class="agent-hat-badge"></span>
-      <button class="agent-card-chat-btn" title="Chat with this agent">💬</button>
+      <button class="agent-card-config-btn" title="Configure this agent" aria-label="Configure this agent">⚙</button>
       <div class="agent-hat-icon"></div>
     </div>
     <div class="agent-state">

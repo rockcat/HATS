@@ -1636,8 +1636,8 @@ main {
 }
 
 
-/* Chat button on agent cards */
-.agent-card-chat-btn {
+/* Settings (gear) button on agent cards; the card itself opens the chat */
+.agent-card-config-btn {
   opacity: 0;
   background: none;
   border: 1px solid transparent;
@@ -1650,10 +1650,10 @@ main {
   transition: opacity 0.15s, border-color 0.15s, color 0.15s;
   flex-shrink: 0;
 }
-.agent-card:hover .agent-card-chat-btn {
+.agent-card:hover .agent-card-config-btn {
   opacity: 1;
 }
-.agent-card-chat-btn:hover {
+.agent-card-config-btn:hover {
   border-color: var(--border);
   color: var(--text);
 }

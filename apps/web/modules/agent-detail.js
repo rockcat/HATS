@@ -361,13 +361,14 @@ export function initAgentDetail() {
   agentDetailInited = true;
 
   document.getElementById('agents-container').addEventListener('click', e => {
-    if (e.target.closest('.agent-card-chat-btn')) {
+    // The card is for talking to the agent; the gear opens its settings.
+    if (e.target.closest('.agent-card-config-btn')) {
       const card = e.target.closest('.agent-card');
-      if (card) openAgentChat(card.dataset.name);
+      if (card) openAgentDetail(card.dataset.name);
       return;
     }
     const card = e.target.closest('.agent-card');
-    if (card) openAgentDetail(card.dataset.name);
+    if (card) openAgentChat(card.dataset.name);
   });
   document.getElementById('agent-detail-close').addEventListener('click', closeAgentDetail);
   document.addEventListener('keydown', e => {
