@@ -12,7 +12,7 @@ export type {
 } from '../../../packages/core/src/mcp/config.js';
 export { interpolateHeaders } from '../../../packages/core/src/mcp/config.js';
 
-import { interpolateHeaders } from '../../../packages/core/src/mcp/config.js';
+import { interpolateArgs, interpolateHeaders } from '../../../packages/core/src/mcp/config.js';
 import type { MCPServerConfig } from '../../../packages/core/src/mcp/config.js';
 
 export interface MCPServerDef {
@@ -64,7 +64,8 @@ export class MCPClient {
     if (config.transport === 'stdio') {
       const missing = missingScript(config.args ?? []);
       if (missing) throw new Error(`${missing} is not installed in this environment — skipped`);
-      transport = new StdioClientTransport({ command: config.command, args: config.args ?? [], env: config.env });
+      const args = interpolateArgs(config.args ?? [], { ...process.env, ...config.env });
+      transport = new StdioClientTransport({ command: config.command, args, env: config.env });
     } else if (config.transport === 'http') {
       const headers = config.headers
         ? interpolateHeaders(config.headers, process.env as Record<string, string>)

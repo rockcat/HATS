@@ -26,6 +26,9 @@ export interface MCPServerConfigHTTP {
 
 export type MCPServerConfig = MCPServerConfigStdio | MCPServerConfigSSE | MCPServerConfigHTTP;
 
+const interpolate = (value: string, vars: Record<string, string | undefined>) =>
+  value.replace(/\$\{([^}]+)\}/g, (_, name) => vars[name] ?? '');
+
 /** Replace ${VAR_NAME} placeholders in header values from the supplied variable map. */
 export function interpolateHeaders(
   headers: Record<string, string>,
@@ -33,7 +36,16 @@ export function interpolateHeaders(
 ): Record<string, string> {
   const result: Record<string, string> = {};
   for (const [k, v] of Object.entries(headers)) {
-    result[k] = v.replace(/\$\{([^}]+)\}/g, (_, name) => vars[name] ?? '');
+    result[k] = interpolate(v, vars);
   }
   return result;
+}
+
+/**
+ * Replace ${VAR_NAME} placeholders in a stdio server's arguments, for a server
+ * that takes its settings only as flags. Done as it starts, so the config that
+ * is kept and saved still names the variable rather than holding its value.
+ */
+export function interpolateArgs(args: string[], vars: Record<string, string | undefined>): string[] {
+  return args.map((a) => interpolate(a, vars));
 }

@@ -105,6 +105,32 @@ export const BUILTIN_CATALOGUE: MCPCatalogueEntry[] = [
     url: 'https://github.com/modelcontextprotocol/servers/tree/main/src/github',
   },
   {
+    id: 'sftp-ssh',
+    name: 'SSH / SFTP',
+    description: 'Run shell commands on a remote Linux or Windows server over SSH, and upload, download and list its files over SFTP',
+    category: 'dev',
+    // Shared for the team's own server; per agent when each looks after its own.
+    users: ['human', 'agent'],
+    config: {
+      transport: 'stdio', command: 'npx',
+      // It reads only flags, so the flags name env values: filled in when the
+      // server starts, the password stays in env and out of a saved project.
+      args: ['-y', 'sftp-ssh-mcp', '--host=${SSH_HOST}', '--port=${SSH_PORT}', '--user=${SSH_USER}',
+        '--password=${SSH_PASSWORD}', '--key=${SSH_KEY}'],
+      env: { SSH_HOST: '', SSH_PORT: '22', SSH_USER: '', SSH_PASSWORD: '', SSH_KEY: '' },
+    },
+    envVars: [
+      { name: 'SSH_HOST', placeholder: 'Hostname or IP' },
+      { name: 'SSH_PORT', placeholder: '22' },
+      { name: 'SSH_USER', placeholder: 'Username' },
+      { name: 'SSH_PASSWORD', placeholder: 'Password (or leave blank and use a key)', type: 'password' },
+      { name: 'SSH_KEY', placeholder: 'Path to a private key file' },
+    ],
+    notes: 'The agent can run any command the SSH user can — give it an account with only the rights it needs. '
+      + 'A key path is read by the runner, so in Docker it must be a path inside the container, such as one under /app/runtime_data.',
+    url: 'https://www.npmjs.com/package/sftp-ssh-mcp',
+  },
+  {
     id: 'sqlite',
     name: 'SQLite',
     description: 'Run queries against a local SQLite database file',
