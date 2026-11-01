@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { handleCall, withFrontMatter, type DiaryOptions } from './server.js';
+import { handleCall, toolsFor, withFrontMatter, type DiaryOptions } from './server.js';
 
 interface Seen { method: string; url: string; auth: string | null; body: unknown }
 
@@ -49,6 +49,20 @@ describe('the diary tools', () => {
   it('pass on what the site said when it refuses', async () => {
     const { options } = site(401, { error: 'Invalid or missing token' });
     await expect(handleCall(options, 'rebuild_site', {})).rejects.toThrow('The diary said 401: Invalid or missing token');
+  });
+});
+
+describe('a diary not set up', () => {
+  it('offers no tools without both the address and the token', () => {
+    expect(toolsFor({ baseUrl: 'https://diary.example', token: '' })).toEqual([]);
+    expect(toolsFor({ baseUrl: '', token: 't0k' })).toEqual([]);
+    expect(toolsFor({ baseUrl: 'https://diary.example', token: 't0k' })).toHaveLength(5);
+  });
+
+  it('refuses a call without asking the site', async () => {
+    const { seen, options } = site(200, []);
+    await expect(handleCall({ ...options, token: '' }, 'list_entries', {})).rejects.toThrow(/not set up/);
+    expect(seen).toHaveLength(0);
   });
 });
 

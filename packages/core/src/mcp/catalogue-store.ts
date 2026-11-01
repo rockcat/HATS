@@ -31,13 +31,14 @@ export const BUILTIN_CATALOGUE: MCPCatalogueEntry[] = [
     users: ['human', 'agent'],
     config: {
       transport: 'stdio', command: 'node', args: [builtin('diary/server')],
-      env: { DIARY_API_URL: 'https://secretdiaryofai.com', DIARY_API_TOKEN: '' },
+      env: { DIARY_API_URL: '', DIARY_API_TOKEN: '' },
     },
     envVars: [
       { name: 'DIARY_API_URL', placeholder: 'https://secretdiaryofai.com' },
       { name: 'DIARY_API_TOKEN', placeholder: 'The site\'s DIARY_API_TOKEN', type: 'password' },
     ],
-    notes: 'Anyone with the token can rewrite or delete any entry, so give it only to the agent that keeps the diary.',
+    notes: 'Until both the URL and the token are set it offers no tools, so it takes no room in an agent\'s context. '
+      + 'Anyone with the token can rewrite or delete any entry, so give it only to the agent that keeps the diary.',
   },
   {
     id: 'filesystem',

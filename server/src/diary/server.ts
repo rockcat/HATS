@@ -10,8 +10,6 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { log } from '../../../packages/core/src/logger.js';
 
-export const DEFAULT_DIARY_URL = 'https://secretdiaryofai.com';
-
 export interface DiaryOptions {
   baseUrl: string;
   token: string;
@@ -119,7 +117,16 @@ export const TOOLS = [
   },
 ];
 
+const configured = (options: DiaryOptions) => !!options.baseUrl && !!options.token;
+
+/**
+ * No tools at all until the site and its token are set: tools that could only
+ * fail would still be sent with every call, taking room in the agent's context.
+ */
+export const toolsFor = (options: DiaryOptions) => (configured(options) ? TOOLS : []);
+
 export async function handleCall(options: DiaryOptions, name: string, args: Record<string, unknown>): Promise<string> {
+  if (!configured(options)) throw new Error('The diary is not set up: DIARY_API_URL and DIARY_API_TOKEN are both needed.');
   switch (name) {
     case 'list_entries': {
       const { data } = await call<EntrySummary[]>(options, 'GET', '/entries');
@@ -163,7 +170,7 @@ export async function handleCall(options: DiaryOptions, name: string, args: Reco
 export async function startDiaryServer(options: DiaryOptions): Promise<void> {
   const server = new Server({ name: 'diary', version: '1.0.0' }, { capabilities: { tools: {} } });
 
-  server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }));
+  server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: toolsFor(options) }));
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
@@ -176,16 +183,15 @@ export async function startDiaryServer(options: DiaryOptions): Promise<void> {
   });
 
   await server.connect(new StdioServerTransport());
-  log.info(`[Diary] serving ${options.baseUrl}`);
+  log.info(configured(options)
+    ? `[Diary] serving ${options.baseUrl}`
+    : '[Diary] DIARY_API_URL or DIARY_API_TOKEN is not set, so no tools are offered');
 }
 
 // Entry point when run directly as an MCP server.
 import { pathToFileURL } from 'url';
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
-  const token = process.env['DIARY_API_TOKEN'] ?? '';
-  // Started anyway, so the agent is told why each call fails rather than the server vanishing.
-  if (!token) log.warn('[Diary] DIARY_API_TOKEN is not set; every call will be refused');
-  startDiaryServer({ baseUrl: process.env['DIARY_API_URL'] || DEFAULT_DIARY_URL, token })
+  startDiaryServer({ baseUrl: process.env['DIARY_API_URL'] ?? '', token: process.env['DIARY_API_TOKEN'] ?? '' })
     .catch((err) => log.error(err));
 }
