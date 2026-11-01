@@ -19,6 +19,8 @@ class ConversationThreads extends HTMLElement {
     this._pollTimer = null;
     this._newThreadMode = false;
     this._sending = false;
+    // Remembered per browser, so a long list stays out of the way once folded.
+    this._threadsCollapsed = (() => { try { return localStorage.getItem('threadsCollapsed') === '1'; } catch { return false; } })();
     this._shadow.innerHTML = this._template();
   }
 
@@ -171,6 +173,8 @@ class ConversationThreads extends HTMLElement {
       if (close) { this._closeThread(); return; }
       const sendBtn = e.target.closest('.compose-send-btn');
       if (sendBtn) { this._handleComposeSend(sendBtn.dataset.panel); return; }
+      const toggle = e.target.closest('.threads-toggle');
+      if (toggle) { this._toggleThreadsCollapsed(); return; }
       const newThread = e.target.closest('.new-thread-btn');
       if (newThread) { this._toggleNewThreadMode(); return; }
       const replyBtn = e.target.closest('.reply-in-thread-btn');
@@ -290,6 +294,12 @@ class ConversationThreads extends HTMLElement {
     }
   }
 
+  _toggleThreadsCollapsed() {
+    this._threadsCollapsed = !this._threadsCollapsed;
+    try { localStorage.setItem('threadsCollapsed', this._threadsCollapsed ? '1' : '0'); } catch { /* not kept */ }
+    this._render();
+  }
+
   // ── Rendering ─────────────────────────────────────────────────────────────
 
   _render() {
@@ -308,10 +318,13 @@ class ConversationThreads extends HTMLElement {
           </div>
           <div class="threads-section">
             <div class="threads-divider">
-              <span>Threads</span>
+              <button class="threads-toggle" aria-expanded="${!this._threadsCollapsed}" title="${this._threadsCollapsed ? 'Show threads' : 'Hide threads'}">
+                <span class="threads-caret">${this._threadsCollapsed ? '&#9656;' : '&#9662;'}</span>
+                <span>Threads${nonGeneral.length ? ` (${nonGeneral.length})` : ''}</span>
+              </button>
               <button class="new-thread-btn${this._newThreadMode ? ' new-thread-btn--active' : ''}">${this._newThreadMode ? '✕ Cancel' : '+ New'}</button>
             </div>
-            ${nonGeneral.map(([k, entry]) => {
+            ${this._threadsCollapsed ? '' : `<div class="thread-list">${nonGeneral.map(([k, entry]) => {
               const count = typeof entry === 'object' ? entry.count : entry;
               const label = typeof entry === 'object' ? entry.label : this._shortKey(k);
               return `<div class="thread-item${this._activeThread === k ? ' thread-item--active' : ''}" data-key="${this._esc(k)}">
@@ -320,7 +333,7 @@ class ConversationThreads extends HTMLElement {
                 <span class="thread-count">${count} msg${count !== 1 ? 's' : ''}</span>
                 <span class="thread-arrow">&#8594;</span>
               </div>`;
-            }).join('')}
+            }).join('')}</div>`}
           </div>
           <div class="compose-bar" id="general-compose" data-panel="general">
             ${this._newThreadMode ? `
@@ -701,13 +714,24 @@ class ConversationThreads extends HTMLElement {
           justify-content: space-between;
           padding: 0 14px 4px;
         }
-        .threads-divider span {
+        .threads-toggle {
+          display: flex;
+          align-items: center;
+          gap: 5px;
+          background: none;
+          border: none;
+          padding: 0;
+          cursor: pointer;
           font-size: 11px;
           font-weight: 600;
           color: #72767d;
           text-transform: uppercase;
           letter-spacing: 0.04em;
         }
+        .threads-toggle:hover { color: #d1d2d3; }
+        .threads-caret { width: 10px; text-transform: none; }
+        /* Scrolls past a handful, so a long list never squeezes the messages. */
+        .thread-list { max-height: min(30vh, 180px); overflow-y: auto; }
         .thread-item {
           display: flex;
           align-items: center;
