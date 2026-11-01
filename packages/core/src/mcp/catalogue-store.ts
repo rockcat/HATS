@@ -24,6 +24,22 @@ export const BUILTIN_CATALOGUE: MCPCatalogueEntry[] = [
       + 'agent and the calendar borrows its settings — there is nothing to enter twice.',
   },
   {
+    id: 'diary',
+    name: 'Secret Diary',
+    description: 'Read, write and delete the dated entries of The Secret Diary of AI, Dr Ian Mole, which publish to the site at once',
+    category: 'web',
+    users: ['human', 'agent'],
+    config: {
+      transport: 'stdio', command: 'node', args: [builtin('diary/server')],
+      env: { DIARY_API_URL: 'https://secretdiaryofai.com', DIARY_API_TOKEN: '' },
+    },
+    envVars: [
+      { name: 'DIARY_API_URL', placeholder: 'https://secretdiaryofai.com' },
+      { name: 'DIARY_API_TOKEN', placeholder: 'The site\'s DIARY_API_TOKEN', type: 'password' },
+    ],
+    notes: 'Anyone with the token can rewrite or delete any entry, so give it only to the agent that keeps the diary.',
+  },
+  {
     id: 'filesystem',
     name: 'Filesystem',
     description: 'Read, write, and list files in the project folder — sources/ for inputs, outputs/ for deliverables',
