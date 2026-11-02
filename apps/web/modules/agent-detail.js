@@ -12,6 +12,7 @@ import { bindAgentAgenda } from './agent-agenda.js';
 import { bindAgentPrompt, initAgentPrompt, saveAgentPrompt } from './agent-prompt.js';
 import { bindAgentLimits, saveAgentLimits } from './agent-limits.js';
 import { bindAgentTools, initAgentTools, saveAgentTools } from './agent-tools.js';
+import { initAgentTransfer, resetAgentTransfer } from './agent-transfer.js';
 
 export let activeDetailAgent = null;
 let activeChatAgent          = null;
@@ -414,6 +415,7 @@ export function initAgentDetail() {
 
   initAgentPrompt();
   initAgentTools();
+  initAgentTransfer(() => activeDetailAgent);
 
   document.getElementById('agent-config-apply').addEventListener('click', async () => {
     if (!activeDetailAgent) return;
@@ -467,6 +469,7 @@ export function openAgentDetail(name, chatOnly = false) {
   bindAgentPrompt(name, agent);
   bindAgentLimits(agent);
   bindAgentTools(name);
+  resetAgentTransfer();
 
   const ticketsEl     = document.getElementById('agent-detail-tickets');
   ticketsEl.innerHTML = '';

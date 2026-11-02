@@ -87,6 +87,8 @@
       <div class="panel-header panel-header--agents">
         Agents
         <button id="add-agent-btn" class="panel-add-btn" title="Add new agent">+ Agent</button>
+        <button id="load-agent-btn" class="panel-add-btn" title="Load an agent saved to a file">Load</button>
+        <input type="file" id="load-agent-input" accept=".zip,application/zip" hidden>
         <button id="impromptu-meeting-btn" class="panel-add-btn" title="Start an impromptu meeting now"><img src="assets/meeting.svg" class="svg-icon" alt=""> Meet</button>
         <button class="panel-expand-btn" data-panel="agents-panel" title="Expand"><img src="assets/expand.svg" class="svg-icon" alt="Expand"></button>
       </div>
@@ -354,6 +356,25 @@
         <details class="agent-config-details" id="agent-agenda-line">
           <summary class="agent-config-details-summary">Schedule</summary>
           <div id="agent-agenda" class="agent-agenda"></div>
+        </details>
+        <details class="agent-config-details" id="agent-transfer-line">
+          <summary class="agent-config-details-summary">Save &amp; share</summary>
+          <div class="agent-transfer">
+            <div class="agent-transfer-row">
+              <button id="agent-duplicate-btn" class="agent-config-btn" title="A copy in this project under a new name — settings, threads, memory and schedule">Duplicate…</button>
+              <button id="agent-save-btn" class="agent-config-btn" title="Download this agent as a file, to load here or on another runner">Save to file</button>
+              <button id="agent-to-library-btn" class="agent-config-btn" title="A new library template with this agent's current settings">Add to library…</button>
+            </div>
+            <div class="agent-transfer-row">
+              <input id="agent-send-url" class="agent-config-input" placeholder="Other runner, e.g. http://otherbox:3000" autocomplete="off" spellcheck="false">
+              <input id="agent-send-key" class="agent-config-input" type="password" placeholder="An API key from it" autocomplete="off">
+              <button id="agent-send-btn" class="agent-config-btn" title="Send this agent straight to another runner">Send</button>
+            </div>
+            <label class="agent-transfer-check" title="Mail passwords and other logins. Admin only.">
+              <input type="checkbox" id="agent-transfer-credentials"> Include its logins when saving or sending
+            </label>
+            <div id="agent-transfer-status" class="agent-transfer-status" role="status"></div>
+          </div>
         </details>
         <div class="agent-config-line agent-config-line--btns">
           <label class="agent-config-label"></label>

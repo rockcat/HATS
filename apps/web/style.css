@@ -2117,6 +2117,14 @@ main {
 .agent-config-btn:hover { opacity: 0.85; }
 .agent-config-btn:disabled { opacity: 0.5; cursor: default; }
 .agent-config-stop-btn    { background: #c0392b; color: #fff; }
+
+/* Save & share */
+.agent-transfer { display: flex; flex-direction: column; gap: 6px; padding: 6px 0 2px; }
+.agent-transfer-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.agent-transfer-row .agent-config-input { flex: 1 1 140px; min-width: 0; }
+.agent-transfer-check { display: flex; gap: 6px; align-items: center; font-size: 11px; color: var(--text-muted); }
+.agent-transfer-status { font-size: 11px; color: var(--text-muted); min-height: 1em; }
+.agent-transfer-status--error { color: #e06c6c; }
 .agent-config-preview-btn { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); }
 .agent-config-preview-btn:hover { background: var(--border); opacity: 1; }
 
