@@ -57,7 +57,7 @@ export function isSafeRelativePath(p: string): boolean {
 const json = (value: unknown): Uint8Array => strToU8(JSON.stringify(value, null, 2));
 
 /** Formats that are already compressed gain nothing from a second pass. */
-const STORED = /\.(glb|vrm|png|jpe?g|webp|gif|mp3|mp4|zip|onnx)$/i;
+export const STORED =/\.(glb|vrm|png|jpe?g|webp|gif|mp3|mp4|zip|onnx)$/i;
 
 export function packArchive(archive: ProjectArchive): Promise<Uint8Array> {
   const entries: Zippable = {

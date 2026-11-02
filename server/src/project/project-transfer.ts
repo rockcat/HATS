@@ -47,14 +47,14 @@ export class TransferNotFound extends Error {}
 /** SQLite's own files. The database travels as one snapshot instead. */
 const DB_FILES = new Set(['project.db', 'project.db-wal', 'project.db-shm', 'project.db-journal']);
 
-type Identity = { avatar?: string; background?: string; voice?: string };
+export type Identity = { avatar?: string; background?: string; voice?: string };
 
-const assetPaths = (identity: Identity): string[] => [
+export const assetPaths = (identity: Identity): string[] => [
   ...(identity.avatar ? [`avatars/${identity.avatar}`] : []),
   ...(identity.background ? [`avatars/backgrounds/${identity.background}`] : []),
 ];
 
-const voiceFile = (dataRoot: string, voice: string) => path.join(dataRoot, 'piper_voices', `${voice}.onnx`);
+export const voiceFile = (dataRoot: string, voice: string) => path.join(dataRoot, 'piper_voices', `${voice}.onnx`);
 
 const unique = <T>(items: T[]): T[] => [...new Set(items)];
 
