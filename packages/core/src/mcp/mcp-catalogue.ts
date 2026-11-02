@@ -167,10 +167,12 @@ export function resolvePersonalConfig(
     ...Object.fromEntries(declared),
     ...credentials,
   };
-  return {
+  const config = {
     ...entry.config,
     command: platformCommand(entry.config.command),
     args: entry.config.args?.map((a) => expandAgentDir(expandTilde(a))),
     env,
   };
+  // One of our own, as for a shared server: the marker is not a path node can run.
+  return { ...config, ...(expandBuiltin(config) ?? {}) };
 }

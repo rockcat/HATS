@@ -87,6 +87,7 @@ export function builtinServerCommand(
 const BUILTIN_BY_NAME: Record<string, string> = {
   kanban: 'mcp/kanban/server',
   calendar: 'calendar/server',
+  diary: 'diary/server',
 };
 
 /**

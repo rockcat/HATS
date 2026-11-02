@@ -123,3 +123,20 @@ describe('a catalogue default and an agent\'s own setting', () => {
       .toBe('true');
   });
 });
+
+// ── One of our own servers, run for one agent ────────────────────────────────
+
+describe('a built-in server for one agent', () => {
+  it('is started from a real path, not the catalogue marker', () => {
+    // The marker reached node as a file name: "Cannot find module '/app/builtin:diary/server'".
+    const diary: MCPCatalogueEntry = {
+      ...email,
+      id: 'diary',
+      config: { transport: 'stdio', command: 'node', args: ['builtin:diary/server'] },
+    };
+    const resolved = resolvePersonalConfig(diary, { DIARY_API_TOKEN: 't' });
+    const args = resolved.transport === 'stdio' ? resolved.args ?? [] : [];
+    expect(args.some((a) => a.startsWith('builtin:'))).toBe(false);
+    expect(args.join(' ')).toMatch(/diary[\\/]server\.(js|ts)/);
+  });
+});
