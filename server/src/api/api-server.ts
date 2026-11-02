@@ -16,6 +16,7 @@ import { SpeechRouter } from './speech-router.js';
 import { ServiceStatusRouter, serviceTargets } from './service-status.js';
 import { ProjectManager, AgentStatus } from './project-manager.js';
 import { AgentRouter } from './agent-router.js';
+import { AgentTransferRouter } from './agent-transfer-router.js';
 import { handleCLICommand } from './cli-handler.js';
 import { buildAgentStatuses, readBody, readBodyBuffer } from './api-utils.js';
 import { HumanRequestStore } from './human-request-store.js';
@@ -159,6 +160,7 @@ export class APIServer {
   private serviceStatusRouter: ServiceStatusRouter;
   private projectManager: ProjectManager;
   private agentRouter: AgentRouter;
+  private agentTransferRouter: AgentTransferRouter;
   private mcpCatalogueRouter: MCPCatalogueRouter;
   private googleTokenStore:      GoogleTokenStore;
   private agentGoogleTokenStore: AgentGoogleTokenStore;
@@ -289,6 +291,21 @@ export class APIServer {
       json: (r, s, b) => self.json(r, s, b),
       readBody,
       avatarsDir: AVATARS_DIR,
+    });
+    this.agentTransferRouter = new AgentTransferRouter({
+      getOrchestrator:  () => self.orchestrator,
+      getAgentStore:    () => self.agentStore,
+      getActionStore:   () => self.actionStore,
+      dataRoot:         runtimeDir(),
+      resolveAgentName: (n) => self.resolveAgentName(n),
+      isAdmin:          (req) => parseRequestAuth(req, self.userStore)?.role === 'admin',
+      agentsChanged:    () => {
+        self.sseBroadcast({ type: 'agent_update', agents: self.buildAgentStatuses() });
+        self.saveCurrentState().catch(() => {});
+      },
+      json: (r, s, b) => self.json(r, s, b),
+      readBody,
+      readBodyBuffer,
     });
     this.mcpCatalogueRouter = new MCPCatalogueRouter({
       json:         (r, s, b) => self.json(r, s, b),
@@ -653,6 +670,7 @@ export class APIServer {
     if (await this.serviceStatusRouter.handleRoutes(pathname, method, req, res))      return;
     if (await this.projectTransferRouter.handleRoutes(pathname, method, url, req, res)) return;
     if (await this.projectManager.handleRoutes(pathname, method, url, req, res))      return;
+    if (await this.agentTransferRouter.handleRoutes(pathname, method, url, req, res)) return;
     if (await this.agentRouter.handleRoutes(pathname, method, url, req, res))         return;
     if (await this.mcpCatalogueRouter.handleRoutes(pathname, method, req, res))       return;
     if (await this.emailAllowlistRouter.handleRoutes(pathname, method, req, res))     return;

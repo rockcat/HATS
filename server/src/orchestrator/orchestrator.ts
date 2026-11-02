@@ -28,7 +28,7 @@ import { portableConfig } from '../../../packages/core/src/mcp/saved-config.js';
 import { Semaphore } from '../providers/semaphore.js';
 import { TeamSnapshot, TeamSnapshotV1, TeamSnapshotV2, AgentSnapshot, AgentDefinition, HistoryEntry } from '../store/team-snapshot.js';
 import { AgentDefinitionStore } from '../api/agent-store.js';
-import { configFrom, definitionOf, serializeMessages, serializeThreads } from './agent-definition.js';
+import { assignedActionIds, configFrom, definitionOf, serializeMessages, serializeThreads } from './agent-definition.js';
 import { MeetingRoom } from './meeting-room.js';
 import { TeamMessage, Task, Meeting, MeetingTurn, ScheduledMeeting, MeetingType } from './types.js';
 import { MeetingStore } from './meeting-store.js';
@@ -348,7 +348,7 @@ export class TeamOrchestrator {
         const threads = serializeThreads(agent);
         agentHistories[agent.id] = threads['general'] ?? [];
         agentThreads[agent.id]   = threads;
-        const assigned = (this.agendaStoreRef.store?.list(agent.name) ?? []).flatMap(e => e.actionId ? [e.actionId] : []);
+        const assigned = assignedActionIds(this.agendaStoreRef.store, agent.name);
         // Only a store without a secrets file keeps credentials in the project.
         const def = definitionOf(agent, assigned, { withCredentials: !keepsSecrets });
         agents[agent.id] = def;

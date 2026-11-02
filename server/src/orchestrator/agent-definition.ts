@@ -6,6 +6,7 @@
 // save learned about and the duplicate did not would quietly be lost.
 
 import type { IAgent } from '../agent/iagent.js';
+import type { AgendaStore } from '../api/agenda-store.js';
 import type { AgentConfig, AgentMessage } from '../agent/types.js';
 import type { AIProvider } from '../providers/types.js';
 import type { AgentDefinition, HistoryEntry } from '../store/team-snapshot.js';
@@ -26,6 +27,11 @@ export function serializeThreads(agent: IAgent): Record<string, HistoryEntry[]> 
   const out: Record<string, HistoryEntry[]> = {};
   for (const [key, msgs] of Object.entries(agent.getAllThreadHistories())) out[key] = serializeMessages(msgs);
   return out;
+}
+
+/** The scheduled actions on an agent's agenda. */
+export function assignedActionIds(agenda: Pick<AgendaStore, 'list'> | null, agentName: string): string[] {
+  return (agenda?.list(agentName) ?? []).flatMap((e) => (e.actionId ? [e.actionId] : []));
 }
 
 /**
