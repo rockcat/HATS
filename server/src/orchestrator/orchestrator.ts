@@ -28,6 +28,7 @@ import { portableConfig } from '../../../packages/core/src/mcp/saved-config.js';
 import { Semaphore } from '../providers/semaphore.js';
 import { TeamSnapshot, TeamSnapshotV1, TeamSnapshotV2, AgentSnapshot, AgentDefinition, HistoryEntry } from '../store/team-snapshot.js';
 import { AgentDefinitionStore } from '../api/agent-store.js';
+import { configFrom, definitionOf, serializeMessages, serializeThreads } from './agent-definition.js';
 import { MeetingRoom } from './meeting-room.js';
 import { TeamMessage, Task, Meeting, MeetingTurn, ScheduledMeeting, MeetingType } from './types.js';
 import { MeetingStore } from './meeting-store.js';
@@ -333,24 +334,6 @@ export class TeamOrchestrator {
   // ── State persistence ──────────────────────────────────────────────────────
 
   async saveState(filePath: string): Promise<void> {
-    const serializeMessages = (msgs: import('../agent/types.js').AgentMessage[]): HistoryEntry[] =>
-      msgs.map((m) => ({
-        role: m.role,
-        content: m.content,
-        timestamp: m.timestamp instanceof Date ? m.timestamp.toISOString() : String(m.timestamp),
-        toolCalls: m.toolCalls,
-        toolCallId: m.toolCallId,
-        toolName: m.toolName,
-      }));
-
-    const serializeAllThreads = (agent: IAgent): Record<string, HistoryEntry[]> => {
-      const out: Record<string, HistoryEntry[]> = {};
-      for (const [key, msgs] of Object.entries(agent.getAllThreadHistories())) {
-        out[key] = serializeMessages(msgs);
-      }
-      return out;
-    };
-
     if (this.agentStore) {
       // V2: each agent's config goes in the project file with its history. It
       // used to go back into the library, which kept every project's copy of an
@@ -362,34 +345,12 @@ export class TeamOrchestrator {
       const keepsSecrets = !!(this.agentStore.setSecrets && this.agentStore.secretsFor);
       for (const agent of this.agents.values()) {
         agentIds.push(agent.id);
-        const threads = serializeAllThreads(agent);
+        const threads = serializeThreads(agent);
         agentHistories[agent.id] = threads['general'] ?? [];
         agentThreads[agent.id]   = threads;
         const assigned = (this.agendaStoreRef.store?.list(agent.name) ?? []).flatMap(e => e.actionId ? [e.actionId] : []);
-        const def: AgentDefinition = {
-          id:                    agent.id,
-          ...(agent.config.templateId && { templateId: agent.config.templateId }),
-          identity:              agent.config.identity,
-          hatType:               agent.config.hatType,
-          model:                 agent.config.model,
-          providerName:          agent.config.provider.name,
-          teamContext:           agent.config.teamContext,
-          enabledMcpServers:          agent.config.enabledMcpServers,
-          // Kept in this machine's secrets file rather than the project, which
-          // travels: every export would otherwise carry the agents' passwords.
-          // Only a store without one keeps them here.
-          ...(!keepsSecrets && { personalMcpCredentials: agent.config.personalMcpCredentials }),
-          disabledPersonalMcpServers: agent.config.disabledPersonalMcpServers,
-          upfrontTools:               agent.config.upfrontTools,
-          scheduledActionIds:         assigned,
-          // Left out, every save stored the agent without its limits, and the
-          // next time it was built — a project switch, a restore — it had none.
-          maxContextTokens:           agent.config.maxContextTokens,
-          maxCostPerHour:             agent.config.maxCostPerHour,
-          instructions:               agent.config.instructions,
-          promptMode:                 agent.config.promptMode,
-          externalEndpoint:           agent.config.externalEndpoint,
-        };
+        // Only a store without a secrets file keeps credentials in the project.
+        const def = definitionOf(agent, assigned, { withCredentials: !keepsSecrets });
         agents[agent.id] = def;
         // Credentials stay on this machine; a restore, and a team built from
         // the project definition, pick them up from here by instance id.
@@ -499,26 +460,9 @@ export class TeamOrchestrator {
       }
       const isExternal = !!def.externalEndpoint;
       const provider = isExternal ? EXTERNAL_PROVIDER : providerFactory(def.providerName);
-      const config: AgentConfig = {
-        id:                    def.id,
-        ...(def.templateId && { templateId: def.templateId }),
-        identity:              def.identity,
-        hatType:               def.hatType,
-        provider,
-        model:                 def.model,
-        teamContext:           def.teamContext,
-        enabledMcpServers:          def.enabledMcpServers,
-        // Older snapshots carry them; newer ones leave them in the secrets file.
-        personalMcpCredentials:     def.personalMcpCredentials
-          ?? this.agentStore?.secretsFor?.(def.id, def.templateId).personalMcpCredentials,
-        disabledPersonalMcpServers: def.disabledPersonalMcpServers,
-        upfrontTools:          def.upfrontTools,
-        maxContextTokens:      def.maxContextTokens,
-        maxCostPerHour:        def.maxCostPerHour,
-        instructions:          def.instructions,
-        promptMode:            def.promptMode,
-        externalEndpoint:      def.externalEndpoint,
-      };
+      // Older snapshots carry credentials; newer ones leave them in the secrets file.
+      const config = configFrom(def, provider, def.personalMcpCredentials
+        ?? this.agentStore?.secretsFor?.(def.id, def.templateId).personalMcpCredentials);
       const agent = this.registerAgent(config);
       if (s.agentThreads?.[agentId]) {
         agent.setAllThreadHistories(s.agentThreads[agentId]);
