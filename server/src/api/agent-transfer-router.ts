@@ -68,7 +68,8 @@ export class AgentTransferRouter {
         : err instanceof ArchiveError ? 400
         : 500;
       if (status === 500) log.error(`[Agent transfer] ${(err as Error).stack ?? err}`);
-      this.deps.json(res, status, { error: (err as Error).message });
+      // The name tried, so the page can suggest one that is free.
+      this.deps.json(res, status, { error: (err as Error).message, ...(err instanceof AgentNameTaken && { name: err.takenName }) });
     }
     return true;
   }
@@ -128,11 +129,15 @@ export class AgentTransferRouter {
       }).catch((err: Error & { cause?: Error }) => {
         throw new HttpError(502, `Could not reach ${remote.origin}: ${err.cause?.message ?? err.message}`);
       });
-      const reply = await answer.json().catch(() => ({})) as { error?: string };
+      const reply = await answer.json().catch(() => ({})) as { error?: string; name?: string };
       if (answer.ok) log.info(`[Agent transfer] Sent ${agent.name} to ${remote.origin}`);
       // Passed on as it came, so a name taken there can be asked about here.
       this.deps.json(res, answer.ok ? 201 : answer.status === 401 || answer.status === 403 ? 502 : answer.status,
-        answer.ok ? reply : { error: `${remote.origin} said: ${reply.error ?? answer.statusText}`, remoteStatus: answer.status });
+        answer.ok ? reply : {
+          error: `${remote.origin} said: ${reply.error ?? answer.statusText}`,
+          remoteStatus: answer.status,
+          ...(reply.name && { name: reply.name }),
+        });
       return;
     }
 

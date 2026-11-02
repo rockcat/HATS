@@ -19,7 +19,9 @@ import { configFrom, definitionOf, serializeThreads } from '../orchestrator/agen
 import { assetPaths } from '../project/project-transfer.js';
 import { AGENT_FORMAT, AGENT_VERSION, type AgentBundle } from './agent-bundle.js';
 
-export class AgentNameTaken extends Error {}
+export class AgentNameTaken extends Error {
+  constructor(message: string, readonly takenName: string) { super(message); }
+}
 
 export interface AgentSource {
   agent: IAgent;
@@ -121,8 +123,8 @@ export interface RestoreReport {
 
 export async function restoreAgent(target: AgentTarget, bundle: AgentBundle, { name }: { name: string }): Promise<RestoreReport> {
   const newName = name.trim();
-  if (!newName) throw new AgentNameTaken('Give the agent a name');
-  if (target.hasAgentNamed(newName)) throw new AgentNameTaken(`There is already an agent called "${newName}"`);
+  if (!newName) throw new AgentNameTaken('Give the agent a name', bundle.manifest.name);
+  if (target.hasAgentNamed(newName)) throw new AgentNameTaken(`There is already an agent called "${newName}"`, newName);
 
   const id = randomUUID();
   const definition: AgentDefinition = {
