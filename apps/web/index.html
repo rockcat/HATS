@@ -950,6 +950,11 @@
           </label>
         </div>
         <input type="text" id="schedules-add-label" class="schedules-input" placeholder="Label (e.g. Check inbox)">
+        <select id="schedules-add-prompt-mode" class="schedules-input schedules-select" title="The system prompt the agent answers this with, for this run only">
+          <option value="">Agent's own prompt setting</option>
+          <option value="full">Full prompt</option>
+          <option value="condensed">Condensed prompt</option>
+        </select>
         <!-- Prompt fields -->
         <div id="schedules-prompt-fields">
           <textarea id="schedules-add-description" class="schedules-textarea" placeholder="What should the agent do when this fires?" rows="3"></textarea>

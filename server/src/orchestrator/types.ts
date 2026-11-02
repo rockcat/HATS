@@ -1,3 +1,5 @@
+import type { PromptMode } from '../../../packages/core/src/prompt/types.js';
+
 export type MessageType =
   | 'task'           // task assignment
   | 'direct'         // agent-to-agent or human-to-agent DM
@@ -25,6 +27,8 @@ export interface TeamMessage {
   sourceThreadLimit?: number;
   /** Target an explicit thread by ID instead of the default routing logic. */
   threadId?: string;
+  /** Answer this one message with the full or condensed prompt, whatever the agent's own setting. */
+  promptMode?: PromptMode;
 }
 
 export interface HumanRequest {

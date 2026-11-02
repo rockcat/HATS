@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { readFile, writeFile } from 'fs/promises';
 import { McpToolCallSpec, ScheduledActionType } from '../store/team-snapshot.js';
+import type { PromptMode } from '../../../packages/core/src/prompt/types.js';
 import { nextCronRun, cronError } from '../../../packages/core/src/schedule/cron.js';
 
 /** How an entry repeats: at the times a cron expression names, every so many seconds, or not at all. */
@@ -31,6 +32,11 @@ export function repeatFromRequest(body: { intervalMinutes?: number | null; cron?
   return { intervalSeconds: mins && mins > 0 ? Math.round(mins * 60) : null };
 }
 
+/** The prompt a request asks for; anything else, '' or null among it, means the agent's own setting. */
+export function promptModeFrom(value: unknown): PromptMode | undefined {
+  return value === 'full' || value === 'condensed' ? value : undefined;
+}
+
 /** When a new or rescheduled entry first runs: its first cron time, else after a delay. */
 function firstRun(repeat: Repeat, delaySeconds: number | undefined, now: number): number {
   if (repeat.cron) return nextCronRun(repeat.cron, now) ?? now;
@@ -50,6 +56,8 @@ export interface AgendaEntry {
   createdAt: string;
   type?: ScheduledActionType;
   mcpToolCall?: McpToolCallSpec;
+  /** The prompt the agent answers this with; its own setting when absent. */
+  promptMode?: PromptMode;
   /** The global scheduled action this entry was assigned from, if any. */
   actionId?: string;
   /** When it last fired successfully (ms since epoch). */
@@ -108,6 +116,7 @@ export class AgendaStore {
     delaySeconds?: number;
     type?: ScheduledActionType;
     mcpToolCall?: McpToolCallSpec;
+    promptMode?: PromptMode;
     actionId?: string;
   }): Promise<AgendaEntry> {
     // Deduplicate: if an entry with the same agent+label already exists, update it
@@ -124,6 +133,7 @@ export class AgendaStore {
         enabled:         true,
         type:            data.type,
         mcpToolCall:     data.mcpToolCall,
+        promptMode:      data.promptMode,
         ...(data.actionId && { actionId: data.actionId }),
       });
       await this.save();
@@ -142,6 +152,7 @@ export class AgendaStore {
       createdAt:       new Date().toISOString(),
       ...(data.type        && { type: data.type }),
       ...(data.mcpToolCall && { mcpToolCall: data.mcpToolCall }),
+      ...(data.promptMode  && { promptMode: data.promptMode }),
       ...(data.actionId    && { actionId: data.actionId }),
     };
     this.entries.set(entry.id, entry);

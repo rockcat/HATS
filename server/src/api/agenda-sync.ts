@@ -71,6 +71,7 @@ export async function applyAssignment(agenda: AgendaStore, agentName: string, pl
       cron: action.cron,
       type: action.type,
       mcpToolCall: action.mcpToolCall,
+      promptMode: action.promptMode,
       actionId: action.id,
     });
   }
@@ -91,6 +92,7 @@ export async function propagateEdit(agenda: AgendaStore, before: ScheduledAction
       cron: after.cron ?? '',
       type: after.type,
       mcpToolCall: after.mcpToolCall,
+      promptMode: after.promptMode,
       actionId: after.id,
     });
   }

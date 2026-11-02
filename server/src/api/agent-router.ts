@@ -23,7 +23,7 @@ import { AgentStatus } from './project-manager.js';
 import { AgentDefinitionStore } from './agent-store.js';
 import { ScheduledActionStore } from './scheduled-action-store.js';
 import { propagateEdit, removeCopies, lastRunOf, isCopyOf } from './agenda-sync.js';
-import { repeatFromRequest, type Repeat } from './agenda-store.js';
+import { promptModeFrom, repeatFromRequest, type Repeat } from './agenda-store.js';
 import { projectCopy, hasCopyOf, assignScheduledActions } from './project-agents.js';
 import { parseLimits } from './agent-limits.js';
 import { toolRows, selectorsFor } from '../tools/tool-listing.js';
@@ -929,6 +929,7 @@ export class AgentRouter {
         cron?: string;
         type?: import('../store/team-snapshot.js').ScheduledActionType;
         mcpToolCall?: import('../store/team-snapshot.js').McpToolCallSpec;
+        promptMode?: string | null;
       };
       if (!parsed.label?.trim()) { json(res, 400, { error: 'label is required' }); return true; }
       if (parsed.type === 'mcp_tool_call') {
@@ -946,6 +947,7 @@ export class AgentRouter {
         ...repeat,
         type: parsed.type,
         mcpToolCall: parsed.mcpToolCall,
+        promptMode: promptModeFrom(parsed.promptMode),
       });
       json(res, 201, def);
       return true;
@@ -962,8 +964,10 @@ export class AgentRouter {
         intervalMinutes?: number | null;
         cron?: string | null;
         mcpToolCall?: import('../store/team-snapshot.js').McpToolCallSpec;
+        promptMode?: string | null;
       };
       const patch: Record<string, unknown> = {};
+      if (parsed.promptMode  !== undefined) patch['promptMode']  = promptModeFrom(parsed.promptMode);
       if (parsed.label       !== undefined) patch['label']       = parsed.label.trim();
       if (parsed.description !== undefined) patch['description'] = parsed.description.trim();
       if (parsed.mcpToolCall !== undefined) patch['mcpToolCall'] = parsed.mcpToolCall;

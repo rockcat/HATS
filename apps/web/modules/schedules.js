@@ -164,7 +164,7 @@ export function buildScheduleRow(action) {
   viewBody.className = 'schedules-row-body';
   viewBody.title     = 'Click to edit';
   viewBody.innerHTML = `
-    <div class="schedules-row-label">${esc(action.label)}${isMcp ? ' <span class="schedules-mcp-badge">MCP</span>' : ''}</div>
+    <div class="schedules-row-label">${esc(action.label)}${isMcp ? ' <span class="schedules-mcp-badge">MCP</span>' : ''}${action.promptMode ? ` <span class="schedules-mcp-badge">${esc(action.promptMode)}</span>` : ''}</div>
     <div class="schedules-row-desc">${esc(descText)}</div>`;
 
   const intervalBadge = document.createElement('span');
@@ -236,6 +236,7 @@ export async function openScheduleModal(action) {
 
   document.getElementById('schedules-add-label').value       = '';
   document.getElementById('schedules-add-description').value = '';
+  document.getElementById('schedules-add-prompt-mode').value = action?.promptMode ?? '';
   repeat().set(action ?? {});
   document.getElementById('schedules-mcp-condition').value   = '';
   document.getElementById('schedules-mcp-message').value     = '';
@@ -394,6 +395,9 @@ export function initSchedulesTab() {
       if (!description) { alert('Description is required'); return; }
       body = { label, description, ...when };
     }
+
+    // null, not '', so an edit back to the agent's own setting clears it.
+    body.promptMode = document.getElementById('schedules-add-prompt-mode').value || null;
 
     const saveBtn = document.getElementById('schedules-add-btn');
     saveBtn.disabled = true; saveBtn.textContent = '…';

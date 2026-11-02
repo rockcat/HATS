@@ -31,6 +31,10 @@ export function failureUpdate(entry: AgendaEntry, message: string, now: number, 
   return next === null ? { ...base, enabled: false } : { ...base, nextRunAt: next };
 }
 
+/** What marks a message as a scheduled run, and the prompt it is answered with. */
+const scheduledExtras = (entry: AgendaEntry): Partial<TeamMessage> =>
+  ({ isScheduled: true, ...(entry.promptMode && { promptMode: entry.promptMode }) });
+
 export class AgendaRunner {
   private store: AgendaStore;
   private deliverMessage: (agentName: string, msg: TeamMessage) => Promise<void>;
@@ -132,7 +136,7 @@ export class AgendaRunner {
       ? `This task runs automatically every ${Math.round(entry.intervalSeconds / 60)} minute(s) and has just fired. Do NOT schedule it again — just do it now.`
       : 'This is a one-off task. Do NOT schedule it again — just do it now.';
     const content = `Do this now — ${entry.label}:\n\n${this.fill(entry.description, entry.agentName)}\n\n(${repeatNote})\n\nIf there is nothing to do right now, call disengage_conversation immediately and produce no text response.`;
-    const msg = buildMessage('human', entry.agentName, 'direct', content, { isScheduled: true });
+    const msg = buildMessage('human', entry.agentName, 'direct', content, scheduledExtras(entry));
     await this.deliverMessage(entry.agentName, msg);
     return { delivered: true };
   }
@@ -167,7 +171,7 @@ export class AgendaRunner {
 
     // Its own fields first, so a result that happens to hold "${date}" stays as it is.
     const text = this.fill(spec.messageTemplate, entry.agentName).replace(/\$\{result\}/g, result);
-    const msg = buildMessage('human', entry.agentName, 'direct', text, { isScheduled: true });
+    const msg = buildMessage('human', entry.agentName, 'direct', text, scheduledExtras(entry));
     await this.deliverMessage(entry.agentName, msg);
     return { delivered: true, result };
   }

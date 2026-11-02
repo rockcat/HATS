@@ -223,3 +223,14 @@ describe('a scheduled prompt as it fires', () => {
     expect(sent[0]).toMatch(/Write \d{4}-\d\d-\d\d for Paul; sign as poppy@example\.com\./);
   });
 });
+
+describe('the prompt a scheduled run is answered with', () => {
+  it('is the one the entry names, and the agent\'s own when it names none', async () => {
+    const store = new AgendaStore(null);
+    await store.add({ agentName: 'Poppy', label: 'Small', description: 'x', intervalSeconds: null, promptMode: 'condensed' });
+    await store.add({ agentName: 'Poppy', label: 'Usual', description: 'y', intervalSeconds: null });
+    const modes: (string | undefined)[] = [];
+    await new AgendaRunner(store, async (_n, m) => { modes.push(m.promptMode); }).tick(true);
+    expect(modes).toEqual(['condensed', undefined]);
+  });
+});

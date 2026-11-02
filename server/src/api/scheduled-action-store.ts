@@ -34,6 +34,7 @@ export class ScheduledActionStore {
     cron?: string;
     type?: import('../store/team-snapshot.js').ScheduledActionType;
     mcpToolCall?: import('../store/team-snapshot.js').McpToolCallSpec;
+    promptMode?: ScheduledActionDef['promptMode'];
   }): Promise<ScheduledActionDef> {
     const def: ScheduledActionDef = {
       id:              uuidv4(),
@@ -44,6 +45,7 @@ export class ScheduledActionStore {
       createdAt:       new Date().toISOString(),
       ...(data.type        && { type: data.type }),
       ...(data.mcpToolCall && { mcpToolCall: data.mcpToolCall }),
+      ...(data.promptMode  && { promptMode: data.promptMode }),
     };
     this.actions.set(def.id, def);
     await this.save();

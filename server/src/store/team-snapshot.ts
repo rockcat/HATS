@@ -62,6 +62,8 @@ export interface ScheduledActionDef {
   createdAt: string;
   type?: ScheduledActionType;
   mcpToolCall?: McpToolCallSpec;
+  /** The prompt the agent answers this with; its own setting when absent. */
+  promptMode?: PromptMode;
 }
 
 // V1 format kept for migration only

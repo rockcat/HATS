@@ -3,6 +3,7 @@ import { Agent } from './agent.js';
 import { HatType } from '../../../packages/core/src/hats/types.js';
 import { MockProvider } from '../providers/mock.js';
 import type { AgentConfig } from './types.js';
+import type { TeamMessage } from '../orchestrator/types.js';
 
 function makeAgent(provider: MockProvider, overrides: Partial<AgentConfig> = {}): Agent {
   return new Agent({
@@ -11,8 +12,8 @@ function makeAgent(provider: MockProvider, overrides: Partial<AgentConfig> = {})
   });
 }
 
-async function promptSent(agent: Agent, provider: MockProvider): Promise<string> {
-  agent.receive({ id: 'm', ts: new Date().toISOString(), type: 'direct', from: 'human', to: 'Poppy', content: 'Hi' });
+async function promptSent(agent: Agent, provider: MockProvider, extras: Partial<TeamMessage> = {}): Promise<string> {
+  agent.receive({ id: 'm', ts: new Date().toISOString(), type: 'direct', from: 'human', to: 'Poppy', content: 'Hi', ...extras });
   await new Promise((r) => setTimeout(r, 50));
   return provider.calls.at(-1)?.systemPrompt ?? '';
 }
@@ -31,6 +32,15 @@ describe('which prompt an agent is given', () => {
     const sent = await promptSent(agent, provider);
     expect(sent).toBe(agent.previewPrompt().condensed);
     expect(sent).toContain('Reply in French.');
+  });
+
+  it('is the one a scheduled run asks for, for that run only', async () => {
+    const provider = new MockProvider({ content: 'ok' });
+    const agent = makeAgent(provider);
+    expect(await promptSent(agent, provider, { isScheduled: true, promptMode: 'condensed' })).toBe(agent.previewPrompt().condensed);
+    expect(await promptSent(agent, provider)).toBe(agent.previewPrompt().text);
+    agent.setPromptSettings(undefined, 'condensed');
+    expect(await promptSent(agent, provider, { isScheduled: true, promptMode: 'full' })).toBe(agent.previewPrompt().text);
   });
 
   it('previews unsaved instructions without changing what the agent is given', () => {

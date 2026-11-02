@@ -310,9 +310,10 @@ export class Agent implements IAgent {
     record();
 
     // Tool loop — run until text response or max rounds
+    const systemPrompt = this.systemPromptFor(message);
     for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
       const req: CompletionRequest = {
-        systemPrompt: this.systemPrompt,
+        systemPrompt,
         messages: toSend(),
         model: this.config.model,
         tools: [...tools], // snapshot so later pushes don't mutate past requests
@@ -570,9 +571,15 @@ export class Agent implements IAgent {
     return allowed === undefined || allowed.includes('kanban');
   }
 
-  private buildSystemPrompt(): string {
+  private buildSystemPrompt(mode = this.config.promptMode): string {
     const prompt = generateSystemPrompt(promptContextFor(this.config, this.hasTicketing()));
-    return this.config.promptMode === 'condensed' ? prompt.condensed : prompt.text;
+    return mode === 'condensed' ? prompt.condensed : prompt.text;
+  }
+
+  /** The prompt this message is answered with: its own choice, else the agent's. */
+  private systemPromptFor(message: TeamMessage): string {
+    const mode = message.promptMode;
+    return mode && mode !== (this.config.promptMode ?? 'full') ? this.buildSystemPrompt(mode) : this.systemPrompt;
   }
 
   /** Both versions of the prompt, with unsaved edits applied — for the editor's preview. */
