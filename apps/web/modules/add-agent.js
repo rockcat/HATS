@@ -295,7 +295,7 @@ export async function openLibraryEdit(agent) {
   _agentEditorMode     = 'edit';
   _activePromptSection = null;
   _libEditAgentId      = agent.id;
-  document.getElementById('add-agent-modal-title').textContent = 'Edit Agent';
+  document.getElementById('add-agent-modal-title').textContent = 'Edit Agent Template - Writes back to Library';
   document.getElementById('add-agent-save').textContent        = 'Save';
   document.getElementById('add-agent-error').textContent       = '';
 
