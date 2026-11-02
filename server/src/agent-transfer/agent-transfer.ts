@@ -36,10 +36,19 @@ export interface AgentSource {
 
 const unique = <T>(items: T[]): T[] => [...new Set(items)];
 
+/**
+ * A write in progress, not the agent's data. The memory server has no buffer
+ * to flush — it writes the whole graph after every change, to a .tmp file
+ * renamed over memory.json, under a .lock — so the files themselves are
+ * always current, but those two can be caught mid-change.
+ */
+export const TRANSIENT_FILE = /\.(tmp|lock)$/i;
+
 async function readFolder(dir: string | undefined): Promise<Map<string, Uint8Array>> {
   const files = new Map<string, Uint8Array>();
   if (!dir || !existsSync(dir)) return files;
   for (const entry of await readdir(dir, { recursive: true })) {
+    if (TRANSIENT_FILE.test(entry)) continue;
     const full = path.join(dir, entry);
     if ((await stat(full)).isFile()) files.set(entry.split(path.sep).join('/'), await readFile(full));
   }

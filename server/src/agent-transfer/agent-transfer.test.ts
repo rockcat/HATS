@@ -102,6 +102,13 @@ describe('a saved agent', () => {
     expect(back.scheduledActions).toEqual([action]);
   });
 
+  it('leaves out a memory write caught half done', async () => {
+    const dir = path.join(root, 'project', 'agents', 'poppy-1');
+    await writeFile(path.join(dir, 'memory.json.0a1b2c.tmp'), '{"entit');
+    await writeFile(path.join(dir, 'memory.json.lock'), 'token');
+    expect([...(await capture(false)).files.keys()]).toEqual(['memory.json']);
+  });
+
   it('carries no logins unless asked to', async () => {
     const without = await capture(false);
     expect(without.credentials).toBeUndefined();
