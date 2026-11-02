@@ -194,7 +194,11 @@
 /* ── Tool preview ────────────────────────────────────────────────────────── */
 /* What the model is handed, against what it has to go looking for. */
 
-#tool-preview { padding: 10px 12px; }
+#tool-preview { 
+  padding: 10px 12px; 
+  max-height: calc(100vh - 480px);
+  min-height: 200px;
+}
 
 .preview-summary {
   display: flex;
