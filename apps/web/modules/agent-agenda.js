@@ -35,7 +35,7 @@ function editForm(entry, onDone) {
   form.className = 'agenda-edit';
   form.innerHTML = `
     <input class="agenda-edit-label" value="${esc(entry.label)}" placeholder="Label">
-    <textarea class="agenda-edit-desc" rows="2" placeholder="What to do">${esc(entry.description)}</textarea>
+    <textarea class="agenda-edit-desc" rows="2" placeholder="What to do — \${date} \${time} \${human} \${email} are filled in" title="\${date} \${time} \${human} and \${email} (the agent's) are filled in when it fires">${esc(entry.description)}</textarea>
     <div class="agenda-edit-repeat"></div>
     <div class="agenda-edit-btns">
       <button class="library-btn library-btn--add" data-act="save">Save</button>

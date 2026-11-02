@@ -212,3 +212,14 @@ describe('the repeat a request asks for', () => {
     expect(() => repeatFromRequest({ cron: '0 25 * * *' })).toThrow(/Bad cron expression: .*hour/);
   });
 });
+
+describe('a scheduled prompt as it fires', () => {
+  it('names the human, the agent\'s email and the date it fired', async () => {
+    const store = new AgendaStore(null);
+    await store.add({ agentName: 'Poppy', label: 'Diary', description: 'Write ${date} for ${human}; sign as ${email}.', intervalSeconds: null });
+    const sent: string[] = [];
+    await new AgendaRunner(store, async (_n, m) => { sent.push(m.content); }, null, () => null, 60_000,
+      (name) => ({ human: 'Paul', email: `${name.toLowerCase()}@example.com` })).tick(true);
+    expect(sent[0]).toMatch(/Write \d{4}-\d\d-\d\d for Paul; sign as poppy@example\.com\./);
+  });
+});

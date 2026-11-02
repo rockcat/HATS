@@ -953,6 +953,7 @@
         <!-- Prompt fields -->
         <div id="schedules-prompt-fields">
           <textarea id="schedules-add-description" class="schedules-textarea" placeholder="What should the agent do when this fires?" rows="3"></textarea>
+          <div class="schedules-mcp-hint">Filled in when it fires: <code>${date}</code> <code>${time}</code> <code>${human}</code> <code>${email}</code> (the agent's)</div>
         </div>
         <!-- MCP tool call fields -->
         <div id="schedules-mcp-fields" hidden>
@@ -972,7 +973,7 @@
             <input type="text" id="schedules-mcp-condition" class="schedules-input" placeholder='e.g. result !== "" or JSON.parse(result).count > 0' autocomplete="off">
           </div>
           <div class="schedules-mcp-section">
-            <label class="schedules-mcp-label">Message to agent <span class="schedules-mcp-hint">(use <code>${result}</code> to include tool output)</span></label>
+            <label class="schedules-mcp-label">Message to agent <span class="schedules-mcp-hint">(use <code>${result}</code> to include tool output; <code>${date}</code> <code>${time}</code> <code>${human}</code> <code>${email}</code> too)</span></label>
             <textarea id="schedules-mcp-message" class="schedules-textarea" rows="2" placeholder="New data: ${result}"></textarea>
           </div>
         </div>

@@ -3,6 +3,7 @@ import { MCPRegistry } from '../mcp/mcp-registry.js';
 import { TeamMessage } from './types.js';
 import { buildMessage } from './orchestrator-utils.js';
 import { log } from '../../../packages/core/src/logger.js';
+import { fillScheduleFields, type ScheduleFieldValues } from '../../../packages/core/src/schedule/fields.js';
 
 /** What one run did — shown to whoever pressed Run now. */
 export interface RunOutcome {
@@ -35,6 +36,7 @@ export class AgendaRunner {
   private deliverMessage: (agentName: string, msg: TeamMessage) => Promise<void>;
   private mcp: MCPRegistry | null;
   private getPersonalMcp: (agentName: string) => MCPRegistry | null;
+  private fieldsFor: (agentName: string) => ScheduleFieldValues;
   private timer: ReturnType<typeof setInterval> | null = null;
   private readonly checkIntervalMs: number;
 
@@ -44,12 +46,14 @@ export class AgendaRunner {
     mcp: MCPRegistry | null = null,
     getPersonalMcp: (agentName: string) => MCPRegistry | null = () => null,
     checkIntervalMs = 60_000,
+    fieldsFor: (agentName: string) => ScheduleFieldValues = () => ({}),
   ) {
     this.store = store;
     this.deliverMessage = deliverMessage;
     this.mcp = mcp;
     this.getPersonalMcp = getPersonalMcp;
     this.checkIntervalMs = checkIntervalMs;
+    this.fieldsFor = fieldsFor;
   }
 
   start(): void {
@@ -116,13 +120,18 @@ export class AgendaRunner {
       : this.firePrompt(entry);
   }
 
+  /** The text with its ${date}, ${human} and the rest filled in for now. */
+  private fill(text: string, agentName: string): string {
+    return fillScheduleFields(text, this.fieldsFor(agentName), new Date());
+  }
+
   private async firePrompt(entry: AgendaEntry): Promise<RunOutcome> {
     const repeatNote = entry.cron
       ? `This task runs automatically on a schedule (cron "${entry.cron}") and has just fired. Do NOT schedule it again — just do it now.`
       : entry.intervalSeconds
       ? `This task runs automatically every ${Math.round(entry.intervalSeconds / 60)} minute(s) and has just fired. Do NOT schedule it again — just do it now.`
       : 'This is a one-off task. Do NOT schedule it again — just do it now.';
-    const content = `Do this now — ${entry.label}:\n\n${entry.description}\n\n(${repeatNote})\n\nIf there is nothing to do right now, call disengage_conversation immediately and produce no text response.`;
+    const content = `Do this now — ${entry.label}:\n\n${this.fill(entry.description, entry.agentName)}\n\n(${repeatNote})\n\nIf there is nothing to do right now, call disengage_conversation immediately and produce no text response.`;
     const msg = buildMessage('human', entry.agentName, 'direct', content, { isScheduled: true });
     await this.deliverMessage(entry.agentName, msg);
     return { delivered: true };
@@ -156,7 +165,8 @@ export class AgendaRunner {
       return { delivered: false, result };
     }
 
-    const text = spec.messageTemplate.replace(/\$\{result\}/g, result);
+    // Its own fields first, so a result that happens to hold "${date}" stays as it is.
+    const text = this.fill(spec.messageTemplate, entry.agentName).replace(/\$\{result\}/g, result);
     const msg = buildMessage('human', entry.agentName, 'direct', text, { isScheduled: true });
     await this.deliverMessage(entry.agentName, msg);
     return { delivered: true, result };

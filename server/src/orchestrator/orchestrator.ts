@@ -167,6 +167,8 @@ export class TeamOrchestrator {
       },
       this.mcp,
       (agentName) => this.personalMcpByAgent.get(agentName.toLowerCase()) ?? null,
+      undefined,
+      (agentName) => ({ human: this.humanName, email: this.getAgent(agentName)?.config.identity.email }),
     );
     this.agendaRunner.start();
   }
