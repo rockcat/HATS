@@ -12,6 +12,7 @@ import { appendCLIAgent, updateChatAgentSelect, initCLI } from './cli.js';
 import { applyTelemetrySummary, telScope, refreshTelemetryBar } from './telemetry.js';
 import { renderFilesList, fetchFiles, startFilesRefresh } from './files.js';
 import { initTabs } from './panels.js';
+import { isSignedOut, showLogin } from './auth.js';
 
 // renderTools lives inline here because it's small and only used in SSE events.
 function renderTools(tools) {
@@ -86,10 +87,17 @@ export function connect() {
   const es  = new EventSource('/events');
 
   es.onopen = () => { dot.classList.add('connected'); dot.title = 'Connected'; };
-  es.onerror = () => {
+  es.onerror = async () => {
     dot.classList.remove('connected');
-    dot.title = 'Disconnected — reconnecting…';
     es.close();
+    // EventSource hides the status code, so ask whether the session expired —
+    // retrying a 401 would never succeed.
+    if (await isSignedOut()) {
+      dot.title = 'Signed out';
+      showLogin();
+      return;
+    }
+    dot.title = 'Disconnected — reconnecting…';
     setTimeout(connect, 3000);
   };
 

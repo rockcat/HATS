@@ -33,9 +33,32 @@ export async function checkAuth() {
   } catch (err) {
     console.error('[Auth] checkAuth error:', err);
   }
-  document.getElementById('login-overlay').hidden = false;
-  initLoginForm();
+  showLogin();
   return false;
+}
+
+/**
+ * True only when the server is up and says the session is gone. A server that
+ * cannot be reached (restarting, network blip) is not a sign-out.
+ */
+export async function isSignedOut() {
+  try {
+    const r = await fetch('/api/auth/me');
+    if (r.status !== 401) return false;
+    sessionStorage.removeItem('hats_token');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+let _loginFormInited = false;
+
+export function showLogin() {
+  document.getElementById('login-overlay').hidden = false;
+  if (_loginFormInited) return;
+  _loginFormInited = true;
+  initLoginForm();
 }
 
 export async function logout() {
