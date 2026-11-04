@@ -145,6 +145,7 @@ export class APIServer {
   private agentFeeds = new Map<string, StoredEvent[]>();
   private readonly FEED_LIMIT = 200;
   private nudgeScheduler: ReturnType<typeof setInterval> | null = null;
+  private sseHeartbeat: ReturnType<typeof setInterval> | null = null;
   private autosaveTimer: ReturnType<typeof setTimeout> | null = null;
   private unsubscribeEvents: (() => void) | null = null;
   // Voice is stored by name; the Speech Service resolves it to a running model.
@@ -479,6 +480,9 @@ export class APIServer {
     if (this.kanbanManager.kanbanPath) this.kanbanManager.dispatchUnstartedTickets().catch(() => {});
 
     this.nudgeScheduler = setInterval(() => this.kanbanManager.nudgeStaleTickets().catch(() => {}), 30 * 60 * 1000);
+    // An SSE comment line every 25s keeps quiet streams from being closed as
+    // idle by proxies; EventSource ignores it.
+    this.sseHeartbeat = setInterval(() => this.sseWrite(': ping\n\n'), 25_000);
 
     this.server.listen(this.port, () => {
       log.info(`[API] UI         http://localhost:${this.port}`);
@@ -499,6 +503,7 @@ export class APIServer {
     this.unsubscribeEvents?.();
     if (this.meetingScheduler)    { clearInterval(this.meetingScheduler);    this.meetingScheduler    = null; }
     if (this.nudgeScheduler)      { clearInterval(this.nudgeScheduler);      this.nudgeScheduler      = null; }
+    if (this.sseHeartbeat)        { clearInterval(this.sseHeartbeat);        this.sseHeartbeat        = null; }
     if (this.googleRefreshTimer)  { clearInterval(this.googleRefreshTimer);  this.googleRefreshTimer  = null; }
     this.orchestrator.stopAgendaRunner();
     this.embodimentRouter.close();
@@ -559,7 +564,10 @@ export class APIServer {
   }
 
   private sseBroadcast(data: object): void {
-    const msg = `data: ${JSON.stringify(data)}\n\n`;
+    this.sseWrite(`data: ${JSON.stringify(data)}\n\n`);
+  }
+
+  private sseWrite(msg: string): void {
     for (let i = this.sseClients.length - 1; i >= 0; i--) {
       try { this.sseClients[i].write(msg); }
       catch { this.sseClients.splice(i, 1); }
