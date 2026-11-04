@@ -449,6 +449,11 @@
           <label class="field-label">Blocked by <span class="field-hint">(ticket IDs, comma-separated)</span></label>
           <input type="text" id="edit-blocked-by" class="modal-input" placeholder="e.g. TKT-001, TKT-002">
         </div>
+        <div class="field-group">
+          <label class="field-check" title="Work expected to take hours or days. The assignee is not chased for updates while it is in progress or blocked.">
+            <input type="checkbox" id="edit-long-running"> Long-running task <span class="field-hint">(not nudged for status updates)</span>
+          </label>
+        </div>
         <div class="field-group" id="modal-activity-section">
           <label class="field-label">Activity</label>
           <div id="modal-comments"></div>

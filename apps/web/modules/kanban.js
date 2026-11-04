@@ -109,6 +109,9 @@ function ticketHTML(ticket) {
   const blockersHTML = blockers.length
     ? `<div class="ticket-blockers" title="Blocked by: ${esc(blockers.join(', '))}">⛔ ${esc(blockers.join(', '))}</div>`
     : '';
+  const longRunningHTML = ticket.longRunning
+    ? '<div class="ticket-long-running" title="Long-running — not nudged for status updates">⏳ Long-running</div>'
+    : '';
 
   return `
     <div class="task-card${blockers.length ? ' task-card--blocked' : ''}${human ? ' task-card--human' : ''}" data-ticket-id="${esc(ticket.id)}" draggable="true" title="Drag to move · Click to edit">
@@ -119,6 +122,7 @@ function ticketHTML(ticket) {
       <div class="ticket-title">${esc(title)}</div>
       ${projectHTML}
       ${blockersHTML}
+      ${longRunningHTML}
       <div class="task-footer">
         <span class="task-assignee">${esc(assignee)}</span>
         ${tagsHTML}
@@ -281,6 +285,7 @@ function openNewTicketModal() {
   populateAssigneeDropdown('');
   document.getElementById('edit-tags').value        = '';
   document.getElementById('edit-blocked-by').value  = '';
+  document.getElementById('edit-long-running').checked = false;
   document.getElementById('modal-error').textContent = '';
   document.getElementById('modal-save').textContent = 'Create ticket';
   document.getElementById('modal-activity-section').hidden = true;
@@ -306,6 +311,7 @@ function openTicketModal(id) {
   populateAssigneeDropdown(ticket.assignee ?? '');
   document.getElementById('edit-tags').value        = (ticket.tags ?? []).join(', ');
   document.getElementById('edit-blocked-by').value  = (ticket.blockedBy ?? []).join(', ');
+  document.getElementById('edit-long-running').checked = !!ticket.longRunning;
   document.getElementById('modal-error').textContent = '';
   document.getElementById('modal-save').textContent = 'Save changes';
   document.getElementById('modal-activity-section').hidden = false;
@@ -364,6 +370,7 @@ function saveTicket() {
       .split(',').map(t => t.trim()).filter(Boolean),
     blockedBy:    document.getElementById('edit-blocked-by').value
       .split(',').map(t => t.trim().toUpperCase()).filter(Boolean),
+    longRunning:  document.getElementById('edit-long-running').checked,
   };
 
   const isCreate = currentEditId === null;

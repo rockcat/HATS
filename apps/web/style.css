@@ -810,6 +810,14 @@ main {
 .task-card--human { border-color: rgba(230,140,30,0.55); }
 .task-card--human:hover { border-color: rgba(230,140,30,0.9); }
 
+.ticket-long-running {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin: 3px 0 2px;
+}
+
+.field-check { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--text); cursor: pointer; }
+
 .ticket-blockers {
   font-size: 10px;
   color: #f85149;
