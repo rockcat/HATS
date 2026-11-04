@@ -91,6 +91,15 @@ export function ensureSchema(db: DatabaseSync, statements: string[]): void {
   for (const statement of statements) db.exec(statement);
 }
 
+/**
+ * Add a column to a table that may predate it. `CREATE TABLE IF NOT EXISTS`
+ * leaves an existing table alone, so a column added later needs this too.
+ */
+export function ensureColumn(db: DatabaseSync, table: string, column: string, definition: string): void {
+  const columns = db.prepare(`PRAGMA table_info(${table})`).all() as unknown as Array<{ name: string }>;
+  if (!columns.some(c => c.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+}
+
 /** Is this table empty? */
 export function isEmpty(db: DatabaseSync, table: string): boolean {
   const row = db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as { n: number };

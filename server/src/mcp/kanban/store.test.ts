@@ -8,6 +8,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, rm, writeFile } from 'fs/promises';
 import { existsSync } from 'fs';
+import { DatabaseSync } from 'node:sqlite';
 import { tmpdir } from 'os';
 import * as path from 'path';
 import { KanbanStore } from './store.js';
@@ -151,6 +152,25 @@ describe('mutations persist', () => {
     expect(await second.listTickets()).toHaveLength(0);
   });
 
+  it('the long-running flag, set and cleared', async () => {
+    const store = await freshStore();
+    const made = await make(store, { longRunning: true });
+    expect((await (await reopen()).getTicket(made.id))!.longRunning).toBe(true);
+
+    await (await freshStore()).updateTicket(made.id, { longRunning: false });
+    expect((await (await reopen()).getTicket(made.id))!.longRunning).toBeUndefined();
+  });
+
+  it('an update leaves the fields it was not given alone', async () => {
+    const store = await freshStore();
+    const made = await make(store, { tags: ['a'] });
+    await store.updateTicket(made.id, { title: undefined, tags: undefined, longRunning: true });
+
+    const after = await (await reopen()).getTicket(made.id);
+    expect(after!.title).toBe('Something');
+    expect(after!.tags).toEqual(['a']);
+  });
+
   it('keeps the id sequence across a restart', async () => {
     const store = await freshStore();
     const first = await make(store);
@@ -234,5 +254,22 @@ describe('where the board lives', () => {
     expect(existsSync(path.join(dir, 'project.db'))).toBe(true);
     // Nothing writes the JSON any more.
     expect(existsSync(boardPath)).toBe(false);
+  });
+});
+
+describe('a database from before the long-running flag', () => {
+  it('gains the column and keeps its tickets', async () => {
+    const store = await freshStore();
+    const made = await make(store);
+    closeAllProjectDbs();
+
+    const db = new DatabaseSync(path.join(dir, 'project.db'));
+    db.exec('ALTER TABLE tickets DROP COLUMN longRunning');
+    db.close();
+
+    const after = await freshStore();
+    expect((await after.getTicket(made.id))!.title).toBe('Something');
+    await after.updateTicket(made.id, { longRunning: true });
+    expect((await (await reopen()).getTicket(made.id))!.longRunning).toBe(true);
   });
 });

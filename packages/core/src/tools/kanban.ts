@@ -51,6 +51,7 @@ export const kanbanTools = (): KanbanTool[] => [
         creator:     { type: 'string', description: 'Name of the person or agent creating this ticket.' },
         assignee:    { type: 'string', description: 'Name of the person or agent to assign to (optional).' },
         tags:        { type: 'array', items: { type: 'string' }, description: 'Optional tags/labels.' },
+        long_running: { type: 'boolean', description: 'True for work expected to take many hours or days. Long-running tickets are not chased for status updates.' },
         thread_id:   { type: 'string', description: 'Conversation thread key this ticket originates from. Injected automatically — do not set manually.' },
       },
       required: ['title', 'description', 'creator'],
@@ -106,7 +107,7 @@ export const kanbanTools = (): KanbanTool[] => [
   },
   {
     name: 'update_ticket',
-    description: 'Update a ticket\'s title, description, priority, or tags.',
+    description: 'Update a ticket\'s title, description, priority, tags, or long-running flag.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -118,6 +119,7 @@ export const kanbanTools = (): KanbanTool[] => [
         description: { type: 'string', description: 'New description. Omit to leave it alone.' },
         priority:    { type: 'string', enum: PRIORITIES, description: 'New priority. Omit to leave it alone.' },
         tags:        { type: 'array', items: { type: 'string' }, description: 'Replaces the existing tags. Omit to leave them alone.' },
+        long_running: { type: 'boolean', description: 'True for work expected to take many hours or days, so it is not chased for status updates. Omit to leave it alone.' },
       },
       required: ['id'],
     },

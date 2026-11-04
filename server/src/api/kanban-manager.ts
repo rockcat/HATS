@@ -134,7 +134,7 @@ export class KanbanManager {
     const orch    = this.deps.getOrchestrator();
     for (const ticket of Object.values(board.tickets)) {
       if (ticket.column !== 'in_progress' && ticket.column !== 'blocked') continue;
-      if (!ticket.assignee) continue;
+      if (!ticket.assignee || ticket.longRunning) continue;
       const age = now - new Date(ticket.updatedAt).getTime();
       if (age < STALE) continue;
       const agentName = this.deps.resolveAgentName(ticket.assignee);
@@ -253,6 +253,7 @@ export class KanbanManager {
       const fields = JSON.parse(body) as {
         title: string; description?: string; priority?: string;
         column?: string; assignee?: string; tags?: string[]; blockedBy?: string[];
+        longRunning?: boolean;
       };
       if (!fields.title?.trim()) { json(res, 400, { error: 'Title is required' }); return true; }
       const board = await this.readKanban();
@@ -272,6 +273,7 @@ export class KanbanManager {
         assignee:    fields.assignee || undefined,
         tags:        fields.tags ?? [],
         blockedBy:   fields.blockedBy?.length ? fields.blockedBy : undefined,
+        ...(fields.longRunning ? { longRunning: true } : {}),
         comments:    [],
         createdAt:   now,
         updatedAt:   now,
@@ -326,6 +328,7 @@ export class KanbanManager {
         title: string; description: string; priority: string;
         column: string; closedReason: 'completed' | 'cancelled';
         assignee: string | null; tags: string[]; blockedBy: string[];
+        longRunning: boolean;
       }>;
       const board  = await this.readKanban();
       const ticket = board.tickets[id];
@@ -346,6 +349,7 @@ export class KanbanManager {
       if (fields.assignee    !== undefined) ticket.assignee    = fields.assignee ?? undefined;
       if (fields.tags        !== undefined) ticket.tags        = fields.tags;
       if (fields.blockedBy   !== undefined) ticket.blockedBy   = fields.blockedBy;
+      if (fields.longRunning !== undefined) ticket.longRunning = fields.longRunning;
       ticket.updatedAt = new Date().toISOString();
       await this.writeKanban(board);
       json(res, 200, ticket);

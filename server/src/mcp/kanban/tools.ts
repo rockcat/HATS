@@ -43,6 +43,7 @@ export async function handleKanbanCall(
         assignee:    args['assignee'] as string | undefined,
         tags:        args['tags'] as string[] | undefined,
         threadId:    args['thread_id'] as string | undefined,
+        longRunning: args['long_running'] as boolean | undefined,
       });
       return `Created ${ticket.id}: "${ticket.title}" in backlog.`;
     }
@@ -96,6 +97,7 @@ export async function handleKanbanCall(
         description: args['description'] as string | undefined,
         priority:    args['priority'] as Priority | undefined,
         tags:        args['tags'] as string[] | undefined,
+        longRunning: args['long_running'] as boolean | undefined,
       });
       return `Updated ${ticket.id}.`;
     }

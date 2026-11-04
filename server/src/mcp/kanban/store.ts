@@ -4,7 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import type { DatabaseSync } from 'node:sqlite';
 import { Board, ClosedReason, Column, Comment, Priority, Ticket } from './types.js';
 import {
-  dbPathFor, ensureSchema, hasImported, inTransaction, markImported, openProjectDb,
+  dbPathFor, ensureColumn, ensureSchema, hasImported, inTransaction, markImported, openProjectDb,
 } from '../../store/project-db.js';
 
 const EMPTY_BOARD: Board = { tickets: {}, nextSeq: 1 };
@@ -50,7 +50,8 @@ export class KanbanStore {
          projectName   TEXT,
          projectFolder TEXT,
          lastTaskId    TEXT,
-         threadId      TEXT
+         threadId      TEXT,
+         longRunning   INTEGER NOT NULL DEFAULT 0
        )`,
       `CREATE TABLE IF NOT EXISTS ticket_comments (
          id       TEXT PRIMARY KEY,
@@ -69,6 +70,7 @@ export class KanbanStore {
       'CREATE INDEX IF NOT EXISTS tickets_assignee ON tickets (assignee)',
       'CREATE INDEX IF NOT EXISTS ticket_comments_ticket ON ticket_comments (ticketId)',
     ]);
+    ensureColumn(this.db, 'tickets', 'longRunning', 'INTEGER NOT NULL DEFAULT 0');
 
     if (!hasImported(this.db, 'kanban-board.json')) {
       await this.importLegacy();
@@ -184,6 +186,7 @@ export class KanbanStore {
     assignee?: string;
     tags?: string[];
     threadId?: string;
+    longRunning?: boolean;
   }): Promise<Ticket> {
     return this.serialise(async () => {
       const existing = this.findByTitle(fields.title);
@@ -210,6 +213,7 @@ export class KanbanStore {
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         ...(fields.threadId ? { threadId: fields.threadId } : {}),
+        ...(fields.longRunning ? { longRunning: true } : {}),
       };
       this.board.tickets[id] = ticket;
       await this.save();
@@ -242,10 +246,13 @@ export class KanbanStore {
     });
   }
 
-  updateTicket(id: string, fields: Partial<Pick<Ticket, 'title' | 'description' | 'priority' | 'tags'>>): Promise<Ticket> {
+  updateTicket(id: string, fields: Partial<Pick<Ticket, 'title' | 'description' | 'priority' | 'tags' | 'longRunning'>>): Promise<Ticket> {
     return this.serialise(async () => {
       const ticket = this.requireTicket(id);
-      Object.assign(ticket, fields);
+      // Only the fields given change — an undefined one must not wipe a value.
+      for (const [key, value] of Object.entries(fields)) {
+        if (value !== undefined) Object.assign(ticket, { [key]: value });
+      }
       ticket.updatedAt = new Date().toISOString();
       await this.save();
       return ticket;
@@ -375,8 +382,8 @@ export class KanbanStore {
         `INSERT OR REPLACE INTO tickets
            (id, title, description, priority, col, creator, assignee, tags,
             createdAt, updatedAt, closedReason, projectName, projectFolder,
-            lastTaskId, threadId)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            lastTaskId, threadId, longRunning)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       );
       const addComment = db.prepare(
         'INSERT INTO ticket_comments (id, ticketId, author, text, ts) VALUES (?, ?, ?, ?, ?)',
@@ -402,7 +409,7 @@ export class KanbanStore {
           t.assignee ?? null, JSON.stringify(t.tags ?? []),
           t.createdAt ?? now, t.updatedAt ?? now, t.closedReason ?? null,
           t.projectName ?? null, t.projectFolder ?? null,
-          t.lastTaskId ?? null, t.threadId ?? null);
+          t.lastTaskId ?? null, t.threadId ?? null, t.longRunning ? 1 : 0);
 
         // Replaced wholesale rather than diffed: a ticket has a handful of
         // comments and working out which are new costs more than rewriting.
@@ -449,7 +456,7 @@ export class KanbanStore {
     for (const row of db.prepare(
       `SELECT id, title, description, priority, col, creator, assignee, tags,
               createdAt, updatedAt, closedReason, projectName, projectFolder,
-              lastTaskId, threadId
+              lastTaskId, threadId, longRunning
        FROM tickets`,
     ).all() as unknown as TicketRow[]) {
       tickets[row.id] = {
@@ -475,6 +482,7 @@ export class KanbanStore {
         ...(row.projectFolder ? { projectFolder: row.projectFolder } : {}),
         ...(row.lastTaskId ? { lastTaskId: row.lastTaskId } : {}),
         ...(row.threadId ? { threadId: row.threadId } : {}),
+        ...(row.longRunning ? { longRunning: true } : {}),
       };
     }
 
@@ -504,5 +512,5 @@ interface TicketRow {
   creator: string; assignee: string | null; tags: string;
   createdAt: string; updatedAt: string; closedReason: string | null;
   projectName: string | null; projectFolder: string | null;
-  lastTaskId: string | null; threadId: string | null;
+  lastTaskId: string | null; threadId: string | null; longRunning: number;
 }
