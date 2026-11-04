@@ -43,6 +43,7 @@ import { seedBuiltIns } from './store/built-in-agents.js';
 import { runtimeDir } from '../../packages/core/src/runtime-dir.js';
 import { seedMissing } from './util/seed-data.js';
 import { UserStore } from './api/user-store.js';
+import { loadSessions } from './api/auth-middleware.js';
 import { AgentLibraryClient } from '../../packages/clients/src/agent-library-client.js';
 import { resolveProjectSource } from './project/project-source.js';
 import { ProjectSync } from './project/project-sync.js';
@@ -182,6 +183,7 @@ async function main() {
 
   const userStore = new UserStore(runtimeDir('data', 'users.json'));
   await userStore.load();
+  await loadSessions(runtimeDir('data', 'sessions.json'));
   if (userStore.isEmpty()) {
     const username = process.env['HATS_ADMIN_USERNAME'] ?? 'admin';
     const password = process.env['HATS_ADMIN_PASSWORD'] ?? 'changeme';

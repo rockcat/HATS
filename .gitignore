@@ -49,6 +49,7 @@ apps/poppyinyourpocket/ios/
 runtime_data/data/google-tokens.json
 runtime_data/data/google-agent-tokens/
 runtime_data/data/users.json
+runtime_data/data/sessions.json
 
 # Per-runner data folders (docker-compose.multi.yml)
 runners/

@@ -1,32 +1,17 @@
-import { randomBytes } from 'crypto';
 import type { IncomingMessage, ServerResponse } from 'http';
 import type { UserStore, User } from './user-store.js';
+import { SessionStore, SESSION_TTL, type Session } from './session-store.js';
 
-export interface Session {
-  userId:    string;
-  username:  string;
-  role:      'admin' | 'user';
-  expiresAt: number;
-}
+export type { Session };
 
-const SESSION_TTL = 24 * 60 * 60 * 1000; // 24 h
-const sessions    = new Map<string, Session>();
+const sessions = new SessionStore();
 
-export function createSession(user: User): string {
-  const id = randomBytes(32).toString('hex');
-  sessions.set(id, {
-    userId: user.id, username: user.username, role: user.role,
-    expiresAt: Date.now() + SESSION_TTL,
-  });
-  return id;
-}
+/** Restore sessions saved by a previous run, and keep saving them to `filePath`. */
+export function loadSessions(filePath: string): Promise<void> { return sessions.load(filePath); }
 
-export function getSession(id: string): Session | null {
-  const s = sessions.get(id);
-  if (!s) return null;
-  if (Date.now() > s.expiresAt) { sessions.delete(id); return null; }
-  return s;
-}
+export function createSession(user: User): string { return sessions.create(user); }
+
+export function getSession(id: string): Session | null { return sessions.get(id); }
 
 export function deleteSession(id: string): void { sessions.delete(id); }
 

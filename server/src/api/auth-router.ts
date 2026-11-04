@@ -3,7 +3,7 @@ import { hostOf, isLoopback, lanAddresses } from '../util/lan-addresses.js';
 import type { IncomingMessage, ServerResponse } from 'http';
 import type { UserStore } from './user-store.js';
 import {
-  createSession, deleteSession,
+  createSession, deleteSession, getSession,
   setSessionCookie, clearSessionCookie, parseRequestAuth,
 } from './auth-middleware.js';
 import { readBody } from './api-utils.js';
@@ -63,6 +63,10 @@ export class AuthRouter {
       if (!session) { json(res, 401, { error: 'Not authenticated' }); return true; }
       const user = this.userStore.getById(session.userId);
       if (!user)  { json(res, 401, { error: 'Not authenticated' }); return true; }
+      // Re-issue the cookie so its lifetime slides along with the session.
+      // The event stream can only authenticate with the cookie.
+      const sid = cookieSessionId(req);
+      if (sid && getSession(sid)) setSessionCookie(res, sid);
       json(res, 200, this.userStore.toPublic(user));
       return true;
     }
