@@ -12,6 +12,7 @@
 
 import { KanbanStore } from './store.js';
 import { ClosedReason, Column, Priority } from './types.js';
+import { leavesLongRunningInProgress } from './long-running.js';
 import { kanbanTools, KANBAN_TOOL_NAMES, UPFRONT_KANBAN_TOOLS, type KanbanTool } from '../../../../packages/core/src/tools/kanban.js';
 
 export { kanbanTools, KANBAN_TOOL_NAMES, UPFRONT_KANBAN_TOOLS, type KanbanTool };
@@ -79,6 +80,12 @@ export async function handleKanbanCall(
       const id     = (args['id'] ?? args['ticket']) as string;
       const col    = args['column'] as Column;
       const reason = args['closed_reason'] as ClosedReason | undefined;
+      const current = await store.getTicket(id);
+      if (current && leavesLongRunningInProgress(current, col) && args['instructed'] !== true) {
+        return `${current.id} is a long-running ticket, so it stays in "in_progress". `
+          + 'Only move it if you have been explicitly told to — then call move_ticket again with instructed: true. '
+          + 'To record progress, use add_comment instead.';
+      }
       const ticket = await store.moveTicket(id, col, reason);
       const suffix = ticket.closedReason ? ` (${ticket.closedReason})` : '';
       return `Moved ${ticket.id} to "${ticket.column}"${suffix}.`;

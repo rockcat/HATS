@@ -168,3 +168,36 @@ describe('running them', () => {
     await expect(call('make_tea')).rejects.toThrow(/Unknown tool: make_tea/);
   });
 });
+
+describe('a long-running ticket in progress', () => {
+  async function longRunningInProgress(): Promise<string> {
+    const id = await makeTicket('Watch the logs');
+    await call('update_ticket', { id, long_running: true });
+    await call('move_ticket', { id, column: 'in_progress' });
+    return id;
+  }
+
+  it('is not moved out unless the agent was told to', async () => {
+    const id = await longRunningInProgress();
+    const said = await call('move_ticket', { id, column: 'closed', closed_reason: 'completed' });
+
+    expect(said).toMatch(/long-running/);
+    expect((await store.getTicket(id))!.column).toBe('in_progress');
+  });
+
+  it('moves when the agent says it was instructed', async () => {
+    const id = await longRunningInProgress();
+    await call('move_ticket', { id, column: 'review', instructed: true });
+
+    expect((await store.getTicket(id))!.column).toBe('review');
+  });
+
+  it('can still be moved into progress from elsewhere', async () => {
+    const id = await makeTicket('Nightly import');
+    await call('update_ticket', { id, long_running: true });
+    await call('move_ticket', { id, column: 'ready' });
+    await call('move_ticket', { id, column: 'in_progress' });
+
+    expect((await store.getTicket(id))!.column).toBe('in_progress');
+  });
+});

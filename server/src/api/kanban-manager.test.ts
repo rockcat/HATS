@@ -17,7 +17,14 @@ const ticket = (id: string, over: Partial<Ticket> = {}): Ticket => ({
 function managerFor(tickets: Ticket[]) {
   const board: Board = { tickets: Object.fromEntries(tickets.map(t => [t.id, t])), nextSeq: 1 };
   const humanMessage = vi.fn(() => Promise.resolve());
+  const moveTicket   = vi.fn(async () => {});
   const orchestrator = { listAgents: () => [{ name: 'Rhoda' }], humanMessage } as unknown as TeamOrchestrator;
+  const store = {
+    getBoard:    async () => board,
+    getTicket:   async (id: string) => board.tickets[id],
+    listTickets: async () => Object.values(board.tickets),
+    moveTicket,
+  } as unknown as KanbanStore;
   const manager = new KanbanManager('kanban-board.json', {
     getOrchestrator:  () => orchestrator,
     agentTicketMap:   new Map(),
@@ -25,12 +32,27 @@ function managerFor(tickets: Ticket[]) {
     resolveAgentName: (n) => n,
     agentIdForName:   (n) => n,
     sseBroadcast:     () => {},
-    getKanbanStore:   () => ({ getBoard: async () => board }) as unknown as KanbanStore,
+    getKanbanStore:   () => store,
     json:             () => {},
     readBody:         async () => '',
   });
-  return { manager, humanMessage };
+  return { manager, humanMessage, moveTicket };
 }
+
+describe('automatic column changes', () => {
+  it('keep a long-running ticket in progress', async () => {
+    const { manager, moveTicket } = managerFor([ticket('TKT-001', { longRunning: true })]);
+    await manager.updateKanbanColumn('TKT-001', 'closed', 'completed');
+    await manager.updateKanbanColumn('TKT-001', 'blocked');
+    expect(moveTicket).not.toHaveBeenCalled();
+  });
+
+  it('still move an ordinary ticket', async () => {
+    const { manager, moveTicket } = managerFor([ticket('TKT-001')]);
+    await manager.updateKanbanColumn('TKT-001', 'closed', 'completed');
+    expect(moveTicket).toHaveBeenCalledWith('TKT-001', 'closed', 'completed');
+  });
+});
 
 describe('nudgeStaleTickets', () => {
   it('chases a stale ticket', async () => {

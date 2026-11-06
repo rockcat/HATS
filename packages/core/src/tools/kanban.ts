@@ -82,13 +82,14 @@ export const kanbanTools = (): KanbanTool[] => [
   },
   {
     name: 'move_ticket',
-    description: 'Move a ticket to a different column. Use "review" before closing; move back to "in_progress" if review fails. When moving to "closed", set closed_reason to "completed" or "cancelled".',
+    description: 'Move a ticket to a different column. Use "review" before closing; move back to "in_progress" if review fails. When moving to "closed", set closed_reason to "completed" or "cancelled". A long-running ticket stays in "in_progress" unless you have been explicitly told to move it.',
     inputSchema: {
       type: 'object',
       properties: {
         id:            { type: 'string', description: 'Ticket ID.' },
         column:        { type: 'string', enum: COLUMNS, description: 'Destination column.' },
         closed_reason: { type: 'string', enum: CLOSED_REASONS, description: 'Required when moving to "closed". Use "completed" for finished work or "cancelled" to abandon.' },
+        instructed:    { type: 'boolean', description: 'Set true only when you have been explicitly told to move this long-running ticket out of "in_progress". Not needed for other tickets.' },
       },
       required: ['id', 'column'],
     },

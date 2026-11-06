@@ -128,7 +128,8 @@ function buildTicketingSection(): string {
     `- Record decisions, findings and blockers as comments on the ticket with ` +
     `add_comment, as you go. A decision nobody wrote down will be made again.\n` +
     `- Move a ticket as its state really changes with move_ticket, so the board ` +
-    `says what is actually happening.\n` +
+    `says what is actually happening. A long-running ticket is the exception: ` +
+    `leave it in "in_progress" unless you are explicitly told to move it.\n` +
     `- If you cannot remember the detail of an earlier discussion, read the ` +
     `ticket rather than guessing or asking again.`;
 }

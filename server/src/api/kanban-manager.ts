@@ -7,6 +7,7 @@ import { Board } from '../mcp/kanban/types.js';
 import type { KanbanStore } from '../mcp/kanban/store.js';
 import { log } from '../../../packages/core/src/logger.js';
 import { buildBoardSummary } from './api-utils.js';
+import { leavesLongRunningInProgress } from '../mcp/kanban/long-running.js';
 
 export interface KanbanManagerDeps {
   getOrchestrator(): TeamOrchestrator;
@@ -75,6 +76,12 @@ export class KanbanManager {
 
     const ticket = await store.getTicket(ticketId);
     if (!ticket || ticket.column === column) return;
+    // These moves are automatic (a task finished, an agent escalated), never
+    // an explicit instruction, so a long-running ticket stays where it is.
+    if (leavesLongRunningInProgress(ticket, column)) {
+      log.info(`[API] Ticket ${ticketId} is long-running — kept in progress rather than → ${column}`);
+      return;
+    }
 
     await store.moveTicket(ticketId, column as never, closedReason);
     await this.broadcast();
@@ -162,7 +169,7 @@ export class KanbanManager {
     }
   }
 
-  async dispatchTicket(ticket: { id: string; title: string; description: string; assignee?: string; priority?: string; tags?: string[]; comments?: import('../mcp/kanban/types.js').Comment[]; lastTaskId?: string; threadId?: string }): Promise<void> {
+  async dispatchTicket(ticket: { id: string; title: string; description: string; assignee?: string; priority?: string; tags?: string[]; comments?: import('../mcp/kanban/types.js').Comment[]; lastTaskId?: string; threadId?: string; longRunning?: boolean }): Promise<void> {
     if (!ticket.assignee) return;
     const orch      = this.deps.getOrchestrator();
     const agentName = this.deps.resolveAgentName(ticket.assignee);
@@ -181,8 +188,13 @@ export class KanbanManager {
       ? `\n\n## Activity log\n${priorComments.map(c => `- [${c.ts.slice(0, 16).replace('T', ' ')}] ${c.author}: ${c.text}`).join('\n')}`
       : '';
 
+    const longRunningNote = ticket.longRunning
+      ? '\n\nThis is a long-running ticket: leave it in "in_progress" when you finish a piece of it. '
+        + 'Record progress with add_comment, and only move it if you are explicitly told to.'
+      : '';
+
     const projectName = ticket.id;
-    const description = `Work on ticket ${ticket.id}: ${ticket.title}${ticket.description ? `\n\n${ticket.description}` : ''}${commentsSection}`;
+    const description = `Work on ticket ${ticket.id}: ${ticket.title}${ticket.description ? `\n\n${ticket.description}` : ''}${longRunningNote}${commentsSection}`;
     // Re-dispatch: seed from the previous task's thread (full history, no limit).
     // First dispatch: seed from the ticket's origin thread (where it was created/discussed), or general.
     const sourceThreadId   = ticket.lastTaskId ?? ticket.threadId ?? 'general';
