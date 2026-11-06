@@ -7,7 +7,8 @@ import { updateGoalBar, updateProjectBadge } from './project.js';
 import { renderRequests } from './requests.js';
 import { renderAllowlist, initAllowlist } from './allowlist.js';
 import { renderCalendar, fetchCalendar } from './calendar.js';
-import { appendAgentFeedEvent, initAgentDetail } from './agent-detail.js';
+import { appendAgentFeedEvent, initAgentDetail, activeDetailAgent } from './agent-detail.js';
+import { refreshAgentSpend } from './agent-model.js';
 import { appendCLIAgent, updateChatAgentSelect, initCLI } from './cli.js';
 import { applyTelemetrySummary, telScope, refreshTelemetryBar } from './telemetry.js';
 import { renderFilesList, fetchFiles, startFilesRefresh } from './files.js';
@@ -129,6 +130,7 @@ export function connect() {
       syncAgentConfigs();
       renderAgents(state.agents);
       updateChatAgentSelect();
+      if (activeDetailAgent) refreshAgentSpend(state.agents.find(a => a.name === activeDetailAgent));
     } else if (msg.type === 'scheduled_meetings_update') {
       renderCalendar(msg.meetings);
     } else if (msg.type === 'kanban_update') {

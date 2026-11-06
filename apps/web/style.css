@@ -2442,6 +2442,13 @@ main {
   font-size: 11px; color: var(--text-muted); white-space: nowrap;
 }
 .agent-config-limit-input { flex: 0 0 auto; width: 72px; }
+.agent-config-spend { font-size: 11px; color: var(--text-muted); white-space: nowrap; margin-left: auto; }
+
+/* The agent's model, beside its limits */
+.agent-config-model-pickers { flex: 1; min-width: 0; display: flex; gap: 6px; }
+.agent-config-model-pickers[hidden] { display: none; }
+.agent-config-model-pickers > #agent-config-provider { flex: 0 1 140px; }
+.agent-config-model-external { font-size: 11px; color: var(--text); }
 
 /* Tools sent in every call, in the Configure panel */
 .agent-tools-help { font-size: 11px; color: var(--text-muted); margin: 4px 0 6px; line-height: 1.4; }

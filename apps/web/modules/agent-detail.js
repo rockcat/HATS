@@ -11,6 +11,7 @@ import { refreshProviderModels } from './providers.js';
 import { bindAgentAgenda } from './agent-agenda.js';
 import { bindAgentPrompt, initAgentPrompt, saveAgentPrompt } from './agent-prompt.js';
 import { bindAgentLimits, saveAgentLimits } from './agent-limits.js';
+import { bindAgentModel, initAgentModel, saveAgentModel } from './agent-model.js';
 import { bindAgentTools, initAgentTools, saveAgentTools } from './agent-tools.js';
 import { initAgentTransfer, resetAgentTransfer } from './agent-transfer.js';
 
@@ -414,6 +415,7 @@ export function initAgentDetail() {
   });
 
   initAgentPrompt();
+  initAgentModel();
   initAgentTools();
   initAgentTransfer(() => activeDetailAgent);
 
@@ -429,6 +431,7 @@ export function initAgentDetail() {
         body: JSON.stringify({ email }),
       }));
       tasks.push(saveAgentPrompt(activeDetailAgent));
+      tasks.push(saveAgentModel(activeDetailAgent));
       tasks.push(saveAgentLimits(activeDetailAgent));
       tasks.push(saveAgentTools(activeDetailAgent));
       const mcpLine = document.getElementById('agent-config-mcp-line');
@@ -467,6 +470,7 @@ export function openAgentDetail(name, chatOnly = false) {
   bindAgentMemory(name);
   bindAgentAgenda(name);
   bindAgentPrompt(name, agent);
+  bindAgentModel(agent);
   bindAgentLimits(agent);
   bindAgentTools(name);
   resetAgentTransfer();
