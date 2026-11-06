@@ -507,6 +507,34 @@
     </div>
   </div>
 
+  <!-- Model catalogue: every model the providers returned, with its price -->
+  <div id="model-cat-modal" class="modal-overlay" hidden>
+    <div class="modal model-cat-modal" role="dialog" aria-modal="true" aria-labelledby="model-cat-title">
+      <div class="modal-header">
+        <span id="model-cat-title" class="modal-ticket-id">Models &amp; pricing</span>
+        <button class="modal-close" id="model-cat-close" title="Close"><img src="assets/close.svg" class="svg-icon" alt="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="model-cat-toolbar">
+          <input type="search" id="model-cat-filter" class="modal-input" placeholder="Filter by provider or model" autocomplete="off">
+          <span id="model-cat-summary" class="model-cat-summary"></span>
+        </div>
+        <div class="model-cat-scroll">
+          <table class="model-cat-table">
+            <thead>
+              <tr><th>Provider</th><th>Model</th><th>Input $/M</th><th>Output $/M</th><th>Context</th></tr>
+            </thead>
+            <tbody id="model-cat-rows"></tbody>
+          </table>
+        </div>
+        <details id="model-cat-unoffered" class="model-cat-unoffered" hidden>
+          <summary>Priced, but not offered by any provider</summary>
+          <ul></ul>
+        </details>
+      </div>
+    </div>
+  </div>
+
   <!-- MCP Catalogue Editor Modal -->
   <div id="mcp-editor-modal" class="modal-overlay" hidden>
     <div class="modal mcp-editor-modal" role="dialog" aria-modal="true" aria-label="MCP Catalogue Editor">

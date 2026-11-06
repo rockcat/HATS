@@ -4751,3 +4751,23 @@ body.has-expanded-panel main > section:not(.panel--expanded) {
 .tab-badge[hidden],
 .panel-header-action-btn[hidden],
 .lib-avatar-panel[hidden] { display: none; }
+
+/* ── Model catalogue (Settings → View models) ────────── */
+.model-cat-modal { max-width: 860px; width: min(860px, 95vw); max-height: 85vh; }
+.model-cat-toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.model-cat-toolbar .modal-input { flex: 1 1 220px; }
+.model-cat-summary { font-size: 11px; color: var(--text-muted); }
+.model-cat-scroll { overflow: auto; border: 1px solid var(--border); border-radius: 6px; }
+.model-cat-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+.model-cat-table th {
+  position: sticky; top: 0; background: var(--surface-2); text-align: left;
+  font-weight: 600; color: var(--text-muted); padding: 6px 8px; white-space: nowrap;
+}
+.model-cat-table td { padding: 4px 8px; border-top: 1px solid var(--border); color: var(--text); white-space: nowrap; }
+.model-cat-table td:nth-child(n+3) { font-variant-numeric: tabular-nums; }
+.model-cat-model { font-family: ui-monospace, monospace; }
+.model-cat-free { color: #58a6ff; }
+.model-cat-unknown { color: #e3b341; }
+.model-cat-empty { text-align: center; color: var(--text-muted); }
+.model-cat-unoffered summary { font-size: 11px; color: var(--text-muted); cursor: pointer; }
+.model-cat-unoffered ul { margin: 6px 0 0; padding-left: 18px; font-size: 11px; color: var(--text-muted); }

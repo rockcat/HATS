@@ -4,6 +4,7 @@ import { esc } from './utils.js';
 import { setToolCallDetail, toolCallDetail } from './agent-detail.js';
 import { resetProvidersCache, refreshProviderModels, loadProviders } from './providers.js';
 import { resetPricingCache } from './pricing.js';
+import { initModelCatalogue, openModelCatalogue } from './model-catalogue.js';
 import { toggleMute } from './voice.js';
 import { currentUser, logout } from './auth.js';
 
@@ -162,7 +163,7 @@ export function renderSettingsBody(entries, providers, humanName, logPrompts) {
   }
 
   if (providers && providers.length) {
-    html += `<div class="settings-section"><div class="settings-section-title">Provider Status <button id="refresh-models-btn" class="modal-btn secondary" style="font-size:11px;padding:2px 8px;margin-left:8px">Refresh models</button><button id="update-pricing-btn" class="modal-btn secondary" style="font-size:11px;padding:2px 8px;margin-left:6px" title="Fetch current pricing from provider websites using Claude Haiku">Update pricing</button></div>`;
+    html += `<div class="settings-section"><div class="settings-section-title">Provider Status <button id="refresh-models-btn" class="modal-btn secondary" style="font-size:11px;padding:2px 8px;margin-left:8px">Refresh models</button><button id="update-pricing-btn" class="modal-btn secondary" style="font-size:11px;padding:2px 8px;margin-left:6px" title="Fetch current pricing from provider websites using Claude Haiku">Update pricing</button><button id="view-models-btn" class="modal-btn secondary" style="font-size:11px;padding:2px 8px;margin-left:6px" title="Every model the providers returned, with its price">View models</button></div>`;
     for (const p of providers) {
       const dot        = p.available ? '🟢' : '🔴';
       const modelCount = p.models?.length ? ` · ${p.models.length} model${p.models.length !== 1 ? 's' : ''}` : '';
@@ -181,6 +182,11 @@ export function renderSettingsBody(entries, providers, humanName, logPrompts) {
     resetProvidersCache();
     await refreshProviderModels(true);
     openSettings();
+  });
+
+  document.getElementById('view-models-btn')?.addEventListener('click', () => {
+    initModelCatalogue();
+    openModelCatalogue();
   });
 
   document.getElementById('update-pricing-btn')?.addEventListener('click', async () => {
