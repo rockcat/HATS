@@ -13,6 +13,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "start": "node --env-file=.env --import tsx/esm server/src/team-runner.ts",
+    "update-pricing": "tsx --env-file=.env server/src/tools/pricing-updater.ts",
     "start:standalone": "node --env-file=.env --import tsx/esm server/src/team-runner.ts --standalone"
   },
   "dependencies": {

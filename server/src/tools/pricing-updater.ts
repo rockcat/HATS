@@ -1,7 +1,8 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
-import { join } from 'path';
+import { dirname } from 'path';
 import { fileURLToPath } from 'url';
 import Anthropic from '@anthropic-ai/sdk';
+import { runtimeDir } from '../../../packages/core/src/runtime-dir.js';
 
 export interface PricingEntry {
   provider: string;
@@ -21,7 +22,9 @@ export interface UpdateResult {
   errors: string[];
 }
 
-const PRICING_FILE = join(process.cwd(), 'data', 'model-pricing.json');
+// The file providers/pricing.ts reads. This wrote to <cwd>/data instead, so a
+// refresh saved prices the runner never looked at.
+const PRICING_FILE = runtimeDir('data', 'model-pricing.json');
 
 // Pricing page URLs match each provider's pricingPageUrl property
 const PROVIDERS = [
@@ -148,7 +151,7 @@ export async function updatePricing(
 
   file.updatedAt = new Date().toISOString();
 
-  const dir = join(process.cwd(), 'data');
+  const dir = dirname(PRICING_FILE);
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   writeFileSync(PRICING_FILE, JSON.stringify(file, null, 2), 'utf-8');
   log(`Saved — ${Object.keys(file.models).length} total models in model-pricing.json`);
