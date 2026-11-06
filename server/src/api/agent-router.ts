@@ -516,7 +516,12 @@ export class AgentRouter {
       try {
         const { updatePricing } = await import('../tools/pricing-updater.js');
         const logs: string[] = [];
-        const result = await updatePricing(msg => logs.push(msg));
+        // The ids each provider serves, so prices are saved under the keys
+        // they are looked up by.
+        const known = Object.fromEntries(await Promise.all(
+          KNOWN_PROVIDERS.map(async p => [p.id, await getCachedModels(p).catch(() => [...p.models])] as const),
+        ));
+        const result = await updatePricing(msg => logs.push(msg), known);
         reloadPricingFromFile();
         json(res, 200, { ...result, log: logs });
       } catch (err) {

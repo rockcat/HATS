@@ -3,17 +3,12 @@ import { dirname } from 'path';
 import { fileURLToPath } from 'url';
 import Anthropic from '@anthropic-ai/sdk';
 import { runtimeDir } from '../../../packages/core/src/runtime-dir.js';
+import {
+  extractionPrompt, htmlToText, mergePricing, parseExtraction,
+  type Extracted, type PricingFile,
+} from './pricing-extract.js';
 
-export interface PricingEntry {
-  provider: string;
-  input: number;
-  output: number;
-}
-
-export interface PricingFile {
-  updatedAt: string;
-  models: Record<string, PricingEntry>;
-}
+export type { PricingEntry, PricingFile } from './pricing-extract.js';
 
 export interface UpdateResult {
   added: number;
@@ -22,9 +17,14 @@ export interface UpdateResult {
   errors: string[];
 }
 
+/** Model ids each provider's API serves, by provider id — the keys prices are looked up by. */
+export type KnownModels = Record<string, string[]>;
+
 // The file providers/pricing.ts reads. This wrote to <cwd>/data instead, so a
 // refresh saved prices the runner never looked at.
 const PRICING_FILE = runtimeDir('data', 'model-pricing.json');
+
+const EXTRACTION_MODEL = 'claude-haiku-5-5';
 
 // Pricing page URLs match each provider's pricingPageUrl property
 const PROVIDERS = [
@@ -50,59 +50,28 @@ async function fetchPage(url: string): Promise<string> {
   return res.text();
 }
 
-function htmlToText(html: string): string {
-  return html
-    .replace(/<script[\s\S]*?<\/script>/gi, '')
-    .replace(/<style[\s\S]*?<\/style>/gi, '')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 50_000);
-}
-
 async function extractPricing(
   client: Anthropic,
   providerName: string,
   html: string,
-): Promise<Record<string, { input: number; output: number }>> {
+  knownIds: string[],
+): Promise<Extracted> {
   const text = htmlToText(html);
   if (text.length < 500) throw new Error('Page content too short — likely a JS-rendered SPA; no pricing extracted');
 
   const msg = await client.messages.create({
-    model: 'claude-haiku-4-5-20251001',
-    max_tokens: 2048,
-    messages: [{
-      role: 'user',
-      content: `Extract all AI model text-token pricing from this ${providerName} pricing page.
-
-Return ONLY a valid JSON object: model-id → {"input": <USD/1M tokens>, "output": <USD/1M tokens>}.
-Rules:
-- Values are USD per 1 million tokens (not per 1K).
-- Only include text / language model pricing — skip image, audio, embedding, and fine-tuning.
-- Use the exact model ID strings shown on the page (e.g. "claude-3-5-sonnet-20241022").
-- If no pricing data is present, return {}.
-
-Page content:
-${text}`,
-    }],
+    model: EXTRACTION_MODEL,
+    max_tokens: 16_000,
+    messages: [{ role: 'user', content: extractionPrompt(providerName, text, knownIds) }],
   });
 
-  const raw = msg.content[0].type === 'text' ? msg.content[0].text.trim() : '';
-  const match = raw.match(/\{[\s\S]*\}/);
-  if (!match) return {};
-  try {
-    return JSON.parse(match[0]) as Record<string, { input: number; output: number }>;
-  } catch {
-    return {};
-  }
+  const raw = msg.content.map(b => (b.type === 'text' ? b.text : '')).join('').trim();
+  return parseExtraction(raw, msg.stop_reason);
 }
 
 export async function updatePricing(
   log: (msg: string) => void = console.log,
+  knownModels: KnownModels = {},
 ): Promise<UpdateResult> {
   const apiKey = process.env['ANTHROPIC_API_KEY'];
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY environment variable is required');
@@ -121,10 +90,10 @@ export async function updatePricing(
       log(msg); result.errors.push(msg); continue;
     }
 
-    log(`[${provider.name}] Extracting pricing with Claude Haiku…`);
-    let extracted: Record<string, { input: number; output: number }>;
+    log(`[${provider.name}] Extracting pricing with ${EXTRACTION_MODEL}…`);
+    let extracted: Extracted;
     try {
-      extracted = await extractPricing(client, provider.name, html);
+      extracted = await extractPricing(client, provider.name, html, knownModels[provider.id] ?? []);
     } catch (err) {
       const msg = `${provider.name}: extraction failed — ${(err as Error).message}`;
       log(msg); result.errors.push(msg); continue;
@@ -132,21 +101,12 @@ export async function updatePricing(
 
     const count = Object.keys(extracted).length;
     log(`[${provider.name}] Found ${count} model(s)`);
+    if (count === 0) result.errors.push(`${provider.name}: no prices found on the pricing page`);
 
-    for (const [model, prices] of Object.entries(extracted)) {
-      const existing = file.models[model];
-      if (existing) {
-        if (existing.input !== prices.input || existing.output !== prices.output) {
-          file.models[model] = { ...existing, input: prices.input, output: prices.output };
-          result.updated++;
-        } else {
-          result.unchanged++;
-        }
-      } else {
-        file.models[model] = { provider: provider.id, input: prices.input, output: prices.output };
-        result.added++;
-      }
-    }
+    const counts = mergePricing(file, provider.id, extracted);
+    result.added += counts.added;
+    result.updated += counts.updated;
+    result.unchanged += counts.unchanged;
   }
 
   file.updatedAt = new Date().toISOString();
@@ -162,7 +122,11 @@ export async function updatePricing(
 // ── CLI entry point ────────────────────────────────────────────────────────────
 const __filename = fileURLToPath(import.meta.url);
 if (process.argv[1] === __filename || process.argv[1]?.endsWith('pricing-updater.ts')) {
-  updatePricing()
+  import('../api/providers.js')
+    .then(({ KNOWN_PROVIDERS, getCachedModels }) => Promise.all(
+      KNOWN_PROVIDERS.map(async p => [p.id, await getCachedModels(p).catch(() => [...p.models])] as const),
+    ))
+    .then(known => updatePricing(console.log, Object.fromEntries(known)))
     .then(r => {
       console.log(`\nDone: +${r.added} added  ~${r.updated} updated  =${r.unchanged} unchanged`);
       if (r.errors.length) console.log(`Errors:\n  ${r.errors.join('\n  ')}`);

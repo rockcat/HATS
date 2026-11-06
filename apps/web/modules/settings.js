@@ -197,9 +197,15 @@ export function renderSettingsBody(entries, providers, humanName, logPrompts) {
       if (r.error) throw new Error(r.error);
       resetPricingCache();
       const summary = `+${r.added} added, ${r.updated} updated, ${r.unchanged} unchanged`;
-      btn.textContent = `✓ ${summary}`;
+      const problems = r.errors ?? [];
+      btn.textContent = `${problems.length ? '⚠' : '✓'} ${summary}`;
       const msgEl = document.getElementById('settings-msg');
-      if (msgEl) { msgEl.textContent = `Pricing updated: ${summary}`; msgEl.className = 'settings-msg settings-msg--ok'; }
+      if (msgEl) {
+        msgEl.textContent = problems.length
+          ? `Pricing updated: ${summary}. Problems — ${problems.join('; ')}`
+          : `Pricing updated: ${summary}`;
+        msgEl.className = `settings-msg settings-msg--${problems.length ? 'error' : 'ok'}`;
+      }
     } catch (err) {
       btn.textContent = `✗ ${err.message}`;
     }
