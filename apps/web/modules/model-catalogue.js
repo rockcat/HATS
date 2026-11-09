@@ -42,6 +42,41 @@ export function filterRows(rows, text) {
   return rows.filter(r => r.model.toLowerCase().includes(q) || r.provider.toLowerCase().includes(q));
 }
 
+/** The value a column sorts by; null sorts last. Local models count as costing nothing. */
+const SORT_VALUE = {
+  provider: r => r.provider.toLowerCase(),
+  model:    r => r.model.toLowerCase(),
+  input:    r => (r.free ? 0 : r.price?.input ?? null),
+  output:   r => (r.free ? 0 : r.price?.output ?? null),
+  context:  r => r.context ?? null,
+};
+
+/**
+ * Rows ordered by a column, ties broken by provider then model. Rows with no
+ * value for the column stay at the bottom whichever way it is sorted.
+ */
+export function sortRows(rows, key, dir = 'asc') {
+  const value = SORT_VALUE[key];
+  if (!value) return rows;
+  const sign = dir === 'desc' ? -1 : 1;
+  const cmp = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+  return [...rows].sort((a, b) => {
+    const va = value(a), vb = value(b);
+    if (va === null || vb === null) {
+      if (va !== vb) return va === null ? 1 : -1;
+    } else if (va !== vb) {
+      return sign * cmp(va, vb);
+    }
+    return cmp(a.provider, b.provider) || cmp(a.model, b.model);
+  });
+}
+
+/** Clicking the sorted column flips it; another column starts ascending, numbers descending. */
+export function nextSort(current, key) {
+  if (current.key === key) return { key, dir: current.dir === 'asc' ? 'desc' : 'asc' };
+  return { key, dir: key === 'provider' || key === 'model' ? 'asc' : 'desc' };
+}
+
 const money = n => `$${Number(n).toFixed(2)}`;
 
 function priceCells(row) {
@@ -62,9 +97,19 @@ function rowHTML(row) {
 
 let rows = [];
 let unoffered = [];
+let sort = { key: 'provider', dir: 'asc' };
+
+function renderSortHeaders() {
+  for (const th of document.querySelectorAll('#model-cat-modal th[data-sort]')) {
+    const on = th.dataset.sort === sort.key;
+    th.setAttribute('aria-sort', on ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none');
+    th.querySelector('.model-cat-sort-mark').textContent = on ? (sort.dir === 'asc' ? '▲' : '▼') : '';
+  }
+}
 
 function render() {
-  const shown = filterRows(rows, el('model-cat-filter').value);
+  renderSortHeaders();
+  const shown = sortRows(filterRows(rows, el('model-cat-filter').value), sort.key, sort.dir);
   const unknown = rows.filter(r => !r.free && !r.price).length;
   el('model-cat-summary').textContent =
     `${rows.length} models · ${rows.length - unknown} priced or free · ${unknown} unknown`;
@@ -107,6 +152,9 @@ export function initModelCatalogue() {
   el('model-cat-close').addEventListener('click', close);
   el('model-cat-modal').addEventListener('click', e => { if (e.target.id === 'model-cat-modal') close(); });
   el('model-cat-filter').addEventListener('input', render);
+  for (const th of document.querySelectorAll('#model-cat-modal th[data-sort]')) {
+    th.querySelector('button').addEventListener('click', () => { sort = nextSort(sort, th.dataset.sort); render(); });
+  }
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape' && !el('model-cat-modal').hidden) { e.stopPropagation(); close(); }
   }, true);

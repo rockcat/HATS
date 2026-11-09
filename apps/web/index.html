@@ -522,7 +522,13 @@
         <div class="model-cat-scroll">
           <table class="model-cat-table">
             <thead>
-              <tr><th>Provider</th><th>Model</th><th>Input $/M</th><th>Output $/M</th><th>Context</th></tr>
+              <tr>
+                <th data-sort="provider"><button type="button" class="model-cat-sort">Provider <span class="model-cat-sort-mark"></span></button></th>
+                <th data-sort="model"><button type="button" class="model-cat-sort">Model <span class="model-cat-sort-mark"></span></button></th>
+                <th data-sort="input"><button type="button" class="model-cat-sort">Input $/M <span class="model-cat-sort-mark"></span></button></th>
+                <th data-sort="output"><button type="button" class="model-cat-sort">Output $/M <span class="model-cat-sort-mark"></span></button></th>
+                <th data-sort="context"><button type="button" class="model-cat-sort">Context <span class="model-cat-sort-mark"></span></button></th>
+              </tr>
             </thead>
             <tbody id="model-cat-rows"></tbody>
           </table>

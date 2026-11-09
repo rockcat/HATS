@@ -4763,6 +4763,12 @@ body.has-expanded-panel main > section:not(.panel--expanded) {
   position: sticky; top: 0; background: var(--surface-2); text-align: left;
   font-weight: 600; color: var(--text-muted); padding: 6px 8px; white-space: nowrap;
 }
+.model-cat-sort {
+  all: unset; cursor: pointer; display: inline-flex; gap: 4px; align-items: center;
+}
+.model-cat-sort:hover, .model-cat-table th[aria-sort$="ending"] .model-cat-sort { color: var(--text); }
+.model-cat-sort:focus-visible { outline: 1px solid var(--border); outline-offset: 2px; border-radius: 3px; }
+.model-cat-sort-mark { font-size: 8px; min-width: 8px; }
 .model-cat-table td { padding: 4px 8px; border-top: 1px solid var(--border); color: var(--text); white-space: nowrap; }
 .model-cat-table td:nth-child(n+3) { font-variant-numeric: tabular-nums; }
 .model-cat-model { font-family: ui-monospace, monospace; }
