@@ -3,6 +3,7 @@ import { AnthropicProvider } from '../providers/anthropic.js';
 import { OpenAIProvider, OllamaProvider, LMStudioProvider } from '../providers/openai.js';
 import { GeminiProvider } from '../providers/gemini.js';
 import { log } from '../../../packages/core/src/logger.js';
+import { recordContextWindows } from '../providers/context-windows.js';
 
 export function makeProvider(id: string): AIProvider | null {
   switch (id) {
@@ -63,14 +64,16 @@ export async function fetchLiveModels(p: KnownProvider): Promise<string[]> {
     if (p.id === 'anthropic') {
       const key = process.env['ANTHROPIC_API_KEY'];
       if (!key) { log.info('[Models] anthropic: no API key, skipping'); return []; }
-      const r = await fetch('https://api.anthropic.com/v1/models', {
+      // One page of up to 1000; the default page is 20, which hid newer models.
+      const r = await fetch('https://api.anthropic.com/v1/models?limit=1000', {
         headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01' },
         signal: abort.signal,
       });
       clearTimeout(timer);
       if (!r.ok) { log.warn(`[Models] anthropic: HTTP ${r.status}`); return []; }
-      const data = await r.json() as { data: Array<{ id: string }> };
+      const data = await r.json() as { data: Array<{ id: string; max_input_tokens?: number }> };
       models = data.data.map(m => m.id).sort();
+      recordContextWindows(Object.fromEntries(data.data.map(m => [m.id, m.max_input_tokens])));
       log.info(`[Models] anthropic: ${models.length} model(s)`);
 
     } else if (p.id === 'openai') {
@@ -93,16 +96,19 @@ export async function fetchLiveModels(p: KnownProvider): Promise<string[]> {
       const key = process.env['GEMINI_API_KEY'];
       if (!key) { log.info('[Models] gemini: no API key, skipping'); return []; }
       const r = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models?key=${key}`,
+        `https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000&key=${key}`,
         { signal: abort.signal },
       );
       clearTimeout(timer);
       if (!r.ok) { log.warn(`[Models] gemini: HTTP ${r.status}`); return []; }
-      const data = await r.json() as { models: Array<{ name: string; supportedGenerationMethods?: string[] }> };
-      models = data.models
+      const data = await r.json() as {
+        models: Array<{ name: string; inputTokenLimit?: number; supportedGenerationMethods?: string[] }>;
+      };
+      const usable = data.models
         .filter(m => (m.supportedGenerationMethods ?? []).includes('generateContent'))
-        .map(m => m.name.replace(/^models\//, ''))
-        .sort();
+        .map(m => ({ id: m.name.replace(/^models\//, ''), context: m.inputTokenLimit }));
+      models = usable.map(m => m.id).sort();
+      recordContextWindows(Object.fromEntries(usable.map(m => [m.id, m.context])));
       log.info(`[Models] gemini: ${models.length} model(s)`);
 
     } else if (p.id === 'ollama' || p.id === 'lmstudio') {

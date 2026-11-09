@@ -8,6 +8,8 @@ import {
   type Extracted, type PricingFile,
 } from './pricing-extract.js';
 import { PRICING_SOURCES, type PricingSource } from './pricing-sources.js';
+import { fetchOpenAiContextWindows } from './openai-context.js';
+import { recordContextWindows } from '../providers/context-windows.js';
 
 export type { PricingEntry, PricingFile } from './pricing-extract.js';
 
@@ -76,6 +78,28 @@ async function extractWithModel(
   return parseExtraction(raw, msg.stop_reason);
 }
 
+/**
+ * OpenAI's model list carries no context sizes (Anthropic's and Gemini's do,
+ * and are recorded when models are listed), so they are read from its docs.
+ */
+async function updateOpenAiContextWindows(ids: string[], log: (msg: string) => void, result: UpdateResult): Promise<void> {
+  if (!ids.length) return;
+  log(`[OpenAI] Reading context windows from ${ids.length} model page(s)…`);
+  try {
+    const { sizes, missing } = await fetchOpenAiContextWindows(ids, async url => {
+      const { body, type } = await fetchPage(url);
+      if (/html/i.test(type)) throw new Error('not a markdown page');
+      return body;
+    });
+    const changed = recordContextWindows(sizes);
+    log(`[OpenAI] Context windows: ${Object.keys(sizes).length} found, ${changed} changed`
+      + (missing.length ? `; no page gave one for ${missing.join(', ')}` : ''));
+  } catch (err) {
+    const msg = `OpenAI: reading context windows failed — ${(err as Error).message}`;
+    log(msg); result.errors.push(msg);
+  }
+}
+
 export async function updatePricing(
   log: (msg: string) => void = console.log,
   knownModels: KnownModels = {},
@@ -126,6 +150,8 @@ export async function updatePricing(
     result.updated += counts.updated;
     result.unchanged += counts.unchanged;
   }
+
+  await updateOpenAiContextWindows(knownModels['openai'] ?? [], log, result);
 
   file.updatedAt = new Date().toISOString();
 
