@@ -91,7 +91,11 @@ export const BUILTIN_CATALOGUE: MCPCatalogueEntry[] = [
     description: 'Web search via Brave Search API — returns titles, URLs, and snippets',
     category: 'web',
     users: ['human'],
-    config: { transport: 'stdio', command: 'npx', args: ['-y', '@modelcontextprotocol/server-brave-search'], env: { BRAVE_API_KEY: '' } },
+    // Brave's own server. The old @modelcontextprotocol/server-brave-search is
+    // deprecated and kept its own 1-request-per-second counter, failing any
+    // second search within a second with "Rate limit exceeded" — whatever the
+    // key's plan allowed, and without asking Brave.
+    config: { transport: 'stdio', command: 'npx', args: ['-y', '@brave/brave-search-mcp-server@2'], env: { BRAVE_API_KEY: '' } },
     envVars: ['BRAVE_API_KEY'],
     url: 'https://brave.com/search/api/',
   },

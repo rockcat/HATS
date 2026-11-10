@@ -88,7 +88,7 @@ const LIST_FILES: ToolDefinition = {
 
 const WEB_SEARCH: ToolDefinition = {
   name: 'web_search',
-  description: 'Search the web for up-to-date information. Returns titles, URLs, and snippets. Requires BRAVE_SEARCH_API_KEY environment variable.',
+  description: 'Search the web for up-to-date information. Returns titles, URLs, and snippets. Requires BRAVE_API_KEY environment variable.',
   parameters: {
     type: 'object',
     properties: {
