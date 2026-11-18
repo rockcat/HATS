@@ -266,7 +266,7 @@ export class AgentRouter {
       if (!newName?.trim()) { json(res, 400, { error: 'name is required' }); return true; }
       try {
         const resolved = resolveAgentName(oldName);
-        orch.renameAgent(resolved, newName.trim());
+        await orch.renameAgent(resolved, newName.trim());
         // Maps are keyed by stable agent ID — no migration needed on rename.
         sseBroadcast({ type: 'agent_update', agents: this.deps.buildAgentStatuses() });
         saveCurrentState().catch(() => {});
@@ -418,7 +418,7 @@ export class AgentRouter {
       try {
         const resolved = resolveAgentName(agentName);
         const agentId  = orch.agentIdForName(resolved) ?? resolved;
-        orch.removeAgent(resolved);
+        await orch.removeAgent(resolved);
         const kanbanPath = this.deps.getKanbanPath();
         if (kanbanPath) {
           try {

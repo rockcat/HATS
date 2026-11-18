@@ -183,6 +183,44 @@ export class AgendaStore {
     return deleted;
   }
 
+  /** Remove every entry for an agent that is gone. Returns what was removed. */
+  removeAgent(agentName: string): Promise<AgendaEntry[]> {
+    return this.removeWhere(e => e.agentName === agentName);
+  }
+
+  /**
+   * Remove the entries of every agent not named here — left behind by agents
+   * deleted before deleting one cleared its agenda. Returns what was removed.
+   */
+  keepOnlyAgents(agentNames: string[]): Promise<AgendaEntry[]> {
+    const keep = new Set(agentNames);
+    return this.removeWhere(e => !keep.has(e.agentName));
+  }
+
+  /**
+   * Move an agent's entries to its new name, and point tool calls that used
+   * its own MCP servers at them under that name. Returns how many changed.
+   */
+  async renameAgent(oldName: string, newName: string): Promise<number> {
+    let changed = 0;
+    for (const e of this.entries.values()) {
+      const owned = e.agentName === oldName;
+      const usesItsMcp = e.mcpToolCall?.personalMcpAgentName === oldName;
+      if (owned) e.agentName = newName;
+      if (usesItsMcp) e.mcpToolCall = { ...e.mcpToolCall!, personalMcpAgentName: newName };
+      if (owned || usesItsMcp) changed++;
+    }
+    if (changed) await this.save();
+    return changed;
+  }
+
+  private async removeWhere(match: (e: AgendaEntry) => boolean): Promise<AgendaEntry[]> {
+    const removed = this.list().filter(match);
+    for (const e of removed) this.entries.delete(e.id);
+    if (removed.length) await this.save();
+    return removed;
+  }
+
   private async save(): Promise<void> {
     if (!this.filePath) return;
     await writeFile(this.filePath, JSON.stringify(this.list(), null, 2), 'utf-8');

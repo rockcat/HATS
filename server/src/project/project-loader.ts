@@ -110,6 +110,7 @@ export function makeProjectLoader(deps: ProjectLoaderDeps): ProjectLoader {
       console.log(`[Team] Team assembled: ${names.join(' · ')}`);
     }
 
+    await orchestrator.pruneAgenda();
     await deps.onLoaded?.({ orchestrator, ...source });
     return orchestrator;
   };

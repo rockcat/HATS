@@ -889,13 +889,20 @@ export class TeamOrchestrator {
     this.rebuildTeamContext();
   }
 
-  renameAgent(oldName: string, newName: string): void {
+  /** Rename an agent; its scheduled tasks and its own MCP servers go with it. */
+  async renameAgent(oldName: string, newName: string): Promise<void> {
     const agent = this.requireAgent(oldName);
     const trimmed = newName.trim();
     if (!trimmed) throw new Error('Name cannot be empty');
     if (this.hasAgentWithName(trimmed) && trimmed !== oldName) throw new Error(`Agent "${trimmed}" already exists`);
     agent.rename(trimmed);
+    const personalMcp = this.personalMcpByAgent.get(oldName.toLowerCase());
+    if (personalMcp) {
+      this.personalMcpByAgent.delete(oldName.toLowerCase());
+      this.personalMcpByAgent.set(trimmed.toLowerCase(), personalMcp);
+    }
     this.rebuildTeamContext();
+    await this.agendaStoreRef.store?.renameAgent(oldName, trimmed);
   }
 
   updateAgentSpecialisation(name: string, specialisation: string | undefined): void {
@@ -916,7 +923,8 @@ export class TeamOrchestrator {
     this.requireAgent(name).config.enabledMcpServers = serverIds;
   }
 
-  removeAgent(name: string): void {
+  /** Remove an agent, and its scheduled tasks — left behind, they kept firing for nobody. */
+  async removeAgent(name: string): Promise<void> {
     const agent = this.requireAgent(name);
     this.agents.delete(agent.id);
     const personalMcp = this.personalMcpByAgent.get(name.toLowerCase());
@@ -925,6 +933,21 @@ export class TeamOrchestrator {
       this.personalMcpByAgent.delete(name.toLowerCase());
     }
     this.rebuildTeamContext();
+    await this.agendaStoreRef.store?.removeAgent(agent.name);
+  }
+
+  /**
+   * Drop scheduled tasks of agents no longer on the team. Run once the team is
+   * loaded. An empty team is left alone: that more likely means the team
+   * failed to load than that every agent was deleted.
+   */
+  async pruneAgenda(): Promise<number> {
+    const store = this.agendaStoreRef.store;
+    const names = this.listAgents().map(a => a.name);
+    if (!store || names.length === 0) return 0;
+    const removed = await store.keepOnlyAgents(names);
+    for (const e of removed) log.info(`[Agenda] Removed "${e.label}" — its agent "${e.agentName}" is no longer on the team`);
+    return removed.length;
   }
 
   // ── Human interface ────────────────────────────────────────────────────────
