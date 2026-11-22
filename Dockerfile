@@ -4,21 +4,9 @@
 FROM node:24-slim AS builder
 WORKDIR /build
 
-# Build-time deps for native Node addons:
-#   @napi-rs/canvas → Cairo + Pango
-#   gl              → Mesa OpenGL (headless rendering)
-#   @kmamal/sdl     → SDL2
-#
-# python-is-python3 because gl publishes prebuilt binaries for Node 22 but
-# not 24, so on 24 it compiles ANGLE from source — and ANGLE's gyp files
-# call `python`, which Debian does not provide. Without it the build dies
-# with "python: not found" deep inside node-gyp.
-RUN apt-get update && apt-get install -y --no-install-recommends \
-      python3 python-is-python3 build-essential pkg-config \
-      libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev \
-      libgl1-mesa-dev libglu1-mesa-dev libxi-dev libxext-dev \
-      libsdl2-dev \
-    && rm -rf /var/lib/apt/lists/*
+# No system packages: the runner has no native addons. The ones that needed
+# Cairo, Mesa, SDL and a compiler belong to packages/avatar-camera, which is
+# not part of this image.
 
 # Install deps first — this layer is cached until package*.json changes
 COPY package*.json ./
@@ -32,31 +20,25 @@ COPY packages/            ./packages/
 COPY apps/web/            ./apps/web/
 COPY scripts/             ./scripts/
 
-# Compile TypeScript → server/dist/
-RUN npm run build
+# Compile TypeScript → server/dist/, then drop what only building needed:
+# TypeScript, Vitest, tsx and the type packages. The image runs the compiled
+# code, and built-in MCP servers use it too once server/dist exists.
+RUN npm run build && npm prune --omit=dev
 
 
 # ─── Stage 2: runner ─────────────────────────────────────────────────────────
 FROM node:24-slim AS runner
 WORKDIR /app
 
-# Runtime shared libraries (not -dev headers)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-      libcairo2 libpango-1.0-0 libpangocairo-1.0-0 libjpeg62-turbo libgif7 \
-      libgl1-mesa-glx libglu1-mesa libxi6 libxext6 \
-      libsdl2-2.0-0 \
-      ffmpeg \
-    && rm -rf /var/lib/apt/lists/*
-
-# node_modules carries compiled .node files AND tsx (needed for the
-# kanban MCP subprocess: node --import tsx/esm scripts/kanban-mcp.ts)
+# Production dependencies only. three and three-vrm are among them because
+# the dashboard's browser loads them from here, at /nm/.
 COPY --from=builder /build/node_modules ./node_modules
 COPY --from=builder /build/server/dist  ./server/dist
 COPY --from=builder /build/scripts      ./scripts
 # tsc emits only .js, but the compiled code finds these assets relative to its
 # own location — dist mirrors the repo, so they must sit beside it in dist:
 #   contracts/src/validate.ts → ../schemas, contracts/src/openapi.ts → ../openapi
-#   api-server.ts (static UI) and glb-renderer.ts (imports) → apps/web
+#   api-server.ts (static UI) → apps/web
 COPY --from=builder /build/packages/contracts/schemas ./server/dist/packages/contracts/schemas
 COPY --from=builder /build/packages/contracts/openapi ./server/dist/packages/contracts/openapi
 COPY --from=builder /build/apps/web     ./server/dist/apps/web
