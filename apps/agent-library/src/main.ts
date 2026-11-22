@@ -10,7 +10,8 @@
 
 import * as path from 'path';
 import { fileURLToPath } from 'url';
-import { metaRoutes, startService } from '@hats/service-kit/index';
+import { metaRoutes, seedMissing, startService } from '@hats/service-kit/index';
+import { runtimeDir } from '@hats/core/runtime-dir';
 import { uiKitMount } from '../../../packages/ui-kit/index.js';
 import { initCatalogue } from '@hats/core/mcp/catalogue-store';
 import { config } from './config.js';
@@ -23,6 +24,15 @@ import { mcpRoutes } from './routes/mcp.js';
 const PUBLIC_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
 
 async function main(): Promise<void> {
+  // The services image carries the default avatars and backgrounds. A new
+  // installation gets them in the shared data folder, where this library and
+  // every runner read them; an existing one keeps its own.
+  const defaults = process.env['HATS_DEFAULTS_DIR'];
+  if (defaults) {
+    const seeded = await seedMissing(defaults, runtimeDir());
+    if (seeded.length > 0) console.log(`[${config.name}] first run: copied ${seeded.length} default file(s) into the data folder`);
+  }
+
   const store = new TemplateStore(config.templatesDir);
   await store.load();
 

@@ -27,7 +27,16 @@ hats-runner/server
 hats-runner/apps
 hats-runner/scripts
 hats-runner/docs
+hats-runner/packages/avatar-camera
 hats-runner/runtime_data
+
+# Except the default avatars and backgrounds, which the services carry so
+# that runners do not each need a copy. Listed by type, so nothing else that
+# lands in that folder on a developer's machine gets in.
+!hats-runner/runtime_data/avatars/*.glb
+!hats-runner/runtime_data/avatars/*.vrm
+!hats-runner/runtime_data/avatars/avatars.json
+!hats-runner/runtime_data/avatars/backgrounds/*.png
 
 # Not part of any service.
 HATS/apps/flutter

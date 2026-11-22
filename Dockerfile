@@ -54,7 +54,7 @@ RUN npm ci --omit=dev
 
 
 # ─── Stage 2: the services ───────────────────────────────────────────────────
-FROM node:22-slim AS services
+FROM node:22-slim AS services-base
 WORKDIR /workspace/HATS
 
 COPY --from=deps /workspace/hats-runner /workspace/hats-runner
@@ -79,12 +79,24 @@ EXPOSE 3010 3020 3030 3040 3060 3070
 CMD ["node", "--import", "tsx/esm", "apps/agent-library/src/main.ts"]
 
 
+# ─── Stage 2b: the services, with the default avatars ────────────────────────
+#
+# The Agent Template Library copies these into the data folder on startup
+# wherever they are missing, and every runner reads them from there or from
+# the library, so there is one copy however many runners there are. Speech is
+# built from the stage above instead: it never touches an avatar.
+FROM services-base AS services
+
+COPY hats-runner/runtime_data/avatars/ ./defaults/avatars/
+ENV HATS_DEFAULTS_DIR=/workspace/HATS/defaults
+
+
 # ─── Stage 3: the speech service ─────────────────────────────────────────────
 #
 # Its own stage because it is the only one that is not just Node: it spawns
 # `python -m piper.http_server` per voice model. Putting Piper in the shared
 # image would make six services carry a Python runtime they never call.
-FROM services AS speech
+FROM services-base AS speech
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
       python3 python3-pip ffmpeg \
