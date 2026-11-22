@@ -44,6 +44,7 @@ import { runtimeDir } from '../../packages/core/src/runtime-dir.js';
 import { seedMissing } from '../../packages/service-kit/src/seed-data.js';
 import { UserStore } from '../../packages/auth/src/user-store.js';
 import { loadSessions } from '../../packages/auth/src/auth-middleware.js';
+import { startHeartbeat } from './runner-heartbeat.js';
 import { AgentLibraryClient } from '../../packages/clients/src/agent-library-client.js';
 import { resolveProjectSource } from './project/project-source.js';
 import { ProjectSync } from './project/project-sync.js';
@@ -103,6 +104,10 @@ const LOCAL_FALLBACK_PROJECT = (() => {
 
 const AGENT_LIBRARY_URL  = STANDALONE ? null : (process.env['AGENT_LIBRARY_URL']  ?? 'http://localhost:3010');
 const PROJECT_SERVER_URL = STANDALONE ? null : (process.env['PROJECT_SERVER_URL'] ?? 'http://localhost:3020');
+// Unlike the two above, no default: a runner shares sign-in, and reports in to
+// a runner manager, only when told where they are.
+const AUTH_SERVICE_URL   = STANDALONE ? null : (process.env['AUTH_SERVICE_URL'] || null);
+const RUNNER_MANAGER_URL = STANDALONE ? null : (process.env['RUNNER_MANAGER_URL'] || null);
 
 // ── Provider factory ──────────────────────────────────────────────────────────
 
@@ -184,7 +189,9 @@ async function main() {
   const userStore = new UserStore(runtimeDir('data', 'users.json'));
   await userStore.load();
   await loadSessions(runtimeDir('data', 'sessions.json'));
-  if (userStore.isEmpty()) {
+  // Sharing sign-in, the auth service makes the first admin; this runner's
+  // own user list goes unused.
+  if (!AUTH_SERVICE_URL && userStore.isEmpty()) {
     const username = process.env['HATS_ADMIN_USERNAME'] ?? 'admin';
     const password = process.env['HATS_ADMIN_PASSWORD'] ?? 'changeme';
     await userStore.createUser(username, password, 'admin');
@@ -241,8 +248,9 @@ async function main() {
   console.log(`[Team] Events → ${EVENTS_FILE}`);
   console.log(`[Team] State  → ${STATE_FILE}  (saved on Ctrl+C)\n`);
 
+  const port = Number(process.env['TEAM_RUNNER_PORT'] ?? 3001);
   const api = new APIServer(orchestrator, {
-    port:           Number(process.env['TEAM_RUNNER_PORT'] ?? 3001),
+    port,
     kanbanPath:     KANBAN_FILE,
     requestsPath:   REQUESTS_FILE,
     allowlistPath:  ALLOWLIST_FILE,
@@ -257,11 +265,18 @@ async function main() {
     projectLoader:  loader,
     agentLibraryUrl:  AGENT_LIBRARY_URL,
     projectServerUrl: PROJECT_SERVER_URL,
+    authServiceUrl:   AUTH_SERVICE_URL,
     agentStore,
     actionStore,
     userStore,
   });
   api.start();
+  if (RUNNER_MANAGER_URL) {
+    startHeartbeat({
+      managerUrl: RUNNER_MANAGER_URL, port, project: () => api.currentProjectId,
+      ...(process.env['HATS_PUBLIC_URL'] && { url: process.env['HATS_PUBLIC_URL'] }),
+    });
+  }
 
 
   // SIGTERM as well as SIGINT. Ctrl+C sends SIGINT, but `docker stop` — and

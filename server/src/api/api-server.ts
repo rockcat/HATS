@@ -34,7 +34,10 @@ import { runtimeDir } from '../../../packages/core/src/runtime-dir.js';
 import { UserStore } from '../../../packages/auth/src/user-store.js';
 import { AuthRouter } from '../../../packages/auth/src/auth-router.js';
 import { UserManagementRouter } from '../../../packages/auth/src/user-management-router.js';
-import { parseRequestAuth } from '../../../packages/auth/src/auth-middleware.js';
+import {
+  localAuthenticator, rememberSession, remoteAuthenticator, sessionOf, type Authenticator,
+} from '../../../packages/auth/src/authenticator.js';
+import { forwardToAuthService, isSharedAuthRoute } from '../../../packages/auth/src/auth-proxy.js';
 import { ProjectTransferRouter, transferDepsFrom } from './project-transfer-router.js';
 import { EmbodimentRouter } from '../embodiment/embodiment-router.js';
 import { DeviceToolBridge } from '../device/device-tool-bridge.js';
@@ -119,6 +122,8 @@ export interface APIServerConfig {
   /** Agent Library / Project Server URLs; null when standalone. Shown in the header. */
   agentLibraryUrl?:  string | null;
   projectServerUrl?: string | null;
+  /** The shared auth service, so one sign-in works on every runner; null for this runner's own users. */
+  authServiceUrl?:   string | null;
 }
 
 export class APIServer {
@@ -175,12 +180,17 @@ export class APIServer {
   private userStore: UserStore;
   private authRouter: AuthRouter;
   private userManagementRouter: UserManagementRouter;
+  private authServiceUrl: string | null;
+  private authenticator: Authenticator;
   private embodimentRouter: EmbodimentRouter;
   private deviceTools: DeviceToolBridge;
   private projectName: string;
   private projectSource: 'project-server' | 'local';
   private googleRefreshTimer: ReturnType<typeof setInterval> | null = null;
   private readonly GOOGLE_HTTP_MCP_IDS = new Set(['google-gmail', 'google-calendar', 'google-drive', 'google-chat', 'google-contacts']);
+
+  /** The project open now, which a runner that is not locked can change. */
+  get currentProjectId(): string { return this.projectId; }
 
   constructor(orchestrator: TeamOrchestrator, config: APIServerConfig = {}) {
     this.orchestrator  = orchestrator;
@@ -243,7 +253,7 @@ export class APIServer {
       getProjectId:     () => self.projectId,
       saveCurrentState: () => self.saveCurrentState(),
       reloadAgents:     async () => { await self.agentStore?.load(); },
-      isAdmin:          (req) => parseRequestAuth(req, self.userStore)?.role === 'admin',
+      isAdmin:          (req) => sessionOf(req)?.role === 'admin',
       json: (r, s, b) => self.json(r, s, b),
       readBodyBuffer,
     });
@@ -306,7 +316,7 @@ export class APIServer {
       getActionStore:   () => self.actionStore,
       dataRoot:         runtimeDir(),
       resolveAgentName: (n) => self.resolveAgentName(n),
-      isAdmin:          (req) => parseRequestAuth(req, self.userStore)?.role === 'admin',
+      isAdmin:          (req) => sessionOf(req)?.role === 'admin',
       agentsChanged:    () => {
         self.sseBroadcast({ type: 'agent_update', agents: self.buildAgentStatuses() });
         self.saveCurrentState().catch(() => {});
@@ -399,6 +409,10 @@ export class APIServer {
     this.userStore            = config.userStore ?? new UserStore(runtimeDir('data', 'users.json'));
     this.authRouter           = new AuthRouter(this.userStore, this.port);
     this.userManagementRouter = new UserManagementRouter(this.userStore);
+    this.authServiceUrl       = config.authServiceUrl ?? null;
+    this.authenticator        = this.authServiceUrl
+      ? remoteAuthenticator(this.authServiceUrl)
+      : localAuthenticator(this.userStore);
 
     this.server = createServer((req, res) => {
       this.handleRequest(req, res).catch((err) => {
@@ -641,11 +655,19 @@ export class APIServer {
     const isPublic = (pathname === '/api/auth/login' && method === 'POST')
                   || (pathname.startsWith('/api/auth/pair/') && method === 'GET');
     if (!isPublic && (pathname.startsWith('/api/') || pathname === '/events')) {
-      if (!parseRequestAuth(req, this.userStore)) {
+      const session = await this.authenticator.authenticate(req);
+      if (!session) {
         res.writeHead(401, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'Not authenticated' }));
         return;
       }
+      rememberSession(req, session);
+    }
+
+    // Sharing sign-in: users, sessions and pairing are the auth service's.
+    if (this.authServiceUrl && isSharedAuthRoute(pathname)) {
+      await forwardToAuthService(this.authServiceUrl, req, res, this.port);
+      return;
     }
 
     // The Embodiment API is the public contract — matched before any dashboard

@@ -15,7 +15,7 @@ export function getSession(id: string): Session | null { return sessions.get(id)
 
 export function deleteSession(id: string): void { sessions.delete(id); }
 
-function cookieVal(req: IncomingMessage, name: string): string | null {
+export function cookieVal(req: IncomingMessage, name: string): string | null {
   for (const part of (req.headers['cookie'] ?? '').split(';')) {
     const eq = part.indexOf('=');
     if (eq < 0) continue;

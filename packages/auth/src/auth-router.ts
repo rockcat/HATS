@@ -81,7 +81,10 @@ export class AuthRouter {
       pairingTokens.set(token, { userId: session.userId, expiresAt: expires });
 
       const publicUrl = process.env['HATS_PUBLIC_URL']?.replace(/\/$/, '');
-      const host      = hostOf(req.headers['host'], this.port);
+      // Behind a runner sharing sign-in, the link must point at that runner,
+      // which forwards the claim here; auth-proxy.ts says where it is.
+      const port      = Number(req.headers['x-forwarded-port']) || this.port;
+      const host      = hostOf((req.headers['x-forwarded-host'] as string | undefined) ?? req.headers['host'], port);
       const link      = (base: string) => `${base}/api/auth/pair/${token}`;
 
       /**
@@ -104,7 +107,7 @@ export class AuthRouter {
       if (publicUrl) add(link(publicUrl), 'HATS_PUBLIC_URL');
       if (!isLoopback(host)) add(link(`http://${host}`), 'this page');
       for (const lan of lanAddresses()) {
-        add(link(`http://${lan.address}:${this.port}`),
+        add(link(`http://${lan.address}:${port}`),
           lan.likelyReachable ? lan.label : `${lan.label} (virtual)`);
       }
       if (candidates.length === 0) add(link(`http://${host}`), 'this page');
