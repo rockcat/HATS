@@ -41,7 +41,7 @@ import { LibraryAgentStore } from './api/library-agent-store.js';
 import { ScheduledActionStore } from './api/scheduled-action-store.js';
 import { seedBuiltIns } from './store/built-in-agents.js';
 import { runtimeDir } from '../../packages/core/src/runtime-dir.js';
-import { seedMissing } from './util/seed-data.js';
+import { seedMissing } from '../../packages/service-kit/src/seed-data.js';
 import { UserStore } from './api/user-store.js';
 import { loadSessions } from './api/auth-middleware.js';
 import { AgentLibraryClient } from '../../packages/clients/src/agent-library-client.js';

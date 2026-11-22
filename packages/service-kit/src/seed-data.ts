@@ -1,8 +1,9 @@
 // ── First-run data ──────────────────────────────────────────────────────────
 //
-// The image carries the defaults this repository ships under runtime_data —
-// the avatars, their backgrounds, model pricing. A new installation starts
-// with an empty data directory, so on startup anything missing is copied in.
+// An image carries defaults under runtime_data: the runner its MCP catalogue
+// and model pricing, the services the avatars and their backgrounds. A new
+// installation starts with an empty data directory, so on startup anything
+// missing is copied in.
 // Nothing already there is ever replaced: once copied, a file is the
 // installation's own to edit or delete.
 
