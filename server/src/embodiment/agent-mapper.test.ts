@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import * as path from 'path';
 import { toAgentConfig, toDeployedAgent, toEmbodiedAgent } from './agent-mapper.js';
-import { findAvatarByFile, framingOf } from '../render/avatar-catalogue.js';
+import { findAvatarByFile, framingOf } from '../../../packages/core/src/avatars/avatar-catalogue.js';
 import type { IAgent } from '../agent/iagent.js';
 
 /** Only the fields the mapper reads; the rest of IAgent is irrelevant here. */

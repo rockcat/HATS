@@ -8,7 +8,7 @@ import * as path from 'path';
 import { HeadlessRenderer } from '../renderer3d/headless-renderer.js';
 import { RendererConfig } from './canvas-renderer.js';
 import { VisemeId } from '../avatar/types.js';
-import { DEFAULT_CAMERA, findAvatarByName } from './avatar-catalogue.js';
+import { DEFAULT_CAMERA, findAvatarByName } from '../../../packages/core/src/avatars/avatar-catalogue.js';
 
 // Shared helpers — same modules imported by browser avatar.js, meeting.js, and Flutter WebView
 import {

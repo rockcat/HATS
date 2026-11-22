@@ -22,7 +22,7 @@ import {
 } from '../../../packages/service-kit/src/index.js';
 import { metaRoutes } from '../../../packages/service-kit/src/meta-routes.js';
 import type { SendMessageRequest } from '../../../packages/contracts/src/types.js';
-import { findAvatarByFile, framingOf } from '../render/avatar-catalogue.js';
+import { findAvatarByFile, framingOf } from '../../../packages/core/src/avatars/avatar-catalogue.js';
 import type { DeviceToolBridge, DeviceToolSpec, DeviceResult } from '../device/device-tool-bridge.js';
 import { toEmbodiedAgent } from './agent-mapper.js';
 import { mapOrchestratorEvent } from './event-mapper.js';
