@@ -1,0 +1,21 @@
+{
+  "name": "@hats/auth",
+  "version": "0.1.0",
+  "description": "Users, sessions, API keys and phone pairing: the dashboard's sign-in, for a runner on its own or shared by several.",
+  "type": "module",
+  "exports": {
+    "./package.json": "./package.json",
+    "./*": {
+      "types": "./src/*.ts",
+      "default": "./src/*.ts"
+    }
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "dependencies": {
+    "qrcode": "^1.5.4"
+  },
+  "license": "SEE LICENSE IN LICENSE.txt"
+}

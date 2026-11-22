@@ -1,12 +1,12 @@
 import { randomBytes } from 'crypto';
-import { hostOf, isLoopback, lanAddresses } from '../util/lan-addresses.js';
+import { hostOf, isLoopback, lanAddresses } from './lan-addresses.js';
 import type { IncomingMessage, ServerResponse } from 'http';
 import type { UserStore } from './user-store.js';
 import {
   createSession, deleteSession, getSession,
   setSessionCookie, clearSessionCookie, parseRequestAuth,
 } from './auth-middleware.js';
-import { readBody } from './api-utils.js';
+import { readJsonBody } from '../../service-kit/src/http.js';
 
 // Short-lived pairing tokens → { userId, expiresAt }
 const pairingTokens = new Map<string, { userId: string; expiresAt: number }>();
@@ -37,7 +37,7 @@ export class AuthRouter {
 
     // POST /api/auth/login — public
     if (pathname === '/api/auth/login' && method === 'POST') {
-      const { username, password } = JSON.parse(await readBody(req)) as Record<string, string>;
+      const { username, password } = ((await readJsonBody<Record<string, string>>(req)) ?? {});
       const user = await this.userStore.verifyPassword(username?.trim() ?? '', password ?? '');
       if (!user) { json(res, 401, { error: 'Invalid username or password' }); return true; }
       const sid = createSession(user);
