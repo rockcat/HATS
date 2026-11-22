@@ -35,8 +35,9 @@ import { UserStore } from '../../../packages/auth/src/user-store.js';
 import { AuthRouter } from '../../../packages/auth/src/auth-router.js';
 import { UserManagementRouter } from '../../../packages/auth/src/user-management-router.js';
 import {
-  localAuthenticator, rememberSession, remoteAuthenticator, sessionOf, type Authenticator,
+  credentialOf, localAuthenticator, rememberSession, remoteAuthenticator, sessionOf, type Authenticator,
 } from '../../../packages/auth/src/authenticator.js';
+import { switchRefusal } from '../project/project-holder.js';
 import { forwardRequest, forwardToAuthService, isSharedAuthRoute } from '../../../packages/auth/src/auth-proxy.js';
 import { ProjectTransferRouter, transferDepsFrom } from './project-transfer-router.js';
 import { EmbodimentRouter } from '../embodiment/embodiment-router.js';
@@ -277,6 +278,14 @@ export class APIServer {
       getProjectsRoot:  () => self.projectsRoot,
       getEnvPath:       () => self.envPath,
       switchProject:    (id) => self.switchProject(id),
+      // Only a runner with a runner manager has others to collide with.
+      switchRefusal:    async (id, req) => self.runnerManagerUrl
+        ? switchRefusal(id, {
+            managerUrl: self.runnerManagerUrl.replace(/\/$/, ''),
+            ownPort: self.port,
+            credential: credentialOf(req),
+          })
+        : null,
       buildAgentStatuses: () => self.buildAgentStatuses(),
       readTickets:      () => self.kanbanManager.readTickets(),
       saveCurrentState: () => self.saveCurrentState(),

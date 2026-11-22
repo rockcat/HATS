@@ -39,6 +39,8 @@ export interface ProjectManagerDeps {
   getProjectsRoot(): string | null;
   getEnvPath(): string;
   switchProject(newId: string): Promise<void>;
+  /** Why `newId` cannot be opened here, such as another runner having it open; null when it can. */
+  switchRefusal(newId: string, req: IncomingMessage): Promise<string | null>;
   buildAgentStatuses(): AgentStatus[];
   readTickets(): Promise<unknown[]>;
   saveCurrentState(): Promise<void>;
@@ -194,6 +196,8 @@ export class ProjectManager {
       const body = await readBody(req);
       const { id } = JSON.parse(body) as { id: string };
       if (!id?.trim()) { json(res, 400, { error: 'id is required' }); return true; }
+      const refusal = await this.deps.switchRefusal(id.trim(), req);
+      if (refusal) { json(res, 409, { error: refusal }); return true; }
       try {
         await this.deps.switchProject(id.trim());
         const agents  = this.deps.buildAgentStatuses();

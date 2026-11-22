@@ -139,6 +139,10 @@ for agents.
 - **Two runners editing the same agent template at the same moment**: the
   last save wins. Each runner's own copy of an agent is unaffected.
 - **Opening a project on a second runner while another has it open** is what
-  the lock prevents. Do not give two runners the same `TEAM_PROJECT`.
+  the lock prevents. Do not give two runners the same `TEAM_PROJECT`. A
+  runner that is not locked but has a runner manager asks it before
+  switching, and refuses a project another runner has open, even one that is
+  starting or not answering. If the manager cannot be reached, it does not
+  switch.
 - **Memory and cost** grow with each runner. Every runner is a full process,
   and its agents spend against their own hourly budgets.
