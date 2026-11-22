@@ -58,6 +58,18 @@ describe('launching a runner', () => {
       .rejects.toMatchObject({ status: 409 });
   });
 
+  it('replaces a stopped runner it started, but not one it did not that has gone quiet', async () => {
+    const docker = fakeDocker([{ id: 'old', project: 'rhoda', port: 3101, running: false }]);
+    expect(await managerWith(docker).launch('rhoda')).toMatchObject({ port: 3101, status: 'starting' });
+    expect(docker.removed).toEqual(['old']);
+
+    let now = 0;
+    const registry = new Registry(() => now);
+    registry.heartbeat({ project: 'evan', port: 3001 });
+    now = 10 * 60_000;
+    await expect(managerWith(fakeDocker(), registry).launch('evan')).rejects.toMatchObject({ status: 409 });
+  });
+
   it('says so when every port is taken', async () => {
     const docker = fakeDocker([3101, 3102, 3103].map((port) => ({ id: `c${port}`, project: `p${port}`, port, running: true })));
     await expect(managerWith(docker).launch('rhoda')).rejects.toMatchObject({ status: 503 });

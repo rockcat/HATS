@@ -61,10 +61,17 @@ export class RunnerManager {
 
     const runners = await this.runners();
     const existing = runners.find((r) => r.project.toLowerCase() === project.toLowerCase());
-    if (existing && existing.status !== 'unreachable') {
+    // A stopped runner of this manager's is replaced. Any other would leave
+    // two runners writing one project's state if the first came back.
+    if (existing?.managed && existing.status === 'stopped') {
+      await this.remove(project);
+    } else if (existing?.status === 'unreachable') {
+      throw new LaunchError(409, `${project} has a runner on port ${existing.port} that is not answering. Start that one again instead.`);
+    } else if (existing) {
       throw new LaunchError(409, `${project} already has a runner, on port ${existing.port}.`);
     }
-    const port = freePort(runners.map((r) => r.port), this.o.ports.from, this.o.ports.to);
+    const others = runners.filter((r) => r !== existing);
+    const port = freePort(others.map((r) => r.port), this.o.ports.from, this.o.ports.to);
     if (port === null) throw new LaunchError(503, `No free port between ${this.o.ports.from} and ${this.o.ports.to}.`);
 
     const { hostData, network } = await this.o.docker.self(this.o.selfId, this.o.dataDir);
