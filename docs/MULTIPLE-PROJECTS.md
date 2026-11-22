@@ -12,6 +12,31 @@ once, exactly as they do for a single runner.
                                      └──> Speech Service         :3050
 ```
 
+## From the dashboard
+
+On an installation made with `install.sh`, the services include a runner
+manager and an auth service, and the runner is told where both are
+(`RUNNER_MANAGER_URL`, `AUTH_SERVICE_URL`). Then:
+
+- **The project badge lists every project with its runner.** Choosing a
+  running one opens that runner's dashboard.
+- **A project with no runner has a Launch button**, for admins. The runner
+  manager starts a runner for it on the next free port in `RUNNER_PORTS`
+  (3101–3199 by default), following every rule below. It waits for the runner
+  to report in, then opens it. A stopped runner it started can be launched
+  again the same way.
+- **One sign-in works on every runner.** Users, sessions and API keys live in
+  the auth service, in `data/users.json`: the file the runner used before, so
+  existing logins and keys carry on.
+
+The runner manager needs the Docker socket to start runners, which gives it
+full control of Docker on that machine. It only ever starts runner
+containers, and only for an admin. Without the socket it still lists runners.
+
+Every runner reports in, including ones written by hand as below, so they
+appear in the list too. Launched runners keep their data under
+`data/runners/<project>`; removing one leaves that folder in place.
+
 ## Rules each runner must follow
 
 | Rule | Why | How |
@@ -94,7 +119,7 @@ Then run `docker compose up -d`.
 
 | Shared by every runner | Separate for each runner |
 |---|---|
-| Agent templates, in the library | Dashboard logins and API keys minted from Settings |
+| Agent templates, in the library | Dashboard logins and API keys, unless the runners share the auth service |
 | Project definitions, in the Project Server | Google connections, which need setting up on each runner |
 | Voices, from the Speech Service | The MCP catalogue and the tools found on servers |
 | `.env`: model keys, admin login, Brave key | Global scheduled actions |
