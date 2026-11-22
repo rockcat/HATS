@@ -1,5 +1,7 @@
 // ── Project switcher & goal bar ───────────────────────────────────────────────
 
+import { hasRunnerManager, loadRunnerList } from './runner-switcher.js';
+
 // Injected at init time to avoid circular deps with sse.js.
 let _applyState            = () => {};
 let _fetchTools            = () => {};
@@ -94,12 +96,19 @@ export function updateProjectBadge(id, dir) {
   if (!badge.dataset.locked) badge.title = dir ?? id;
 }
 
+/** Set once the runner manager answers: the badge then switches runners, not projects. */
+let runnerMode = false;
+let currentProjectId = null;
+
 export function initProjectBadge() {
   fetch('/api/project')
     .then(r => r.json())
-    .then(({ id, dir, locked }) => {
+    .then(async ({ id, dir, locked }) => {
+      currentProjectId = id;
       updateProjectBadge(id, dir);
-      if (locked) lockProjectBadge();
+      runnerMode = await hasRunnerManager();
+      if (runnerMode) enterRunnerMode();
+      else if (locked) lockProjectBadge();
     })
     .catch(() => {});
 
@@ -112,6 +121,7 @@ export function initProjectBadge() {
     const open = !switcher.hidden;
     if (open) { switcher.hidden = true; return; }
     switcher.hidden = false;
+    if (runnerMode) { void loadRunnerList(currentProjectId); return; }
     document.getElementById('project-switcher-input').value = '';
     loadProjectList();
   });
@@ -133,6 +143,15 @@ export function initProjectBadge() {
       switcher.hidden = true;
     }
   });
+}
+
+/** Each project on its own runner: the badge lists them, and opens or starts one. */
+function enterRunnerMode() {
+  const badge = document.getElementById('project-badge');
+  badge.title = 'Open another project\'s runner, or start one';
+  // Loading a project by name is for switching inside one runner.
+  const byName = document.querySelector('.project-switcher-new');
+  if (byName) byName.hidden = true;
 }
 
 /** A runner kept on one project: the badge names it but no longer switches. */
