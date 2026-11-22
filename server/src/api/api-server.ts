@@ -37,7 +37,7 @@ import { UserManagementRouter } from '../../../packages/auth/src/user-management
 import {
   localAuthenticator, rememberSession, remoteAuthenticator, sessionOf, type Authenticator,
 } from '../../../packages/auth/src/authenticator.js';
-import { forwardToAuthService, isSharedAuthRoute } from '../../../packages/auth/src/auth-proxy.js';
+import { forwardRequest, forwardToAuthService, isSharedAuthRoute } from '../../../packages/auth/src/auth-proxy.js';
 import { ProjectTransferRouter, transferDepsFrom } from './project-transfer-router.js';
 import { EmbodimentRouter } from '../embodiment/embodiment-router.js';
 import { DeviceToolBridge } from '../device/device-tool-bridge.js';
@@ -124,6 +124,8 @@ export interface APIServerConfig {
   projectServerUrl?: string | null;
   /** The shared auth service, so one sign-in works on every runner; null for this runner's own users. */
   authServiceUrl?:   string | null;
+  /** Lists every runner and starts new ones; the dashboard reaches it through /api/runners. */
+  runnerManagerUrl?: string | null;
 }
 
 export class APIServer {
@@ -181,6 +183,7 @@ export class APIServer {
   private authRouter: AuthRouter;
   private userManagementRouter: UserManagementRouter;
   private authServiceUrl: string | null;
+  private runnerManagerUrl: string | null;
   private authenticator: Authenticator;
   private embodimentRouter: EmbodimentRouter;
   private deviceTools: DeviceToolBridge;
@@ -410,6 +413,7 @@ export class APIServer {
     this.authRouter           = new AuthRouter(this.userStore, this.port);
     this.userManagementRouter = new UserManagementRouter(this.userStore);
     this.authServiceUrl       = config.authServiceUrl ?? null;
+    this.runnerManagerUrl     = config.runnerManagerUrl ?? null;
     this.authenticator        = this.authServiceUrl
       ? remoteAuthenticator(this.authServiceUrl)
       : localAuthenticator(this.userStore);
@@ -667,6 +671,15 @@ export class APIServer {
     // Sharing sign-in: users, sessions and pairing are the auth service's.
     if (this.authServiceUrl && isSharedAuthRoute(pathname)) {
       await forwardToAuthService(this.authServiceUrl, req, res, this.port);
+      return;
+    }
+
+    // The project switcher: every runner, and launching one. Same origin, so
+    // the sign-in cookie goes along and the manager can check who is asking.
+    if (pathname === '/api/runners' || pathname.startsWith('/api/runners/')) {
+      if (!this.runnerManagerUrl) { this.json(res, 404, { error: 'This runner has no runner manager.' }); return; }
+      const target = `${this.runnerManagerUrl.replace(/\/$/, '')}/api/v1${pathname.slice(4)}${url.search}`;
+      await forwardRequest(target, req, res, this.port, 'The runner manager');
       return;
     }
 

@@ -45,6 +45,7 @@ import { seedMissing } from '../../packages/service-kit/src/seed-data.js';
 import { UserStore } from '../../packages/auth/src/user-store.js';
 import { loadSessions } from '../../packages/auth/src/auth-middleware.js';
 import { startHeartbeat } from './runner-heartbeat.js';
+import { ensureFirstAdmin } from '../../packages/auth/src/first-admin.js';
 import { AgentLibraryClient } from '../../packages/clients/src/agent-library-client.js';
 import { resolveProjectSource } from './project/project-source.js';
 import { ProjectSync } from './project/project-sync.js';
@@ -191,15 +192,7 @@ async function main() {
   await loadSessions(runtimeDir('data', 'sessions.json'));
   // Sharing sign-in, the auth service makes the first admin; this runner's
   // own user list goes unused.
-  if (!AUTH_SERVICE_URL && userStore.isEmpty()) {
-    const username = process.env['HATS_ADMIN_USERNAME'] ?? 'admin';
-    const password = process.env['HATS_ADMIN_PASSWORD'] ?? 'changeme';
-    await userStore.createUser(username, password, 'admin');
-    console.log(`[Auth] Created initial admin user: ${username}`);
-    if (!process.env['HATS_ADMIN_PASSWORD']) {
-      console.warn('[Auth] WARNING: Using default password "changeme" — set HATS_ADMIN_PASSWORD in .env');
-    }
-  }
+  if (!AUTH_SERVICE_URL) await ensureFirstAdmin(userStore);
 
   // Mirror runtime team changes back into the open project's definition. One
   // sync per open project: it used to stay bound to the startup project and
@@ -266,6 +259,7 @@ async function main() {
     agentLibraryUrl:  AGENT_LIBRARY_URL,
     projectServerUrl: PROJECT_SERVER_URL,
     authServiceUrl:   AUTH_SERVICE_URL,
+    runnerManagerUrl: RUNNER_MANAGER_URL,
     agentStore,
     actionStore,
     userStore,

@@ -21,9 +21,19 @@ export function isSharedAuthRoute(pathname: string): boolean {
 
 const FORWARDED_HEADERS = ['content-type', 'cookie', 'authorization', 'x-api-key', 'user-agent'];
 
-/** Forward one request and stream the answer back, Set-Cookie included. */
-export async function forwardToAuthService(
+/** Forward one request to the auth service, as it came. */
+export function forwardToAuthService(
   baseUrl: string, req: IncomingMessage, res: ServerResponse, runnerPort: number,
+): Promise<void> {
+  return forwardRequest(`${baseUrl.replace(/\/$/, '')}${req.url ?? '/'}`, req, res, runnerPort, 'The sign-in service');
+}
+
+/**
+ * Forward one request to `target` with the caller's credentials, and send
+ * the answer back, Set-Cookie included. Used for the runner manager too.
+ */
+export async function forwardRequest(
+  target: string, req: IncomingMessage, res: ServerResponse, runnerPort: number, service: string,
 ): Promise<void> {
   const headers: Record<string, string> = {};
   for (const name of FORWARDED_HEADERS) {
@@ -39,11 +49,11 @@ export async function forwardToAuthService(
   const method = req.method ?? 'GET';
   const hasBody = method !== 'GET' && method !== 'HEAD';
   try {
-    const upstream = await fetch(`${baseUrl.replace(/\/$/, '')}${req.url ?? '/'}`, {
+    const upstream = await fetch(target, {
       method,
       headers,
       ...(hasBody && { body: Readable.toWeb(req) as unknown as BodyInit, duplex: 'half' }),
-      signal: AbortSignal.timeout(15_000),
+      signal: AbortSignal.timeout(60_000),
     } as RequestInit);
     const out: Record<string, string | string[]> = {};
     const type = upstream.headers.get('content-type');
@@ -54,6 +64,6 @@ export async function forwardToAuthService(
     res.end(Buffer.from(await upstream.arrayBuffer()));
   } catch {
     res.writeHead(503, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ error: 'The sign-in service is not answering' }));
+    res.end(JSON.stringify({ error: `${service} is not answering` }));
   }
 }
