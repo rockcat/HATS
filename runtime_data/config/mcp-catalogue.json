@@ -102,7 +102,7 @@
       "command": "npx",
       "args": [
         "-y",
-        "@modelcontextprotocol/server-brave-search"
+        "@brave/brave-search-mcp-server@2"
       ],
       "env": {
         "BRAVE_API_KEY": ""
@@ -890,5 +890,93 @@
       }
     },
     "notes": "Invitations need an email account. Set up the Email (IMAP / SMTP) server for this agent and the calendar borrows its settings — there is nothing to enter twice."
+  },
+  {
+    "id": "diary",
+    "name": "Secret Diary",
+    "description": "Read, write and delete the dated entries of The Secret Diary of AI, Dr Ian Mole, which publish to the site at once",
+    "category": "web",
+    "users": [
+      "human",
+      "agent"
+    ],
+    "config": {
+      "transport": "stdio",
+      "command": "node",
+      "args": [
+        "builtin:diary/server"
+      ],
+      "env": {
+        "DIARY_API_URL": "",
+        "DIARY_API_TOKEN": ""
+      }
+    },
+    "envVars": [
+      {
+        "name": "DIARY_API_URL",
+        "placeholder": "https://secretdiaryofai.com"
+      },
+      {
+        "name": "DIARY_API_TOKEN",
+        "placeholder": "The site's DIARY_API_TOKEN",
+        "type": "password"
+      }
+    ],
+    "notes": "Until both the URL and the token are set it offers no tools, so it takes no room in an agent's context. Anyone with the token can rewrite or delete any entry, so give it only to the agent that keeps the diary."
+  },
+  {
+    "id": "sftp-ssh",
+    "name": "SSH / SFTP",
+    "description": "Run shell commands on a remote Linux or Windows server over SSH, and upload, download and list its files over SFTP",
+    "category": "dev",
+    "users": [
+      "human",
+      "agent"
+    ],
+    "config": {
+      "transport": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "sftp-ssh-mcp",
+        "--host=${SSH_HOST}",
+        "--port=${SSH_PORT}",
+        "--user=${SSH_USER}",
+        "--password=${SSH_PASSWORD}",
+        "--key=${SSH_KEY}"
+      ],
+      "env": {
+        "SSH_HOST": "",
+        "SSH_PORT": "22",
+        "SSH_USER": "",
+        "SSH_PASSWORD": "",
+        "SSH_KEY": ""
+      }
+    },
+    "envVars": [
+      {
+        "name": "SSH_HOST",
+        "placeholder": "Hostname or IP"
+      },
+      {
+        "name": "SSH_PORT",
+        "placeholder": "22"
+      },
+      {
+        "name": "SSH_USER",
+        "placeholder": "Username"
+      },
+      {
+        "name": "SSH_PASSWORD",
+        "placeholder": "Password (or leave blank and use a key)",
+        "type": "password"
+      },
+      {
+        "name": "SSH_KEY",
+        "placeholder": "Path to a private key file"
+      }
+    ],
+    "notes": "The agent can run any command the SSH user can — give it an account with only the rights it needs. A key path is read by the runner, so in Docker it must be a path inside the container, such as one under /app/runtime_data.",
+    "url": "https://www.npmjs.com/package/sftp-ssh-mcp"
   }
 ]
