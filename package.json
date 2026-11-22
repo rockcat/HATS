@@ -18,7 +18,9 @@
     "electron:run": "electron --env-file=.env apps/electron/main.js",
     "speech-service": "node --env-file=.env --import tsx/esm apps/speech-service/src/main.ts",
     "companion": "node --env-file=.env --import tsx/esm apps/companion/src/main.ts",
-    "project-view": "node --env-file=.env --import tsx/esm apps/project-view/src/main.ts"
+    "project-view": "node --env-file=.env --import tsx/esm apps/project-view/src/main.ts",
+    "auth-service": "node --env-file=.env --import tsx/esm apps/auth-service/src/main.ts",
+    "runner-manager": "node --env-file=.env --import tsx/esm apps/runner-manager/src/main.ts"
   },
   "build": {
     "appId": "com.hatagents.app",
@@ -40,13 +42,14 @@
     }
   },
   "dependencies": {
-    "@pixiv/three-vrm": "^3.5.4",
-    "three": "0.162.0",
-    "@hats/core": "file:../hats-runner/packages/core",
-    "@hats/contracts": "file:../hats-runner/packages/contracts",
+    "@hats/auth": "file:../hats-runner/packages/auth",
     "@hats/clients": "file:../hats-runner/packages/clients",
+    "@hats/contracts": "file:../hats-runner/packages/contracts",
+    "@hats/core": "file:../hats-runner/packages/core",
     "@hats/service-kit": "file:../hats-runner/packages/service-kit",
     "@hats/speech-core": "file:../hats-runner/packages/speech-core",
+    "@pixiv/three-vrm": "^3.5.4",
+    "three": "0.162.0",
     "tsx": "^4.19.0"
   },
   "devDependencies": {
