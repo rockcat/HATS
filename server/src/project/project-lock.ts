@@ -15,3 +15,16 @@ export function projectLocked(env: Record<string, string | undefined> = process.
 
 export const PROJECT_LOCKED_MESSAGE =
   'This runner is kept on one project (HATS_PROJECT_LOCKED). Open the other project on its own runner.';
+
+export const RUNNER_MANAGED_MESSAGE =
+  'Each project has its own runner here. Open or launch the other project from the project badge.';
+
+/**
+ * Why this runner cannot switch projects, or null when it can. A runner with
+ * a runner manager never switches: another project means another runner.
+ */
+export function switchRefusal(hasRunnerManager: boolean, env: Record<string, string | undefined> = process.env): string | null {
+  if (projectLocked(env)) return PROJECT_LOCKED_MESSAGE;
+  if (hasRunnerManager) return RUNNER_MANAGED_MESSAGE;
+  return null;
+}

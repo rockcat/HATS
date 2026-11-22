@@ -35,9 +35,8 @@ import { UserStore } from '../../../packages/auth/src/user-store.js';
 import { AuthRouter } from '../../../packages/auth/src/auth-router.js';
 import { UserManagementRouter } from '../../../packages/auth/src/user-management-router.js';
 import {
-  credentialOf, localAuthenticator, rememberSession, remoteAuthenticator, sessionOf, type Authenticator,
+  localAuthenticator, rememberSession, remoteAuthenticator, sessionOf, type Authenticator,
 } from '../../../packages/auth/src/authenticator.js';
-import { switchRefusal } from '../project/project-holder.js';
 import { forwardRequest, forwardToAuthService, isSharedAuthRoute } from '../../../packages/auth/src/auth-proxy.js';
 import { ProjectTransferRouter, transferDepsFrom } from './project-transfer-router.js';
 import { EmbodimentRouter } from '../embodiment/embodiment-router.js';
@@ -46,7 +45,7 @@ import { canonicalModel, configFromEnv } from '../people/embedder.js';
 import { keepDeviceImage } from '../device/image-store.js';
 import { repeatFromRequest, type Repeat } from './agenda-store.js';
 import { cronError } from '../../../packages/core/src/schedule/cron.js';
-import { projectLocked, PROJECT_LOCKED_MESSAGE } from '../project/project-lock.js';
+import { switchRefusal } from '../project/project-lock.js';
 import { forwardAsset, upstreamFor } from './static-assets.js';
 
 const __dirname  = path.dirname(fileURLToPath(import.meta.url));
@@ -279,13 +278,7 @@ export class APIServer {
       getEnvPath:       () => self.envPath,
       switchProject:    (id) => self.switchProject(id),
       // Only a runner with a runner manager has others to collide with.
-      switchRefusal:    async (id, req) => self.runnerManagerUrl
-        ? switchRefusal(id, {
-            managerUrl: self.runnerManagerUrl.replace(/\/$/, ''),
-            ownPort: self.port,
-            credential: credentialOf(req),
-          })
-        : null,
+      switchRefusal:    () => switchRefusal(self.runnerManagerUrl !== null),
       buildAgentStatuses: () => self.buildAgentStatuses(),
       readTickets:      () => self.kanbanManager.readTickets(),
       saveCurrentState: () => self.saveCurrentState(),
@@ -895,7 +888,8 @@ export class APIServer {
 
   private async switchProject(newId: string): Promise<void> {
     if (!this.projectLoader || !this.projectsRoot) throw new Error('Project loader not configured');
-    if (projectLocked()) throw new Error(PROJECT_LOCKED_MESSAGE);
+    const refusal = switchRefusal(this.runnerManagerUrl !== null);
+    if (refusal) throw new Error(refusal);
     await executeProjectSwitch(newId, {
       projectLoader:        this.projectLoader,
       projectsRoot:         this.projectsRoot,

@@ -7,7 +7,7 @@ import { readEnvFile, writeEnvFile, withEffective } from './env-manager.js';
 import { applicable, lockedKeys } from '../settings-file.js';
 import { listFilesRecursive } from './api-utils.js';
 import { openFolder } from './open-folder.js';
-import { projectLocked, PROJECT_LOCKED_MESSAGE } from '../project/project-lock.js';
+import { projectLocked } from '../project/project-lock.js';
 import { log } from '../../../packages/core/src/logger.js';
 
 export interface AgentStatus {
@@ -39,8 +39,8 @@ export interface ProjectManagerDeps {
   getProjectsRoot(): string | null;
   getEnvPath(): string;
   switchProject(newId: string): Promise<void>;
-  /** Why `newId` cannot be opened here, such as another runner having it open; null when it can. */
-  switchRefusal(newId: string, req: IncomingMessage): Promise<string | null>;
+  /** Why this runner cannot switch projects, such as being locked; null when it can. */
+  switchRefusal(): string | null;
   buildAgentStatuses(): AgentStatus[];
   readTickets(): Promise<unknown[]>;
   saveCurrentState(): Promise<void>;
@@ -192,12 +192,11 @@ export class ProjectManager {
 
     if (pathname === '/api/project/switch' && method === 'POST') {
       if (!this.deps.getProjectsRoot()) { json(res, 503, { error: 'Project switching not configured' }); return true; }
-      if (projectLocked()) { json(res, 409, { error: PROJECT_LOCKED_MESSAGE }); return true; }
+      const refusal = this.deps.switchRefusal();
+      if (refusal) { json(res, 409, { error: refusal }); return true; }
       const body = await readBody(req);
       const { id } = JSON.parse(body) as { id: string };
       if (!id?.trim()) { json(res, 400, { error: 'id is required' }); return true; }
-      const refusal = await this.deps.switchRefusal(id.trim(), req);
-      if (refusal) { json(res, 409, { error: refusal }); return true; }
       try {
         await this.deps.switchProject(id.trim());
         const agents  = this.deps.buildAgentStatuses();
