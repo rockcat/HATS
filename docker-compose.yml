@@ -32,10 +32,17 @@ services:
       # and project folders instead.
       AGENT_LIBRARY_URL: ${DOCKER_AGENT_LIBRARY_URL:-http://host.docker.internal:3010}
       PROJECT_SERVER_URL: ${DOCKER_PROJECT_SERVER_URL:-http://host.docker.internal:3020}
+      # One sign-in shared with every runner, and the runner manager the
+      # project badge opens and launches runners through; with one, this runner
+      # never switches projects itself. Not optional once set: with no auth
+      # service answering, nobody can sign in. Set either to nothing in .env
+      # (DOCKER_AUTH_SERVICE_URL=) to run this runner on its own.
+      AUTH_SERVICE_URL: ${DOCKER_AUTH_SERVICE_URL-http://host.docker.internal:3090}
+      RUNNER_MANAGER_URL: ${DOCKER_RUNNER_MANAGER_URL-http://host.docker.internal:3080}
       # Settings saved in the dashboard are kept in the data directory and
       # reloaded at startup — but never for these, which must stay as set
       # above. A localhost saved from the Settings panel would undo them.
-      HATS_ENV_LOCKED: RUNTIME_DIR,OLLAMA_BASE_URL,SPEECH_SERVICE_URL,AGENT_LIBRARY_URL,PROJECT_SERVER_URL
+      HATS_ENV_LOCKED: RUNTIME_DIR,OLLAMA_BASE_URL,SPEECH_SERVICE_URL,AGENT_LIBRARY_URL,PROJECT_SERVER_URL,AUTH_SERVICE_URL,RUNNER_MANAGER_URL
     extra_hosts:
       # Docker Desktop provides host.docker.internal; plain Linux Docker needs this.
       - "host.docker.internal:host-gateway"
