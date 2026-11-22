@@ -6,6 +6,9 @@ node_modules
 # Built inside the image.
 server/dist
 
+# Not part of the runner; it has its own dependencies.
+packages/avatar-camera
+
 # Mounted at runtime, never baked in — except the defaults the repository
 # ships, which the runner copies into a new installation's data directory.
 # Allowed one by one so local state (users, tokens, projects) never gets in.

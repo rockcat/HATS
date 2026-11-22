@@ -1,7 +1,7 @@
 import ffmpeg from 'fluent-ffmpeg';
 import { PassThrough } from 'stream';
 import { MediaOutput } from './types.js';
-import { log } from '../../../packages/core/src/logger.js';
+import { log } from '../../../core/src/logger.js';
 
 export interface SRTOutputConfig {
   port?: number;           // default 9000

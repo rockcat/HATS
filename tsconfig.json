@@ -21,6 +21,8 @@
     "node_modules",
     "dist",
     "server/dist",
+    // Its own package, with dependencies the runner does not install.
+    "packages/avatar-camera",
     "apps/web",
     "**/public/**"
   ]
