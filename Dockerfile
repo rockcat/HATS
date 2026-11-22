@@ -30,8 +30,8 @@ RUN npm run build && npm prune --omit=dev
 FROM node:24-slim AS runner
 WORKDIR /app
 
-# Production dependencies only. three and three-vrm are among them because
-# the dashboard's browser loads them from here, at /nm/.
+# Production dependencies only. three, which the dashboard's browser loads
+# from /nm/, is not one: the runner fetches it from the Agent Template Library.
 COPY --from=builder /build/node_modules ./node_modules
 COPY --from=builder /build/server/dist  ./server/dist
 COPY --from=builder /build/scripts      ./scripts
@@ -45,8 +45,9 @@ COPY --from=builder /build/apps/web     ./server/dist/apps/web
 COPY package.json ./
 
 # runtime_data/ is always mounted — never bake project data into the image.
-# What the repository ships there (avatars, backgrounds, model pricing — see
-# .dockerignore) is carried as defaults instead, and copied into the data
+# What the repository ships there (the MCP catalogue and model pricing — see
+# .dockerignore; the avatars come with the services) is carried as defaults
+# instead, and copied into the data
 # directory on startup wherever it is missing: a new installation starts with
 # them and an existing one keeps its own.
 COPY runtime_data/ ./defaults/

@@ -43,6 +43,7 @@ import { keepDeviceImage } from '../device/image-store.js';
 import { repeatFromRequest, type Repeat } from './agenda-store.js';
 import { cronError } from '../../../packages/core/src/schedule/cron.js';
 import { projectLocked, PROJECT_LOCKED_MESSAGE } from '../project/project-lock.js';
+import { forwardAsset, upstreamFor } from './static-assets.js';
 
 const __dirname  = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(__dirname, '..', '..', '..', 'apps', 'web');
@@ -74,10 +75,13 @@ const NM_DIR          = path.join(process.cwd(), 'node_modules');
 export const etagOf = (stat: { size: number; mtimeMs: number }): string =>
   `"${stat.size.toString(36)}-${Math.floor(stat.mtimeMs).toString(36)}"`;
 
-function serveFile(filePath: string, dir: string, res: ServerResponse, defaultMime = 'application/octet-stream', extra?: Record<string, string>, req?: IncomingMessage): void {
+function serveFile(filePath: string, dir: string, res: ServerResponse, defaultMime = 'application/octet-stream', extra?: Record<string, string>, req?: IncomingMessage, onMissing?: () => void): void {
   if (!filePath.startsWith(dir)) { res.writeHead(403); res.end('Forbidden'); return; }
   fs.stat(filePath, (statErr, stat) => {
-    if (statErr || !stat.isFile()) { res.writeHead(404); res.end('Not found'); return; }
+    if (statErr || !stat.isFile()) {
+      if (onMissing) { onMissing(); return; }
+      res.writeHead(404); res.end('Not found'); return;
+    }
     const etag = etagOf(stat);
     if (req && req.headers['if-none-match'] === etag) { res.writeHead(304, { ETag: etag, ...extra }); res.end(); return; }
     fs.readFile(filePath, (err, data) => {
@@ -128,6 +132,8 @@ export class APIServer {
   private projectDir: string | null;
   private projectsRoot: string | null;
   private projectLoader: ProjectLoader | null;
+  /** Fetches /nm/, /avatars/ and /backgrounds/ files the runner lacks. */
+  private agentLibraryUrl: string | null;
   private agentStore: AgentDefinitionStore | null;
   private actionStore: ScheduledActionStore | null;
   private projectSwitchCallback: ((orchestrator: TeamOrchestrator) => void) | null = null;
@@ -184,6 +190,7 @@ export class APIServer {
     this.envPath        = config.envPath ?? './.env';
     this.projectId      = config.projectId ?? 'default';
     this.projectDir     = config.projectDir ?? null;
+    this.agentLibraryUrl = config.agentLibraryUrl ?? null;
     this.projectsRoot   = config.projectsRoot ?? null;
     this.projectLoader  = config.projectLoader ?? null;
     this.agentStore     = config.agentStore  ?? null;
@@ -734,12 +741,14 @@ export class APIServer {
 
     if (pathname.startsWith('/api/')) { this.json(res, 404, { error: 'Not found' }); return; }
 
-    if (pathname.startsWith('/nm/')) {
-      serveFile(path.join(NM_DIR, pathname.slice(4)), NM_DIR, res, 'application/javascript', { 'Cache-Control': 'public, max-age=86400' });
-      return;
-    }
-    if (pathname.startsWith('/avatars/'))     { serveFile(path.join(AVATARS_DIR,     pathname.slice(9)),  AVATARS_DIR,     res, 'application/octet-stream', AVATAR_CACHE); return; }
-    if (pathname.startsWith('/backgrounds/')) { serveFile(path.join(BACKGROUNDS_DIR, pathname.slice(13)), BACKGROUNDS_DIR, res, 'image/png', AVATAR_CACHE); return; }
+    // Local first, then the library: see static-assets.ts.
+    const fromLibrary = (cache: Record<string, string>) => {
+      const upstream = upstreamFor(pathname, this.agentLibraryUrl);
+      return upstream ? () => { void forwardAsset(upstream, res, cache); } : undefined;
+    };
+    if (pathname.startsWith('/nm/'))          { serveFile(path.join(NM_DIR,          pathname.slice(4)),  NM_DIR,          res, 'application/javascript',   AVATAR_CACHE, undefined, fromLibrary(AVATAR_CACHE)); return; }
+    if (pathname.startsWith('/avatars/'))     { serveFile(path.join(AVATARS_DIR,     pathname.slice(9)),  AVATARS_DIR,     res, 'application/octet-stream', AVATAR_CACHE, undefined, fromLibrary(AVATAR_CACHE)); return; }
+    if (pathname.startsWith('/backgrounds/')) { serveFile(path.join(BACKGROUNDS_DIR, pathname.slice(13)), BACKGROUNDS_DIR, res, 'image/png',                AVATAR_CACHE, undefined, fromLibrary(AVATAR_CACHE)); return; }
     serveFile(path.join(PUBLIC_DIR, pathname === '/' ? 'index.html' : pathname.slice(1)), PUBLIC_DIR, res, 'application/octet-stream', STATIC_CACHE, req);
   }
 

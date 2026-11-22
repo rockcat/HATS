@@ -12,13 +12,9 @@ packages/avatar-camera
 # Mounted at runtime, never baked in — except the defaults the repository
 # ships, which the runner copies into a new installation's data directory.
 # Allowed one by one so local state (users, tokens, projects) never gets in.
+# The avatars are not among them: they ship with the services image, and the
+# runner serves them from the shared data folder or the Agent Template Library.
 runtime_data/*
-!runtime_data/avatars
-runtime_data/avatars/*
-!runtime_data/avatars/*.glb
-!runtime_data/avatars/*.vrm
-!runtime_data/avatars/avatars.json
-!runtime_data/avatars/backgrounds
 !runtime_data/config
 runtime_data/config/*
 !runtime_data/config/mcp-catalogue.json
