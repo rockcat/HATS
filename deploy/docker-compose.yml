@@ -58,6 +58,10 @@ services:
       AGENT_LIBRARY_URL: http://agent-library:3010
       PROJECT_SERVER_URL: http://project-server:3020
       SPEECH_SERVICE_URL: http://speech-service:3050
+      # One sign-in for every runner, and the list of runners its project
+      # badge switches between.
+      AUTH_SERVICE_URL: http://auth-service:3090
+      RUNNER_MANAGER_URL: http://runner-manager:3080
       # Local model servers run on the host, not in this project.
       OLLAMA_BASE_URL: ${DOCKER_OLLAMA_BASE_URL:-http://host.docker.internal:11434/v1}
       LM_STUDIO_BASE_URL: ${DOCKER_LM_STUDIO_BASE_URL:-http://host.docker.internal:1234/v1}
@@ -69,6 +73,7 @@ services:
     depends_on:
       agent-library: { condition: service_healthy }
       project-server: { condition: service_healthy }
+      auth-service: { condition: service_healthy }
     healthcheck:
       # Any reply under 500 is alive: /api/ needs a login, so a 401 proves
       # the server and its auth layer are both up.
@@ -93,6 +98,42 @@ services:
     healthcheck:
       <<: *health
       test: ["CMD", "node", "-e", "fetch('http://localhost:3020/api/v1/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+
+  # Users, sessions and API keys, once for every runner, in data/users.json:
+  # the file the runner used to keep them in, so existing logins carry on.
+  # Not published: runners reach it on this network.
+  auth-service:
+    <<: *service
+    command: ["node", "--import", "tsx/esm", "apps/auth-service/src/main.ts"]
+    healthcheck:
+      <<: *health
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3090/api/v1/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+
+  # Lists every runner, and starts one per project from the dashboard's
+  # project badge. Each gets the next port from RUNNER_PORTS, its own folder
+  # under data/runners, and this file's .env. Not published: the dashboard
+  # reaches it through its runner, and runners report in on this network.
+  runner-manager:
+    <<: *service
+    command: ["node", "--import", "tsx/esm", "apps/runner-manager/src/main.ts"]
+    volumes:
+      - ${HATS_DATA:-./data}:/workspace/HATS/runtime_data
+      # Docker itself, to start runners. Whoever holds it can do anything on
+      # this machine; the manager only starts runner containers, for admins.
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./.env:/hats/.env:ro
+    environment:
+      <<: *service-env
+      AUTH_SERVICE_URL: http://auth-service:3090
+      RUNNER_MANAGER_URL: http://runner-manager:3080
+      RUNNER_IMAGE: ghcr.io/rockcat/hats-runner:${HATS_VERSION:-latest}
+      RUNNER_PORTS: ${RUNNER_PORTS:-3101-3199}
+      HATS_ENV_FILE: /hats/.env
+      OLLAMA_BASE_URL: ${DOCKER_OLLAMA_BASE_URL:-http://host.docker.internal:11434/v1}
+      LM_STUDIO_BASE_URL: ${DOCKER_LM_STUDIO_BASE_URL:-http://host.docker.internal:1234/v1}
+    healthcheck:
+      <<: *health
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3080/api/v1/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
 
   project-designer:
     <<: *service

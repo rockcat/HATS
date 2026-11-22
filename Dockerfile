@@ -33,6 +33,7 @@ COPY hats-runner/packages/contracts/   ./hats-runner/packages/contracts/
 COPY hats-runner/packages/clients/     ./hats-runner/packages/clients/
 COPY hats-runner/packages/service-kit/ ./hats-runner/packages/service-kit/
 COPY hats-runner/packages/speech-core/ ./hats-runner/packages/speech-core/
+COPY hats-runner/packages/auth/        ./hats-runner/packages/auth/
 
 # Then the manifests, so this layer is cached until a dependency changes
 # rather than on every source edit.
@@ -72,8 +73,8 @@ ENV NODE_ENV=production \
     RUNTIME_DIR=/workspace/HATS/runtime_data
 
 # 3010 library · 3020 projects · 3030 designer · 3040 embodiment
-# 3060 companion · 3070 project view
-EXPOSE 3010 3020 3030 3040 3060 3070
+# 3060 companion · 3070 project view · 3080 runner manager · 3090 auth
+EXPOSE 3010 3020 3030 3040 3060 3070 3080 3090
 
 # Overridden per service by compose. The library is the one most things need.
 CMD ["node", "--import", "tsx/esm", "apps/agent-library/src/main.ts"]

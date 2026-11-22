@@ -84,6 +84,36 @@ services:
     ports: ["3070:3070"]
     command: ["node", "--import", "tsx/esm", "apps/project-view/src/main.ts"]
 
+  # One sign-in for every runner. A runner uses it when given
+  # AUTH_SERVICE_URL: http://localhost:3090 from source, or
+  # http://host.docker.internal:3090 from the runner's own compose file.
+  auth-service:
+    <<: *service
+    ports: ["3090:3090"]
+    command: ["node", "--import", "tsx/esm", "apps/auth-service/src/main.ts"]
+
+  # Lists every runner and starts one per project. Published here because the
+  # runner is outside this compose project and reports in from the host; the
+  # installed docker-compose.yml keeps it private. Runners it starts join this
+  # project's network, so they reach the services by name.
+  runner-manager:
+    <<: *service
+    ports: ["3080:3080"]
+    command: ["node", "--import", "tsx/esm", "apps/runner-manager/src/main.ts"]
+    volumes:
+      - ${HATS_DATA:-../hats-data}:/workspace/HATS/runtime_data
+      # Docker itself, to start runners. Whoever holds this can do anything
+      # on the host; the manager only starts runner containers, for admins.
+      - /var/run/docker.sock:/var/run/docker.sock
+      # The installation's settings, passed on to each runner it starts.
+      - ./.env:/hats/.env:ro
+    environment:
+      <<: *service-env
+      AUTH_SERVICE_URL: http://auth-service:3090
+      RUNNER_MANAGER_URL: http://runner-manager:3080
+      RUNNER_IMAGE: ${RUNNER_IMAGE:-hats:latest}
+      HATS_ENV_FILE: /hats/.env
+
   # The odd one out: it spawns a Piper HTTP server per voice, so it needs a
   # Python runtime the other six never touch. Same source, different stage.
   speech-service:
