@@ -171,6 +171,23 @@
         <small id="agent-mcp-hint"></small>
       </label>
 
+      <details class="agent-needs">
+        <summary>What this agent needs</summary>
+        <div class="field">
+          <span>Cannot work without</span>
+          <div id="agent-needs-required" class="server-picker"></div>
+          <small>If one of these is missing, the agent and the dashboard are told, and a visit to a team without it is refused.</small>
+        </div>
+        <div class="field">
+          <span>Works better with</span>
+          <div id="agent-needs-preferred" class="server-picker"></div>
+        </div>
+        <label class="field row" style="gap:8px; align-items:center">
+          <input type="checkbox" name="needsModel" style="width:auto">
+          <span style="margin:0">Must run on this model provider, even on a visit</span>
+        </label>
+      </details>
+
       <label class="field row" style="gap:8px; align-items:center">
         <input type="checkbox" name="enabled" style="width:auto">
         <span style="margin:0">Embody this agent when the project runs</span>

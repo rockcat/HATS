@@ -251,7 +251,7 @@ async function removeAgent(agent) {
 
 async function editAgent(agent) {
   const ids = new Set(enabledIds(state.current));
-  const patch = await openAgentDialog(agent, teamMcpCatalogue().filter((s) => ids.has(s.id)));
+  const patch = await openAgentDialog(agent, teamMcpCatalogue().filter((s) => ids.has(s.id)), teamMcpCatalogue());
   if (!patch) return;
   await guard(async () => {
     await projects.patch(`/projects/${state.current.id}/team/${agent.instanceId}`, patch);

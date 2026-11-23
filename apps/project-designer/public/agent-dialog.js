@@ -35,13 +35,44 @@ function renderServerOptions(teamServers, chosen) {
 }
 
 /**
+ * What the agent needs is chosen from every shared server in the catalogue,
+ * not only the team's: a need the team does not meet is exactly what this is
+ * for.
+ */
+function renderNeeds(needs, allServers) {
+  buildServerPicker($('#agent-needs-required'), allServers,
+    { selected: needs?.tools?.required ?? [], name: 'needRequired' });
+  buildServerPicker($('#agent-needs-preferred'), allServers,
+    { selected: needs?.tools?.preferred ?? [], name: 'needPreferred' });
+  $('#agent-form').elements['needsModel'].checked = needs?.models?.required === true;
+}
+
+/**
+ * The needs the dialog shows, or undefined when there are none. A server
+ * ticked in both lists counts as required.
+ */
+function readNeeds(previous) {
+  const required = selectedServers($('#agent-needs-required'), 'needRequired');
+  const preferred = selectedServers($('#agent-needs-preferred'), 'needPreferred')
+    .filter((s) => !required.includes(s));
+  const modelRequired = $('#agent-form').elements['needsModel'].checked;
+  if (!required.length && !preferred.length && !modelRequired) return previous ? {} : undefined;
+  return {
+    ...((required.length || preferred.length) && {
+      tools: { ...(required.length && { required }), ...(preferred.length && { preferred }) },
+    }),
+    ...(modelRequired && { models: { required: true } }),
+  };
+}
+
+/**
  * Show the dialog for one deployed agent.
  *
  * @param {object} agent        the deployed agent
  * @param {Array}  teamServers  catalogue entries for the servers this project runs
  * @returns {Promise<object|null>} a patch body, or null when the user cancels
  */
-export function openAgentDialog(agent, teamServers = []) {
+export function openAgentDialog(agent, teamServers = [], allServers = teamServers) {
   const dialog = $('#agent-dialog');
   const form = $('#agent-form');
 
@@ -59,6 +90,7 @@ export function openAgentDialog(agent, teamServers = []) {
   form.elements['allMcpServers'].checked = useAll;
   renderServerOptions(teamServers, allowList ?? []);
   $('#agent-mcp-picker').hidden = useAll;
+  renderNeeds(agent.needs, allServers);
   refreshModels();
 
   return new Promise((resolve) => {
@@ -90,6 +122,8 @@ export function openAgentDialog(agent, teamServers = []) {
             : selectedServers($('#agent-mcp-picker'), 'agentMcpServer'),
         },
       };
+      const needs = readNeeds(agent.needs);
+      if (needs) patch.needs = needs;
       // Only send limits when they carry a value — the schema rejects empty objects with nulls.
       if (cost !== '') patch.limits = { ...(agent.limits ?? {}), maxCostPerHour: Number(cost) };
       else if (agent.limits?.maxContextTokens) patch.limits = { maxContextTokens: agent.limits.maxContextTokens };

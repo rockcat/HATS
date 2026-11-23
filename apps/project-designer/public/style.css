@@ -59,3 +59,9 @@ div.field > span {
   border: 1px solid var(--border); border-radius: 6px;
 }
 .visit-team { font-size: 13px; cursor: pointer; }
+
+/* What an agent needs: folded away, since most agents need nothing in particular. */
+.agent-needs { margin: 4px 0 12px; }
+.agent-needs > summary { cursor: pointer; font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 8px; }
+.agent-needs .server-picker { max-height: 140px; overflow-y: auto; }
+.agent-needs small { display: block; color: var(--text-muted); font-size: 11px; margin-top: 3px; }
