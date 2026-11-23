@@ -1,8 +1,7 @@
 # Agents visiting other teams
 
-**Status:** phase 0 is built. Phase 1 is built except permanent moves and
-authenticated report-ins: see the order of work at the end. Phase 2 is
-design.
+**Status:** phases 0 and 1 are built: see the order of work at the end for
+where the build differs from this design. Phase 2 is design.
 
 Every agent belongs to a **home team**. When its work needs tools or knowledge
 its home team lacks, it can **visit** another team that has them, do that
@@ -328,10 +327,10 @@ reason "the host team stopped".
 
 Teams on other machines talk to the services over the network, so:
 
-- **Report-ins are authenticated.** Today the runner manager accepts them
-  without a login, safe only because its port is not published. Each runner
-  gets a runner token, issued by the manager to runners it launches and set
-  in `.env` for others.
+- **Runners prove they belong.** Every runner shows the installation's
+  runner token, `HATS_RUNNER_TOKEN`, when it reports in, says goodbye,
+  searches for teams, and takes part in visits and moves. The runner manager
+  and the Project Server turn away anything without it.
 - **Traffic is encrypted**, through a reverse proxy with TLS in front of the
   services.
 - Every visit is recorded on the Project Server, with its reason and result,
@@ -465,6 +464,21 @@ Still open:
      stopped: home only does that fifteen minutes past a deadline.
    - Required model providers are not checked yet: the Project Server does
      not know which providers a host has.
-5. Phase 1, still to build: permanent moves for admins, and authenticated
-   report-ins and team searches.
+5. Phase 1: permanent moves, and authenticated runners. *Built.*
+   - **Moves.** An admin moves an agent from the Visits tab
+     (`POST /api/moves` on its runner, then `POST /api/v1/moves` on the
+     Project Server). It goes with its conversations, memory and schedule,
+     not its logins; its open tickets go back to the old team's backlog. The
+     new team must take agents from the old one (`hostFrom`), and an agent
+     with a visit under way waits. There is no separate approval: sign-in is
+     shared across an installation, so an admin of one team is an admin of
+     the other.
+   - **The runner token.** One secret for the installation rather than one
+     issued per runner: `HATS_RUNNER_TOKEN`, in the shared `.env`, which the
+     installers make for a new `.env` and add to an older one. The runner
+     manager wants it for report-ins, goodbyes and team searches; the
+     Project Server for every visit and move route. Without it set, both let
+     any caller in and warn once, so an installation from before keeps
+     working until its installer is run again. In a development setup with
+     separate `.env` files, put the same value in each.
 6. Phase 2.
