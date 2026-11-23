@@ -13,8 +13,12 @@ import type { ProjectChange, ProjectStore } from '../project-store.js';
 
 const BASE = '/api/v1';
 
-export const forProject = (change: ProjectChange, project: string): boolean =>
-  change.id.toLowerCase() === project.toLowerCase();
+/** Whether `change` concerns `project`: a visit concerns both its teams. */
+export function forProject(change: ProjectChange, project: string): boolean {
+  const p = project.toLowerCase();
+  if (change.type === 'visit_changed') return change.home.toLowerCase() === p || change.host.toLowerCase() === p;
+  return change.id.toLowerCase() === p;
+}
 
 export function eventRoutes(store: ProjectStore): Route[] {
   const hub = new SseHub<ProjectChange, string>(forProject);

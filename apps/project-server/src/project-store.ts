@@ -155,6 +155,9 @@ export class ProjectStore {
     return () => { this.listeners.delete(listener); };
   }
 
+  /** Tell every listener of a change made elsewhere, such as a visit moving on. */
+  announce(change: ProjectChange): void { this.notify(change); }
+
   private notify(change: ProjectChange): void {
     for (const listener of this.listeners) {
       try { listener(change); } catch { /* one listener must not stop a save */ }

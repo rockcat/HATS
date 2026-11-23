@@ -9,6 +9,8 @@ export const config = {
   definitionsDir: path.resolve(
     process.env['PROJECT_DEFINITIONS_DIR'] ?? runtimeDir('project-server', 'definitions'),
   ),
+  /** One JSON file per visit, with its travel packs beside them in packs/. */
+  visitsDir: path.resolve(process.env['PROJECT_VISITS_DIR'] ?? runtimeDir('project-server', 'visits')),
   /** Where the Team Runner keeps each project's working files — must match the runner. */
   projectsRoot: process.env['PROJECTS_ROOT']
     ? path.resolve(process.env['PROJECTS_ROOT'])

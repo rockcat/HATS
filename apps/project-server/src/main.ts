@@ -15,6 +15,8 @@ import { projectRoutes } from './routes/projects.js';
 import { eventRoutes } from './routes/events.js';
 import { teamRoutes } from './routes/team.js';
 import { mcpRoutes } from './routes/mcp.js';
+import { visitRoutes } from './routes/visits.js';
+import { VisitService } from './visits/visit-service.js';
 
 async function main(): Promise<void> {
   const store = new ProjectStore({
@@ -23,6 +25,8 @@ async function main(): Promise<void> {
     activeFile: activeFilePath,
   });
   await store.load();
+  const visits = new VisitService(store, config.visitsDir);
+  await visits.load();
 
   for (const bad of store.invalidRecords) {
     console.warn(`[${config.name}] ignoring invalid project ${bad.file}: ${bad.reason}`);
@@ -50,6 +54,7 @@ async function main(): Promise<void> {
       }),
       ...projectRoutes(store),
       ...eventRoutes(store),
+      ...visitRoutes(visits),
       ...teamRoutes(store, library),
       ...mcpRoutes(),
     ],

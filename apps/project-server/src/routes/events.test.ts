@@ -83,3 +83,13 @@ describe('GET /api/v1/events', () => {
     expect(events).toEqual([{ type: 'project_changed', id: 'beta', revision: 1 }]);
   });
 });
+
+describe('forProject', () => {
+  it('sends a visit event to both of its teams, and nobody else', async () => {
+    const { forProject } = await import('./events.js');
+    const change = { type: 'visit_changed' as const, id: 'v1', home: 'ops', host: 'Billing', state: 'approved' as const };
+    expect(forProject(change, 'OPS')).toBe(true);
+    expect(forProject(change, 'billing')).toBe(true);
+    expect(forProject(change, 'research')).toBe(false);
+  });
+});
