@@ -10,6 +10,11 @@
 //   POST   /api/v1/runners/:project/stop
 //                                      stop one, letting it save     admin only
 //   DELETE /api/v1/runners/:project    stop and remove one          admin only
+//   GET    /api/v1/teams?from=&intent=&limit=
+//                                      teams an agent of `from` could visit,
+//                                      best match first (no sign-in, as for
+//                                      report-ins: runners ask on behalf of
+//                                      their agents)
 //
 // The dashboard reaches these through its runner's /api/runners, which
 // passes the caller's sign-in along.
@@ -21,6 +26,7 @@ import { LaunchError, type RunnerManager } from './manager.js';
 import type { Registry } from './registry.js';
 import { DockerError } from './docker.js';
 import type { Heartbeat } from './types.js';
+import { DEFAULT_LIMIT, discoverTeams } from './discovery.js';
 
 const BASE = '/api/v1/runners';
 
@@ -56,12 +62,25 @@ export function runnerRoutes(d: RouteDeps): Route[] {
     post(`${BASE}/heartbeat`, async ({ req, res }) => {
       const beat = await readJsonBody<Partial<Heartbeat>>(req);
       if (!beat?.project || !Number.isInteger(beat.port)) { badRequest(res, 'project and port are required'); return; }
+      // A runner speaks for its own team only.
+      const card = beat.card?.team?.toLowerCase() === beat.project.toLowerCase() ? beat.card : undefined;
       d.registry.heartbeat({
         project: beat.project, port: beat.port!,
         ...(beat.url && { url: beat.url }),
         ...(beat.container && { container: beat.container }),
+        ...(card && { card }),
       });
       noContent(res);
+    }),
+
+    get('/api/v1/teams', ({ res, query }) => {
+      const from = query.get('from')?.trim();
+      if (!from) { badRequest(res, 'from is required: the team asking'); return; }
+      const limit = Number(query.get('limit') ?? DEFAULT_LIMIT);
+      json(res, 200, {
+        teams: discoverTeams(d.registry.cards(), from, query.get('intent') ?? '',
+          Number.isFinite(limit) ? Math.min(limit, 10) : DEFAULT_LIMIT),
+      });
     }),
 
     post(`${BASE}/goodbye`, async ({ req, res }) => {

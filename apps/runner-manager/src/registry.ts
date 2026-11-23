@@ -5,6 +5,7 @@
 // source checkout. Containers this manager started are also listed from
 // Docker, so one that is stopped, or still starting, shows up too.
 
+import type { TeamCard } from '@hats/contracts/types';
 import type { Heartbeat, ManagedContainer, RunnerInfo } from './types.js';
 
 /** A runner that has not reported in for this long is shown as unreachable. */
@@ -39,6 +40,14 @@ export class Registry {
   /** Forget a runner, as when its container is removed. */
   forget(project: string): void {
     this.seen.delete(project.toLowerCase());
+  }
+
+  /** The cards of teams whose runners are up: reported in lately, and not since stopped. */
+  cards(): TeamCard[] {
+    const now = this.now();
+    return [...this.seen.values()]
+      .filter((s) => s.card && !s.stopped && now - s.at < STALE_AFTER_MS)
+      .map((s) => s.card!);
   }
 
   /** Every runner known, one per project, sorted by project. */

@@ -1,3 +1,5 @@
+import type { TeamCard } from '@hats/contracts/types';
+
 /** A team runner, as the dashboard's project list shows it. */
 export interface RunnerInfo {
   project: string;
@@ -26,6 +28,8 @@ export interface Heartbeat {
   url?: string;
   /** Its container's id, when it runs in Docker, so it can be stopped from the dashboard. */
   container?: string;
+  /** Its team's card, for other teams finding it. */
+  card?: TeamCard;
 }
 
 /** A runner container this manager started, as Docker lists it. */

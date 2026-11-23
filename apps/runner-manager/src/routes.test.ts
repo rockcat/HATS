@@ -69,3 +69,33 @@ describe('the runner manager API', () => {
     expect((await fetch(`${base}/heartbeat`, { method: 'POST', body: JSON.stringify({ project: 'x' }) })).status).toBe(400);
   });
 });
+
+describe('finding a team to visit', () => {
+  const card = (team: string, visits: { visitTo: string[]; hostFrom: string[] }, extra: Record<string, unknown> = {}) => ({
+    team, name: team, summary: '', tags: [], members: [], tools: [], models: [],
+    hosting: visits.hostFrom.length > 0, approval: 'admin', visits, ...extra,
+  });
+  const beat = (base: string, project: string, port: number, c: unknown) =>
+    fetch(`${base}/heartbeat`, { method: 'POST', body: JSON.stringify({ project, port, card: c }) });
+
+  it('finds the teams an agent could visit from the cards runners report', async () => {
+    const base = await serve();
+    await beat(base, 'ops', 3001, card('ops', { visitTo: ['*'], hostFrom: [] }));
+    await beat(base, 'billing', 3101, card('billing', { visitTo: [], hostFrom: ['ops'] }, { tags: ['invoices'] }));
+
+    const teams = base.replace('/runners', '/teams');
+    const res = await fetch(`${teams}?from=ops&intent=${encodeURIComponent('invoices for a customer')}`);
+    const found = await res.json() as { teams: Array<{ team: string; visits?: unknown }> };
+    expect(found.teams.map((t) => t.team)).toEqual(['billing']);
+    expect(found.teams[0]).not.toHaveProperty('visits');
+    expect((await fetch(teams)).status).toBe(400);
+  });
+
+  it('ignores a card a runner sends for a team other than its own', async () => {
+    const base = await serve();
+    await beat(base, 'ops', 3001, card('ops', { visitTo: ['*'], hostFrom: [] }));
+    await beat(base, 'billing', 3101, card('payroll', { visitTo: [], hostFrom: ['*'] }));
+    const found = await (await fetch(`${base.replace('/runners', '/teams')}?from=ops`)).json() as { teams: unknown[] };
+    expect(found.teams).toEqual([]);
+  });
+});
