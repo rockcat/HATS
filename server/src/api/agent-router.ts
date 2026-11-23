@@ -84,6 +84,44 @@ export class AgentRouter {
     this.deps = deps;
   }
 
+  /**
+   * Take an agent off the team: its open tickets go back to the backlog, its
+   * activity is forgotten, and the dashboard is told. Throws when there is no
+   * such agent.
+   */
+  async retireAgent(name: string): Promise<void> {
+    const { agentFeeds, agentTicketMap, agentActivity, talkingTimers } = this.deps;
+    const orch = this.deps.getOrchestrator();
+    const agentId = orch.agentIdForName(name) ?? name;
+    await orch.removeAgent(name);
+    await this.returnTicketsToBacklog(name);
+    agentActivity.delete(agentId); agentFeeds.delete(agentId);
+    const timer = talkingTimers.get(agentId);
+    if (timer) { clearTimeout(timer); talkingTimers.delete(agentId); }
+    agentTicketMap.delete(agentId);
+    this.teamChanged();
+  }
+
+  /** Tell the dashboard the team changed, and save it. */
+  teamChanged(): void {
+    this.deps.sseBroadcast({ type: 'agent_update', agents: this.deps.buildAgentStatuses() });
+    this.deps.saveCurrentState().catch(() => {});
+  }
+
+  private async returnTicketsToBacklog(name: string): Promise<void> {
+    if (!this.deps.getKanbanPath()) return;
+    try {
+      const board = await this.deps.readKanban();
+      let changed = false;
+      for (const ticket of Object.values(board.tickets)) {
+        if (ticket.assignee?.toLowerCase() === name.toLowerCase() && (ticket.column === 'in_progress' || ticket.column === 'ready')) {
+          ticket.column = 'backlog'; ticket.assignee = undefined; ticket.updatedAt = new Date().toISOString(); changed = true;
+        }
+      }
+      if (changed) await this.deps.writeKanban(board);
+    } catch { /* non-fatal */ }
+  }
+
   async handleRoutes(pathname: string, method: string, url: URL, req: IncomingMessage, res: ServerResponse): Promise<boolean> {
     const { json, readBody, resolveAgentName, sseBroadcast, saveCurrentState, agentFeeds, humanRequestStore, agentTicketMap, agentActivity, talkingTimers, enabledMCPIds } = this.deps;
     const orch = this.deps.getOrchestrator();
@@ -416,27 +454,8 @@ export class AgentRouter {
     if (pathname.match(/^\/api\/agents\/[^/]+$/) && method === 'DELETE') {
       const agentName = decodeURIComponent(pathname.slice('/api/agents/'.length));
       try {
-        const resolved = resolveAgentName(agentName);
-        const agentId  = orch.agentIdForName(resolved) ?? resolved;
-        await orch.removeAgent(resolved);
-        const kanbanPath = this.deps.getKanbanPath();
-        if (kanbanPath) {
-          try {
-            const board = await this.deps.readKanban();
-            let changed = false;
-            for (const ticket of Object.values(board.tickets)) {
-              if (ticket.assignee?.toLowerCase() === resolved.toLowerCase() && (ticket.column === 'in_progress' || ticket.column === 'ready')) {
-                ticket.column = 'backlog'; ticket.assignee = undefined; ticket.updatedAt = new Date().toISOString(); changed = true;
-              }
-            }
-            if (changed) await this.deps.writeKanban(board);
-          } catch { /* non-fatal */ }
-        }
-        agentActivity.delete(agentId); agentFeeds.delete(agentId);
-        const timer = talkingTimers.get(agentId);
-        if (timer) { clearTimeout(timer); talkingTimers.delete(agentId); }
-        agentTicketMap.delete(agentId);
-        sseBroadcast({ type: 'agent_update', agents: this.deps.buildAgentStatuses() }); saveCurrentState().catch(() => {}); json(res, 200, { ok: true });
+        await this.retireAgent(resolveAgentName(agentName));
+        json(res, 200, { ok: true });
       } catch (err) { json(res, 404, { error: (err as Error).message }); }
       return true;
     }
