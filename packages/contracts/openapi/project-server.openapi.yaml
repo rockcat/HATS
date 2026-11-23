@@ -21,6 +21,8 @@ tags:
     description: Project lifecycle and definitions
   - name: Team
     description: The deployed agents inside a project
+  - name: Visits
+    description: An agent working at another team, for its home team
   - name: Meta
     description: Health, schemas and this document
 
@@ -330,6 +332,88 @@ paths:
           content:
             text/event-stream:
               schema: { type: string }
+
+  # ── Visits: an agent working at another team for its home team ──────────────
+  # See docs/team-visits.md in the HATS repository. Each step is announced on
+  # the event stream as visit_changed, to both teams.
+  /api/v1/visits:
+    get:
+      tags: [Visits]
+      summary: Visits involving a project
+      operationId: listVisits
+      parameters:
+        - { name: project, in: query, required: false, schema: { type: string } }
+        - { name: open, in: query, required: false, description: 'true for unfinished visits only', schema: { type: string } }
+      responses:
+        '200': { description: 'Newest first: { visits: Visit[] }' }
+    post:
+      tags: [Visits]
+      summary: Ask for an agent to visit another team
+      description: >
+        Both teams' visit policies must agree, the host must take visitors, and it must
+        have every server the agent requires. A host that approves automatically
+        returns the visit already approved.
+      operationId: requestVisit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [agent, home, host, reason]
+              properties:
+                agent: { type: string, description: The agent's instance id }
+                home: { type: string }
+                host: { type: string }
+                reason:
+                  type: object
+                  required: [ticket, purpose, expectedResult]
+                  properties:
+                    ticket: { type: string }
+                    purpose: { type: string }
+                    expectedResult: { type: string }
+      responses:
+        '201': { description: The visit, requested or approved }
+        '409': { description: Why it may not happen }
+  /api/v1/visits/{id}:
+    get:
+      tags: [Visits]
+      summary: One visit
+      operationId: getVisit
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: The visit }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/visits/{id}/{step}:
+    post:
+      tags: [Visits]
+      summary: Move a visit on
+      description: >
+        approve, refuse or cancel ({ note? }); leave, when the agent has left home
+        ({ pack }), which marks it away at home and adds it to the host in one change;
+        return, when it has left the host ({ result, ended, pack? }), which puts it
+        back in its place at home; home, once home has it running again.
+      operationId: advanceVisit
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - name: step
+          in: path
+          required: true
+          schema: { type: string, enum: [approve, refuse, cancel, leave, return, home] }
+      responses:
+        '200': { description: The visit after the step }
+        '409': { description: A step out of order, or a policy that no longer allows it }
+  /api/v1/visits/{id}/pack/{direction}:
+    get:
+      tags: [Visits]
+      summary: A visit's travel pack, going out or coming back
+      operationId: getVisitPack
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: direction, in: path, required: true, schema: { type: string, enum: [out, back] } }
+      responses:
+        '200': { description: The pack, as its runner sent it }
+        '404': { $ref: '#/components/responses/NotFound' }
 
   /api/v1/active:
     get:
