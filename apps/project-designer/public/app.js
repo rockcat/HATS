@@ -13,10 +13,10 @@ const projects = makeClient('/proxy/projects/api/v1');
 
 const state = {
   projects: [],
-  activeProjectId: null,
   current: null,      // full ProjectDefinition being edited
   templates: [],
   dirty: false,
+  dashboardUrl: null, // a runner's dashboard, when the server names one
 };
 
 const ui = {
@@ -28,7 +28,7 @@ const ui = {
   revision:      $('#design-revision'),
   save:          $('#save-project'),
   del:           $('#delete-project'),
-  activate:      $('#activate-project'),
+  openRunner:    $('#open-runner'),
   mcpSection:    $('#mcp-section'),
   teamSection:   $('#team-section'),
   teamList:      $('#team-list'),
@@ -44,7 +44,6 @@ const ui = {
 async function loadProjects() {
   const result = await projects.get('/projects');
   state.projects = result?.projects ?? [];
-  state.activeProjectId = result?.activeProjectId ?? null;
   renderProjectList();
 }
 
@@ -78,7 +77,6 @@ function renderProjectList() {
         el('div', { class: 'name' }, project.name),
         el('div', { class: 'meta' }, `${project.teamSize} agent${project.teamSize === 1 ? '' : 's'} · ${relativeTime(project.updatedAt)}`),
       ),
-      project.id === state.activeProjectId ? el('span', { class: 'tag ok' }, 'active') : null,
     ));
   }
 }
@@ -99,7 +97,7 @@ function renderProject() {
   ui.revision.hidden = false;
   ui.revision.textContent = `rev ${project.revision}`;
   ui.del.disabled = false;
-  ui.activate.disabled = project.id === state.activeProjectId;
+  ui.openRunner.disabled = false;
   setDirty(false);
   renderTeam();
 }
@@ -207,19 +205,22 @@ async function deleteProject() {
     ui.designEmpty.hidden = false;
     ui.revision.hidden = true;
     ui.designTitle.textContent = 'Select a project';
-    ui.del.disabled = ui.activate.disabled = ui.save.disabled = true;
+    ui.del.disabled = ui.openRunner.disabled = ui.save.disabled = true;
     await loadProjects();
     renderLibrary();
   }, `Deleted ${name}`);
 }
 
-async function activateProject() {
+/**
+ * Open this project's runner in a new tab. The link goes to a runner's
+ * dashboard, which signs the user in and then opens the project's own runner,
+ * or starts one for an admin, exactly as its project badge does.
+ */
+function openRunner() {
   if (!state.current) return;
-  await guard(async () => {
-    await projects.put('/active', { id: state.current.id });
-    await loadProjects();
-    ui.activate.disabled = true;
-  }, 'The Team Runner will load this project');
+  if (state.dirty && !confirm('This project has unsaved changes, which its runner will not see until they are saved. Open it anyway?')) return;
+  const dashboard = state.dashboardUrl ?? `${location.protocol}//${location.hostname}:3001`;
+  window.open(`${dashboard}/?open=${encodeURIComponent(state.current.id)}`, '_blank', 'noopener');
 }
 
 async function deploy(template) {
@@ -283,7 +284,7 @@ async function init() {
   ui.form.addEventListener('submit', (event) => { event.preventDefault(); void saveProject(); });
   ui.save.addEventListener('click', () => void saveProject());
   ui.del.addEventListener('click', () => void deleteProject());
-  ui.activate.addEventListener('click', () => void activateProject());
+  ui.openRunner.addEventListener('click', openRunner);
   $('#new-project').addEventListener('click', () => void createProject());
   ui.librarySearch.addEventListener('input', debounce(() => void loadTemplates(), 250));
 
@@ -294,6 +295,7 @@ async function init() {
 
   const config = await guard(() => fetch('/api/v1/config').then((r) => r.json()));
   if (config?.agentLibraryUrl) $('#library-link').href = config.agentLibraryUrl;
+  if (config?.dashboardUrl) state.dashboardUrl = config.dashboardUrl.replace(/\/$/, '');
 
   await guard(async () => {
     const providers = await library.get('/providers');
@@ -301,8 +303,7 @@ async function init() {
     await loadTeamMcpCatalogue(projects);
     await loadTemplates();
     await loadProjects();
-    const active = state.projects.find((p) => p.id === state.activeProjectId) ?? state.projects[0];
-    if (active) await openProject(active.id);
+    if (state.projects[0]) await openProject(state.projects[0].id);
   });
 }
 

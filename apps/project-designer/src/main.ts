@@ -20,6 +20,9 @@ const config = {
   port: Number(process.env['PROJECT_DESIGNER_PORT'] ?? 3030),
   agentLibraryUrl: process.env['AGENT_LIBRARY_URL'] ?? 'http://localhost:3010',
   projectServerUrl: process.env['PROJECT_SERVER_URL'] ?? 'http://localhost:3020',
+  // A runner's dashboard as the browser reaches it, for "Open runner". Unset,
+  // the browser uses port 3001 on whatever host it reached this page on.
+  dashboardUrl: process.env['HATS_DASHBOARD_URL'] || null,
 };
 
 await startService({
@@ -37,6 +40,7 @@ await startService({
     get('/api/v1/config', ({ res }) => json(res, 200, {
       agentLibraryUrl: config.agentLibraryUrl,
       projectServerUrl: config.projectServerUrl,
+      dashboardUrl: config.dashboardUrl,
     })),
     ...proxyRoutes({ prefix: '/proxy/library', target: config.agentLibraryUrl, label: 'Agent Template Library' }),
     ...proxyRoutes({ prefix: '/proxy/projects', target: config.projectServerUrl, label: 'Project Server' }),

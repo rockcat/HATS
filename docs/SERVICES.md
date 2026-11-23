@@ -264,8 +264,8 @@ Individually: `npm run agent-library`, `npm run project-server`,
 
 1. Open the Agent Template Library at <http://localhost:3010> and create a few agents.
 2. Open the Project Designer at <http://localhost:3030>, create a project, set a
-   goal, deploy agents into the team, and click **Set active**.
-3. `npm start` — the runner loads the active project and embodies the team.
+   goal, deploy agents into the team, and save it.
+3. `npm start`, then click **Open runner** in the Project Designer: the runner opens the project and embodies the team.
 4. Open the Embodiment test harness at <http://localhost:3040> and talk to them.
 
 ## Service independence
