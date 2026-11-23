@@ -171,13 +171,20 @@ export const BUILTIN_CATALOGUE: MCPCatalogueEntry[] = [
     url: 'https://github.com/modelcontextprotocol/servers/tree/main/src/postgres',
   },
   {
-    id: 'puppeteer',
-    name: 'Puppeteer / Browser',
-    description: 'Control a headless Chrome browser — navigate pages, take screenshots, fill forms',
+    id: 'playwright',
+    name: 'Browser (Playwright)',
+    description: 'Browse the web in a real browser — open pages, click, fill in forms, read what is on screen and take screenshots',
     category: 'web',
-    users: ['human'],
-    config: { transport: 'stdio', command: 'npx', args: ['-y', '@modelcontextprotocol/server-puppeteer'] },
-    url: 'https://github.com/modelcontextprotocol/servers/tree/main/src/puppeteer',
+    // Shared, one browser for the team; per agent, each keeps its own.
+    users: ['human', 'agent'],
+    config: {
+      transport: 'stdio', command: 'npx',
+      // A profile per agent keeps one agent's logins and cookies from another's;
+      // a team instance keeps its profile in the project.
+      args: ['-y', '@playwright/mcp', '--headless', '--user-data-dir', '{AGENT_DIR}/browser-profile'],
+    },
+    notes: 'Uses Google Chrome. If Chrome is not installed, run "npx playwright install chrome" once on the machine running the runner.',
+    url: 'https://github.com/microsoft/playwright-mcp',
   },
   {
     id: 'slack',
@@ -536,11 +543,12 @@ const toolsFileFor = (cataloguePath: string): string =>
  * nothing in the code could regenerate it.
  */
 /**
- * Servers that used to be catalogue entries and are now part of the runner.
+ * Servers that used to be catalogue entries and are no longer offered.
  * Kanban became a library inside the runner; a catalogue that still lists it
  * offers a toggle that can only fail, starting a server file that is gone.
+ * Puppeteer's server was archived upstream; Playwright's replaces it.
  */
-export const RETIRED_SERVER_IDS: readonly string[] = ['kanban'];
+export const RETIRED_SERVER_IDS: readonly string[] = ['kanban', 'puppeteer'];
 
 function normalise(entries: MCPCatalogueEntry[]): MCPCatalogueEntry[] {
   const builtinById = new Map(BUILTIN_CATALOGUE.map(e => [e.id, e]));

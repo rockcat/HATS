@@ -100,7 +100,7 @@ Through the Model Context Protocol \(MCP), HATS ships integrations across five c
 |-|-|
 |Productivity|Kanban, Memory (knowledge graph), Slack|
 |Files & Documents|Filesystem, Excel, Word, PDF, PowerPoint|
-|Web|Brave Search, Puppeteer/Chrome|
+|Web|Brave Search, Browser (Playwright)|
 |Databases|SQLite, PostgreSQL|
 |Development|GitHub|
 

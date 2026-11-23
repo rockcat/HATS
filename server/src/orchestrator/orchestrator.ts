@@ -205,9 +205,9 @@ export class TeamOrchestrator {
   getAgentStore(): AgentDefinitionStore | null { return this.agentStore; }
 
   async addMCPServer(def: MCPServerDef): Promise<void> {
-    // Saved state and old definitions still name servers that are built in now.
+    // Saved state and old definitions still name servers that are retired.
     if (RETIRED_SERVER_IDS.includes(def.name)) {
-      log.info(`[MCP] "${def.name}" is built into the runner now — not starting it as a server.`);
+      log.info(`[MCP] "${def.name}" is no longer offered as a server — not starting it.`);
       return;
     }
     await this.mcp.add(def);

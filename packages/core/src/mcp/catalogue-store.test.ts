@@ -208,3 +208,21 @@ describe('a server that is now part of the runner', () => {
     await rm(d, { recursive: true, force: true });
   });
 });
+
+describe('the browser', () => {
+  it('is Playwright, for the team and for each agent, with a profile of its own', async () => {
+    const d = await mkdtemp(path.join(tmpdir(), 'hats-cat-'));
+    const cat = path.join(d, 'mcp-catalogue.json');
+    await writeFile(cat, JSON.stringify([{
+      id: 'puppeteer', name: 'Puppeteer / Browser', description: 'Archived.', category: 'web',
+      users: ['human'], config: { transport: 'stdio', command: 'npx', args: ['-y', '@modelcontextprotocol/server-puppeteer'] },
+    }]));
+    await initCatalogue(cat);
+
+    expect(getCatalogue().some((e) => e.id === 'puppeteer')).toBe(false);
+    const browser = getCatalogue().find((e) => e.id === 'playwright');
+    expect(browser?.users).toEqual(['human', 'agent']);
+    expect(browser?.config.transport === 'stdio' && browser.config.args).toContain('{AGENT_DIR}/browser-profile');
+    await rm(d, { recursive: true, force: true });
+  });
+});
