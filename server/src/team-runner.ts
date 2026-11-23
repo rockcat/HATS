@@ -46,6 +46,7 @@ import { UserStore } from '../../packages/auth/src/user-store.js';
 import { loadSessions } from '../../packages/auth/src/auth-middleware.js';
 import { ownContainer, sayGoodbye, startHeartbeat } from './runner-heartbeat.js';
 import { buildTeamCard } from './teams/team-card.js';
+import { TeamDirectory } from './teams/team-directory.js';
 import { ensureFirstAdmin } from '../../packages/auth/src/first-admin.js';
 import { AgentLibraryClient } from '../../packages/clients/src/agent-library-client.js';
 import { resolveProjectSource } from './project/project-source.js';
@@ -228,6 +229,15 @@ async function main() {
       if (opened && !noChanges(changes)) dashboard?.teamChanged();
     });
     sync = next;
+    // Other teams to visit, through the runner manager. Offered to the agents
+    // only while this project's visit policy allows visiting anyone.
+    if (RUNNER_MANAGER_URL) {
+      orch.setTeamDirectory(new TeamDirectory({
+        managerUrl: RUNNER_MANAGER_URL,
+        team: () => next.projectId,
+        definition: () => next.current,
+      }));
+    }
     // The definition owns the team, so edits made while the project was
     // closed apply before anything is written back. One with no team at all
     // leaves alone the default team assembled for it.

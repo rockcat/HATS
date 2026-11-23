@@ -44,6 +44,9 @@ export interface ToolCallContext {
   isKanbanTool?(name: string): boolean;
   callKanbanTool?(name: string, args: Record<string, unknown>): Promise<string>;
   callPeopleTool?(agentName: string, name: string, args: Record<string, unknown>): Promise<string>;
+  /** Finding other teams. Absent, or false, without a runner manager or a policy allowing visits. */
+  isTeamsTool?(name: string): boolean;
+  callTeamsTool?(name: string, args: Record<string, unknown>): Promise<string>;
   /** Mutable ref so the store stays live after context creation. */
   agendaStore: { store: AgendaStore | null };
   findByName(name: string): IAgent | undefined;
@@ -186,6 +189,12 @@ export function buildToolExecutor(ctx: ToolCallContext, mcp: MCPRegistry) {
         result = await ctx.callPeopleTool(agentName, call.name, call.arguments ?? {});
         // The face vector is not logged — the result is a sentence about a
         // person, which is the part worth keeping in the history.
+        await ctx.store.append('tool_result', { agent: agentName, tool: call.name, result });
+        return result;
+      }
+
+      if (ctx.isTeamsTool?.(call.name) && ctx.callTeamsTool) {
+        result = await ctx.callTeamsTool(call.name, call.arguments ?? {});
         await ctx.store.append('tool_result', { agent: agentName, tool: call.name, result });
         return result;
       }

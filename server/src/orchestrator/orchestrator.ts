@@ -62,6 +62,8 @@ import {
 } from './meeting-runner.js';
 import * as sm from './scheduled-meetings.js';
 import { drainAgents } from './drain.js';
+import { DISCOVER_TEAMS, TEAMS_TOOL_NAMES } from '../../../packages/core/src/tools/teams.js';
+import { formatTeams, type TeamDirectory } from '../teams/team-directory.js';
 
 export type ProviderFactory = (providerName: string) => AIProvider;
 
@@ -106,6 +108,8 @@ export class TeamOrchestrator {
   private mcp = new MCPRegistry();
   /** Tools that run on a connected device. Absent until a client registers one. */
   private deviceTools: DeviceToolBridge | null = null;
+  /** Other teams this one could visit. Absent without a runner manager. */
+  private teamDirectory: TeamDirectory | null = null;
 
   /**
    * Who the team knows by sight.
@@ -310,6 +314,23 @@ export class TeamOrchestrator {
       && this.peopleContext('') !== null;
   }
   getDeviceTools(): DeviceToolBridge | null { return this.deviceTools; }
+
+  /** Where to find other teams; null without a runner manager. */
+  setTeamDirectory(directory: TeamDirectory | null): void { this.teamDirectory = directory; }
+
+  /** Is this a teams tool, and may this team use it now? Its visit policy can change while it runs. */
+  isTeamsTool(name: string): boolean {
+    return (TEAMS_TOOL_NAMES as readonly string[]).includes(name) && Boolean(this.teamDirectory?.available());
+  }
+
+  private async callTeamsTool(name: string, args: Record<string, unknown>): Promise<string> {
+    if (name !== 'discover_teams' || !this.teamDirectory) return `Unknown tool: ${name}`;
+    try {
+      return formatTeams(await this.teamDirectory.discover(String(args['intent'] ?? '')));
+    } catch (err) {
+      return `Could not ask which teams you could visit: ${(err as Error).message}. Try again later.`;
+    }
+  }
 
   /** Names of the shared MCP servers currently connected for the team. */
   mcpServerNames(): string[] {
@@ -692,6 +713,9 @@ export class TeamOrchestrator {
       ...(context ? peopleTools(context).map((t) => ({
         name: t.name, description: t.description, parameters: t.inputSchema,
       })) : []),
+      // Upfront too: an agent that has never heard other teams exist will
+      // not think to search for a way to find one.
+      ...(this.teamDirectory?.available() ? [DISCOVER_TEAMS] : []),
     ];
 
     // Reading the board and moving a ticket across it are the hot path,
@@ -1275,6 +1299,8 @@ export class TeamOrchestrator {
       isPeopleTool: (name: string) => this.isPeopleTool(name),
       callPeopleTool: (agent: string, name: string, args: Record<string, unknown>) =>
         this.callPeopleTool(agent, name, args),
+      isTeamsTool: (name: string) => this.isTeamsTool(name),
+      callTeamsTool: (name: string, args: Record<string, unknown>) => this.callTeamsTool(name, args),
       agendaStore: this.agendaStoreRef,
       findByName: (name) => this.findByName(name),
       findBlueHat: () => this.findBlueHat(),
