@@ -10,7 +10,6 @@
 // admin-only, as a project export and import are.
 
 import type { IncomingMessage, ServerResponse } from 'http';
-import * as path from 'path';
 import { log } from '../../../packages/core/src/logger.js';
 import type { TeamOrchestrator } from '../orchestrator/orchestrator.js';
 import { ArchiveError } from '../project/project-archive.js';

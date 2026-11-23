@@ -234,3 +234,22 @@ describe('the prompt a scheduled run is answered with', () => {
     expect(modes).toEqual(['condensed', undefined]);
   });
 });
+
+describe('agents away on a visit', () => {
+  it('have their due tasks held, not fired at nobody or counted as failures', async () => {
+    const store = new AgendaStore(null);
+    const e = await store.add({ agentName: 'Rhoda', label: 'x', description: 'y', intervalSeconds: 600 });
+    const deliver = vi.fn(async () => {});
+    const runner = new AgendaRunner(store, deliver);
+    runner.setWaiting((name) => name === 'Rhoda');
+
+    await runner.tick(true);
+    expect(deliver).not.toHaveBeenCalled();
+    expect(store.get(e.id)).toMatchObject({ enabled: true });
+    expect(store.get(e.id)!.failures ?? 0).toBe(0);
+
+    runner.setWaiting(() => false);
+    await runner.tick(true);
+    expect(deliver).toHaveBeenCalledTimes(1);
+  });
+});

@@ -66,3 +66,26 @@ describe('an agent\'s scheduled tasks', () => {
     expect(agendaNames()).toEqual(['Poppy']);
   });
 });
+
+describe('an agent away on a visit', () => {
+  it('keeps its scheduled tasks when set aside, and through pruning, unlike when removed', async () => {
+    orch.setAside('Poppy');
+    expect(orch.getAgent('Poppy')).toBeUndefined();
+    expect(orch.isAway('poppy')).toBe(true);
+    await orch.pruneAgenda();
+    expect(agendaNames()).toEqual(['Poppy', 'Rhoda']);
+
+    await orch.removeAgent('Rhoda');
+    expect(agendaNames()).toEqual(['Poppy']);
+  });
+
+  it('is away from the start when a team opens with it gone', async () => {
+    await orch.removeAgent('Poppy');
+    await schedule('Poppy');
+    orch.markAway(['Poppy']);
+    await orch.pruneAgenda();
+    expect(agendaNames()).toContain('Poppy');
+    orch.welcomeBack('Poppy');
+    expect(orch.isAway('Poppy')).toBe(false);
+  });
+});

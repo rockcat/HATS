@@ -176,6 +176,7 @@ export class TeamOrchestrator {
       undefined,
       (agentName) => ({ human: this.humanName, email: this.getAgent(agentName)?.config.identity.email }),
     );
+    this.agendaRunner.setWaiting((agentName) => this.isAway(agentName));
     this.agendaRunner.start();
   }
 
@@ -993,7 +994,14 @@ export class TeamOrchestrator {
 
   /** Remove an agent, and its scheduled tasks — left behind, they kept firing for nobody. */
   async removeAgent(name: string): Promise<void> {
+    const agent = this.takeOffTeam(name);
+    await this.agendaStoreRef.store?.removeAgent(agent.name);
+  }
+
+  /** Stop running an agent here, without touching what it has scheduled. */
+  private takeOffTeam(name: string): IAgent {
     const agent = this.requireAgent(name);
+    agent.stop();
     this.agents.delete(agent.id);
     const personalMcp = this.personalMcpByAgent.get(name.toLowerCase());
     if (personalMcp) {
@@ -1001,17 +1009,38 @@ export class TeamOrchestrator {
       this.personalMcpByAgent.delete(name.toLowerCase());
     }
     this.rebuildTeamContext();
-    await this.agendaStoreRef.store?.removeAgent(agent.name);
+    return agent;
   }
+
+  /** Agents away on a visit, by lower-cased name: their place is kept, and their scheduled actions wait. */
+  private readonly away = new Map<string, string>();
+
+  /**
+   * An agent leaving on a visit: it stops running here, but keeps its place.
+   * Its scheduled actions stay, waiting until it is back, and are not pruned.
+   */
+  setAside(name: string): void {
+    const agent = this.takeOffTeam(name);
+    this.away.set(agent.name.toLowerCase(), agent.name);
+  }
+
+  /** Mark agents away without their being here first, as when a team opens with them gone. */
+  markAway(names: string[]): void { for (const n of names) this.away.set(n.toLowerCase(), n); }
+
+  /** An agent back from a visit: its scheduled actions run again. */
+  welcomeBack(name: string): void { this.away.delete(name.toLowerCase()); }
+
+  isAway(name: string): boolean { return this.away.has(name.toLowerCase()); }
 
   /**
    * Drop scheduled tasks of agents no longer on the team. Run once the team is
    * loaded. An empty team is left alone: that more likely means the team
-   * failed to load than that every agent was deleted.
+   * failed to load than that every agent was deleted. An agent away on a
+   * visit is still on it.
    */
   async pruneAgenda(): Promise<number> {
     const store = this.agendaStoreRef.store;
-    const names = this.listAgents().map(a => a.name);
+    const names = [...this.listAgents().map(a => a.name), ...this.away.values()];
     if (!store || names.length === 0) return 0;
     const removed = await store.keepOnlyAgents(names);
     for (const e of removed) log.info(`[Agenda] Removed "${e.label}" — its agent "${e.agentName}" is no longer on the team`);

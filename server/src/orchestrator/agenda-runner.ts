@@ -43,6 +43,11 @@ export class AgendaRunner {
   private fieldsFor: (agentName: string) => ScheduleFieldValues;
   private timer: ReturnType<typeof setInterval> | null = null;
   private readonly checkIntervalMs: number;
+  /** Agents whose actions wait, still due, until they are back: those away on a visit. */
+  private waiting: (agentName: string) => boolean = () => false;
+
+  /** Hold the actions of agents for which `waiting` is true, rather than firing them at nobody. */
+  setWaiting(waiting: (agentName: string) => boolean): void { this.waiting = waiting; }
 
   constructor(
     store: AgendaStore,
@@ -76,9 +81,9 @@ export class AgendaRunner {
   }
 
   async tick(fireAll = false): Promise<void> {
-    const due = fireAll
+    const due = (fireAll
       ? this.store.list().filter(e => e.enabled)
-      : this.store.listDue();
+      : this.store.listDue()).filter(e => !this.waiting(e.agentName));
     if (due.length === 0) return;
     const now = Date.now();
     for (const entry of due) {
