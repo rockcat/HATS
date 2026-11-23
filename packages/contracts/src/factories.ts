@@ -158,6 +158,7 @@ export function createDeployedAgent(input: Partial<DeployedAgent> & { name: stri
     enabled: input.enabled ?? true,
     projectRole: input.projectRole,
     home: input.home,
+    needs: input.needs,
     teamContext: input.teamContext,
     deployedAt: input.deployedAt ?? nowIso(),
   }) as DeployedAgent;

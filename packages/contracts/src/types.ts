@@ -134,8 +134,20 @@ export interface DeployedAgent {
    * `homeOf`, never directly.
    */
   home?: string;
+  needs?: AgentNeeds;
   teamContext?: string;
   deployedAt: string;
+}
+
+/**
+ * What an agent depends on. A missing required tool is reported to the agent
+ * and the dashboard, and will refuse a visit to a team without it.
+ */
+export interface AgentNeeds {
+  /** MCP server ids. */
+  tools?: { required?: string[]; preferred?: string[] };
+  /** True refuses a visit to a team that cannot run this agent's model provider. */
+  models?: { required?: boolean };
 }
 
 /** Which teams a team's agents may visit, and which teams' agents it hosts. */
