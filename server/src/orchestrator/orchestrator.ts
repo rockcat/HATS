@@ -61,6 +61,7 @@ import {
   makeResponseHandler as makeResponseHandlerFn,
 } from './meeting-runner.js';
 import * as sm from './scheduled-meetings.js';
+import { drainAgents } from './drain.js';
 
 export type ProviderFactory = (providerName: string) => AIProvider;
 
@@ -856,6 +857,16 @@ export class TeamOrchestrator {
   /** Clear tasks and agent histories while keeping agent definitions. */
   stopAllAgents(): void {
     for (const agent of this.agents.values()) agent.stop();
+  }
+
+  /**
+   * Stop the team for shutting down: no scheduled actions fire, no agent takes
+   * new work, and turns in progress get up to `timeoutMs` to finish. Returns
+   * the agents still busy when time ran out.
+   */
+  drain(timeoutMs: number): Promise<string[]> {
+    this.stopAgendaRunner();
+    return drainAgents([...this.agents.values()], timeoutMs);
   }
 
   clearProject(): void {

@@ -3,6 +3,9 @@ services:
     build: .
     image: hats:latest
     restart: unless-stopped
+    # On stopping, the runner lets turns in progress finish for up to 20
+    # seconds, then saves. Docker's default 10 would kill it first.
+    stop_grace_period: 30s
     ports:
       - "3001:3001"
     volumes:

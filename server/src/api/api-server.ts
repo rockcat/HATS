@@ -194,6 +194,8 @@ export class APIServer {
 
   /** The project open now, which a runner that is not locked can change. */
   get currentProjectId(): string { return this.projectId; }
+  /** The team running now, which a project switch replaces. */
+  get teamOrchestrator(): TeamOrchestrator { return this.orchestrator; }
 
   constructor(orchestrator: TeamOrchestrator, config: APIServerConfig = {}) {
     this.orchestrator  = orchestrator;

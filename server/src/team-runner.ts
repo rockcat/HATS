@@ -44,7 +44,7 @@ import { runtimeDir } from '../../packages/core/src/runtime-dir.js';
 import { seedMissing } from '../../packages/service-kit/src/seed-data.js';
 import { UserStore } from '../../packages/auth/src/user-store.js';
 import { loadSessions } from '../../packages/auth/src/auth-middleware.js';
-import { startHeartbeat } from './runner-heartbeat.js';
+import { ownContainer, sayGoodbye, startHeartbeat } from './runner-heartbeat.js';
 import { ensureFirstAdmin } from '../../packages/auth/src/first-admin.js';
 import { AgentLibraryClient } from '../../packages/clients/src/agent-library-client.js';
 import { resolveProjectSource } from './project/project-source.js';
@@ -110,6 +110,9 @@ const PROJECT_SERVER_URL = STANDALONE ? null : (process.env['PROJECT_SERVER_URL'
 // a runner manager, only when told where they are.
 const AUTH_SERVICE_URL   = STANDALONE ? null : (process.env['AUTH_SERVICE_URL'] || null);
 const RUNNER_MANAGER_URL = STANDALONE ? null : (process.env['RUNNER_MANAGER_URL'] || null);
+
+/** How long agents get to finish the turn they are in when the runner stops. */
+const STOP_GRACE_MS = Number(process.env['HATS_STOP_GRACE_MS'] ?? 20_000);
 
 // ── Provider factory ──────────────────────────────────────────────────────────
 
@@ -290,26 +293,37 @@ async function main() {
   });
   api.start();
   dashboard = api;
-  if (RUNNER_MANAGER_URL) {
-    startHeartbeat({
-      managerUrl: RUNNER_MANAGER_URL, port, project: () => api.currentProjectId,
-      ...(process.env['HATS_PUBLIC_URL'] && { url: process.env['HATS_PUBLIC_URL'] }),
-    });
-  }
+  const stopHeartbeat = RUNNER_MANAGER_URL
+    ? startHeartbeat({
+        managerUrl: RUNNER_MANAGER_URL, port, project: () => api.currentProjectId,
+        ...(process.env['HATS_PUBLIC_URL'] && { url: process.env['HATS_PUBLIC_URL'] }),
+        ...(ownContainer() && { container: ownContainer() }),
+      })
+    : null;
 
 
   // SIGTERM as well as SIGINT. Ctrl+C sends SIGINT, but `docker stop` — and
   // so every compose restart and recreate — sends SIGTERM, which nothing
   // handled. In a container the final save never ran: whatever had changed
   // since the last turn was simply lost on every stop.
+  //
+  // Agents get STOP_GRACE_MS to finish the turn they are in, so their work is
+  // in their threads when the team is saved. Docker must allow longer than
+  // that before it kills the process: the compose files and the runner
+  // manager give it 30 seconds.
   let stopping = false;
   const shutdown = async (signal: string) => {
     if (stopping) return;            // a second signal must not race the first save
     stopping = true;
-    console.log(`[Team] ${signal} — saving state and stopping`);
+    console.log(`[Team] ${signal} — letting turns in progress finish, then saving`);
+    stopHeartbeat?.();
+    if (RUNNER_MANAGER_URL) await sayGoodbye({ managerUrl: RUNNER_MANAGER_URL, project: () => api.currentProjectId });
+    const unfinished = await api.teamOrchestrator.drain(STOP_GRACE_MS);
+    if (unfinished.length > 0) console.log(`[Team] Stopped before ${unfinished.join(', ')} finished`);
     sync?.stop();
     await sync?.flush().catch(() => {});
     await api.shutdown();
+    console.log('[Team] Saved. Stopped.');
     process.exit(0);
   };
   process.on('SIGINT', () => { void shutdown('SIGINT'); });
