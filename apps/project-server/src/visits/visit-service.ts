@@ -128,6 +128,16 @@ export class VisitService {
     return this.save({ ...advance(visit, 'returning', this.now().toISOString(), ended.note), result, ended });
   }
 
+  /**
+   * Home wants its agent back: an admin recalled it, or the ticket it went
+   * for is closed. The host is told, and sends it home with what it has.
+   */
+  async recall(id: string, by: 'recalled' | 'reason-gone', note?: string): Promise<Visit> {
+    const visit = this.visit(id);
+    if (visit.state !== 'visiting') throw new VisitRuleError(409, `A visit that is ${visit.state} cannot be recalled.`);
+    return this.save({ ...visit, recall: { by, at: this.now().toISOString(), ...(note && { note }) }, updatedAt: this.now().toISOString() });
+  }
+
   /** Home has the agent running again with its result: the packs are no longer needed. */
   async home(id: string): Promise<Visit> {
     const visit = await this.step(id, 'home');

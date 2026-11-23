@@ -110,3 +110,16 @@ describe('a visit', () => {
     expect(visits.list('research')).toEqual([]);
   });
 });
+
+describe('recalling a visitor', () => {
+  it('records that home wants it back and tells both teams, while it is visiting only', async () => {
+    const asked = await ask();
+    await expect(visits.recall(asked.id, 'recalled')).rejects.toMatchObject({ status: 409 });
+    await visits.approve(asked.id);
+    await visits.leave(asked.id, {});
+    changes = [];
+    const recalled = await visits.recall(asked.id, 'reason-gone', 'TKT-1 was closed');
+    expect(recalled).toMatchObject({ state: 'visiting', recall: { by: 'reason-gone', note: 'TKT-1 was closed' } });
+    expect(changes).toEqual([{ type: 'visit_changed', id: asked.id, home: 'ops', host: 'billing', state: 'visiting' }]);
+  });
+});

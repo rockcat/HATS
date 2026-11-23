@@ -10,6 +10,7 @@
  *   POST /api/v1/visits/:id/leave            the agent left home  { pack }
  *   POST /api/v1/visits/:id/return           it left the host     { result, ended, pack? }
  *   POST /api/v1/visits/:id/home             home has it back
+ *   POST /api/v1/visits/:id/recall           home wants it back   { by?, note? }
  *   GET  /api/v1/visits/:id/pack/:direction  the travel pack, out or back
  *
  * Runners call these: the agent's home runner to ask and leave, the host's
@@ -77,6 +78,12 @@ export function visitRoutes(visits: VisitService): Route[] {
     }),
 
     post(`${BASE}/:id/home`, async (ctx) => handled(ctx, 200, () => visits.home(id(ctx)))),
+
+    post(`${BASE}/:id/recall`, async (ctx) => {
+      const body = await readJsonBody<{ by?: string; note?: string }>(ctx.req);
+      const by = body?.by === 'reason-gone' ? 'reason-gone' : 'recalled';
+      await handled(ctx, 200, () => visits.recall(id(ctx), by, body?.note?.trim() || undefined));
+    }),
 
     get(`${BASE}/:id/pack/:direction`, async (ctx) => {
       const direction = ctx.params['direction'] as PackDirection;
