@@ -13,16 +13,12 @@ import type { IncomingMessage, ServerResponse } from 'http';
 import * as path from 'path';
 import { log } from '../../../packages/core/src/logger.js';
 import type { TeamOrchestrator } from '../orchestrator/orchestrator.js';
-import { assignedActionIds } from '../orchestrator/agent-definition.js';
 import { ArchiveError } from '../project/project-archive.js';
 import { packAgent, unpackAgent } from '../agent-transfer/agent-bundle.js';
 import {
-  AgentNameTaken, captureAgent, restoreAgent, templateFrom, type AgentTarget,
+  AgentNameTaken, restoreAgent, templateFrom, type AgentTarget,
 } from '../agent-transfer/agent-transfer.js';
-import { EXTERNAL_PROVIDER } from '../agent/external-agent.js';
-import { AnthropicProvider } from '../providers/anthropic.js';
-import { makeProvider } from './providers.js';
-import { assignScheduledActions } from './project-agents.js';
+import { captureFrom, targetFor, type AgentIo } from '../agent-transfer/agent-io.js';
 import type { AgentDefinitionStore } from './agent-store.js';
 import type { ScheduledActionStore } from './scheduled-action-store.js';
 
@@ -82,13 +78,7 @@ export class AgentTransferRouter {
     const orch = this.deps.getOrchestrator();
     const agent = orch.getAgent(this.deps.resolveAgentName(name));
     if (!agent) throw new HttpError(404, `There is no agent called "${name}"`);
-    const capture = (includeCredentials: boolean) => captureAgent({
-      agent,
-      scheduledActionIds: assignedActionIds(orch.getAgendaStore(), agent.name),
-      agentDir: orch.agentDir(agent.name),
-      dataRoot: this.deps.dataRoot,
-      actions: { get: (id) => this.deps.getActionStore()?.get(id) },
-    }, { includeCredentials });
+    const capture = (includeCredentials: boolean) => captureFrom(this.io(), agent, includeCredentials);
 
     if (action === 'duplicate') {
       const body = JSON.parse((await this.deps.readBody(req)) || '{}') as { name?: string };
@@ -166,24 +156,11 @@ export class AgentTransferRouter {
     this.deps.json(res, 201, report);
   }
 
-  private target(): AgentTarget {
-    const orch = this.deps.getOrchestrator();
-    const projectDir = orch.getProjectDir();
-    return {
-      hasAgentNamed: (n) => orch.listAgents().some((a) => a.name.toLowerCase() === n.toLowerCase()),
-      providerFor: (def) => (def.externalEndpoint || def.providerName === 'external'
-        ? EXTERNAL_PROVIDER
-        : makeProvider(def.providerName) ?? new AnthropicProvider()),
-      register: (config) => orch.registerAgent(config),
-      agentDirFor: (id) => (projectDir ? path.join(projectDir, 'agents', id) : undefined),
-      dataRoot: this.deps.dataRoot,
-      actions: {
-        addIfMissing: async (def) => this.deps.getActionStore()?.addIfMissing(def) ?? false,
-      },
-      assignActions: (agentName, ids) =>
-        assignScheduledActions(orch.getAgendaStore(), this.deps.getActionStore(), agentName, ids),
-    };
+  private io(): AgentIo {
+    return { orchestrator: this.deps.getOrchestrator(), actionStore: this.deps.getActionStore(), dataRoot: this.deps.dataRoot };
   }
+
+  private target(): AgentTarget { return targetFor(this.io()); }
 }
 
 /** The other runner's import address, from what was typed: its base address. */

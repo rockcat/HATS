@@ -130,12 +130,16 @@ export interface RestoreReport {
   warnings: string[];
 }
 
-export async function restoreAgent(target: AgentTarget, bundle: AgentBundle, { name }: { name: string }): Promise<RestoreReport> {
+export async function restoreAgent(
+  target: AgentTarget, bundle: AgentBundle, { name, keepId = false }: { name: string; keepId?: boolean },
+): Promise<RestoreReport> {
   const newName = name.trim();
   if (!newName) throw new AgentNameTaken('Give the agent a name', bundle.manifest.name);
   if (target.hasAgentNamed(newName)) throw new AgentNameTaken(`There is already an agent called "${newName}"`, newName);
 
-  const id = randomUUID();
+  // A copy is a new agent. An agent coming back from a visit, or arriving on
+  // one, is the same agent: its home team and its visit know it by its id.
+  const id = keepId ? bundle.definition.id : randomUUID();
   const definition: AgentDefinition = {
     ...bundle.definition,
     id,
