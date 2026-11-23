@@ -46,6 +46,8 @@ import { keepDeviceImage } from '../device/image-store.js';
 import { repeatFromRequest, type Repeat } from './agenda-store.js';
 import { cronError } from '../../../packages/core/src/schedule/cron.js';
 import { switchRefusal } from '../project/project-lock.js';
+import { handleVisitRoutes } from './visit-router.js';
+import type { VisitCoordinator } from '../visits/visit-coordinator.js';
 import { forwardAsset, upstreamFor } from './static-assets.js';
 
 const __dirname  = path.dirname(fileURLToPath(import.meta.url));
@@ -448,6 +450,10 @@ export class APIServer {
   /** Show team news, such as a member joining, on the dashboard. */
   teamNews(news: string[]): void { this.sseBroadcast({ type: 'team_news', news }); }
 
+  /** The open project's visit coordinator, as the runner keeps it. */
+  private visitsFor: () => VisitCoordinator | null = () => null;
+  useVisits(current: () => VisitCoordinator | null): void { this.visitsFor = current; }
+
   /** The board changed underneath the dashboard, as when a visit adds a ticket. */
   async boardChanged(): Promise<void> {
     this.sseBroadcast({ type: 'kanban_update', tickets: await this.kanbanManager.readTickets() });
@@ -737,6 +743,12 @@ export class APIServer {
 
     if (await this.authRouter.handleRoutes(pathname, method, req, res))               return;
     if (await this.userManagementRouter.handleRoutes(pathname, method, req, res))     return;
+    if (await handleVisitRoutes({
+      visits: () => this.visitsFor(),
+      isAdmin: (r) => sessionOf(r)?.role === 'admin',
+      json: (r, s, b) => this.json(r, s, b),
+      readBody,
+    }, pathname, method, req, res)) return;
     if (await this.kanbanManager.handleRoutes(pathname, method, url, req, res))       return;
     if (await this.meetingRouter.handleRoutes(pathname, method, req, res))            return;
     if (await this.speechRouter.handleRoutes(pathname, method, req, res))             return;

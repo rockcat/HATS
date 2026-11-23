@@ -212,9 +212,15 @@ async function main() {
   let sync: ProjectSync | null = null;
   // Set once the dashboard is serving. Until then there is nobody to tell.
   let dashboard: APIServer | null = null;
+  // The open project's visits, and the clock that checks their deadlines.
+  let currentVisits: VisitCoordinator | null = null;
+  let stopVisitClock: (() => void) | null = null;
   const bindSync = async ({ orchestrator: orch, definition, client }: LoadedProject): Promise<void> => {
     const previous = sync;
     sync = null;
+    stopVisitClock?.();
+    stopVisitClock = null;
+    currentVisits = null;
     if (previous) { previous.stop(); await previous.flush().catch(() => {}); }
     if (!client || !definition) return;
     let opened = false;
@@ -261,7 +267,9 @@ async function main() {
     await next.flush();
     opened = true;
     next.start();
+    currentVisits = visits;
     void visits.catchUp();
+    stopVisitClock = visits.startClock();
     orch.onEvent((ev) => {
       if (['task_complete', 'state_saved', 'agent_disengaged'].includes(ev.type) && sync === next) next.schedule();
     });
@@ -321,6 +329,7 @@ async function main() {
   });
   api.start();
   dashboard = api;
+  api.useVisits(() => currentVisits);
   const stopHeartbeat = RUNNER_MANAGER_URL
     ? startHeartbeat({
         managerUrl: RUNNER_MANAGER_URL, port, project: () => api.currentProjectId,

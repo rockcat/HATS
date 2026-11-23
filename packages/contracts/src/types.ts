@@ -285,6 +285,8 @@ export interface Visit {
   memoryHome: 'all' | 'summary' | 'none';
   result?: VisitResult;
   ended?: { by: VisitEnd; note?: string };
+  /** Home asked for the agent back, by an admin or because the reason is gone; the host sends it. */
+  recall?: { by: 'recalled' | 'reason-gone'; note?: string; at: string };
   requestedAt: string;
   updatedAt: string;
   history: Array<{ state: VisitState; at: string; note?: string }>;

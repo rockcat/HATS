@@ -42,6 +42,9 @@ export class VisitsClient {
   /** Home has the agent running again. */
   home(id: string) { return this.step(id, 'home', {}); }
 
+  /** Home wants the agent back; the host sends it. */
+  recall(id: string, by: 'recalled' | 'reason-gone', note?: string) { return this.step(id, 'recall', { by, note }); }
+
   /** A travel pack, or undefined when there is none. */
   pack(id: string, direction: 'out' | 'back'): Promise<unknown | undefined> {
     return this.http.get<unknown>(`${BASE}/${encodeURIComponent(id)}/pack/${direction}`);

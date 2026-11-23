@@ -44,6 +44,10 @@ export interface CoordinatorDeps {
 }
 
 const OUTCOMES = ['done', 'partial', 'failed'] as const;
+/** How often recalls, deadlines and reasons are checked by the clock. */
+const CLOCK_MS = 60_000;
+/** How long past its deadline a visit may stay open before home takes its agent back. */
+const HOST_GRACE_MS = 15 * 60_000;
 const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
 const visitTag = (id: string) => `visit:${id}`;
 
@@ -109,16 +113,94 @@ export class VisitCoordinator implements VisitTools {
   /** The Project Server's notices about visits involving this team. */
   onVisitChanged(change: Extract<ProjectChange, { type: 'visit_changed' }>): void {
     const home = same(change.home, this.project);
+    const host = same(change.host, this.project);
     if (home && change.state === 'approved') void this.depart(change.id);
     if (home && change.state === 'refused') void this.refused(change.id);
-    if (!home && same(change.host, this.project) && change.state === 'requested') void this.asked(change.id);
+    if (host && change.state === 'requested') void this.asked(change.id);
+    // A visit still visiting that moved on has been recalled.
+    if (host && change.state === 'visiting') void this.checkRecall(change.id);
   }
 
-  /** Visits that moved on while this runner was not listening: an approved one still has to leave. */
+  /**
+   * Everything that is due by the clock, or was missed while this runner was
+   * not listening: an approved visit still to leave, a recall, a visit out of
+   * time, a reason gone, a host that stopped.
+   */
   async catchUp(): Promise<void> {
-    for (const visit of await this.d.client.list(this.project, true).catch(() => [])) {
-      if (same(visit.home, this.project) && visit.state === 'approved') void this.depart(visit.id);
+    const now = Date.now();
+    for (const visit of await this.d.client.list(this.project, true).catch(() => [] as Visit[])) {
+      const ends = visit.endsBy ? Date.parse(visit.endsBy) : Infinity;
+      if (same(visit.home, this.project)) {
+        if (visit.state === 'approved') void this.depart(visit.id);
+        if (visit.state === 'visiting') await this.watchFromHome(visit, now, ends);
+      } else if (visit.state === 'visiting') {
+        if (visit.recall) void this.sendHome(visit.id, { by: visit.recall.by, ...(visit.recall.note && { note: visit.recall.note }) });
+        else if (now >= ends) void this.sendHome(visit.id, { by: 'time', note: 'its time ran out' });
+      }
     }
+  }
+
+  /** Check by the clock every `everyMs` until stopped. */
+  startClock(everyMs = CLOCK_MS): () => void {
+    const timer = setInterval(() => { void this.catchUp(); }, everyMs);
+    timer.unref?.();
+    return () => clearInterval(timer);
+  }
+
+  /**
+   * From home: recall an agent whose ticket was closed or given to someone
+   * else, and take back one whose host has gone quiet well past its time.
+   */
+  private async watchFromHome(visit: Visit, now: number, ends: number): Promise<void> {
+    if (now >= ends + HOST_GRACE_MS) {
+      await this.d.client.return(visit.id,
+        { outcome: 'failed', summary: 'The visit did not end in time, and the host team did not send the agent home.', reason: 'the host team stopped' },
+        { by: 'host-stopped' }).catch(() => {});
+      return;
+    }
+    if (visit.recall) return;
+    const board = await this.orch.readyBoard();
+    const ticket = board ? await board.getTicket(visit.reason.ticket) : undefined;
+    const gone = !ticket ? 'it no longer exists'
+      : ticket.column === 'closed' ? 'it was closed'
+      : ticket.assignee && !same(ticket.assignee, visit.agent.name) ? `it was given to ${ticket.assignee}` : null;
+    if (gone) await this.d.client.recall(visit.id, 'reason-gone', `${visit.reason.ticket}: ${gone}`).catch(() => {});
+  }
+
+  private async checkRecall(id: string): Promise<void> {
+    const visit = await this.d.client.get(id);
+    if (visit?.state === 'visiting' && visit.recall) {
+      await this.sendHome(id, { by: visit.recall.by, ...(visit.recall.note && { note: visit.recall.note }) });
+    }
+  }
+
+  // ── For the dashboard ───────────────────────────────────────────────────────
+
+  /** Unfinished visits involving this team. */
+  list(): Promise<Visit[]> { return this.d.client.list(this.project, true); }
+
+  /** At a host: agree to a visit, or not. */
+  async decide(id: string, approve: boolean, note?: string): Promise<Visit> {
+    const visit = await this.ours(id, 'host');
+    return approve ? this.d.client.approve(visit.id, note) : this.d.client.refuse(visit.id, note);
+  }
+
+  /** At home: ask for an agent back, or call off a visit that has not started. */
+  async recall(id: string, note?: string): Promise<Visit> {
+    const visit = await this.ours(id, 'home');
+    return visit.state === 'visiting' ? this.d.client.recall(id, 'recalled', note) : this.d.client.cancel(id, note);
+  }
+
+  /** At a host: send a visitor home now, with whatever it has. */
+  async end(id: string, note?: string): Promise<void> {
+    await this.ours(id, 'host');
+    await this.sendHome(id, { by: 'ended-by-host', ...(note && { note }) });
+  }
+
+  private async ours(id: string, side: 'home' | 'host'): Promise<Visit> {
+    const visit = await this.d.client.get(id);
+    if (!visit || !same(visit[side], this.project)) throw new Error(`There is no such visit ${side === 'home' ? 'from' : 'to'} this team.`);
+    return visit;
   }
 
   private async asked(id: string): Promise<void> {
