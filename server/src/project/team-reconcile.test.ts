@@ -121,6 +121,34 @@ describe('applyDefinition', () => {
     expect(changes.added.map((a) => a.name)).toEqual(['Bo']);
   });
 
+  it('announces what changed to the team', async () => {
+    const { asOrchestrator } = fakeTeam([agent('Ann')]);
+    const announce = vi.fn();
+    await applyDefinition(asOrchestrator, definition([member('Ann'), member('Bo')]), [],
+      { providerFactory, retire: vi.fn(), announce });
+    expect(announce).toHaveBeenCalledWith(['Bo joined the team (wearing the white hat).']);
+  });
+
+  it('announces a new goal saved together with a new member', async () => {
+    const { orch, asOrchestrator } = fakeTeam([agent('Ann')]);
+    // Embodying a member sets the goal as it goes, as the real assembler does.
+    orch.registerAgent.mockImplementation((config: { id: string; identity: { name: string } }) => {
+      orch.getProjectGoal.mockReturnValue('Ship it');
+      return agent(config.identity.name, { id: config.id });
+    });
+    const announce = vi.fn();
+    await applyDefinition(asOrchestrator, definition([member('Ann'), member('Bo')], { goal: 'Ship it' }), [],
+      { providerFactory, retire: vi.fn(), announce });
+    expect(announce.mock.calls[0]![0]).toContain('The project goal is now: Ship it');
+  });
+
+  it('announces nothing when nothing changed', async () => {
+    const { asOrchestrator } = fakeTeam([agent('Ann')]);
+    const announce = vi.fn();
+    await applyDefinition(asOrchestrator, definition([member('Ann')]), [], { providerFactory, retire: vi.fn(), announce });
+    expect(announce).not.toHaveBeenCalled();
+  });
+
   it('changes nothing when the team already matches', async () => {
     const { orch, asOrchestrator } = fakeTeam([agent('Ann')]);
     const retire = vi.fn();

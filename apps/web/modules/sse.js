@@ -14,6 +14,7 @@ import { applyTelemetrySummary, telScope, refreshTelemetryBar } from './telemetr
 import { renderFilesList, fetchFiles, startFilesRefresh } from './files.js';
 import { initTabs } from './panels.js';
 import { isSignedOut, showLogin } from './auth.js';
+import { showTeamNews } from './team-news.js';
 
 // renderTools lives inline here because it's small and only used in SSE events.
 function renderTools(tools) {
@@ -131,6 +132,8 @@ export function connect() {
       renderAgents(state.agents);
       updateChatAgentSelect();
       if (activeDetailAgent) refreshAgentSpend(state.agents.find(a => a.name === activeDetailAgent));
+    } else if (msg.type === 'team_news') {
+      showTeamNews(msg.news);
     } else if (msg.type === 'scheduled_meetings_update') {
       renderCalendar(msg.meetings);
     } else if (msg.type === 'kanban_update') {

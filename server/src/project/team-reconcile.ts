@@ -13,6 +13,7 @@ import type { HatType } from '../../../packages/core/src/hats/types.js';
 import type { ProviderFactory, TeamOrchestrator } from '../orchestrator/orchestrator.js';
 import { toDeployedAgent } from '../embodiment/agent-mapper.js';
 import { assembleFromDefinition } from './team-assembler.js';
+import { describeChanges } from './team-news.js';
 import { log } from '../../../packages/core/src/logger.js';
 
 export interface TeamChanges {
@@ -95,6 +96,8 @@ export interface ApplyDeps {
   providerFactory: ProviderFactory;
   /** Takes an agent off the team. The dashboard's own removal, once it is running. */
   retire: (name: string) => Promise<void>;
+  /** Told what changed, as news for the team. */
+  announce?: (news: string[]) => void | Promise<void>;
 }
 
 /** Apply one member's edits to its live agent. */
@@ -136,6 +139,8 @@ export async function applyDefinition(
   deps: ApplyDeps,
 ): Promise<TeamChanges> {
   const changes = diffTeam(definition.team, liveTeam(orch, previous));
+  // Read before anything is applied: embodying new members sets the goal too.
+  const newGoal = definition.goal && definition.goal !== (orch.getProjectGoal() ?? '') ? definition.goal : undefined;
 
   for (const name of changes.removed) {
     await deps.retire(name).catch((err: Error) => log.warn(`[ProjectSync] Could not remove "${name}": ${err.message}`));
@@ -147,12 +152,14 @@ export async function applyDefinition(
   if (changes.added.length > 0) {
     assembleFromDefinition(orch, { ...definition, team: changes.added }, deps.providerFactory);
   }
-  if ((definition.goal ?? '') !== (orch.getProjectGoal() ?? '') && definition.goal) orch.setProjectGoal(definition.goal);
+  if (newGoal) orch.setProjectGoal(newGoal);
   if (definition.humanName && definition.humanName !== orch.getHumanName()) orch.setHumanName(definition.humanName);
 
   if (!noChanges(changes)) {
     log.info(`[ProjectSync] Applied the project's team: ${changes.added.length} joined, `
       + `${changes.removed.length} left, ${changes.changed.length} changed`);
   }
+  const news = describeChanges(changes, newGoal);
+  if (news.length > 0) await deps.announce?.(news);
   return changes;
 }

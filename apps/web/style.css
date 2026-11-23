@@ -4807,3 +4807,17 @@ body.has-expanded-panel main > section:not(.panel--expanded) {
 .model-cat-empty { text-align: center; color: var(--text-muted); }
 .model-cat-unoffered summary { font-size: 11px; color: var(--text-muted); cursor: pointer; }
 .model-cat-unoffered ul { margin: 6px 0 0; padding-left: 18px; font-size: 11px; color: var(--text-muted); }
+
+/* ── Team news: a notice when the team changes from outside the dashboard ── */
+#team-news {
+  position: fixed; right: 16px; bottom: 16px; z-index: 1000;
+  display: flex; flex-direction: column; gap: 8px;
+  max-width: min(360px, calc(100vw - 32px));
+}
+.team-news-card {
+  background: var(--surface-2); color: var(--text);
+  border: 1px solid var(--border); border-left: 3px solid var(--hat-blue);
+  border-radius: 6px; padding: 10px 12px; font-size: 13px; line-height: 1.4;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4); cursor: pointer;
+}
+.team-news-title { font-weight: 600; margin-bottom: 4px; color: var(--text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }

@@ -443,6 +443,9 @@ export class APIServer {
   /** Tell the dashboard the team changed underneath it, and save it. */
   teamChanged(): void { this.agentRouter.teamChanged(); }
 
+  /** Show team news, such as a member joining, on the dashboard. */
+  teamNews(news: string[]): void { this.sseBroadcast({ type: 'team_news', news }); }
+
   async start(): Promise<void> {
     this.speech.start().catch((err: Error) => log.warn('[API] Speech Service probe failed:', err.message));
 

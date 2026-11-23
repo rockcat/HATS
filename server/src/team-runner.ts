@@ -216,6 +216,10 @@ async function main() {
         providerFactory,
         // While the project is opening, the dashboard still holds the last one.
         retire: (name) => (opened && dashboard ? dashboard.retireAgent(name) : orch.removeAgent(name)),
+        announce: async (news) => {
+          await orch.announce(news);
+          if (opened) dashboard?.teamNews(news);
+        },
       });
       if (opened && !noChanges(changes)) dashboard?.teamChanged();
     });
