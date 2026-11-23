@@ -61,6 +61,55 @@
           "type": "string",
           "enum": ["standup", "sprint_planning", "retro", "review", "ad_hoc"],
           "default": "ad_hoc"
+        },
+        "summary": {
+          "type": "string",
+          "description": "One or two sentences on what this team does, for other teams finding it. Defaults to the goal.",
+          "maxLength": 400
+        },
+        "tags": {
+          "type": "array",
+          "description": "What this team works on, for other teams finding it, e.g. 'billing', 'postgres'.",
+          "items": { "type": "string", "minLength": 1, "maxLength": 40 },
+          "maxItems": 20,
+          "uniqueItems": true
+        },
+        "visits": {
+          "type": "object",
+          "description": "Which teams this team's agents may visit, and which teams' agents it hosts. Nothing is allowed by default.",
+          "properties": {
+            "visitTo": {
+              "type": "array",
+              "description": "Teams this team's agents may visit. \"*\" means any team in the installation.",
+              "items": { "type": "string", "minLength": 1 },
+              "uniqueItems": true
+            },
+            "hostFrom": {
+              "type": "array",
+              "description": "Teams whose agents this team hosts. \"*\" means any team in the installation.",
+              "items": { "type": "string", "minLength": 1 },
+              "uniqueItems": true
+            },
+            "approval": {
+              "type": "string",
+              "enum": ["auto", "admin"],
+              "description": "Whether an allowed visit to this team goes ahead, or waits for one of its admins.",
+              "default": "admin"
+            },
+            "maxHours": {
+              "type": "number",
+              "description": "The longest a visit out of this team, or into it, may last.",
+              "exclusiveMinimum": 0,
+              "maximum": 168
+            },
+            "memoryHome": {
+              "type": "string",
+              "enum": ["all", "summary", "none"],
+              "description": "What visitors take home from this team: all they learned, only their result, or nothing.",
+              "default": "summary"
+            }
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": false

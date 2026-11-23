@@ -128,14 +128,39 @@ export interface DeployedAgent {
   scheduledActionIds?: string[];
   enabled: boolean;
   projectRole?: string;
+  /**
+   * The project this agent belongs to. Absent means the project holding it;
+   * it differs only while the agent visits another team. Read it with
+   * `homeOf`, never directly.
+   */
+  home?: string;
   teamContext?: string;
   deployedAt: string;
+}
+
+/** Which teams a team's agents may visit, and which teams' agents it hosts. */
+export interface VisitPolicy {
+  /** Teams this team's agents may visit; "*" is any team in the installation. */
+  visitTo?: string[];
+  /** Teams whose agents this team hosts; "*" is any team in the installation. */
+  hostFrom?: string[];
+  /** Whether an allowed visit here goes ahead, or waits for an admin. Default "admin". */
+  approval?: 'auto' | 'admin';
+  /** The longest a visit out of this team, or into it, may last. */
+  maxHours?: number;
+  /** What visitors take home from this team. Default "summary". */
+  memoryHome?: 'all' | 'summary' | 'none';
 }
 
 export interface ProjectSettings {
   speechEnabled?: boolean;
   autoAssignVisuals?: boolean;
   defaultMeetingType?: 'standup' | 'sprint_planning' | 'retro' | 'review' | 'ad_hoc';
+  /** One or two sentences for other teams finding this one. Defaults to the goal. */
+  summary?: string;
+  /** What this team works on, for other teams finding it. */
+  tags?: string[];
+  visits?: VisitPolicy;
 }
 
 /** The portable description of a project: objective, team and shared tools. */
