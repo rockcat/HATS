@@ -12,6 +12,7 @@ import { AgentLibraryClient } from '@hats/clients/agent-library-client';
 import { activeFilePath, config } from './config.js';
 import { ProjectStore } from './project-store.js';
 import { projectRoutes } from './routes/projects.js';
+import { eventRoutes } from './routes/events.js';
 import { teamRoutes } from './routes/team.js';
 import { mcpRoutes } from './routes/mcp.js';
 
@@ -48,6 +49,7 @@ async function main(): Promise<void> {
         }),
       }),
       ...projectRoutes(store),
+      ...eventRoutes(store),
       ...teamRoutes(store, library),
       ...mcpRoutes(),
     ],

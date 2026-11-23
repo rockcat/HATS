@@ -43,12 +43,18 @@ export interface ProjectStoreOptions {
   activeFile: string;
 }
 
+/** What a runner needs to know to fetch a project again, or to stop. */
+export type ProjectChange =
+  | { type: 'project_changed'; id: string; revision: number }
+  | { type: 'project_removed'; id: string };
+
 export class ProjectStore {
   private readonly store: JsonStore<ProjectDefinition>;
   private readonly projectsRoot: string;
   private readonly activeFile: string;
   private readonly invalid: Array<{ file: string; reason: string }> = [];
   private activeId: string | null = null;
+  private readonly listeners = new Set<(change: ProjectChange) => void>();
 
   constructor(options: ProjectStoreOptions) {
     this.projectsRoot = options.projectsRoot;
@@ -124,6 +130,7 @@ export class ProjectStore {
   async remove(id: string, purge: boolean): Promise<boolean> {
     const removed = await this.store.remove(id);
     if (!removed) return false;
+    this.notify({ type: 'project_removed', id });
     if (purge) await rm(this.projectDir(id), { recursive: true, force: true }).catch(() => {});
     if (this.activeId === id) {
       const [next] = this.listSummaries();
@@ -145,9 +152,23 @@ export class ProjectStore {
     await mkdir(path.join(dir, 'outputs', 'minutes'), { recursive: true });
   }
 
+  /** Be told of every saved or removed project. Returns a function that stops it. */
+  onChange(listener: (change: ProjectChange) => void): () => void {
+    this.listeners.add(listener);
+    return () => { this.listeners.delete(listener); };
+  }
+
+  private notify(change: ProjectChange): void {
+    for (const listener of this.listeners) {
+      try { listener(change); } catch { /* one listener must not stop a save */ }
+    }
+  }
+
   private async persist(project: ProjectDefinition): Promise<ProjectDefinition> {
     const result = validateProject(project);
     if (!result.valid) throw new ValidationError(result.errors);
-    return this.store.put(project);
+    const saved = await this.store.put(project);
+    this.notify({ type: 'project_changed', id: saved.id, revision: saved.revision });
+    return saved;
   }
 }
