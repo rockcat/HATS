@@ -35,7 +35,7 @@ import { AnthropicProvider } from './providers/anthropic.js';
 import { OpenAIProvider, OllamaProvider, LMStudioProvider } from './providers/openai.js';
 import { GeminiProvider } from './providers/gemini.js';
 import { HatType } from '../../packages/core/src/hats/types.js';
-import { initCatalogue } from '../../packages/core/src/mcp/catalogue-store.js';
+import { getCatalogue, initCatalogue } from '../../packages/core/src/mcp/catalogue-store.js';
 import { AgentStore, type AgentDefinitionStore } from './api/agent-store.js';
 import { LibraryAgentStore } from './api/library-agent-store.js';
 import { ScheduledActionStore } from './api/scheduled-action-store.js';
@@ -45,6 +45,7 @@ import { seedMissing } from '../../packages/service-kit/src/seed-data.js';
 import { UserStore } from '../../packages/auth/src/user-store.js';
 import { loadSessions } from '../../packages/auth/src/auth-middleware.js';
 import { ownContainer, sayGoodbye, startHeartbeat } from './runner-heartbeat.js';
+import { buildTeamCard } from './teams/team-card.js';
 import { ensureFirstAdmin } from '../../packages/auth/src/first-admin.js';
 import { AgentLibraryClient } from '../../packages/clients/src/agent-library-client.js';
 import { resolveProjectSource } from './project/project-source.js';
@@ -298,6 +299,14 @@ async function main() {
         managerUrl: RUNNER_MANAGER_URL, port, project: () => api.currentProjectId,
         ...(process.env['HATS_PUBLIC_URL'] && { url: process.env['HATS_PUBLIC_URL'] }),
         ...(ownContainer() && { container: ownContainer() }),
+        // Only a project from the Project Server has a card: it is what
+        // other teams find, and the only place its visit policy is kept.
+        card: () => sync ? buildTeamCard({
+          definition: sync.current,
+          members: api.teamOrchestrator.listAgents(),
+          describeServer: (name) => getCatalogue().find((e) => e.id === name || e.name === name)?.description,
+          ...(process.env['HATS_PUBLIC_URL'] && { dashboard: process.env['HATS_PUBLIC_URL'] }),
+        }) : undefined,
       })
     : null;
 

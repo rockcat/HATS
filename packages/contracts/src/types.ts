@@ -163,6 +163,34 @@ export interface ProjectSettings {
   visits?: VisitPolicy;
 }
 
+/**
+ * A short description of a team, for other teams finding it. Each runner
+ * builds its team's card and sends it with its report-in; the runner manager
+ * keeps the latest. A few hundred tokens at most: tools are named and
+ * described, never given as schemas.
+ */
+export interface TeamCard {
+  /** The project id. */
+  team: string;
+  name: string;
+  /** One or two sentences: the project's summary, or else its goal. */
+  summary: string;
+  tags: string[];
+  members: Array<{ name: string; hats: string[]; specialisation?: string }>;
+  /** The team's shared MCP servers. */
+  tools: Array<{ name: string; description?: string }>;
+  /** The model providers this team can run. */
+  models: string[];
+  /** Whether it hosts visitors at all. */
+  hosting: boolean;
+  /** Whether a visit here waits for one of its admins. */
+  approval: 'auto' | 'admin';
+  /** Who may visit whom. Read by the runner manager to filter; never shown to an agent. */
+  visits: { visitTo: string[]; hostFrom: string[] };
+  /** Its runner's dashboard, when the runner knows a better address than its host and port. */
+  dashboard?: string;
+}
+
 /** The portable description of a project: objective, team and shared tools. */
 export interface ProjectDefinition {
   schemaVersion: typeof SCHEMA_VERSION;

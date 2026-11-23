@@ -13,6 +13,7 @@
 import { existsSync } from 'fs';
 import { hostname } from 'os';
 import { log } from '../../packages/core/src/logger.js';
+import type { TeamCard } from '../../packages/contracts/src/types.js';
 
 export const HEARTBEAT_MS = 30_000;
 
@@ -25,6 +26,8 @@ export interface HeartbeatOptions {
   url?: string;
   /** This runner's container, when it runs in Docker. */
   container?: string;
+  /** This team's card, for other teams finding it, read fresh for every beat. */
+  card?: () => TeamCard | undefined;
   fetchImpl?: typeof fetch;
 }
 
@@ -47,6 +50,7 @@ export function startHeartbeat(o: HeartbeatOptions): () => void {
 
   const beat = async () => {
     try {
+      const card = o.card?.();
       const res = await send(target, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -54,6 +58,7 @@ export function startHeartbeat(o: HeartbeatOptions): () => void {
           project: o.project(), port: o.port,
           ...(o.url && { url: o.url }),
           ...(o.container && { container: o.container }),
+          ...(card && { card }),
         }),
         signal: AbortSignal.timeout(5_000),
       });
