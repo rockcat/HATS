@@ -242,7 +242,7 @@ npm start
 | Embodiment API spec | <http://localhost:3001/api/embodiment/v1/openapi.yaml> |
 
 Create a few agents in the Agent Library, compose a team in the Project Designer,
-click **Set active**, then start the runner.
+start the runner, then click **Open runner** to open the project in it.
 
 To run without the services — the old single-process behaviour — use
 `npm run start:standalone`.

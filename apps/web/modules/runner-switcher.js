@@ -32,6 +32,35 @@ function message(list, text) {
   list.appendChild(div);
 }
 
+/**
+ * The project a link asks for, as in /?open=paige from the Project Designer,
+ * or null. Taken out of the address so a reload does not act on it again.
+ */
+export function takeRequestedProject() {
+  const params = new URLSearchParams(location.search);
+  const wanted = params.get('open')?.trim();
+  if (!wanted) return null;
+  params.delete('open');
+  const query = params.toString();
+  history.replaceState(null, '', `${location.pathname}${query ? `?${query}` : ''}${location.hash}`);
+  return wanted;
+}
+
+/**
+ * Open `project`'s runner, as if it had been chosen from the badge: a running
+ * one opens, one that can be launched is, and otherwise the list stays open
+ * to show why not.
+ */
+export async function openRunnerFor(project, currentId) {
+  if (project.toLowerCase() === (currentId ?? '').toLowerCase()) return;
+  document.getElementById('project-switcher').hidden = false;
+  await loadRunnerList(currentId);
+  const row = [...document.querySelectorAll('.runner-row')]
+    .find((r) => r.dataset.project?.toLowerCase() === project.toLowerCase());
+  if (row?.classList.contains('runner-row--open')) row.click();
+  else row?.querySelector('.runner-launch-btn')?.click();
+}
+
 /** Fill the switcher with every project and its runner. */
 export async function loadRunnerList(currentId) {
   const list = document.getElementById('project-switcher-list');
@@ -57,6 +86,7 @@ function projectRow(project, currentId, canLaunch) {
   const row = document.createElement('div');
   row.className = 'project-switcher-row runner-row';
   row.title = id;
+  row.dataset.project = id;
 
   const label = document.createElement('span');
   label.className = 'runner-row-name';

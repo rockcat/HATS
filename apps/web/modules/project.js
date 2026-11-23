@@ -1,6 +1,6 @@
 // ── Project switcher & goal bar ───────────────────────────────────────────────
 
-import { hasRunnerManager, loadRunnerList } from './runner-switcher.js';
+import { hasRunnerManager, loadRunnerList, openRunnerFor, takeRequestedProject } from './runner-switcher.js';
 
 // Injected at init time to avoid circular deps with sse.js.
 let _applyState            = () => {};
@@ -101,14 +101,23 @@ let runnerMode = false;
 let currentProjectId = null;
 
 export function initProjectBadge() {
+  // A link from the Project Designer's "Open runner" names a project.
+  const requested = takeRequestedProject();
   fetch('/api/project')
     .then(r => r.json())
     .then(async ({ id, dir, locked }) => {
       currentProjectId = id;
       updateProjectBadge(id, dir);
       runnerMode = await hasRunnerManager();
-      if (runnerMode) enterRunnerMode();
-      else if (locked) lockProjectBadge();
+      if (runnerMode) {
+        enterRunnerMode();
+        if (requested) await openRunnerFor(requested, id);
+      } else if (locked) {
+        lockProjectBadge();
+      } else if (requested && requested.toLowerCase() !== String(id).toLowerCase()) {
+        // On its own, a runner opens another project by switching to it.
+        doSwitchProject(requested);
+      }
     })
     .catch(() => {});
 
