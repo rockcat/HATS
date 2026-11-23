@@ -7,6 +7,7 @@ import { openAgentDialog, setProviderCatalogue } from '/agent-dialog.js';
 import {
   enabledIds, loadTeamMcpCatalogue, renderTeamMcp, selected as selectedTeamServers, teamMcpCatalogue,
 } from '/team-mcp.js';
+import { readVisitPolicy, renderVisitPolicy } from '/visit-policy.js';
 
 const library = makeClient('/proxy/library/api/v1');
 const projects = makeClient('/proxy/projects/api/v1');
@@ -30,6 +31,8 @@ const ui = {
   del:           $('#delete-project'),
   openRunner:    $('#open-runner'),
   mcpSection:    $('#mcp-section'),
+  visitsSection: $('#visits-section'),
+  visitPolicy:   $('#visit-policy'),
   teamSection:   $('#team-section'),
   teamList:      $('#team-list'),
   teamEmpty:     $('#team-empty'),
@@ -87,6 +90,8 @@ function renderProject() {
   ui.form.hidden = false;
   ui.teamSection.hidden = false;
   renderTeamMcp(project, () => setDirty(true));
+  ui.visitsSection.hidden = false;
+  renderVisitPolicy(ui.visitPolicy, project, state.projects, () => setDirty(true));
 
   ui.form.elements['name'].value = project.name ?? '';
   ui.form.elements['humanName'].value = project.humanName ?? '';
@@ -183,6 +188,8 @@ async function saveProject() {
       description: form['description'].value.trim(),
       // Catalogue ids; the Project Server expands them into definitions.
       mcpServerIds: selectedTeamServers(),
+      // Settings are replaced whole, so the ones this form does not show go back as they were.
+      settings: readVisitPolicy(ui.visitPolicy, state.current.settings),
       expectedRevision: state.current.revision,
     });
     state.current = updated;
@@ -202,6 +209,7 @@ async function deleteProject() {
     ui.form.hidden = true;
     ui.teamSection.hidden = true;
     ui.mcpSection.hidden = true;
+    ui.visitsSection.hidden = true;
     ui.designEmpty.hidden = false;
     ui.revision.hidden = true;
     ui.designTitle.textContent = 'Select a project';

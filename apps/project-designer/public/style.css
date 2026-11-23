@@ -45,3 +45,17 @@ li.disabled-agent .name { text-decoration: line-through; opacity: 0.6; }
 /* `[hidden]` ties with a class selector and loses to a later author rule, so
    `.mcp-unknown { display: ... }` would quietly defeat it. */
 .mcp-unknown[hidden] { display: none; }
+
+/* ── Working with other teams ─────────────────────────────────────────────── */
+/* The checklists are not one input, so they sit in a div, styled as a field. */
+div.field { margin-bottom: 12px; }
+div.field > span {
+  display: block; font-size: 12px; font-weight: 600;
+  color: var(--text-muted); margin-bottom: 4px;
+}
+.visit-teams {
+  display: flex; flex-direction: column; gap: 4px;
+  max-height: 160px; overflow-y: auto; padding: 6px 8px;
+  border: 1px solid var(--border); border-radius: 6px;
+}
+.visit-team { font-size: 13px; cursor: pointer; }
