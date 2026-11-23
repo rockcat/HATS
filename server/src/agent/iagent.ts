@@ -36,6 +36,8 @@ export interface IAgent {
   // ── Inbox ───────────────────────────────────────────────────────────────────
   receive(message: TeamMessage): void;
   interrupt(message: TeamMessage): void;
+  /** Team news, such as a member joining. Held until the agent's next turn: it never wakes the agent. */
+  notice(text: string): void;
   markHelpReceived(): void;
   markBlocked(): void;
   markTaskComplete(): void;

@@ -1054,6 +1054,19 @@ export class TeamOrchestrator {
     }
   }
 
+  /**
+   * Tell every agent some team news, such as a member joining, and record it.
+   * Unlike a broadcast it wakes nobody: each agent reads it with whatever it
+   * next works on.
+   */
+  async announce(news: string[]): Promise<void> {
+    if (news.length === 0) return;
+    await this.store.append('team_news', { news });
+    for (const agent of this.agents.values()) {
+      for (const item of news) agent.notice(item);
+    }
+  }
+
   humanMeetingInterjection(meetingId: string, content: string): void {
     this.activeMeetingRooms.get(meetingId)?.injectHumanMessage(content);
   }

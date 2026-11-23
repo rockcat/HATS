@@ -383,3 +383,44 @@ describe('tool-search utils', () => {
     expect(registry.has('get_tool')).toBe(true);
   });
 });
+
+describe('team news', () => {
+  const firstUserMessage = (agent: Agent): string =>
+    String(agent.getThreadHistory('general').find((m) => m.role === 'user')?.content ?? '');
+
+  it('is read with the next message, and does not start a turn on its own', async () => {
+    const agent = makeAgent();
+    agent.notice('Bo joined the team (testing, wearing the white hat).');
+    await waitForProcessing();
+    expect(agent.getThreadHistory('general')).toEqual([]);
+    expect(agent.state).toBe(AgentState.Idle);
+
+    agent.receive(makeDirectMessage('What next?'));
+    await waitForProcessing();
+    const sent = firstUserMessage(agent);
+    expect(sent).toContain('Team news since your last turn:\n- Bo joined the team');
+    expect(sent).toContain('What next?');
+  });
+
+  it('is read once', async () => {
+    const agent = makeAgent();
+    agent.notice('Cy left the team.');
+    agent.receive(makeDirectMessage('One.'));
+    await waitForProcessing();
+    agent.receive(makeDirectMessage('Two.'));
+    await waitForProcessing();
+    const users = agent.getThreadHistory('general').filter((m) => m.role === 'user').map((m) => String(m.content));
+    expect(users.filter((c) => c.includes('Cy left the team.'))).toHaveLength(1);
+  });
+
+  it('keeps only the latest items', async () => {
+    const agent = makeAgent();
+    for (let i = 1; i <= 15; i++) agent.notice(`Item ${i}.`);
+    agent.receive(makeDirectMessage('Hi.'));
+    await waitForProcessing();
+    const sent = firstUserMessage(agent);
+    expect(sent).not.toContain('Item 5.');
+    expect(sent).toContain('Item 6.');
+    expect(sent).toContain('Item 15.');
+  });
+});

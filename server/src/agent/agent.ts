@@ -30,6 +30,8 @@ const MAX_STORED_MESSAGES = 500;
 // cluttering — or feeding into — the agent's real conversations.
 export const SCHEDULED_THREAD = 'scheduled';
 const MAX_SCHEDULED_MESSAGES = 200;
+/** Team news an agent holds until its next turn; older items are dropped. */
+const MAX_NOTICES = 10;
 
 export class Agent implements IAgent {
   readonly id: string;
@@ -60,6 +62,7 @@ export class Agent implements IAgent {
   }
   private inbox: TeamMessage[] = [];
   private priorityInbox: TeamMessage[] = [];
+  private notices: string[] = [];
   private processing = false;
   private interruptFlag = false;
   private stopped = false;
@@ -184,6 +187,24 @@ export class Agent implements IAgent {
     this.costIdleUntil = null;
   }
 
+  /**
+   * Team news, read with whatever the agent next works on. It never starts a
+   * turn: telling every agent that someone joined would otherwise be a model
+   * call per agent for news none of them has to act on. Only the latest are
+   * kept, so an agent idle for a long time is not handed a backlog.
+   */
+  notice(text: string): void {
+    this.notices = [...this.notices, text].slice(-MAX_NOTICES);
+  }
+
+  /** The held team news as a preface to the next message, emptying it. */
+  private takeNotices(): string {
+    if (this.notices.length === 0) return '';
+    const preface = `Team news since your last turn:\n${this.notices.map((n) => `- ${n}`).join('\n')}\n\n`;
+    this.notices = [];
+    return preface;
+  }
+
   /** Deliver a message to this agent's inbox and trigger processing. */
   receive(message: TeamMessage): void {
     if (this.stopped) return;
@@ -278,7 +299,9 @@ export class Agent implements IAgent {
         ? 'general'
         : this.activeThreadKey);
 
-    const userContent = formatIncomingMessage(message);
+    // A scheduled run starts with no history, so news would be read once and
+    // lost; it waits for the agent's next ordinary message instead.
+    const userContent = (message.isScheduled ? '' : this.takeNotices()) + formatIncomingMessage(message);
     const mcp = this.mcpTools();
     const registry = buildToolRegistry([...getAllToolsForHat(this.config.hatType), ...mcp.upfront, ...mcp.searchable]);
     // Core tools plus whatever the template put in front of the model. The

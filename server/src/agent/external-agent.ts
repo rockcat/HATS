@@ -90,6 +90,9 @@ export class ExternalAgent implements IAgent {
     this.receive(message);
   }
 
+  /** An external agent keeps its own context elsewhere; team news is not sent to it. */
+  notice(_text: string): void { /* nothing to hold it in */ }
+
   markHelpReceived(): void {
     if (this._state === AgentState.WaitingForHelp) this._state = AgentState.Idle;
   }
