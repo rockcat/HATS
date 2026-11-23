@@ -17,6 +17,8 @@ import { teamRoutes } from './routes/team.js';
 import { mcpRoutes } from './routes/mcp.js';
 import { visitRoutes } from './routes/visits.js';
 import { VisitService } from './visits/visit-service.js';
+import { MoveService } from './visits/move-service.js';
+import { moveRoutes } from './routes/moves.js';
 
 async function main(): Promise<void> {
   const store = new ProjectStore({
@@ -27,6 +29,8 @@ async function main(): Promise<void> {
   await store.load();
   const visits = new VisitService(store, config.visitsDir);
   await visits.load();
+  const moves = new MoveService(store, visits, config.movesDir);
+  await moves.load();
 
   for (const bad of store.invalidRecords) {
     console.warn(`[${config.name}] ignoring invalid project ${bad.file}: ${bad.reason}`);
@@ -56,6 +60,7 @@ async function main(): Promise<void> {
       ...eventRoutes(store),
       // Only runners take part in visits: with the installation's runner token.
       ...visitRoutes(visits, runnerGate(runnerToken())),
+      ...moveRoutes(moves, runnerGate(runnerToken())),
       ...teamRoutes(store, library),
       ...mcpRoutes(),
     ],

@@ -11,6 +11,8 @@ export const config = {
   ),
   /** One JSON file per visit, with its travel packs beside them in packs/. */
   visitsDir: path.resolve(process.env['PROJECT_VISITS_DIR'] ?? runtimeDir('project-server', 'visits')),
+  /** One JSON file per permanent move, with its pack beside it in packs/. */
+  movesDir: path.resolve(process.env['PROJECT_MOVES_DIR'] ?? runtimeDir('project-server', 'moves')),
   /** Where the Team Runner keeps each project's working files — must match the runner. */
   projectsRoot: process.env['PROJECTS_ROOT']
     ? path.resolve(process.env['PROJECTS_ROOT'])
