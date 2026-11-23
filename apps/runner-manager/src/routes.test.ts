@@ -99,3 +99,31 @@ describe('finding a team to visit', () => {
     expect(found.teams).toEqual([]);
   });
 });
+
+describe('the runner token', () => {
+  async function serveWithToken() {
+    const registry = new Registry();
+    const manager = { overview: async () => [], launch: async () => ({}), remove: async () => {} } as unknown as RunnerManager;
+    const { runnerGate } = await import('@hats/service-kit/runner-token');
+    running = await startService({
+      name: 'test', port: 0,
+      routes: runnerRoutes({ manager, registry, auth, canLaunch: () => true, isRunner: runnerGate('s3cret', () => {}) }),
+    });
+    return `http://127.0.0.1:${(running.server.address() as AddressInfo).port}/api/v1`;
+  }
+  const beat = JSON.stringify({ project: 'paige', port: 3002 });
+
+  it('is needed to report in, say goodbye and search for teams', async () => {
+    const base = await serveWithToken();
+    expect((await fetch(`${base}/runners/heartbeat`, { method: 'POST', body: beat })).status).toBe(401);
+    expect((await fetch(`${base}/runners/goodbye`, { method: 'POST', body: beat })).status).toBe(401);
+    expect((await fetch(`${base}/teams?from=paige`)).status).toBe(401);
+  });
+
+  it('lets a runner carrying it in', async () => {
+    const base = await serveWithToken();
+    const headers = { Authorization: 'Bearer s3cret' };
+    expect((await fetch(`${base}/runners/heartbeat`, { method: 'POST', body: beat, headers })).status).toBe(204);
+    expect((await fetch(`${base}/teams?from=paige`, { headers })).status).toBe(200);
+  });
+});

@@ -13,11 +13,13 @@
  *   POST /api/v1/visits/:id/recall           home wants it back   { by?, note? }
  *   GET  /api/v1/visits/:id/pack/:direction  the travel pack, out or back
  *
- * Runners call these: the agent's home runner to ask and leave, the host's
- * runner to approve for an admin and to send the agent back.
+ * Runners call these, with the installation's runner token (HATS_RUNNER_TOKEN):
+ * the agent's home runner to ask and leave, the host's runner to approve for
+ * an admin and to send the agent back.
  */
 
 import { badRequest, fail, get, json, notFound, post, readJsonBody, type RequestContext, type Route } from '@hats/service-kit/index';
+import type { IncomingMessage } from 'http';
 import { VisitRuleError } from '@hats/contracts/visit-record';
 import type { VisitEnd, VisitReason, VisitResult } from '@hats/contracts/types';
 import type { PackDirection, VisitService } from '../visits/visit-service.js';
@@ -36,7 +38,21 @@ async function handled(ctx: RequestContext, status: number, action: () => Promis
 
 const note = async (ctx: RequestContext) => (await readJsonBody<{ note?: string }>(ctx.req))?.note?.trim() || undefined;
 
-export function visitRoutes(visits: VisitService): Route[] {
+/** Only runners may touch a visit: with the installation's runner token, when one is set. */
+export function onlyRunners(routes: Route[], isRunner: (req: IncomingMessage) => boolean): Route[] {
+  return routes.map((route) => ({
+    ...route,
+    handler: (ctx: RequestContext) => (isRunner(ctx.req)
+      ? route.handler(ctx)
+      : fail(ctx.res, 401, 'Only a runner of this installation may do this')),
+  }));
+}
+
+export function visitRoutes(visits: VisitService, isRunner: (req: IncomingMessage) => boolean = () => true): Route[] {
+  return onlyRunners(routesFor(visits), isRunner);
+}
+
+function routesFor(visits: VisitService): Route[] {
   const id = (ctx: RequestContext) => ctx.params['id'] as string;
 
   return [

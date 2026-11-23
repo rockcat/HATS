@@ -90,6 +90,22 @@ if (Test-Path $envFile) {
   Write-Host ".env: written. Add your other keys to $envFile"
 }
 
+# The runner token: what runners show the services to prove they belong here.
+# Made once, for a new .env or one from before it existed, and kept after.
+$text = Get-Content $envFile -Raw
+if ($text -notmatch '(?m)^HATS_RUNNER_TOKEN=\S') {
+  $bytes = New-Object byte[] 24
+  [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+  $runnerToken = ($bytes | ForEach-Object { $_.ToString('x2') }) -join ''
+  if ($text -match '(?m)^HATS_RUNNER_TOKEN=') {
+    $text = $text -replace '(?m)^HATS_RUNNER_TOKEN=.*$', "HATS_RUNNER_TOKEN=$runnerToken"
+  } else {
+    $text = $text.TrimEnd() + "`n`n# What runners show the services to prove they belong to this installation.`nHATS_RUNNER_TOKEN=$runnerToken`n"
+  }
+  [IO.File]::WriteAllText($envFile, $text)
+  Write-Host '.env: runner token made'
+}
+
 # ── Voices ───────────────────────────────────────────────────────────────────
 # Piper voices are named <lang>_<REGION>-<name>-<quality>, which is also
 # their path in the published collection.

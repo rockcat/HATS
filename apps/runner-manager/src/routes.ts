@@ -1,8 +1,8 @@
 // ── The runner manager's API ─────────────────────────────────────────────────
 //
-//   POST   /api/v1/runners/heartbeat   a runner reporting in (no sign-in: it
-//                                      is on the services' network, and the
-//                                      manager's port is not published)
+//   POST   /api/v1/runners/heartbeat   a runner reporting in (with the runner
+//                                      token, HATS_RUNNER_TOKEN, rather than
+//                                      a person's sign-in)
 //   POST   /api/v1/runners/goodbye     a runner stopping: { project }  (likewise)
 //   GET    /api/v1/runners             every project, with its runner
 //   POST   /api/v1/runners             launch one, or start a stopped one again:
@@ -12,9 +12,9 @@
 //   DELETE /api/v1/runners/:project    stop and remove one          admin only
 //   GET    /api/v1/teams?from=&intent=&limit=
 //                                      teams an agent of `from` could visit,
-//                                      best match first (no sign-in, as for
-//                                      report-ins: runners ask on behalf of
-//                                      their agents)
+//                                      best match first (the runner token, as
+//                                      for report-ins: runners ask on behalf
+//                                      of their agents)
 //
 // The dashboard reaches these through its runner's /api/runners, which
 // passes the caller's sign-in along.
@@ -37,9 +37,17 @@ export interface RouteDeps {
   auth: Authenticator | null;
   /** Whether Docker can be reached, so the dashboard knows to offer Launch. */
   canLaunch: () => boolean;
+  /** Whether a request comes from a runner: it carries the installation's runner token. */
+  isRunner?: (req: IncomingMessage) => boolean;
 }
 
 export function runnerRoutes(d: RouteDeps): Route[] {
+  /** False, with a refusal sent, when the caller is not a runner. */
+  const runner = (req: IncomingMessage, res: ServerResponse) => {
+    if (d.isRunner && !d.isRunner(req)) { fail(res, 401, 'Only a runner of this installation may do this'); return false; }
+    return true;
+  };
+
   /** The caller, or null once a refusal has been sent. */
   const caller = async (req: IncomingMessage, res: ServerResponse, admin: boolean) => {
     const session = d.auth ? await d.auth.authenticate(req) : null;
@@ -60,6 +68,7 @@ export function runnerRoutes(d: RouteDeps): Route[] {
 
   return [
     post(`${BASE}/heartbeat`, async ({ req, res }) => {
+      if (!runner(req, res)) return;
       const beat = await readJsonBody<Partial<Heartbeat>>(req);
       if (!beat?.project || !Number.isInteger(beat.port)) { badRequest(res, 'project and port are required'); return; }
       // A runner speaks for its own team only.
@@ -73,7 +82,8 @@ export function runnerRoutes(d: RouteDeps): Route[] {
       noContent(res);
     }),
 
-    get('/api/v1/teams', ({ res, query }) => {
+    get('/api/v1/teams', ({ req, res, query }) => {
+      if (!runner(req, res)) return;
       const from = query.get('from')?.trim();
       if (!from) { badRequest(res, 'from is required: the team asking'); return; }
       const limit = Number(query.get('limit') ?? DEFAULT_LIMIT);
@@ -84,6 +94,7 @@ export function runnerRoutes(d: RouteDeps): Route[] {
     }),
 
     post(`${BASE}/goodbye`, async ({ req, res }) => {
+      if (!runner(req, res)) return;
       const body = await readJsonBody<{ project?: string }>(req);
       if (!body?.project) { badRequest(res, 'project is required'); return; }
       d.registry.goodbye(body.project);

@@ -6,7 +6,7 @@
  * and writes back what the team changes at runtime.
  */
 
-import { metaRoutes, startService } from '@hats/service-kit/index';
+import { metaRoutes, runnerGate, runnerToken, startService } from '@hats/service-kit/index';
 import { initCatalogue } from '@hats/core/mcp/catalogue-store';
 import { AgentLibraryClient } from '@hats/clients/agent-library-client';
 import { activeFilePath, config } from './config.js';
@@ -54,7 +54,8 @@ async function main(): Promise<void> {
       }),
       ...projectRoutes(store),
       ...eventRoutes(store),
-      ...visitRoutes(visits),
+      // Only runners take part in visits: with the installation's runner token.
+      ...visitRoutes(visits, runnerGate(runnerToken())),
       ...teamRoutes(store, library),
       ...mcpRoutes(),
     ],

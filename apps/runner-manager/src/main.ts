@@ -13,7 +13,7 @@
  */
 
 import { existsSync } from 'fs';
-import { metaRoutes, startService } from '@hats/service-kit/index';
+import { metaRoutes, runnerGate, runnerToken, startService } from '@hats/service-kit/index';
 import { runtimeDir } from '@hats/core/runtime-dir';
 import { remoteAuthenticator } from '@hats/auth/authenticator';
 import { Docker } from './docker.js';
@@ -82,6 +82,7 @@ async function main(): Promise<void> {
         registry,
         auth: config.authServiceUrl ? remoteAuthenticator(config.authServiceUrl) : null,
         canLaunch: () => existsSync(config.socket),
+        isRunner: runnerGate(runnerToken()),
       }),
     ],
     banner: [

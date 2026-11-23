@@ -74,6 +74,20 @@ else
   echo ".env: written. Add your other keys to $ENV_FILE"
 fi
 
+# The runner token: what runners show the services to prove they belong here.
+# Made once, for a new .env or one from before it existed, and kept after.
+if ! grep -q '^HATS_RUNNER_TOKEN=.' "$ENV_FILE"; then
+  RUNNER_TOKEN=$(openssl rand -hex 24 2>/dev/null || head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')
+  if grep -q '^HATS_RUNNER_TOKEN=' "$ENV_FILE"; then
+    awk -v t="$RUNNER_TOKEN" '/^HATS_RUNNER_TOKEN=/ { print "HATS_RUNNER_TOKEN=" t; next } { print }' \
+      "$ENV_FILE" > "$ENV_FILE.tmp" && mv "$ENV_FILE.tmp" "$ENV_FILE"
+  else
+    printf '\n# What runners show the services to prove they belong to this installation.\nHATS_RUNNER_TOKEN=%s\n' "$RUNNER_TOKEN" >> "$ENV_FILE"
+  fi
+  chmod 600 "$ENV_FILE"
+  echo '.env: runner token made'
+fi
+
 # ── Voices ───────────────────────────────────────────────────────────────────
 # Piper voices are named <lang>_<REGION>-<name>-<quality>, which is also
 # their path in the published collection.
