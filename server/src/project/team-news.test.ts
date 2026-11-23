@@ -3,7 +3,7 @@ import { createDeployedAgent } from '../../../packages/contracts/src/factories.j
 import type { DeployedAgent } from '../../../packages/contracts/src/types.js';
 import { describeChanges } from './team-news.js';
 
-const none = { leaving: [], arriving: [], returning: [], departing: [] };
+const none = { leaving: [], arriving: [], returning: [], departing: [], movingIn: [] };
 
 const member = (name: string, extra: Partial<DeployedAgent> = {}): DeployedAgent =>
   createDeployedAgent({ instanceId: `id-${name.toLowerCase()}`, name, hats: ['white'], ...extra });

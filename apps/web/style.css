@@ -4844,3 +4844,8 @@ body.has-expanded-panel main > section:not(.panel--expanded) {
 .visit-btn:hover { border-color: var(--border-hover); }
 .visit-error { color: var(--hat-red); font-size: 12px; margin-top: 6px; }
 .visit-error[hidden] { display: none; }
+.visit-move { margin-top: 14px; font-size: 13px; }
+.visit-move > summary { cursor: pointer; color: var(--text-muted); font-size: 12px; }
+.visit-move-row { display: flex; gap: 6px; align-items: center; margin: 8px 0 6px; flex-wrap: wrap; }
+.visit-move select, .visit-move-note { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); border-radius: 4px; padding: 3px 6px; font-size: 12px; }
+.visit-move-note { width: 100%; box-sizing: border-box; }

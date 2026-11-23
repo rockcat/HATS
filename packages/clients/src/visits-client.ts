@@ -1,7 +1,7 @@
 /** Typed client for the Project Server's visits. See docs/team-visits.md in the HATS repository. */
 
 import { HttpClient } from './http-client.js';
-import type { Visit, VisitEnd, VisitReason, VisitResult } from '../../contracts/src/types.js';
+import type { Move, Visit, VisitEnd, VisitReason, VisitResult } from '../../contracts/src/types.js';
 
 const BASE = '/api/v1/visits';
 
@@ -47,6 +47,27 @@ export class VisitsClient {
 
   /** Home wants the agent back; the host sends it. */
   recall(id: string, by: 'recalled' | 'reason-gone', note?: string) { return this.step(id, 'recall', { by, note }); }
+
+  // ── Permanent moves ────────────────────────────────────────────────────────
+
+  /** Move an agent to another team for good, with its pack. Throws with the reason when it may not. */
+  async move(req: { agent: string; from: string; to: string; note?: string; pack: unknown }): Promise<Move> {
+    return (await this.http.post<Move>('/api/v1/moves', req))!;
+  }
+
+  movePack(id: string): Promise<unknown | undefined> {
+    return this.http.get<unknown>(`/api/v1/moves/${encodeURIComponent(id)}/pack`);
+  }
+
+  /** The new team's runner has the agent running. */
+  async moveDone(id: string): Promise<Move> {
+    return (await this.http.post<Move>(`/api/v1/moves/${encodeURIComponent(id)}/done`, {}))!;
+  }
+
+  /** Every project, to choose where an agent goes. */
+  async projects(): Promise<Array<{ id: string; name: string }>> {
+    return (await this.http.get<{ projects: Array<{ id: string; name: string }> }>('/api/v1/projects'))?.projects ?? [];
+  }
 
   /** A travel pack, or undefined when there is none. */
   pack(id: string, direction: 'out' | 'back'): Promise<unknown | undefined> {

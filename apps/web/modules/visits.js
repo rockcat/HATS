@@ -5,6 +5,8 @@
 // recall their own agents and send visitors home. See docs/team-visits.md in
 // the HATS repository.
 
+import { state } from './state.js';
+
 let projectId = null;
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -108,4 +110,62 @@ export async function fetchVisits() {
     pane.innerHTML = '<p class="visits-empty">No visits to or from this team. Agents ask to visit '
       + 'when their work needs another team; the Project Designer says which teams may.</p>';
   }
+  pane.appendChild(moveForm(groups));
+}
+
+/**
+ * Moving an agent to another team for good, for admins. Its conversations
+ * and schedule go with it; its logins stay; its open tickets here go back to
+ * the backlog.
+ */
+function moveForm(groups) {
+  const busy = new Set([...groups.away, ...groups.waiting, ...groups.visiting].map((v) => v.agent.name));
+  const box = document.createElement('details');
+  box.className = 'visit-move';
+  box.innerHTML = `<summary>Move an agent to another team for good</summary>
+    <div class="visit-move-row">
+      <select class="visit-move-agent"></select>
+      <span>to</span>
+      <select class="visit-move-team"><option value="">Loading teams…</option></select>
+    </div>
+    <input class="visit-move-note" placeholder="Why (optional)" maxlength="200">
+    <div class="visit-actions"><button class="visit-btn visit-move-go">Move</button></div>
+    <div class="visit-error" hidden></div>`;
+
+  const agentSelect = box.querySelector('.visit-move-agent');
+  for (const agent of state.agents.filter((a) => !busy.has(a.name))) {
+    agentSelect.appendChild(new Option(agent.name, agent.name));
+  }
+  box.addEventListener('toggle', () => {
+    if (!box.open) return;
+    fetch('/api/moves/targets').then((r) => r.json()).then(({ teams = [] }) => {
+      const teamSelect = box.querySelector('.visit-move-team');
+      teamSelect.innerHTML = '';
+      for (const team of teams) teamSelect.appendChild(new Option(team.name, team.id));
+      if (!teams.length) teamSelect.appendChild(new Option('No other teams', ''));
+    }).catch(() => {});
+  });
+
+  box.querySelector('.visit-move-go').addEventListener('click', async () => {
+    const agent = agentSelect.value;
+    const to = box.querySelector('.visit-move-team').value;
+    const error = box.querySelector('.visit-error');
+    if (!agent || !to) return;
+    if (!confirm(`Move ${agent} to ${to} for good? Their conversations and schedule go with them; `
+      + 'their logins stay here, and their open tickets go back to the backlog.')) return;
+    const res = await fetch('/api/moves', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agent, to, note: box.querySelector('.visit-move-note').value }),
+    }).catch(() => null);
+    if (!res || !res.ok) {
+      const body = res ? await res.json().catch(() => ({})) : {};
+      error.textContent = body.error ?? 'The runner is not answering.';
+      error.hidden = false;
+      return;
+    }
+    error.hidden = true;
+    box.open = false;
+  });
+  return box;
 }

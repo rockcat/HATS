@@ -63,3 +63,16 @@ describe('mergeMemory', () => {
     expect(text(mergeMemory(undefined, bytes('{"b":2}')))).toBe('{"b":2}\n');
   });
 });
+
+describe('the pack for a permanent move', () => {
+  it('carries conversations and schedule, but never logins or avatars', async () => {
+    const { movingPack } = await import('./travel-pack.js');
+    const moved = await openPack(await movingPack(bundle()));
+    expect(moved.threads).toEqual(bundle().threads);
+    expect(moved.scheduledActions).toEqual(bundle().scheduledActions);
+    expect(moved.definition.scheduledActionIds).toEqual(['a1']);
+    expect(moved.definition).not.toHaveProperty('personalMcpCredentials');
+    expect(moved.credentials).toBeUndefined();
+    expect(moved.assets.size).toBe(0);
+  });
+});

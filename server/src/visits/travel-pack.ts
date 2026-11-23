@@ -41,6 +41,16 @@ export function outgoingPack(bundle: AgentBundle): Promise<TravelPack> {
   });
 }
 
+/**
+ * The pack an agent moves to another team with, for good: everything but its
+ * logins, which stay on this machine, and avatars, which the installation
+ * shares. Unlike a visit, its conversations and schedule go with it.
+ */
+export function movingPack(bundle: AgentBundle): Promise<TravelPack> {
+  const { personalMcpCredentials: _logins, ...definition } = bundle.definition;
+  return wrap({ ...bundle, definition, assets: new Map(), credentials: undefined });
+}
+
 /** What a visitor takes home, by the host's rule; undefined when nothing goes. */
 export async function returningPack(bundle: AgentBundle, memoryHome: 'all' | 'summary' | 'none'): Promise<TravelPack | undefined> {
   if (memoryHome !== 'all') return undefined;

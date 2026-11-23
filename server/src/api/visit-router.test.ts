@@ -48,3 +48,29 @@ describe('the dashboard\'s visit routes', () => {
     expect(await call('/api/agents', 'GET').handled).toBe(false);
   });
 });
+
+describe('the dashboard\'s move routes', () => {
+  const moveCall = (admin: boolean, body: unknown) => {
+    const sent: Array<{ status: number; body: unknown }> = [];
+    const visits = { moveOut: vi.fn(async () => ({ id: 'm1', state: 'moving' })), moveTargets: vi.fn(async () => [{ id: 'billing', name: 'Billing' }]) };
+    const handled = handleVisitRoutes({
+      visits: () => visits as unknown as VisitCoordinator,
+      isAdmin: () => admin,
+      json: (_r, status, b) => { sent.push({ status, body: b }); },
+      readBody: async () => JSON.stringify(body),
+    }, '/api/moves', 'POST', {} as IncomingMessage, {} as ServerResponse);
+    return { handled, sent, visits };
+  };
+
+  it('lets only an admin move an agent', async () => {
+    const refused = moveCall(false, { agent: 'Ann', to: 'billing' });
+    await refused.handled;
+    expect(refused.sent[0]?.status).toBe(403);
+    expect(refused.visits.moveOut).not.toHaveBeenCalled();
+
+    const done = moveCall(true, { agent: 'Ann', to: 'billing', note: ' fits better ' });
+    await done.handled;
+    expect(done.visits.moveOut).toHaveBeenCalledWith('Ann', 'billing', 'fits better');
+    expect(done.sent[0]?.status).toBe(201);
+  });
+});

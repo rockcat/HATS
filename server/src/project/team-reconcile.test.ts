@@ -223,3 +223,15 @@ describe('visits', () => {
     expect(orch.registerAgent).not.toHaveBeenCalled();
   });
 });
+
+describe('permanent moves', () => {
+  it('embodies an agent that has moved here from its pack, not as a new member', () => {
+    const changes = diffTeam([member('Ann', { move: 'm1' })], []);
+    expect(changes.movingIn.map((a) => a.name)).toEqual(['Ann']);
+    expect(changes.added).toEqual([]);
+  });
+
+  it('takes an agent that has moved away off the team as an ordinary removal', () => {
+    expect(diffTeam([], [member('Ann')]).removed).toEqual(['Ann']);
+  });
+});

@@ -41,7 +41,8 @@ export function describeChanges(changes: TeamChanges, newGoal?: string): string[
     ...changes.leaving.map((a) => `${a.name} has gone to visit ${a.away?.host ?? 'another team'}, and will be back.`),
     ...changes.returning.map((a) => `${a.name} is back from a visit.`),
     ...changes.arriving.map((a) => `${a.name} is visiting from ${a.home ?? 'another team'}, to help with one piece of work.`),
-    ...changes.departing.map((a) => `${a.name} has gone home to ${a.home ?? 'their team'}.`),
+    ...changes.movingIn.map((a) => `${a.name} has moved to this team for good.`),
+    ...changes.departing.map((a) =>`${a.name} has gone home to ${a.home ?? 'their team'}.`),
     ...changes.changed.flatMap(({ from, to }) => changed(from, to)),
     ...(newGoal ? [`The project goal is now: ${newGoal}`] : []),
   ];

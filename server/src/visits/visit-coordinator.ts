@@ -19,14 +19,14 @@ import { existsSync } from 'fs';
 import { mkdir, readFile, rm, writeFile } from 'fs/promises';
 import * as path from 'path';
 import type { VisitsClient } from '../../../packages/clients/src/visits-client.js';
-import type { DeployedAgent, ProjectChange, ProjectDefinition, Visit, VisitEnd, VisitResult } from '../../../packages/contracts/src/types.js';
+import type { DeployedAgent, Move, ProjectChange, ProjectDefinition, Visit, VisitEnd, VisitResult } from '../../../packages/contracts/src/types.js';
 import { log } from '../../../packages/core/src/logger.js';
 import type { IAgent } from '../agent/iagent.js';
 import type { TeamOrchestrator, VisitTools } from '../orchestrator/orchestrator.js';
 import { packAgent, unpackAgent } from '../agent-transfer/agent-bundle.js';
 import { restoreAgent } from '../agent-transfer/agent-transfer.js';
 import { captureFrom, targetFor, type AgentIo } from '../agent-transfer/agent-io.js';
-import { MEMORY_FILE, mergeMemory, openPack, outgoingPack, returningPack } from './travel-pack.js';
+import { MEMORY_FILE, mergeMemory, movingPack, openPack, outgoingPack, returningPack } from './travel-pack.js';
 
 export interface CoordinatorDeps {
   client: VisitsClient;
@@ -371,6 +371,39 @@ export class VisitCoordinator implements VisitTools {
   /** The team sync: a visitor has gone home. */
   async departing(member: DeployedAgent): Promise<void> {
     if (this.orch.getAgent(member.name)) await this.orch.removeAgent(member.name);
+    this.d.teamChanged?.();
+  }
+
+  // ── Permanent moves ─────────────────────────────────────────────────────────
+
+  /** The teams an agent here could be moved to: every other project. The Project Server says which take it. */
+  async moveTargets(): Promise<Array<{ id: string; name: string }>> {
+    return (await this.d.client.projects()).filter((p) => !same(p.id, this.project));
+  }
+
+  /**
+   * An admin moves an agent to another team for good: its turn ends, and it
+   * goes with everything but its logins. Its open tickets here go back to the
+   * backlog when the team sync takes it off this team.
+   */
+  async moveOut(agentName: string, to: string, note?: string): Promise<Move> {
+    const agent = this.orch.getAgent(agentName);
+    if (!agent) throw new Error(`There is no agent called ${agentName} here.`);
+    if (this.isVisitor(agentName)) throw new Error(`${agent.name} is visiting; its home team decides where it goes.`);
+    await idle(agent, this.d.idleTimeoutMs ?? 60_000);
+    const pack = await movingPack(await captureFrom(this.d.io(), agent, false));
+    return this.d.client.move({ agent: agent.id, from: this.project, to, pack, ...(note && { note }) });
+  }
+
+  /** The team sync: an agent has moved here. Embody it from its pack, and say it has arrived. */
+  async movingIn(member: DeployedAgent): Promise<void> {
+    const id = member.move!;
+    const pack = await this.d.client.movePack(id);
+    if (pack === undefined) throw new Error(`move ${id} has no pack`);
+    const agent = (await restoreAgent(targetFor(this.d.io()), await openPack(pack), { name: member.name, keepId: true }));
+    await this.d.client.moveDone(id);
+    this.orch.getAgent(agent.name)?.notice(`You have moved to ${this.d.definition().name} for good. `
+      + 'Your conversations and schedule came with you; logins to your own accounts did not, and need setting up again here.');
     this.d.teamChanged?.();
   }
 

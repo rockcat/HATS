@@ -31,10 +31,12 @@ export interface TeamChanges {
   returning: DeployedAgent[];
   /** At a host: visitors that have gone home. */
   departing: DeployedAgent[];
+  /** Agents moved to this team for good, to be embodied from their pack. */
+  movingIn: DeployedAgent[];
 }
 
 export const noChanges = (c: TeamChanges): boolean =>
-  [c.added, c.removed, c.changed, c.leaving, c.arriving, c.returning, c.departing].every((l) => l.length === 0);
+  [c.added, c.removed, c.changed, c.leaving, c.arriving, c.returning, c.departing, c.movingIn].every((l) => l.length === 0);
 
 /** The live team as definition members, keeping the template links `previous` holds. */
 export function liveTeam(orchestrator: TeamOrchestrator, previous: DeployedAgent[]): DeployedAgent[] {
@@ -88,7 +90,7 @@ export function changedSections(from: DeployedAgent, to: DeployedAgent): Section
  */
 export function diffTeam(wanted: DeployedAgent[], live: DeployedAgent[], previous: DeployedAgent[] = []): TeamChanges {
   const unmatched = new Map(live.map((a) => [a.instanceId, a]));
-  const changes: TeamChanges = { added: [], removed: [], changed: [], leaving: [], arriving: [], returning: [], departing: [] };
+  const changes: TeamChanges = { added: [], removed: [], changed: [], leaving: [], arriving: [], returning: [], departing: [], movingIn: [] };
   const before = new Map(previous.map((a) => [a.instanceId, a]));
 
   // A member away on a visit is not run here, but it is still on the team.
@@ -96,7 +98,8 @@ export function diffTeam(wanted: DeployedAgent[], live: DeployedAgent[], previou
     const match = unmatched.get(member.instanceId)
       ?? [...unmatched.values()].find((a) => a.name.toLowerCase() === member.name.toLowerCase());
     if (!match) {
-      if (member.visit) changes.arriving.push(member);
+      if (member.move) changes.movingIn.push(member);
+      else if (member.visit) changes.arriving.push(member);
       // As it was before, still marked away: which visit it is back from.
       else if (before.get(member.instanceId)?.away) changes.returning.push(before.get(member.instanceId)!);
       else changes.added.push(member);
@@ -132,6 +135,7 @@ export interface ApplyDeps {
     arriving(member: DeployedAgent): Promise<void>;
     returning(member: DeployedAgent): Promise<void>;
     departing(member: DeployedAgent): Promise<void>;
+    movingIn(member: DeployedAgent): Promise<void>;
   };
 }
 
@@ -180,6 +184,7 @@ async function applyVisitSteps(orch: TeamOrchestrator, definition: ProjectDefini
   };
   await step(changes.arriving, 'could not arrive', (m) => (v ? v.arriving(m) : embody(m)));
   await step(changes.returning, 'could not come back', (m) => (v ? v.returning(m) : embody(m)));
+  await step(changes.movingIn, 'could not move in', (m) => (v ? v.movingIn(m) : embody(m)));
 }
 
 /**
