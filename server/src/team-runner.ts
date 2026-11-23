@@ -49,6 +49,7 @@ import { ensureFirstAdmin } from '../../packages/auth/src/first-admin.js';
 import { AgentLibraryClient } from '../../packages/clients/src/agent-library-client.js';
 import { resolveProjectSource } from './project/project-source.js';
 import { ProjectSync } from './project/project-sync.js';
+import { applyDefinition, noChanges } from './project/team-reconcile.js';
 import { makeProjectLoader, type LoadedProject } from './project/project-loader.js';
 
 // ── Project layout ────────────────────────────────────────────────────────────
@@ -198,15 +199,34 @@ async function main() {
   // sync per open project: it used to stay bound to the startup project and
   // its orchestrator, and after a switch went on writing teams into the
   // wrong definition.
+  //
+  // The other way, edits made in the Project Designer reach the live team:
+  // on opening a project, and every few seconds while it is open.
   let sync: ProjectSync | null = null;
+  // Set once the dashboard is serving. Until then there is nobody to tell.
+  let dashboard: APIServer | null = null;
   const bindSync = async ({ orchestrator: orch, definition, client }: LoadedProject): Promise<void> => {
     const previous = sync;
     sync = null;
     if (previous) { previous.stop(); await previous.flush().catch(() => {}); }
     if (!client || !definition) return;
-    const next = new ProjectSync(client, definition, () => orch);
+    let opened = false;
+    const next = new ProjectSync(client, definition, () => orch, async (def, team) => {
+      const changes = await applyDefinition(orch, def, team, {
+        providerFactory,
+        // While the project is opening, the dashboard still holds the last one.
+        retire: (name) => (opened && dashboard ? dashboard.retireAgent(name) : orch.removeAgent(name)),
+      });
+      if (opened && !noChanges(changes)) dashboard?.teamChanged();
+    });
     sync = next;
+    // The definition owns the team, so edits made while the project was
+    // closed apply before anything is written back. One with no team at all
+    // leaves alone the default team assembled for it.
+    if (definition.team.length > 0) await next.applyNow();
     await next.flush();
+    opened = true;
+    next.start();
     orch.onEvent((ev) => {
       if (['task_complete', 'state_saved', 'agent_disengaged'].includes(ev.type) && sync === next) next.schedule();
     });
@@ -265,6 +285,7 @@ async function main() {
     userStore,
   });
   api.start();
+  dashboard = api;
   if (RUNNER_MANAGER_URL) {
     startHeartbeat({
       managerUrl: RUNNER_MANAGER_URL, port, project: () => api.currentProjectId,

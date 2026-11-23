@@ -923,6 +923,10 @@ export class TeamOrchestrator {
     this.requireAgent(name).config.enabledMcpServers = serverIds;
   }
 
+  updateAgentDisabledPersonalMcp(name: string, serverIds: string[] | undefined): void {
+    this.requireAgent(name).config.disabledPersonalMcpServers = serverIds;
+  }
+
   /** Remove an agent, and its scheduled tasks — left behind, they kept firing for nobody. */
   async removeAgent(name: string): Promise<void> {
     const agent = this.requireAgent(name);

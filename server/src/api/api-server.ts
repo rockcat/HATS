@@ -437,6 +437,12 @@ export class APIServer {
     this.projectSwitchCallback = cb;
   }
 
+  /** Take an agent off the team, as the dashboard's remove does. */
+  retireAgent(name: string): Promise<void> { return this.agentRouter.retireAgent(name); }
+
+  /** Tell the dashboard the team changed underneath it, and save it. */
+  teamChanged(): void { this.agentRouter.teamChanged(); }
+
   async start(): Promise<void> {
     this.speech.start().catch((err: Error) => log.warn('[API] Speech Service probe failed:', err.message));
 
