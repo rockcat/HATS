@@ -61,8 +61,12 @@ export async function openRunnerFor(project, currentId) {
   else row?.querySelector('.runner-launch-btn')?.click();
 }
 
+/** The project this dashboard's runner holds, as the list was last filled for. */
+let currentProjectOfPage = null;
+
 /** Fill the switcher with every project and its runner. */
 export async function loadRunnerList(currentId) {
+  currentProjectOfPage = currentId;
   const list = document.getElementById('project-switcher-list');
   message(list, 'Loading…');
   let data;
@@ -93,30 +97,77 @@ function projectRow(project, currentId, canLaunch) {
   label.textContent = name;
   row.appendChild(label);
 
-  if (id.toLowerCase() === (currentId ?? '').toLowerCase()) {
-    row.classList.add('active');
-    return row;
-  }
+  const isCurrent = id.toLowerCase() === (currentId ?? '').toLowerCase();
+  if (isCurrent) row.classList.add('active');
 
   const status = document.createElement('span');
   status.className = `runner-status runner-status--${runner?.status ?? 'none'}`;
-  status.textContent = runner ? STATUS_LABEL[runner.status] : 'no runner';
+  status.textContent = isCurrent ? 'this runner' : runner ? STATUS_LABEL[runner.status] : 'no runner';
   row.appendChild(status);
+
+  // Docker restarts a runner that exits by itself, so stopping goes through
+  // the runner manager, which can only reach a runner in a container.
+  const canStop = canLaunch && runner?.status === 'running' && Boolean(runner.container);
+  if (canStop) row.appendChild(button('Stop', () => void stopRunner(id, name, isCurrent, status)));
+
+  if (isCurrent) return row;
 
   if (runner?.status === 'running') {
     row.classList.add('runner-row--open');
     row.title = `Open ${name}'s runner on port ${runner.port}`;
     row.addEventListener('click', () => { location.href = runnerUrl(runner); });
-  } else if (canLaunch && (!runner || (runner.managed && runner.status === 'stopped'))) {
-    // A runner that is not answering and was not started from here is left
-    // alone: if it came back, two runners would share one project.
-    const launch = document.createElement('button');
-    launch.className = 'project-switcher-load-btn runner-launch-btn';
-    launch.textContent = 'Launch';
-    launch.addEventListener('click', (e) => { e.stopPropagation(); void launchRunner(id, status, launch); });
+  } else if (canLaunch && (!runner || (runner.status === 'stopped' && (runner.managed || runner.container)))) {
+    // A stopped runner is started again as it was. One that is not answering,
+    // or stopped and out of reach, is left alone: if it came back, two
+    // runners would share one project.
+    const launch = button(runner ? 'Start' : 'Launch', () => void launchRunner(id, status, launch));
     row.appendChild(launch);
   }
   return row;
+}
+
+function button(text, onClick) {
+  const b = document.createElement('button');
+  b.className = 'project-switcher-load-btn runner-launch-btn';
+  b.textContent = text;
+  b.addEventListener('click', (e) => { e.stopPropagation(); onClick(); });
+  return b;
+}
+
+/**
+ * Stop a runner. It lets its agents finish the turn they are in and saves,
+ * which can take half a minute; this one's dashboard then loses its
+ * connection, so the page says what happened.
+ */
+async function stopRunner(project, name, isCurrent, status) {
+  const what = isCurrent ? 'this runner' : `${name}'s runner`;
+  if (!confirm(`Stop ${what}? Its agents finish what they are doing and it saves before it stops.`)) return;
+  status.textContent = 'stopping…';
+  status.className = 'runner-status runner-status--starting';
+  if (isCurrent) showStopping(name);
+
+  const res = await fetch(`/api/runners/${encodeURIComponent(project)}/stop`, { method: 'POST' }).catch(() => null);
+  if (!res || !res.ok) {
+    const body = res ? await res.json().catch(() => ({})) : {};
+    // This runner may have gone before it could answer, which is success.
+    if (isCurrent && !res) return;
+    if (isCurrent) document.getElementById('runner-stopping')?.remove();
+    status.textContent = 'could not stop';
+    status.className = 'runner-status runner-status--stopped';
+    status.title = body.error ?? 'The runner manager is not answering';
+    return;
+  }
+  if (!isCurrent) void loadRunnerList(currentProjectOfPage);
+}
+
+/** Cover this dashboard while its runner stops: it is about to lose its connection. */
+function showStopping(name) {
+  const cover = document.createElement('div');
+  cover.id = 'runner-stopping';
+  cover.className = 'runner-stopping';
+  cover.textContent = `Stopping ${name}'s runner: its agents are finishing what they are doing, then it saves. `
+    + 'Start it again from another runner\'s project list.';
+  document.body.appendChild(cover);
 }
 
 /** Start a runner for `project`, wait for it to answer, then open it. */
