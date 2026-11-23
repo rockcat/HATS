@@ -1,7 +1,9 @@
 # Agents visiting other teams
 
-**Status:** phase 0 is built. Phases 1 and 2 are design; nothing in them is
-built yet except where it says "exists".
+**Status:** phase 0 is built. Of phase 1, the first step is built: `home` on
+agents, the visit policy, tags and summary in the Designer, team cards in
+report-ins, and `discover_teams`. The rest of phase 1, and phase 2, are
+design.
 
 Every agent belongs to a **home team**. When its work needs tools or knowledge
 its home team lacks, it can **visit** another team that has them, do that
@@ -426,9 +428,14 @@ the outgoing pack after the time limit, as in phase 1.
 
 ## Order of work
 
-1. Phase 0: change notices, then team announcements.
+1. Phase 0: change notices, then team announcements. *Built.*
 2. Phase 1: `home` on every agent, team cards in report-ins, the visit policy
    in the Designer, and `discover_teams` (read-only, so safe to ship first).
+   *Built.* `home` is recorded but nothing sets it yet: until visits exist,
+   every agent's home is the project holding it. The runner manager answers
+   `GET /api/v1/teams` without a sign-in, as it does report-ins, until step 4
+   authenticates both. Until then `discover_teams` tells the agent to take
+   what it found to the human.
 3. Phase 1: requirements and the missing-tool messages. Useful on their own,
    since a tool can disappear from a team without any visit.
 4. Phase 1: the visit record, reason and result, travel packs, approval,
