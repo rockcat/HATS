@@ -1,16 +1,30 @@
 # syntax=docker/dockerfile:1
 
-# ─── Stage 1: builder ────────────────────────────────────────────────────────
-FROM node:24-slim AS builder
-WORKDIR /build
-
+# Ordered so an edit to the source reruns only the compile, which takes
+# seconds. Both installs depend on package*.json alone, so they are reused
+# until a dependency changes. (Pruning dev dependencies after the compile
+# instead re-resolved and audited the whole tree on every edit: three of the
+# build's four minutes.)
+#
 # No system packages: the runner has no native addons. The ones that needed
 # Cairo, Mesa, SDL and a compiler belong to packages/avatar-camera, which is
 # not part of this image.
 
-# Install deps first — this layer is cached until package*.json changes
+# ─── Stage 1: production dependencies ────────────────────────────────────────
+FROM node:24-slim AS prod-deps
+WORKDIR /build
 COPY package*.json ./
-RUN npm ci
+# The cache mount keeps npm's downloads between builds.
+RUN --mount=type=cache,target=/root/.npm npm ci --omit=dev --no-audit --no-fund
+
+
+# ─── Stage 2: builder ────────────────────────────────────────────────────────
+FROM node:24-slim AS builder
+WORKDIR /build
+
+# Every dependency, for the compiler.
+COPY package*.json ./
+RUN --mount=type=cache,target=/root/.npm npm ci --no-audit --no-fund
 
 # Source files. packages/ holds the shared contracts and service clients the
 # server imports, so it is part of the compilation unit.
@@ -20,19 +34,19 @@ COPY packages/            ./packages/
 COPY apps/web/            ./apps/web/
 COPY scripts/             ./scripts/
 
-# Compile TypeScript → server/dist/, then drop what only building needed:
-# TypeScript, Vitest, tsx and the type packages. The image runs the compiled
-# code, and built-in MCP servers use it too once server/dist exists.
-RUN npm run build && npm prune --omit=dev
+# Compile TypeScript → server/dist/. The image runs the compiled code, and
+# built-in MCP servers use it too once server/dist exists.
+RUN npm run build
 
 
-# ─── Stage 2: runner ─────────────────────────────────────────────────────────
+# ─── Stage 3: runner ─────────────────────────────────────────────────────────
 FROM node:24-slim AS runner
 WORKDIR /app
 
-# Production dependencies only. three, which the dashboard's browser loads
-# from /nm/, is not one: the runner fetches it from the Agent Template Library.
-COPY --from=builder /build/node_modules ./node_modules
+# Production dependencies only, from their own stage, so this layer is reused
+# until a dependency changes. three, which the dashboard's browser loads from
+# /nm/, is not one: the runner fetches it from the Agent Template Library.
+COPY --from=prod-deps /build/node_modules ./node_modules
 COPY --from=builder /build/server/dist  ./server/dist
 COPY --from=builder /build/scripts      ./scripts
 # tsc emits only .js, but the compiled code finds these assets relative to its
