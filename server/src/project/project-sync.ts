@@ -6,8 +6,10 @@
  * in the runner's local snapshot, so the Designer sees them and the next start
  * reproduces the same team.
  *
- * The Designer changes the definition too. Every few seconds the runner looks
- * for a newer revision and applies it to the live team. When both change at
+ * The Designer changes the definition too. The Project Server announces every
+ * save on its change stream, and the runner fetches the newer revision and
+ * applies it to the live team; it also looks every few seconds while the
+ * stream is down, and every minute while it is up. When both change at
  * once, the Designer's edit is applied first and the runner's write goes on
  * top of it, so neither is lost.
  *
@@ -22,7 +24,10 @@ import { liveTeam } from './team-reconcile.js';
 import { log } from '../../../packages/core/src/logger.js';
 
 const DEBOUNCE_MS = 2_000;
+/** How often to look for the Designer's edits while the change stream is down. */
 export const POLL_MS = 5_000;
+/** How often to look anyway while it is up, in case a notice was missed. */
+export const SLOW_POLL_MS = 60_000;
 
 /** Applies a definition to the live team. `previous` is the team it replaces. */
 export type ApplyDefinition = (definition: ProjectDefinition, previous: DeployedAgent[]) => Promise<void>;
@@ -34,6 +39,9 @@ export class ProjectSync {
   private definition: ProjectDefinition;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private poller: ReturnType<typeof setInterval> | null = null;
+  private watch: { stop(): void } | null = null;
+  private streaming = false;
+  private lastPull = 0;
   private inFlight: Promise<void> = Promise.resolve();
 
   constructor(
@@ -51,10 +59,26 @@ export class ProjectSync {
   get projectId(): string { return this.definition.id; }
   get current(): ProjectDefinition { return this.definition; }
 
-  /** Look for the Designer's edits every few seconds until stopped. */
-  start(pollMs = POLL_MS): void {
+  /**
+   * Follow the Designer's edits until stopped: at once from the Project
+   * Server's change stream, and by looking every `pollMs` while the stream is
+   * down, or every `slowPollMs` while it is up.
+   */
+  start(pollMs = POLL_MS, slowPollMs = SLOW_POLL_MS): void {
     if (this.poller) return;
-    this.poller = setInterval(() => { void this.pull(); }, pollMs);
+    this.watch = this.client.watchProject(this.definition.id, (change) => {
+      if (change.type === 'project_changed' && change.revision !== this.definition.revision) void this.pull();
+      if (change.type === 'project_removed') log.warn(`[ProjectSync] Project "${change.id}" was removed from the Project Server`);
+    }, {
+      onState: (connected) => {
+        this.streaming = connected;
+        // Anything saved while the stream was down was never announced.
+        if (connected) void this.pull();
+      },
+    });
+    this.poller = setInterval(() => {
+      if (!this.streaming || Date.now() - this.lastPull >= slowPollMs) void this.pull();
+    }, pollMs);
     this.poller.unref?.();
   }
 
@@ -74,6 +98,7 @@ export class ProjectSync {
   /** Apply a newer revision from the Project Server, if there is one. */
   async pull(): Promise<void> {
     return this.queue(async () => {
+      this.lastPull = Date.now();
       const latest = await this.client.getProject(this.definition.id).catch(() => undefined);
       if (latest && latest.revision !== this.definition.revision) await this.adopt(latest);
     });
@@ -87,6 +112,9 @@ export class ProjectSync {
   stop(): void {
     if (this.timer) { clearTimeout(this.timer); this.timer = null; }
     if (this.poller) { clearInterval(this.poller); this.poller = null; }
+    this.watch?.stop();
+    this.watch = null;
+    this.streaming = false;
   }
 
   /** One read or write at a time, so a pull never lands in the middle of a write. */

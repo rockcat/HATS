@@ -1,7 +1,8 @@
 /** Typed client for the Project Server API. */
 
 import { HttpClient } from './http-client.js';
-import type { DeployedAgent, ProjectDefinition, ProjectSummary } from '../../contracts/src/types.js';
+import { watchEvents, type Watch, type WatchOptions } from './event-stream.js';
+import type { DeployedAgent, ProjectChange, ProjectDefinition, ProjectSummary } from '../../contracts/src/types.js';
 
 const BASE = '/api/v1';
 
@@ -28,6 +29,18 @@ export class ProjectServerClient {
 
   getProject(id: string): Promise<ProjectDefinition | undefined> {
     return this.http.get<ProjectDefinition>(`${BASE}/projects/${encodeURIComponent(id)}`);
+  }
+
+  /**
+   * Be told the moment project `id` is saved or removed. The stream is kept
+   * open, reconnecting when it drops; `onState` says whether it is open.
+   */
+  watchProject(id: string, onChange: (change: ProjectChange) => void, options: WatchOptions = {}): Watch {
+    const url = `${this.baseUrl.replace(/\/$/, '')}${BASE}/events?project=${encodeURIComponent(id)}`;
+    return watchEvents(url, (event) => {
+      if (event.event !== 'project_changed' && event.event !== 'project_removed') return;
+      try { onChange(JSON.parse(event.data) as ProjectChange); } catch { /* not a change */ }
+    }, options);
   }
 
   async getActive(): Promise<ActiveProjectResponse> {

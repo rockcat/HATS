@@ -154,6 +154,14 @@ export interface ProjectDefinition {
   updatedAt: string;
 }
 
+/**
+ * One event on the Project Server's stream, GET /api/v1/events: a project was
+ * saved, with its new revision, or removed. Enough to fetch it again.
+ */
+export type ProjectChange =
+  | { type: 'project_changed'; id: string; revision: number }
+  | { type: 'project_removed'; id: string };
+
 /** Listing entry returned by the Project Server — the definition without the team. */
 export interface ProjectSummary {
   id: string;

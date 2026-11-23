@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createDeployedAgent } from '../../../packages/contracts/src/factories.js';
-import type { DeployedAgent, ProjectDefinition } from '../../../packages/contracts/src/types.js';
+import type { DeployedAgent, ProjectChange, ProjectDefinition } from '../../../packages/contracts/src/types.js';
 import type { ProjectServerClient } from '../../../packages/clients/src/project-server-client.js';
 import type { TeamOrchestrator } from '../orchestrator/orchestrator.js';
 import { ProjectSync } from './project-sync.js';
@@ -18,11 +18,21 @@ const emptyTeam = {
   getHumanName: () => 'Boss',
 } as unknown as TeamOrchestrator;
 
+type Listener = (change: ProjectChange) => void;
+
+/** A Project Server holding `stored`, whose change stream the test drives. */
 function fakeClient(stored: ProjectDefinition) {
+  const stream: { send?: Listener; connect?: (up: boolean) => void; stopped: boolean } = { stopped: false };
   return {
+    stream,
     getProject: vi.fn(async () => stored),
     replaceProject: vi.fn(async (_id: string, fields: Partial<ProjectDefinition>) =>
       ({ ...stored, ...fields, revision: stored.revision + 1 }) as ProjectDefinition),
+    watchProject: vi.fn((_id: string, onChange: Listener, o: { onState?: (up: boolean) => void }) => {
+      stream.send = onChange;
+      stream.connect = (up) => o.onState?.(up);
+      return { stop: () => { stream.stopped = true; } };
+    }),
   };
 }
 
@@ -74,17 +84,63 @@ describe('ProjectSync', () => {
     expect(written.team).toEqual([off]);
   });
 
-  it('keeps looking until stopped', async () => {
+  it('keeps looking while the change stream is down, until stopped', async () => {
     vi.useFakeTimers();
     try {
       const client = fakeClient(definition(2));
       const { sync } = syncWith(client, definition(2));
-      sync.start(1_000);
+      sync.start(1_000, 60_000);
       await vi.advanceTimersByTimeAsync(3_000);
       expect(client.getProject).toHaveBeenCalledTimes(3);
       sync.stop();
+      expect(client.stream.stopped).toBe(true);
       await vi.advanceTimersByTimeAsync(3_000);
       expect(client.getProject).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('applies a change the moment the stream announces it', async () => {
+    const newer = definition(3, [member('Ann'), member('Bo')]);
+    const client = fakeClient(newer);
+    const { sync, apply } = syncWith(client, definition(2));
+    sync.start(60_000, 60_000);
+
+    client.stream.send!({ type: 'project_changed', id: 'p', revision: 3 });
+    await sync.pull(); // waits behind the pull the notice queued
+
+    expect(apply).toHaveBeenCalledWith(newer, expect.anything());
+    sync.stop();
+  });
+
+  it('ignores a notice of the revision it already has', async () => {
+    const client = fakeClient(definition(2));
+    const { sync } = syncWith(client, definition(2));
+    sync.start(60_000, 60_000);
+    client.stream.send!({ type: 'project_changed', id: 'p', revision: 2 });
+    expect(client.getProject).not.toHaveBeenCalled();
+    sync.stop();
+  });
+
+  it('looks once on connecting, then only every slow interval while connected', async () => {
+    vi.useFakeTimers();
+    try {
+      const client = fakeClient(definition(2));
+      const { sync } = syncWith(client, definition(2));
+      sync.start(1_000, 10_000);
+      client.stream.connect!(true);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(client.getProject).toHaveBeenCalledTimes(1);   // catching up on connecting
+      await vi.advanceTimersByTimeAsync(9_000);
+      expect(client.getProject).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(client.getProject).toHaveBeenCalledTimes(2);
+
+      client.stream.connect!(false);                         // dropped: back to every second
+      await vi.advanceTimersByTimeAsync(3_000);
+      expect(client.getProject).toHaveBeenCalledTimes(5);
+      sync.stop();
     } finally {
       vi.useRealTimers();
     }
