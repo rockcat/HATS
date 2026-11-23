@@ -1,9 +1,9 @@
 # Agents visiting other teams
 
-**Status:** phase 0 is built. Of phase 1, the first step is built: `home` on
-agents, the visit policy, tags and summary in the Designer, team cards in
-report-ins, and `discover_teams`. The rest of phase 1, and phase 2, are
-design.
+**Status:** phase 0 is built. Of phase 1, the first two steps are built:
+`home` on agents, the visit policy, tags and summary in the Designer, team
+cards in report-ins, `discover_teams`, what an agent needs, and the
+missing-tool messages. The rest of phase 1, and phase 2, are design.
 
 Every agent belongs to a **home team**. When its work needs tools or knowledge
 its home team lacks, it can **visit** another team that has them, do that
@@ -437,7 +437,12 @@ the outgoing pack after the time limit, as in phase 1.
    authenticates both. Until then `discover_teams` tells the agent to take
    what it found to the human.
 3. Phase 1: requirements and the missing-tool messages. Useful on their own,
-   since a tool can disappear from a team without any visit.
+   since a tool can disappear from a team without any visit. *Built.* A
+   missing required server is reported to the agent in the turn it is found,
+   once until what is missing changes, and to the dashboard. Preferred
+   servers and a required model provider are recorded but only read once
+   visits exist. Requirements are MCP server ids; built-in tools are always
+   there.
 4. Phase 1: the visit record, reason and result, travel packs, approval,
    recall and the return; then permanent moves for admins; then
    authenticated report-ins.
