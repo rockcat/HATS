@@ -4829,3 +4829,18 @@ body.has-expanded-panel main > section:not(.panel--expanded) {
   padding: 16px; background: rgba(13, 17, 23, 0.92); color: var(--text);
   font-size: 15px; line-height: 1.5;
 }
+
+/* ── Visits: agents working at other teams, and other teams' agents here ── */
+.visits-pane { padding: 8px 10px; overflow-y: auto; }
+.visits-heading { margin: 10px 0 6px; font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.visits-empty { color: var(--text-muted); font-size: 13px; }
+.visit-item { border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; margin-bottom: 8px; background: var(--surface); }
+.visit-head { font-size: 13px; }
+.visit-meta { color: var(--text-muted); font-size: 11px; margin-left: 6px; }
+.visit-reason { font-size: 13px; margin-top: 4px; }
+.visit-expect { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+.visit-actions { display: flex; gap: 6px; margin-top: 8px; }
+.visit-btn { font-size: 12px; padding: 3px 10px; background: var(--surface-2); color: var(--text); border: 1px solid var(--border); border-radius: 4px; cursor: pointer; }
+.visit-btn:hover { border-color: var(--border-hover); }
+.visit-error { color: var(--hat-red); font-size: 12px; margin-top: 6px; }
+.visit-error[hidden] { display: none; }

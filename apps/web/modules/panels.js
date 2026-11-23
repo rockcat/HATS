@@ -5,6 +5,7 @@ import { fetchGlobalAgents } from './library.js';
 import { fetchScheduledActions } from './schedules.js';
 import { appendCLILine } from './cli.js';
 import { micAction } from './mic-action.js';
+import { fetchVisits } from './visits.js';
 
 // ── Main panel tabs ───────────────────────────────────────────────────────────
 
@@ -18,6 +19,7 @@ export function initTabs() {
       if (tab === 'cli')       document.getElementById('cli-input')?.focus();
       if (tab === 'library')   fetchGlobalAgents();
       if (tab === 'schedules') fetchScheduledActions();
+      if (tab === 'visits')    void fetchVisits();
       const mcpEditBtn = document.getElementById('mcp-catalogue-edit-btn');
       if (mcpEditBtn) mcpEditBtn.hidden = (tab !== 'mcp');
     });
