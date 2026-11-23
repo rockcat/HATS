@@ -1,6 +1,7 @@
 # Agents visiting other teams
 
-**Status:** design. Nothing here is built yet except where it says "exists".
+**Status:** phase 0 is built. Phases 1 and 2 are design; nothing in them is
+built yet except where it says "exists".
 
 Every agent belongs to a **home team**. When its work needs tools or knowledge
 its home team lacks, it can **visit** another team that has them, do that
@@ -64,6 +65,11 @@ replaces both with a useful explanation.
 
 ## Phase 0: change notices and announcements
 
+Built: the stream is `apps/project-server/src/routes/events.ts`; the runner
+follows it in `project-sync.ts`; the news is written in `team-news.ts`, held
+by each agent with `notice()`, and shown on the dashboard by
+`apps/web/modules/team-news.js`.
+
 ### Push instead of polling
 
 The Project Server publishes a stream, `GET /api/v1/events` (server-sent
@@ -83,8 +89,11 @@ change emits team events:
 - From phase 1: `member_visiting` and `member_returned` at home, and
   `visitor_arrived` and `visitor_left` at the host, each with the reason.
 
-They are posted to the team's general thread, so the other agents know who is
-here and why, and shown on the dashboard as a notice.
+Each agent holds them and reads them at the start of its next turn, as "Team
+news since your last turn", so the team knows who is here and why without
+anyone being woken: telling every agent at once would cost a model call
+each. They are recorded in the team's event log as `team_news`, and shown on
+the dashboard as a notice.
 
 ---
 
