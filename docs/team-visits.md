@@ -1,9 +1,8 @@
 # Agents visiting other teams
 
-**Status:** phase 0 is built. Of phase 1, the first two steps are built:
-`home` on agents, the visit policy, tags and summary in the Designer, team
-cards in report-ins, `discover_teams`, what an agent needs, and the
-missing-tool messages. The rest of phase 1, and phase 2, are design.
+**Status:** phase 0 is built. Phase 1 is built except permanent moves and
+authenticated report-ins: see the order of work at the end. Phase 2 is
+design.
 
 Every agent belongs to a **home team**. When its work needs tools or knowledge
 its home team lacks, it can **visit** another team that has them, do that
@@ -408,22 +407,31 @@ the outgoing pack after the time limit, as in phase 1.
 
 ## Open questions
 
-1. **Pausing an agent.** Packing needs an agent that finishes its turn and
-   then takes no new work. The runner has cost-idling and disengaging, but no
-   "travelling" state yet.
-2. **The reason changing.** If the home ticket is edited while the agent is
+Settled while building phase 1:
+
+- **Pausing an agent.** No travelling state: the runner waits, up to a
+  minute, until the agent is between turns, then packs it and it leaves. A
+  message that arrives in that moment waits with its place at home.
+- **Helping at the host.** Only its linked ticket. Its first task says to
+  work only on what it came for.
+- **Results.** Text: an outcome, a summary, what remains and why. Posted on
+  the home ticket, and given to the agent as its first task back home.
+- **Scheduled actions.** Suspended at home while the agent is away, and they
+  run when it is back; pruning keeps them.
+
+Still open:
+
+1. **The reason changing.** If the home ticket is edited while the agent is
    away, is the visitor told, and may it change its purpose?
-3. **Outputs.** How large may a result's outputs be, and are they always
+2. **Outputs.** Beyond text: may a result carry files, and are they always
    files on the ticket, or can they be changes to the home team's own tools
    (a database row, a document)?
-4. **Helping at the host.** May a visitor take other host tickets while it
-   is there, or only its own linked one?
-5. **Card freshness.** Cards update with report-ins every 30 seconds. The
+3. **Card freshness.** Cards update with report-ins every 30 seconds. The
    request re-checks `hosting`, and arrival re-checks the policy; is that
    enough?
-6. **Phase 2 cost.** Should a visit across installations always run on the
+4. **Phase 2 cost.** Should a visit across installations always run on the
    host's model keys, or may the home pay with its own?
-7. **Phase 2 key rotation and revocation**: how a peer replaces a key, and
+5. **Phase 2 key rotation and revocation**: how a peer replaces a key, and
    how an installation withdraws trust from one.
 
 ## Order of work
@@ -431,11 +439,8 @@ the outgoing pack after the time limit, as in phase 1.
 1. Phase 0: change notices, then team announcements. *Built.*
 2. Phase 1: `home` on every agent, team cards in report-ins, the visit policy
    in the Designer, and `discover_teams` (read-only, so safe to ship first).
-   *Built.* `home` is recorded but nothing sets it yet: until visits exist,
-   every agent's home is the project holding it. The runner manager answers
-   `GET /api/v1/teams` without a sign-in, as it does report-ins, until step 4
-   authenticates both. Until then `discover_teams` tells the agent to take
-   what it found to the human.
+   *Built.* The runner manager answers `GET /api/v1/teams` without a
+   sign-in, as it does report-ins, until they are authenticated.
 3. Phase 1: requirements and the missing-tool messages. Useful on their own,
    since a tool can disappear from a team without any visit. *Built.* A
    missing required server is reported to the agent in the turn it is found,
@@ -444,6 +449,22 @@ the outgoing pack after the time limit, as in phase 1.
    visits exist. Requirements are MCP server ids; built-in tools are always
    there.
 4. Phase 1: the visit record, reason and result, travel packs, approval,
-   recall and the return; then permanent moves for admins; then
-   authenticated report-ins.
-5. Phase 2.
+   recall and the return. *Built.* The Project Server keeps visits
+   (`apps/project-server/src/visits/`); each runner's
+   `server/src/visits/visit-coordinator.ts` does its side, and the dashboard
+   has a Visits tab. Where it differs from the design above:
+   - Leaving and arriving are one step each, `leave` and `return`; there is
+     no separate `packed` state. A visit is `returning` from when the host
+     lets go until home has the agent running, then `home`.
+   - Home keeps the agent's place as a file on its own runner,
+     `data/visits/<visit>.zip`, logins included. So a home runner that loses
+     its data folder mid-visit cannot restore the agent's conversations.
+   - Memory comes home by the host's `memoryHome`: `all` joins the memory
+     file line by line; `summary` and `none` send nothing but the result.
+   - A visit with no time limit is never taken back for a host that has
+     stopped: home only does that fifteen minutes past a deadline.
+   - Required model providers are not checked yet: the Project Server does
+     not know which providers a host has.
+5. Phase 1, still to build: permanent moves for admins, and authenticated
+   report-ins and team searches.
+6. Phase 2.
