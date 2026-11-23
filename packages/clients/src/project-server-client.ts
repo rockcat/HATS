@@ -6,6 +6,9 @@ import type { DeployedAgent, ProjectChange, ProjectDefinition, ProjectSummary } 
 
 const BASE = '/api/v1';
 
+/** The stream's events a runner acts on; the rest (heartbeats) only keep it open. */
+const CHANGE_EVENTS = new Set<string>(['project_changed', 'project_removed', 'visit_changed']);
+
 export interface ActiveProjectResponse {
   activeProjectId: string | null;
   project: ProjectDefinition | null;
@@ -38,7 +41,7 @@ export class ProjectServerClient {
   watchProject(id: string, onChange: (change: ProjectChange) => void, options: WatchOptions = {}): Watch {
     const url = `${this.baseUrl.replace(/\/$/, '')}${BASE}/events?project=${encodeURIComponent(id)}`;
     return watchEvents(url, (event) => {
-      if (event.event !== 'project_changed' && event.event !== 'project_removed') return;
+      if (!CHANGE_EVENTS.has(event.event)) return;
       try { onChange(JSON.parse(event.data) as ProjectChange); } catch { /* not a change */ }
     }, options);
   }
