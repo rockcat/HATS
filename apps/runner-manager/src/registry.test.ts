@@ -42,3 +42,32 @@ describe('choosing a port for a new runner', () => {
     expect(freePort([3101, 3102], 3101, 3102)).toBeNull();
   });
 });
+
+describe('a runner stopping and starting again', () => {
+  it('shows a runner that said goodbye as stopped at once, and running when it reports in again', () => {
+    const registry = new Registry();
+    registry.heartbeat({ project: 'evan', port: 3001, container: 'abc' });
+    registry.goodbye('Evan');
+    expect(registry.list([])).toMatchObject([{ project: 'evan', status: 'stopped', container: 'abc' }]);
+
+    registry.starting('evan');
+    expect(registry.list([])[0]?.status).toBe('starting');
+
+    registry.heartbeat({ project: 'evan', port: 3001, container: 'abc' });
+    expect(registry.list([])[0]?.status).toBe('running');
+  });
+
+  it('shows its own container as stopped once its runner says goodbye, while Docker still has it running', () => {
+    const registry = new Registry();
+    registry.heartbeat({ project: 'paige', port: 3101 });
+    registry.goodbye('paige');
+    expect(registry.list([{ id: 'c1', project: 'paige', port: 3101, running: true }]))
+      .toMatchObject([{ status: 'stopped', managed: true, container: 'c1' }]);
+  });
+
+  it('ignores a goodbye from a runner it never heard from', () => {
+    const registry = new Registry();
+    registry.goodbye('nobody');
+    expect(registry.list([])).toEqual([]);
+  });
+});

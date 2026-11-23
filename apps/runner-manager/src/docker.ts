@@ -10,7 +10,7 @@
 
 import { request } from 'http';
 import type { ManagedContainer } from './types.js';
-import { LABELS } from './runner-spec.js';
+import { LABELS, STOP_TIMEOUT_S } from './runner-spec.js';
 
 export class DockerError extends Error {
   constructor(readonly status: number, message: string) { super(message); }
@@ -82,6 +82,14 @@ export class Docker {
   }
 
   start(id: string): Promise<void> { return this.call('POST', `/containers/${encodeURIComponent(id)}/start`); }
-  stop(id: string): Promise<void> { return this.call('POST', `/containers/${encodeURIComponent(id)}/stop?t=20`); }
+  /**
+   * Ask the container to stop, killing it after `STOP_TIMEOUT_S`. A runner
+   * spends up to 20 seconds letting turns in progress finish before it saves,
+   * so this must be longer. A container stopped this way stays stopped
+   * whatever its restart policy, until it is started again.
+   */
+  stop(id: string): Promise<void> {
+    return this.call('POST', `/containers/${encodeURIComponent(id)}/stop?t=${STOP_TIMEOUT_S}`);
+  }
   remove(id: string): Promise<void> { return this.call('DELETE', `/containers/${encodeURIComponent(id)}?force=true`); }
 }

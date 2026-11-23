@@ -14,6 +14,8 @@ export interface RunnerInfo {
   status: 'running' | 'starting' | 'stopped' | 'unreachable';
   /** Started by this manager, which can therefore stop and remove it. */
   managed: boolean;
+  /** Its Docker container, when known: started by this manager, or reported by the runner. */
+  container?: string;
   lastSeen?: string;
 }
 
@@ -22,6 +24,8 @@ export interface Heartbeat {
   project: string;
   port: number;
   url?: string;
+  /** Its container's id, when it runs in Docker, so it can be stopped from the dashboard. */
+  container?: string;
 }
 
 /** A runner container this manager started, as Docker lists it. */

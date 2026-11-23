@@ -98,3 +98,54 @@ describe('removing a runner', () => {
     await expect(managerWith(docker).remove('evan')).rejects.toMatchObject({ status: 404 });
   });
 });
+
+describe('stopping a runner', () => {
+  /** A Docker that records which containers it stopped and started. */
+  function recordingDocker(containers: ManagedContainer[] = []) {
+    const docker = fakeDocker(containers);
+    const stopped: string[] = [];
+    const started: string[] = [];
+    return {
+      ...docker, stopped, started,
+      stop: async (id: string) => { stopped.push(id); },
+      start: async (id: string) => { started.push(id); },
+    };
+  }
+
+  it('stops a container it started, and shows it stopped', async () => {
+    const docker = recordingDocker([{ id: 'c1', project: 'paige', port: 3101, running: true }]);
+    const registry = new Registry();
+    registry.heartbeat({ project: 'paige', port: 3101 });
+    await managerWith(docker, registry).stop('Paige');
+    expect(docker.stopped).toEqual(['c1']);
+    expect((await managerWith(docker, registry).runners())[0]?.status).toBe('stopped');
+  });
+
+  it('stops a runner it did not start, by the container the runner reported', async () => {
+    const docker = recordingDocker();
+    const registry = new Registry();
+    registry.heartbeat({ project: 'evan', port: 3001, container: 'hats-1' });
+    await managerWith(docker, registry).stop('evan');
+    expect(docker.stopped).toEqual(['hats-1']);
+  });
+
+  it('refuses a runner whose container it cannot reach, or none at all', async () => {
+    const registry = new Registry();
+    registry.heartbeat({ project: 'evan', port: 3001 });
+    await expect(managerWith(recordingDocker(), registry).stop('evan')).rejects.toMatchObject({ status: 409 });
+    await expect(managerWith(recordingDocker(), registry).stop('nobody')).rejects.toMatchObject({ status: 404 });
+  });
+
+  it('starts a stopped runner it did not start again, rather than making a second one', async () => {
+    const docker = recordingDocker();
+    const registry = new Registry();
+    registry.heartbeat({ project: 'paige', port: 3001, container: 'hats-1' });
+    registry.goodbye('paige');
+
+    const runner = await managerWith(docker, registry).launch('paige');
+
+    expect(docker.started).toEqual(['hats-1']);
+    expect(docker.created).toEqual([]);
+    expect(runner).toMatchObject({ project: 'paige', port: 3001, status: 'starting' });
+  });
+});

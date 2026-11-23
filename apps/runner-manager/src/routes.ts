@@ -3,8 +3,12 @@
 //   POST   /api/v1/runners/heartbeat   a runner reporting in (no sign-in: it
 //                                      is on the services' network, and the
 //                                      manager's port is not published)
+//   POST   /api/v1/runners/goodbye     a runner stopping: { project }  (likewise)
 //   GET    /api/v1/runners             every project, with its runner
-//   POST   /api/v1/runners             launch one: { project }     admin only
+//   POST   /api/v1/runners             launch one, or start a stopped one again:
+//                                      { project }                  admin only
+//   POST   /api/v1/runners/:project/stop
+//                                      stop one, letting it save     admin only
 //   DELETE /api/v1/runners/:project    stop and remove one          admin only
 //
 // The dashboard reaches these through its runner's /api/runners, which
@@ -52,8 +56,27 @@ export function runnerRoutes(d: RouteDeps): Route[] {
     post(`${BASE}/heartbeat`, async ({ req, res }) => {
       const beat = await readJsonBody<Partial<Heartbeat>>(req);
       if (!beat?.project || !Number.isInteger(beat.port)) { badRequest(res, 'project and port are required'); return; }
-      d.registry.heartbeat({ project: beat.project, port: beat.port!, ...(beat.url && { url: beat.url }) });
+      d.registry.heartbeat({
+        project: beat.project, port: beat.port!,
+        ...(beat.url && { url: beat.url }),
+        ...(beat.container && { container: beat.container }),
+      });
       noContent(res);
+    }),
+
+    post(`${BASE}/goodbye`, async ({ req, res }) => {
+      const body = await readJsonBody<{ project?: string }>(req);
+      if (!body?.project) { badRequest(res, 'project is required'); return; }
+      d.registry.goodbye(body.project);
+      noContent(res);
+    }),
+
+    post(`${BASE}/:project/stop`, async ({ req, res, params }) => {
+      if (!(await caller(req, res, true))) return;
+      try {
+        await d.manager.stop(decodeURIComponent(params['project'] as string));
+        noContent(res);
+      } catch (err) { failed(res, err); }
     }),
 
     get(BASE, async ({ req, res }) => {

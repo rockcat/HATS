@@ -61,10 +61,18 @@ export class RunnerManager {
 
     const runners = await this.runners();
     const existing = runners.find((r) => r.project.toLowerCase() === project.toLowerCase());
-    // A stopped runner of this manager's is replaced. Any other would leave
-    // two runners writing one project's state if the first came back.
+    // A stopped runner of this manager's is replaced. A stopped one it did
+    // not start, such as the installed runner, is started again as it was:
+    // a second runner would have two writing one project's state if the
+    // first came back.
     if (existing?.managed && existing.status === 'stopped') {
       await this.remove(project);
+    } else if (existing?.status === 'stopped' && existing.container) {
+      await this.o.docker.start(existing.container);
+      this.o.registry.starting(project);
+      return { ...existing, status: 'starting' };
+    } else if (existing?.status === 'stopped') {
+      throw new LaunchError(409, `${project}'s runner on port ${existing.port} is stopped, and was not started from here. Start it where it was started.`);
     } else if (existing?.status === 'unreachable') {
       throw new LaunchError(409, `${project} has a runner on port ${existing.port} that is not answering. Start that one again instead.`);
     } else if (existing) {
@@ -86,6 +94,22 @@ export class RunnerManager {
     }));
     await this.o.docker.start(id);
     return { project, port, status: 'starting', managed: true };
+  }
+
+  /**
+   * Stop a runner's container: one this manager started, or one that reported
+   * its container. The runner lets turns in progress finish and saves first.
+   * The container stays, stopped, and Launch starts it again.
+   */
+  async stop(project: string): Promise<void> {
+    const runner = (await this.runners()).find((r) => r.project.toLowerCase() === project.toLowerCase());
+    if (!runner) throw new LaunchError(404, `No runner is running ${project}.`);
+    if (!runner.container) {
+      throw new LaunchError(409, `${project}'s runner is not in a container this manager can reach. Stop it where it was started.`);
+    }
+    if (runner.status === 'stopped') return;
+    await this.o.docker.stop(runner.container);
+    this.o.registry.goodbye(project);
   }
 
   /** Stop and remove a runner this manager started. Its data folder stays. */

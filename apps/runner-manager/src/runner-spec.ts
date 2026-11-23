@@ -17,6 +17,12 @@ export const LABELS = {
   port: 'hats.runner.port',
 } as const;
 
+/**
+ * How long Docker waits for a stopping runner before killing it. The runner
+ * spends up to 20 seconds letting turns in progress finish, then saves.
+ */
+export const STOP_TIMEOUT_S = 30;
+
 export interface RunnerSpecInput {
   project: string;
   port: number;
@@ -67,6 +73,8 @@ export function runnerSpec(input: RunnerSpecInput): Record<string, unknown> {
     Env: Object.entries(env).map(([k, v]) => `${k}=${v}`),
     Labels: { [LABELS.managed]: '1', [LABELS.project]: project, [LABELS.port]: String(port) },
     ExposedPorts: { [`${port}/tcp`]: {} },
+    // Also how long `docker stop` and a Docker Desktop stop wait.
+    StopTimeout: STOP_TIMEOUT_S,
     HostConfig: {
       PortBindings: { [`${port}/tcp`]: [{ HostPort: String(port) }] },
       Binds: [
