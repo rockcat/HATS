@@ -15,7 +15,9 @@ import {
   type CreateProjectInput,
 } from '@hats/contracts/factories';
 import { validateProject } from '@hats/contracts/validate';
-import type { ProjectDefinition, ProjectSummary } from '@hats/contracts/types';
+import type { ProjectChange, ProjectDefinition, ProjectSummary } from '@hats/contracts/types';
+
+export type { ProjectChange };
 
 export class RevisionConflictError extends Error {
   readonly expected: number;
@@ -42,11 +44,6 @@ export interface ProjectStoreOptions {
   projectsRoot: string;
   activeFile: string;
 }
-
-/** What a runner needs to know to fetch a project again, or to stop. */
-export type ProjectChange =
-  | { type: 'project_changed'; id: string; revision: number }
-  | { type: 'project_removed'; id: string };
 
 export class ProjectStore {
   private readonly store: JsonStore<ProjectDefinition>;
