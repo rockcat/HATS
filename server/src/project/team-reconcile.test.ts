@@ -180,3 +180,46 @@ describe('applyDefinition', () => {
     expect(orch.updateAgentMaxCostPerHour).toHaveBeenCalledWith('Cy', 1);
   });
 });
+
+describe('visits', () => {
+  it('sets aside a member now away, keeping its place', () => {
+    const changes = diffTeam([member('Ann', { away: { visit: 'v1', host: 'billing' } })], [member('Ann')]);
+    expect(changes.leaving.map((a) => a.name)).toEqual(['Ann']);
+    expect(changes.removed).toEqual([]);
+  });
+
+  it('receives a visitor as arriving, not as a new member', () => {
+    const changes = diffTeam([member('Ann', { home: 'ops', visit: 'v1' })], []);
+    expect(changes.arriving.map((a) => a.name)).toEqual(['Ann']);
+    expect(changes.added).toEqual([]);
+  });
+
+  it('knows a member back from a visit by what it was before', () => {
+    const before = [member('Ann', { away: { visit: 'v1', host: 'billing' } })];
+    const changes = diffTeam([member('Ann')], [], before);
+    expect(changes.returning.map((a) => a.name)).toEqual(['Ann']);
+    expect(changes.added).toEqual([]);
+  });
+
+  it('sees a visitor off as departing, not as removed', () => {
+    const changes = diffTeam([], [member('Ann', { home: 'ops', visit: 'v1' })]);
+    expect(changes.departing.map((a) => a.name)).toEqual(['Ann']);
+    expect(changes.removed).toEqual([]);
+  });
+
+  it('hands each step to the visit coordinator, and never retires an agent going away', async () => {
+    const { orch, asOrchestrator } = fakeTeam([agent('Ann'), agent('Cy')]);
+    const retire = vi.fn();
+    const visits = { leaving: vi.fn(async () => {}), arriving: vi.fn(async () => {}), returning: vi.fn(async () => {}), departing: vi.fn(async () => {}) };
+    await applyDefinition(asOrchestrator, definition([
+      member('Ann', { away: { visit: 'v1', host: 'billing' } }),
+      member('Cy'),
+      member('Di', { home: 'research', visit: 'v2' }),
+    ]), [], { providerFactory, retire, visits });
+
+    expect(visits.leaving).toHaveBeenCalledWith(expect.objectContaining({ name: 'Ann' }));
+    expect(visits.arriving).toHaveBeenCalledWith(expect.objectContaining({ name: 'Di' }));
+    expect(retire).not.toHaveBeenCalled();
+    expect(orch.registerAgent).not.toHaveBeenCalled();
+  });
+});

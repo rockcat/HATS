@@ -23,10 +23,18 @@ export interface TeamChanges {
   removed: string[];
   /** Live agents whose definition differs, by their live name. */
   changed: { from: DeployedAgent; to: DeployedAgent }[];
+  /** At home: live agents now away on a visit. Their place is kept. */
+  leaving: DeployedAgent[];
+  /** At a host: visitors that have just arrived, to be embodied from their travel pack. */
+  arriving: DeployedAgent[];
+  /** At home: members back from a visit, to be restored from the place kept for them. */
+  returning: DeployedAgent[];
+  /** At a host: visitors that have gone home. */
+  departing: DeployedAgent[];
 }
 
 export const noChanges = (c: TeamChanges): boolean =>
-  c.added.length === 0 && c.removed.length === 0 && c.changed.length === 0;
+  [c.added, c.removed, c.changed, c.leaving, c.arriving, c.returning, c.departing].every((l) => l.length === 0);
 
 /** The live team as definition members, keeping the template links `previous` holds. */
 export function liveTeam(orchestrator: TeamOrchestrator, previous: DeployedAgent[]): DeployedAgent[] {
@@ -78,18 +86,32 @@ export function changedSections(from: DeployedAgent, to: DeployedAgent): Section
  * id, then by name: the team assumes names are unique, and a member that
  * arrived under a second id is still the same agent.
  */
-export function diffTeam(wanted: DeployedAgent[], live: DeployedAgent[]): TeamChanges {
+export function diffTeam(wanted: DeployedAgent[], live: DeployedAgent[], previous: DeployedAgent[] = []): TeamChanges {
   const unmatched = new Map(live.map((a) => [a.instanceId, a]));
-  const changes: TeamChanges = { added: [], removed: [], changed: [] };
+  const changes: TeamChanges = { added: [], removed: [], changed: [], leaving: [], arriving: [], returning: [], departing: [] };
+  const before = new Map(previous.map((a) => [a.instanceId, a]));
 
-  for (const member of wanted.filter((a) => a.enabled !== false)) {
+  // A member away on a visit is not run here, but it is still on the team.
+  for (const member of wanted.filter((a) => a.enabled !== false && !a.away)) {
     const match = unmatched.get(member.instanceId)
       ?? [...unmatched.values()].find((a) => a.name.toLowerCase() === member.name.toLowerCase());
-    if (!match) { changes.added.push(member); continue; }
+    if (!match) {
+      if (member.visit) changes.arriving.push(member);
+      else if (before.get(member.instanceId)?.away) changes.returning.push(member);
+      else changes.added.push(member);
+      continue;
+    }
     unmatched.delete(match.instanceId);
     if (changedSections(match, member).length > 0) changes.changed.push({ from: match, to: member });
   }
-  changes.removed = [...unmatched.values()].map((a) => a.name);
+
+  const awayNow = new Map(wanted.filter((a) => a.away).map((a) => [a.instanceId, a]));
+  for (const gone of unmatched.values()) {
+    const away = awayNow.get(gone.instanceId);
+    if (away) changes.leaving.push(away);
+    else if (gone.visit ?? before.get(gone.instanceId)?.visit) changes.departing.push(gone);
+    else changes.removed.push(gone.name);
+  }
   return changes;
 }
 
@@ -99,6 +121,17 @@ export interface ApplyDeps {
   retire: (name: string) => Promise<void>;
   /** Told what changed, as news for the team. */
   announce?: (news: string[]) => void | Promise<void>;
+  /**
+   * The visit steps, done by the runner's visit coordinator. Without one, an
+   * agent leaving is set aside, and one arriving or returning is embodied
+   * from its definition alone.
+   */
+  visits?: {
+    leaving(member: DeployedAgent): Promise<void>;
+    arriving(member: DeployedAgent): Promise<void>;
+    returning(member: DeployedAgent): Promise<void>;
+    departing(member: DeployedAgent): Promise<void>;
+  };
 }
 
 /** Apply one member's edits to its live agent. */
@@ -129,6 +162,25 @@ async function updateAgent(orch: TeamOrchestrator, from: DeployedAgent, to: Depl
   if (sections.includes('needs')) orch.updateAgentNeeds(name, to.needs);
 }
 
+/** Agents leaving on a visit, arriving on one, coming back, or going home: each a step of its own. */
+async function applyVisitSteps(orch: TeamOrchestrator, definition: ProjectDefinition, changes: TeamChanges, deps: ApplyDeps): Promise<void> {
+  const step = async (members: DeployedAgent[], what: string, run: (m: DeployedAgent) => Promise<void>) => {
+    for (const member of members) {
+      await run(member).catch((err: Error) => log.warn(`[ProjectSync] ${member.name} ${what}: ${err.message}`));
+    }
+  };
+  const v = deps.visits;
+  await step(changes.leaving, 'could not leave', (m) => (v ? v.leaving(m) : Promise.resolve(orch.setAside(m.name))));
+  await step(changes.departing, 'could not go home', (m) => (v ? v.departing(m) : orch.removeAgent(m.name)));
+  const embody = (m: DeployedAgent) => {
+    orch.welcomeBack(m.name);
+    assembleFromDefinition(orch, { ...definition, team: [m] }, deps.providerFactory);
+    return Promise.resolve();
+  };
+  await step(changes.arriving, 'could not arrive', (m) => (v ? v.arriving(m) : embody(m)));
+  await step(changes.returning, 'could not come back', (m) => (v ? v.returning(m) : embody(m)));
+}
+
 /**
  * Bring the live team into line with `definition`, and its goal and human
  * name. One member failing to apply is logged and the rest carry on.
@@ -140,7 +192,7 @@ export async function applyDefinition(
   previous: DeployedAgent[],
   deps: ApplyDeps,
 ): Promise<TeamChanges> {
-  const changes = diffTeam(definition.team, liveTeam(orch, previous));
+  const changes = diffTeam(definition.team, liveTeam(orch, previous), previous);
   // Read before anything is applied: embodying new members sets the goal too.
   const newGoal = definition.goal && definition.goal !== (orch.getProjectGoal() ?? '') ? definition.goal : undefined;
 
@@ -154,6 +206,7 @@ export async function applyDefinition(
   if (changes.added.length > 0) {
     assembleFromDefinition(orch, { ...definition, team: changes.added }, deps.providerFactory);
   }
+  await applyVisitSteps(orch, definition, changes, deps);
   if (newGoal) orch.setProjectGoal(newGoal);
   if (definition.humanName && definition.humanName !== orch.getHumanName()) orch.setHumanName(definition.humanName);
 

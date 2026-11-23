@@ -133,8 +133,12 @@ export class ProjectSync {
   private nextFields() {
     const orch = this.getOrchestrator();
     return {
-      // Members disabled in the Designer are not running, but stay on the team.
-      team: [...liveTeam(orch, this.definition.team), ...this.definition.team.filter((a) => a.enabled === false)],
+      // Members disabled in the Designer, or away on a visit, are not running
+      // here, but stay on the team.
+      team: [
+        ...liveTeam(orch, this.definition.team),
+        ...this.definition.team.filter((a) => a.enabled === false || a.away),
+      ],
       goal: orch.getProjectGoal() ?? '',
       humanName: orch.getHumanName(),
     };

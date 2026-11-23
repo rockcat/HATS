@@ -3,12 +3,14 @@ import { createDeployedAgent } from '../../../packages/contracts/src/factories.j
 import type { DeployedAgent } from '../../../packages/contracts/src/types.js';
 import { describeChanges } from './team-news.js';
 
+const none = { leaving: [], arriving: [], returning: [], departing: [] };
+
 const member = (name: string, extra: Partial<DeployedAgent> = {}): DeployedAgent =>
   createDeployedAgent({ instanceId: `id-${name.toLowerCase()}`, name, hats: ['white'], ...extra });
 
 describe('describeChanges', () => {
   it('says who joined, with what they do, and who left', () => {
-    const news = describeChanges({
+    const news = describeChanges({ ...none,
       added: [member('Bo', { hats: ['white', 'red'], identity: { specialisation: 'testing' } }), member('Di')],
       removed: ['Cy'],
       changed: [],
@@ -28,7 +30,7 @@ describe('describeChanges', () => {
       identity: { specialisation: 'research' },
       model: { provider: 'openai', model: 'gpt-x' },
     });
-    expect(describeChanges({ added: [], removed: [], changed: [{ from, to }] })).toEqual([
+    expect(describeChanges({ ...none, added: [], removed: [], changed: [{ from, to }] })).toEqual([
       'Ann is now called Annie.',
       'Annie now specialises in research.',
       'Annie now wears the black hat.',
@@ -39,11 +41,11 @@ describe('describeChanges', () => {
   it('leaves out changes no teammate needs, such as an avatar or cost limits', () => {
     const from = member('Ann');
     const to = member('Ann', { identity: { avatar: 'max.glb' }, limits: { maxCostPerHour: 3 } });
-    expect(describeChanges({ added: [], removed: [], changed: [{ from, to }] })).toEqual([]);
+    expect(describeChanges({ ...none, added: [], removed: [], changed: [{ from, to }] })).toEqual([]);
   });
 
   it('announces a new goal', () => {
-    expect(describeChanges({ added: [], removed: [], changed: [] }, 'Ship the beta'))
+    expect(describeChanges({ ...none, added: [], removed: [], changed: [] }, 'Ship the beta'))
       .toEqual(['The project goal is now: Ship the beta']);
   });
 });
