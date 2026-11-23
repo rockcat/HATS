@@ -628,6 +628,11 @@ export class APIServer {
 
   private handleOrchestratorEvent(ev: StoredEvent): void {
     if (ev.type === 'agent_response') this.scheduleAutosave();
+    if (ev.type === 'needs_unmet') {
+      const { agent, missing } = ev as unknown as { agent: string; missing: string[] };
+      this.teamNews([`${agent} needs ${missing.join(', ')}, which this team does not have working. `
+        + 'Add it to the team in the Project Designer, or check why it did not start.']);
+    }
     handleOrchestratorEvent(ev, {
       agentActivity:        this.agentActivity,
       talkingTimers:        this.talkingTimers,

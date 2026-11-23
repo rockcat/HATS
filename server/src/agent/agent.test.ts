@@ -424,3 +424,19 @@ describe('team news', () => {
     expect(sent).toContain('Item 15.');
   });
 });
+
+describe('team news found while working out tools', () => {
+  it('reaches the agent in the same turn', async () => {
+    const agent = makeAgent();
+    // As the orchestrator does when a tool the agent needs is missing.
+    agent.setExtraToolsProvider(() => {
+      agent.notice('You need postgres, which is not available to you on this team right now.');
+      return { upfront: [], searchable: [] };
+    });
+    agent.receive(makeDirectMessage('How many customers?'));
+    await waitForProcessing();
+    const first = String(agent.getThreadHistory('general').find((m) => m.role === 'user')?.content ?? '');
+    expect(first).toContain('You need postgres');
+    expect(first).toContain('How many customers?');
+  });
+});

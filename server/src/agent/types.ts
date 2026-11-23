@@ -100,6 +100,8 @@ export interface AgentConfig {
   maxContextTokens?: number;
   /** If set, agent idles until the next hour when hourly spend exceeds this value (USD). */
   maxCostPerHour?: number;
+  /** What the agent depends on: a missing required tool is reported to it and the dashboard. */
+  needs?: import('../../../packages/contracts/src/types.js').AgentNeeds;
   /** Free text added to this agent's system prompt. */
   instructions?: string;
   /** 'condensed' gives the agent the cut-down prompt meant for small local models. */

@@ -42,6 +42,7 @@ export interface AgentDefinition {
   scheduledActionIds: string[];
   maxContextTokens?: number;
   maxCostPerHour?: number;
+  needs?: import('../../../packages/contracts/src/types.js').AgentNeeds;
   /** Free text added to the agent's system prompt. */
   instructions?: string;
   promptMode?: PromptMode;

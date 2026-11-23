@@ -64,6 +64,7 @@ const SECTIONS = {
     disabledPersonalMcpServers: a.tools?.disabledPersonalMcpServers,
     upfrontTools: a.tools?.upfrontTools,
   }),
+  needs:    (a: DeployedAgent) => a.needs,
 };
 type Section = keyof typeof SECTIONS;
 
@@ -125,6 +126,7 @@ async function updateAgent(orch: TeamOrchestrator, from: DeployedAgent, to: Depl
     orch.updateAgentDisabledPersonalMcp(name, to.tools?.disabledPersonalMcpServers);
     orch.updateAgentUpfrontTools(name, to.tools?.upfrontTools);
   }
+  if (sections.includes('needs')) orch.updateAgentNeeds(name, to.needs);
 }
 
 /**

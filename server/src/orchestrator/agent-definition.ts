@@ -61,6 +61,7 @@ export function definitionOf(
     // next time it was built — a project switch, a restore — it had none.
     maxContextTokens:           c.maxContextTokens,
     maxCostPerHour:             c.maxCostPerHour,
+    needs:                      c.needs,
     instructions:               c.instructions,
     promptMode:                 c.promptMode,
     externalEndpoint:           c.externalEndpoint,
@@ -87,6 +88,7 @@ export function configFrom(
     upfrontTools:               def.upfrontTools,
     maxContextTokens:           def.maxContextTokens,
     maxCostPerHour:             def.maxCostPerHour,
+    needs:                      def.needs,
     instructions:               def.instructions,
     promptMode:                 def.promptMode,
     externalEndpoint:           def.externalEndpoint,

@@ -64,6 +64,7 @@ import * as sm from './scheduled-meetings.js';
 import { drainAgents } from './drain.js';
 import { DISCOVER_TEAMS, TEAMS_TOOL_NAMES } from '../../../packages/core/src/tools/teams.js';
 import { formatTeams, type TeamDirectory } from '../teams/team-directory.js';
+import { needsNotice, serversIn, unmetNeeds } from '../teams/tool-needs.js';
 
 export type ProviderFactory = (providerName: string) => AIProvider;
 
@@ -835,6 +836,7 @@ export class TeamOrchestrator {
               + ' They will never be sent to the model.');
           }
         }
+        this.checkNeeds(agent, [...personal, ...shared, ...(always ?? [])].map((t) => t.name));
         return splitToolSet(available, agent.config.upfrontTools);
       });
       agent.setLLMSemaphore(this.llmSemaphore);
@@ -960,6 +962,33 @@ export class TeamOrchestrator {
 
   updateAgentDisabledPersonalMcp(name: string, serverIds: string[] | undefined): void {
     this.requireAgent(name).config.disabledPersonalMcpServers = serverIds;
+  }
+
+  updateAgentNeeds(name: string, needs: AgentConfig['needs']): void {
+    this.requireAgent(name).config.needs = needs;
+  }
+
+  /** The required servers each agent was last told were missing, so it is told once, not every turn. */
+  private readonly toldMissing = new Map<string, string>();
+
+  /**
+   * Tell an agent, and the dashboard, when servers it cannot work without are
+   * not among the tools it has. Again only when what is missing changes.
+   */
+  private checkNeeds(agent: IAgent, toolNames: string[]): void {
+    const reachable = serversIn(toolNames);
+    for (const name of this.mcp.serverNames()) reachable.add(name.toLowerCase());
+    for (const name of this.personalMcpByAgent.get(agent.name.toLowerCase())?.serverNames() ?? []) {
+      reachable.add(name.toLowerCase());
+    }
+    const { required } = unmetNeeds(agent.config.needs, reachable);
+    const key = required.join(',');
+    if ((this.toldMissing.get(agent.id) ?? '') === key) return;
+    this.toldMissing.set(agent.id, key);
+    if (required.length === 0) return;
+    agent.notice(needsNotice(required, this.isTeamsTool(DISCOVER_TEAMS.name)));
+    log.warn(`[Team] ${agent.name} needs ${required.join(', ')}, which ${required.length === 1 ? 'is' : 'are'} not available`);
+    void this.store.append('needs_unmet', { agent: agent.name, missing: required });
   }
 
   /** Remove an agent, and its scheduled tasks — left behind, they kept firing for nobody. */

@@ -12,6 +12,8 @@ import { MeetingStore } from './meeting-store.js';
 import { buildMessage } from './orchestrator-utils.js';
 import { EmailAllowlistStore } from '../api/email-allowlist-store.js';
 import { repeatFromRequest, type Repeat } from '../api/agenda-store.js';
+import { missingToolMessage } from '../teams/tool-needs.js';
+import { DISCOVER_TEAMS } from '../../../packages/core/src/tools/teams.js';
 
 // Brave search: max 1 request/second — serialise behind a queued delay chain
 let _braveQueue = Promise.resolve();
@@ -581,6 +583,6 @@ export async function executeToolCall(ctx: ToolCallContext, agentName: string, c
     }
 
     default:
-      return `Unknown tool: ${call.name}`;
+      return missingToolMessage(call.name, Boolean(ctx.isTeamsTool?.(DISCOVER_TEAMS.name)));
   }
 }

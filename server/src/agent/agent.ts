@@ -299,10 +299,12 @@ export class Agent implements IAgent {
         ? 'general'
         : this.activeThreadKey);
 
+    // The tools first: working them out can add news, such as a tool this
+    // agent needs having gone, which belongs in this turn rather than the next.
+    const mcp = this.mcpTools();
     // A scheduled run starts with no history, so news would be read once and
     // lost; it waits for the agent's next ordinary message instead.
     const userContent = (message.isScheduled ? '' : this.takeNotices()) + formatIncomingMessage(message);
-    const mcp = this.mcpTools();
     const registry = buildToolRegistry([...getAllToolsForHat(this.config.hatType), ...mcp.upfront, ...mcp.searchable]);
     // Core tools plus whatever the template put in front of the model. The
     // rest is in the registry, reachable through search_tools.

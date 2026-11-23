@@ -95,6 +95,7 @@ export function toDeployedAgent(agent: IAgent, existing?: DeployedAgent): Deploy
       disabledPersonalMcpServers: agent.config.disabledPersonalMcpServers,
       upfrontTools: agent.config.upfrontTools,
     }),
+    ...(agent.config.needs && { needs: agent.config.needs }),
     enabled: true,
     ...(existing?.deployedAt && { deployedAt: existing.deployedAt }),
   });
@@ -137,5 +138,6 @@ export function toAgentConfig(
     personalMcpCredentials: secrets.personalMcpCredentials,
     maxContextTokens: deployed.limits?.maxContextTokens,
     maxCostPerHour: deployed.limits?.maxCostPerHour,
+    needs: deployed.needs,
   }) as AgentConfig;
 }

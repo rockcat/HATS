@@ -44,6 +44,7 @@ function fakeTeam(agents: IAgent[]) {
     updateAgentMcpServers: vi.fn(),
     updateAgentDisabledPersonalMcp: vi.fn(),
     updateAgentUpfrontTools: vi.fn(),
+    updateAgentNeeds: vi.fn(),
     getProjectGoal: vi.fn(() => 'old goal'),
     setProjectGoal: vi.fn(),
     getHumanName: vi.fn(() => 'Boss'),
@@ -119,6 +120,16 @@ describe('applyDefinition', () => {
     expect(team.map((a) => a.name).sort()).toEqual(['Annie', 'Bo']);
     expect(orch.setProjectGoal).toHaveBeenCalledWith('new goal');
     expect(changes.added.map((a) => a.name)).toEqual(['Bo']);
+  });
+
+  it('applies a change to what a member needs, without telling the team', async () => {
+    const { orch, asOrchestrator } = fakeTeam([agent('Ann')]);
+    const announce = vi.fn();
+    const needs = { tools: { required: ['postgres'] } };
+    await applyDefinition(asOrchestrator, definition([member('Ann', { needs })]), [],
+      { providerFactory, retire: vi.fn(), announce });
+    expect(orch.updateAgentNeeds).toHaveBeenCalledWith('Ann', needs);
+    expect(announce).not.toHaveBeenCalled();
   });
 
   it('announces what changed to the team', async () => {
