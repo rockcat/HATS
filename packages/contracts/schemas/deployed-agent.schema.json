@@ -50,6 +50,21 @@
       "$ref": "common.schema.json#/$defs/slug",
       "description": "The project this agent belongs to. Absent means the project holding it; it differs only while the agent visits another team."
     },
+    "away": {
+      "type": "object",
+      "description": "At home, while the agent visits another team: its place is kept, and it is not run here.",
+      "properties": {
+        "visit": { "type": "string", "minLength": 1 },
+        "host": { "$ref": "common.schema.json#/$defs/slug" }
+      },
+      "required": ["visit", "host"],
+      "additionalProperties": false
+    },
+    "visit": {
+      "type": "string",
+      "minLength": 1,
+      "description": "At a host team: the visit this agent is here on. Its home names where it belongs."
+    },
     "needs": {
       "type": "object",
       "description": "What this agent depends on. A missing required tool is reported to the agent and the dashboard, and refuses a visit to a team without it.",

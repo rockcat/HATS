@@ -135,6 +135,10 @@ export interface DeployedAgent {
    */
   home?: string;
   needs?: AgentNeeds;
+  /** At home, while the agent visits another team: its place is kept, and it is not run here. */
+  away?: { visit: string; host: string };
+  /** At a host team: the visit this agent is here on. Its `home` names where it belongs. */
+  visit?: string;
   teamContext?: string;
   deployedAt: string;
 }
@@ -221,11 +225,70 @@ export interface ProjectDefinition {
 
 /**
  * One event on the Project Server's stream, GET /api/v1/events: a project was
- * saved, with its new revision, or removed. Enough to fetch it again.
+ * saved, with its new revision, or removed; or a visit between two projects
+ * moved on. Enough to fetch it again.
  */
 export type ProjectChange =
   | { type: 'project_changed'; id: string; revision: number }
-  | { type: 'project_removed'; id: string };
+  | { type: 'project_removed'; id: string }
+  | { type: 'visit_changed'; id: string; home: string; host: string; state: VisitState };
+
+// ── Visits ───────────────────────────────────────────────────────────────────
+// An agent visiting another team to do a piece of its home team's work. See
+// docs/team-visits.md in the HATS repository.
+
+/**
+ *   requested ─► approved ─► visiting ─► returning ─► home
+ *        │           │
+ *        └───────────┴──► cancelled, or refused by the host
+ *
+ * visiting:  the agent has left home, which keeps its place, and is at the host
+ * returning: it has left the host with its result, and home has not yet taken it back
+ */
+export type VisitState = 'requested' | 'approved' | 'visiting' | 'returning' | 'home' | 'cancelled' | 'refused';
+
+/** Why a visit ended, when it was not the agent finishing. */
+export type VisitEnd = 'finished' | 'recalled' | 'ended-by-host' | 'time' | 'reason-gone' | 'host-stopped';
+
+/** The home team's work a visit serves. */
+export interface VisitReason {
+  /** The home-team ticket the visit is for. */
+  ticket: string;
+  /** What the agent will do there. */
+  purpose: string;
+  /** What it will bring back. */
+  expectedResult: string;
+}
+
+/** What a visit produced, delivered to its home ticket. */
+export interface VisitResult {
+  outcome: 'done' | 'partial' | 'failed';
+  summary: string;
+  /** What is still to do, when it is not done. */
+  remaining?: string;
+  /** Why it is not done, when it is not. */
+  reason?: string;
+}
+
+export interface Visit {
+  id: string;
+  agent: { instanceId: string; name: string };
+  home: string;
+  host: string;
+  reason: VisitReason;
+  state: VisitState;
+  /** The host's rule when it was asked. */
+  approval: 'auto' | 'admin';
+  /** When the visit must end, from either team's longest visit. */
+  endsBy?: string;
+  /** What the host lets visitors take home, when it was asked. */
+  memoryHome: 'all' | 'summary' | 'none';
+  result?: VisitResult;
+  ended?: { by: VisitEnd; note?: string };
+  requestedAt: string;
+  updatedAt: string;
+  history: Array<{ state: VisitState; at: string; note?: string }>;
+}
 
 /** Listing entry returned by the Project Server — the definition without the team. */
 export interface ProjectSummary {
