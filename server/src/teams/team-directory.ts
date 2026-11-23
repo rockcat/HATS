@@ -63,7 +63,7 @@ export function formatTeams(cards: VisibleCard[]): string {
     '',
     cards.map((c, i) => describe(c, i + 1)).join('\n\n'),
     '',
-    'Visiting another team is not available yet. To use what one of these teams offers, '
-      + 'tell the human which team and why, with escalate_to_human.',
+    'To use what one of these teams offers, ask to visit it with request_visit, for one of your '
+      + 'tickets, saying what you will do there and what you will bring back.',
   ].join('\n');
 }

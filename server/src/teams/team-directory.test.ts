@@ -47,7 +47,7 @@ describe('formatTeams', () => {
     expect(text).toContain('Tools: postgres (Query the invoice database.); stripe');
     expect(text).toContain('Members: Ann, reconciliation; Bo');
     expect(text).toContain('wait for one of its admins');
-    expect(text).toContain('escalate_to_human');
+    expect(text).toContain('request_visit');
   });
 
   it('says plainly when nothing matches', () => {
