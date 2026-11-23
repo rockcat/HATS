@@ -48,7 +48,7 @@ export interface ToolCallContext {
   callPeopleTool?(agentName: string, name: string, args: Record<string, unknown>): Promise<string>;
   /** Finding other teams. Absent, or false, without a runner manager or a policy allowing visits. */
   isTeamsTool?(name: string): boolean;
-  callTeamsTool?(name: string, args: Record<string, unknown>): Promise<string>;
+  callTeamsTool?(agentName: string, name: string, args: Record<string, unknown>): Promise<string>;
   /** Mutable ref so the store stays live after context creation. */
   agendaStore: { store: AgendaStore | null };
   findByName(name: string): IAgent | undefined;
@@ -196,7 +196,7 @@ export function buildToolExecutor(ctx: ToolCallContext, mcp: MCPRegistry) {
       }
 
       if (ctx.isTeamsTool?.(call.name) && ctx.callTeamsTool) {
-        result = await ctx.callTeamsTool(call.name, call.arguments ?? {});
+        result = await ctx.callTeamsTool(agentName, call.name, call.arguments ?? {});
         await ctx.store.append('tool_result', { agent: agentName, tool: call.name, result });
         return result;
       }

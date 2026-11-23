@@ -47,6 +47,8 @@ import { loadSessions } from '../../packages/auth/src/auth-middleware.js';
 import { ownContainer, sayGoodbye, startHeartbeat } from './runner-heartbeat.js';
 import { buildTeamCard } from './teams/team-card.js';
 import { TeamDirectory } from './teams/team-directory.js';
+import { VisitCoordinator } from './visits/visit-coordinator.js';
+import { VisitsClient } from '../../packages/clients/src/visits-client.js';
 import { ensureFirstAdmin } from '../../packages/auth/src/first-admin.js';
 import { AgentLibraryClient } from '../../packages/clients/src/agent-library-client.js';
 import { resolveProjectSource } from './project/project-source.js';
@@ -216,6 +218,8 @@ async function main() {
     if (previous) { previous.stop(); await previous.flush().catch(() => {}); }
     if (!client || !definition) return;
     let opened = false;
+    // Visits to other teams and from them; the Project Server coordinates them.
+    let visits: VisitCoordinator | null = null;
     const next = new ProjectSync(client, definition, () => orch, async (def, team) => {
       const changes = await applyDefinition(orch, def, team, {
         providerFactory,
@@ -225,10 +229,22 @@ async function main() {
           await orch.announce(news);
           if (opened) dashboard?.teamNews(news);
         },
+        ...(visits && { visits }),
       });
       if (opened && !noChanges(changes)) dashboard?.teamChanged();
     });
     sync = next;
+    visits = new VisitCoordinator({
+      client: new VisitsClient(client.baseUrl),
+      definition: () => next.current,
+      io: () => ({ orchestrator: orch, actionStore, dataRoot: runtimeDir() }),
+      placeDir: runtimeDir('data', 'visits'),
+      teamChanged: () => { if (opened) dashboard?.teamChanged(); },
+      boardChanged: () => { if (opened) void dashboard?.boardChanged(); },
+      tell: (news) => { if (opened) dashboard?.teamNews(news); },
+    });
+    orch.setVisitTools(visits);
+    next.setVisitListener((change) => visits!.onVisitChanged(change));
     // Other teams to visit, through the runner manager. Offered to the agents
     // only while this project's visit policy allows visiting anyone.
     if (RUNNER_MANAGER_URL) {
@@ -245,6 +261,7 @@ async function main() {
     await next.flush();
     opened = true;
     next.start();
+    void visits.catchUp();
     orch.onEvent((ev) => {
       if (['task_complete', 'state_saved', 'agent_disengaged'].includes(ev.type) && sync === next) next.schedule();
     });

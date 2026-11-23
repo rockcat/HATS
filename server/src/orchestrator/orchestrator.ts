@@ -62,8 +62,19 @@ import {
 } from './meeting-runner.js';
 import * as sm from './scheduled-meetings.js';
 import { drainAgents } from './drain.js';
-import { DISCOVER_TEAMS, TEAMS_TOOL_NAMES } from '../../../packages/core/src/tools/teams.js';
+import {
+  DISCOVER_TEAMS, FINISH_VISIT, REQUEST_VISIT, TEAMS_TOOL_NAMES,
+} from '../../../packages/core/src/tools/teams.js';
+import type { ToolDefinition } from '../../../packages/core/src/tools/types.js';
 import { formatTeams, type TeamDirectory } from '../teams/team-directory.js';
+
+/** What the orchestrator asks of the runner's visit coordinator. */
+export interface VisitTools {
+  /** Is this agent here on a visit from another team? */
+  isVisitor(agentName: string): boolean;
+  request(agentName: string, args: Record<string, unknown>): Promise<string>;
+  finish(agentName: string, args: Record<string, unknown>): Promise<string>;
+}
 import { needsNotice, serversIn, unmetNeeds } from '../teams/tool-needs.js';
 
 export type ProviderFactory = (providerName: string) => AIProvider;
@@ -320,18 +331,44 @@ export class TeamOrchestrator {
   /** Where to find other teams; null without a runner manager. */
   setTeamDirectory(directory: TeamDirectory | null): void { this.teamDirectory = directory; }
 
-  /** Is this a teams tool, and may this team use it now? Its visit policy can change while it runs. */
-  isTeamsTool(name: string): boolean {
-    return (TEAMS_TOOL_NAMES as readonly string[]).includes(name) && Boolean(this.teamDirectory?.available());
+  /** Visits to other teams and from them; null without a Project Server to coordinate them. */
+  private visitTools: VisitTools | null = null;
+  setVisitTools(tools: VisitTools | null): void { this.visitTools = tools; }
+
+  /** The teams tools `agentName` has now: finding and visiting teams at home, finishing a visit on one. */
+  private teamsToolsFor(agentName: string): ToolDefinition[] {
+    if (this.visitTools?.isVisitor(agentName)) return [FINISH_VISIT];
+    if (!this.teamDirectory?.available()) return [];
+    return this.visitTools ? [DISCOVER_TEAMS, REQUEST_VISIT] : [DISCOVER_TEAMS];
   }
 
-  private async callTeamsTool(name: string, args: Record<string, unknown>): Promise<string> {
-    if (name !== 'discover_teams' || !this.teamDirectory) return `Unknown tool: ${name}`;
-    try {
-      return formatTeams(await this.teamDirectory.discover(String(args['intent'] ?? '')));
-    } catch (err) {
-      return `Could not ask which teams you could visit: ${(err as Error).message}. Try again later.`;
+  /** Is this a teams tool, and may this team use it now? Its visit policy can change while it runs. */
+  isTeamsTool(name: string): boolean {
+    if (!(TEAMS_TOOL_NAMES as readonly string[]).includes(name)) return false;
+    return name === FINISH_VISIT.name ? Boolean(this.visitTools) : Boolean(this.teamDirectory?.available());
+  }
+
+  private async callTeamsTool(agentName: string, name: string, args: Record<string, unknown>): Promise<string> {
+    if (!this.teamsToolsFor(agentName).some((t) => t.name === name)) {
+      return name === FINISH_VISIT.name
+        ? 'You are not on a visit, so there is nothing to finish.'
+        : `${name} is not available to you here.`;
     }
+    try {
+      if (name === DISCOVER_TEAMS.name) return formatTeams(await this.teamDirectory!.discover(String(args['intent'] ?? '')));
+      if (name === REQUEST_VISIT.name) return await this.visitTools!.request(agentName, args);
+      return await this.visitTools!.finish(agentName, args);
+    } catch (err) {
+      return `${name} did not work: ${(err as Error).message}. Try again later.`;
+    }
+  }
+
+  /** The project's board, once it has loaded; null when no project is open. */
+  async readyBoard(): Promise<KanbanStore | null> {
+    const store = this.kanbanStore();
+    if (!store) return null;
+    await this.kanbanLoaded;
+    return store;
   }
 
   /** Names of the shared MCP servers currently connected for the team. */
@@ -717,7 +754,7 @@ export class TeamOrchestrator {
       })) : []),
       // Upfront too: an agent that has never heard other teams exist will
       // not think to search for a way to find one.
-      ...(this.teamDirectory?.available() ? [DISCOVER_TEAMS] : []),
+      ...this.teamsToolsFor(agent.name),
     ];
 
     // Reading the board and moving a ticket across it are the hot path,
@@ -1358,7 +1395,7 @@ export class TeamOrchestrator {
       callPeopleTool: (agent: string, name: string, args: Record<string, unknown>) =>
         this.callPeopleTool(agent, name, args),
       isTeamsTool: (name: string) => this.isTeamsTool(name),
-      callTeamsTool: (name: string, args: Record<string, unknown>) => this.callTeamsTool(name, args),
+      callTeamsTool: (agent: string, name: string, args: Record<string, unknown>) => this.callTeamsTool(agent, name, args),
       agendaStore: this.agendaStoreRef,
       findByName: (name) => this.findByName(name),
       findBlueHat: () => this.findBlueHat(),

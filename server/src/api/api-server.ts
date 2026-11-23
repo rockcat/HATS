@@ -448,6 +448,11 @@ export class APIServer {
   /** Show team news, such as a member joining, on the dashboard. */
   teamNews(news: string[]): void { this.sseBroadcast({ type: 'team_news', news }); }
 
+  /** The board changed underneath the dashboard, as when a visit adds a ticket. */
+  async boardChanged(): Promise<void> {
+    this.sseBroadcast({ type: 'kanban_update', tickets: await this.kanbanManager.readTickets() });
+  }
+
   async start(): Promise<void> {
     this.speech.start().catch((err: Error) => log.warn('[API] Speech Service probe failed:', err.message));
 

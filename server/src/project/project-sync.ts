@@ -18,7 +18,9 @@
  */
 
 import type { ProjectServerClient } from '../../../packages/clients/src/project-server-client.js';
-import type { DeployedAgent, ProjectDefinition } from '../../../packages/contracts/src/types.js';
+import type { DeployedAgent, ProjectChange, ProjectDefinition } from '../../../packages/contracts/src/types.js';
+
+type VisitChange = Extract<ProjectChange, { type: 'visit_changed' }>;
 import type { TeamOrchestrator } from '../orchestrator/orchestrator.js';
 import { liveTeam } from './team-reconcile.js';
 import { log } from '../../../packages/core/src/logger.js';
@@ -59,6 +61,10 @@ export class ProjectSync {
   get projectId(): string { return this.definition.id; }
   get current(): ProjectDefinition { return this.definition; }
 
+  /** Told when a visit involving this project moves on. */
+  private onVisit: ((change: VisitChange) => void) | null = null;
+  setVisitListener(listener: (change: VisitChange) => void): void { this.onVisit = listener; }
+
   /**
    * Follow the Designer's edits until stopped: at once from the Project
    * Server's change stream, and by looking every `pollMs` while the stream is
@@ -69,6 +75,7 @@ export class ProjectSync {
     this.watch = this.client.watchProject(this.definition.id, (change) => {
       if (change.type === 'project_changed' && change.revision !== this.definition.revision) void this.pull();
       if (change.type === 'project_removed') log.warn(`[ProjectSync] Project "${change.id}" was removed from the Project Server`);
+      if (change.type === 'visit_changed') this.onVisit?.(change);
     }, {
       onState: (connected) => {
         this.streaming = connected;

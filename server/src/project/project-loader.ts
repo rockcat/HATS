@@ -110,6 +110,9 @@ export function makeProjectLoader(deps: ProjectLoaderDeps): ProjectLoader {
       console.log(`[Team] Team assembled: ${names.join(' · ')}`);
     }
 
+    // Before pruning: an agent away on a visit is still on the team, and its
+    // scheduled actions wait for it rather than being deleted.
+    orchestrator.markAway((definition?.team ?? []).filter((a) => a.away).map((a) => a.name));
     await orchestrator.pruneAgenda();
     await deps.onLoaded?.({ orchestrator, ...source });
     return orchestrator;

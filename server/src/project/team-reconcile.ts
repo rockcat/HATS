@@ -27,7 +27,7 @@ export interface TeamChanges {
   leaving: DeployedAgent[];
   /** At a host: visitors that have just arrived, to be embodied from their travel pack. */
   arriving: DeployedAgent[];
-  /** At home: members back from a visit, to be restored from the place kept for them. */
+  /** At home: members back from a visit, as they were while away, to be restored from the place kept for them. */
   returning: DeployedAgent[];
   /** At a host: visitors that have gone home. */
   departing: DeployedAgent[];
@@ -97,7 +97,8 @@ export function diffTeam(wanted: DeployedAgent[], live: DeployedAgent[], previou
       ?? [...unmatched.values()].find((a) => a.name.toLowerCase() === member.name.toLowerCase());
     if (!match) {
       if (member.visit) changes.arriving.push(member);
-      else if (before.get(member.instanceId)?.away) changes.returning.push(member);
+      // As it was before, still marked away: which visit it is back from.
+      else if (before.get(member.instanceId)?.away) changes.returning.push(before.get(member.instanceId)!);
       else changes.added.push(member);
       continue;
     }
