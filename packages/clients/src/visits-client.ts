@@ -8,9 +8,12 @@ const BASE = '/api/v1/visits';
 export class VisitsClient {
   private readonly http: HttpClient;
 
-  /** A travel pack can be a few megabytes, so this allows longer than most calls. */
-  constructor(baseUrl: string, timeoutMs = 60_000) {
-    this.http = new HttpClient({ service: 'Project Server', baseUrl, timeoutMs });
+  /**
+   * A travel pack can be a few megabytes, so this allows longer than most
+   * calls. `headers` carries the installation's runner token, which visits need.
+   */
+  constructor(baseUrl: string, timeoutMs = 60_000, headers: Record<string, string> = {}) {
+    this.http = new HttpClient({ service: 'Project Server', baseUrl, timeoutMs, headers });
   }
 
   /** Ask for a visit. Throws with the reason when it may not happen. */

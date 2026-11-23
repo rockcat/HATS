@@ -5,6 +5,7 @@
  */
 
 import type { ProjectDefinition, TeamCard } from '../../../packages/contracts/src/types.js';
+import { runnerToken, runnerTokenHeaders } from '../../../packages/service-kit/src/runner-token.js';
 
 /** A card as an agent sees it. */
 export type VisibleCard = Omit<TeamCard, 'visits'>;
@@ -30,7 +31,7 @@ export class TeamDirectory {
     const query = new URLSearchParams({ from: this.o.team(), intent });
     const res = await (this.o.fetchImpl ?? fetch)(
       `${this.o.managerUrl.replace(/\/$/, '')}/api/v1/teams?${query}`,
-      { signal: AbortSignal.timeout(5_000) },
+      { signal: AbortSignal.timeout(5_000), headers: runnerTokenHeaders(runnerToken()) },
     );
     if (!res.ok) throw new Error(`the runner manager answered ${res.status}`);
     return ((await res.json()) as { teams: VisibleCard[] }).teams;

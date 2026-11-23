@@ -27,24 +27,28 @@ export interface HttpClientOptions {
   service: string;
   baseUrl: string;
   timeoutMs?: number;
+  /** Sent with every request, such as the installation's runner token. */
+  headers?: Record<string, string>;
 }
 
 export class HttpClient {
   readonly baseUrl: string;
   private readonly service: string;
   private readonly timeoutMs: number;
+  private readonly headers: Record<string, string>;
 
   constructor(options: HttpClientOptions) {
     this.service = options.service;
     this.baseUrl = options.baseUrl.replace(/\/$/, '');
     this.timeoutMs = options.timeoutMs ?? 10_000;
+    this.headers = options.headers ?? {};
   }
 
   /** Returns undefined on 404 so callers can treat "missing" as a normal outcome. */
   async request<T>(method: string, path: string, body?: unknown): Promise<T | undefined> {
-    const init: RequestInit = { method, signal: AbortSignal.timeout(this.timeoutMs) };
+    const init: RequestInit = { method, signal: AbortSignal.timeout(this.timeoutMs), headers: { ...this.headers } };
     if (body !== undefined) {
-      init.headers = { 'Content-Type': 'application/json' };
+      init.headers = { ...this.headers, 'Content-Type': 'application/json' };
       init.body = JSON.stringify(body);
     }
 

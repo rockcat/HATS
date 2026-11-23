@@ -13,9 +13,13 @@
 import { existsSync } from 'fs';
 import { hostname } from 'os';
 import { log } from '../../packages/core/src/logger.js';
+import { runnerToken, runnerTokenHeaders } from '../../packages/service-kit/src/runner-token.js';
 import type { TeamCard } from '../../packages/contracts/src/types.js';
 
 export const HEARTBEAT_MS = 30_000;
+
+/** The installation's runner token, which the runner manager asks of every runner. */
+const TOKEN_HEADERS = runnerTokenHeaders(runnerToken());
 
 export interface HeartbeatOptions {
   managerUrl: string;
@@ -53,7 +57,7 @@ export function startHeartbeat(o: HeartbeatOptions): () => void {
       const card = o.card?.();
       const res = await send(target, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...TOKEN_HEADERS },
         body: JSON.stringify({
           project: o.project(), port: o.port,
           ...(o.url && { url: o.url }),
@@ -81,7 +85,7 @@ export function startHeartbeat(o: HeartbeatOptions): () => void {
 export async function sayGoodbye(o: Pick<HeartbeatOptions, 'managerUrl' | 'project' | 'fetchImpl'>): Promise<void> {
   await (o.fetchImpl ?? fetch)(endpoint(o.managerUrl, 'goodbye'), {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...TOKEN_HEADERS },
     body: JSON.stringify({ project: o.project() }),
     signal: AbortSignal.timeout(2_000),
   }).catch(() => {});

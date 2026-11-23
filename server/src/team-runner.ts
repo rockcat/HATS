@@ -49,6 +49,7 @@ import { buildTeamCard } from './teams/team-card.js';
 import { TeamDirectory } from './teams/team-directory.js';
 import { VisitCoordinator } from './visits/visit-coordinator.js';
 import { VisitsClient } from '../../packages/clients/src/visits-client.js';
+import { runnerToken, runnerTokenHeaders } from '../../packages/service-kit/src/runner-token.js';
 import { ensureFirstAdmin } from '../../packages/auth/src/first-admin.js';
 import { AgentLibraryClient } from '../../packages/clients/src/agent-library-client.js';
 import { resolveProjectSource } from './project/project-source.js';
@@ -241,7 +242,7 @@ async function main() {
     });
     sync = next;
     visits = new VisitCoordinator({
-      client: new VisitsClient(client.baseUrl),
+      client: new VisitsClient(client.baseUrl, undefined, runnerTokenHeaders(runnerToken())),
       definition: () => next.current,
       io: () => ({ orchestrator: orch, actionStore, dataRoot: runtimeDir() }),
       placeDir: runtimeDir('data', 'visits'),
