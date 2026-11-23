@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createDeployedAgent, createProject } from './factories.js';
 import { validateProject } from './validate.js';
 import type { DeployedAgent, ProjectDefinition, Visit, VisitPolicy } from './types.js';
-import { advance, comeHome, isOpen, leaveHome, visitDeadline, visitProblem, VisitRuleError } from './visit-record.js';
+import { advance, comeHome, isOpen, leaveHome, moveProblem, moveTeams, visitDeadline, visitProblem, VisitRuleError } from './visit-record.js';
 
 const ann = (extra: Partial<DeployedAgent> = {}) => createDeployedAgent({ instanceId: 'id-ann', name: 'Ann', ...extra });
 
@@ -110,5 +110,29 @@ describe('visitDeadline', () => {
     const from = new Date('2026-11-23T10:00:00Z');
     expect(visitDeadline(project('a', { maxHours: 4 }), project('b', { maxHours: 2 }), from)).toBe('2026-11-23T12:00:00.000Z');
     expect(visitDeadline(project('a', {}), project('b', {}), from)).toBeUndefined();
+  });
+});
+
+describe('permanent moves', () => {
+  const ops = project('ops', {}, [ann(), createDeployedAgent({ instanceId: 'id-bo', name: 'Bo' })]);
+  const billing = project('billing', { hostFrom: ['ops'] }, [createDeployedAgent({ instanceId: 'id-cy', name: 'Cy' })]);
+
+  it('needs the new team to take agents from the old one, and nothing in the way', () => {
+    expect(moveProblem(ops, billing, 'id-ann', [])).toBeNull();
+    expect(moveProblem(ops, project('billing', { hostFrom: [] }), 'id-ann', [])).toMatch(/does not take agents/);
+    expect(moveProblem(ops, billing, 'id-ann', [visit({ state: 'approved' })])).toMatch(/visit under way/);
+    const away = project('ops', {}, [ann({ away: { visit: 'v0', host: 'research' } })]);
+    expect(moveProblem(away, billing, 'id-ann', [])).toMatch(/already/);
+    const clash = project('billing', { hostFrom: ['*'] }, [createDeployedAgent({ instanceId: 'id-x', name: 'ann' })]);
+    expect(moveProblem(ops, clash, 'id-ann', [])).toMatch(/already has someone called Ann/);
+    expect(moveProblem(ops, ops, 'id-ann', [])).toMatch(/already on/);
+  });
+
+  it('takes the agent off one team and puts it on the other, marked with the move', () => {
+    const teams = moveTeams(ops, billing, 'm1', 'id-ann');
+    expect(teams.from.map((a) => a.name)).toEqual(['Bo']);
+    expect(teams.to.map((a) => a.name)).toEqual(['Cy', 'Ann']);
+    expect(teams.to[1]).toMatchObject({ instanceId: 'id-ann', move: 'm1' });
+    expect(validateProject({ ...billing, team: teams.to }).valid).toBe(true);
   });
 });

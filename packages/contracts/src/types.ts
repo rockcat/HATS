@@ -139,6 +139,8 @@ export interface DeployedAgent {
   away?: { visit: string; host: string };
   /** At a host team: the visit this agent is here on. Its `home` names where it belongs. */
   visit?: string;
+  /** At its new team, until its runner has it running: the move that brought it, and its pack. */
+  move?: string;
   teamContext?: string;
   deployedAt: string;
 }
@@ -268,6 +270,22 @@ export interface VisitResult {
   remaining?: string;
   /** Why it is not done, when it is not. */
   reason?: string;
+}
+
+/**
+ * An agent moving to another team for good, by an admin: unlike a visit it
+ * has no reason, no result and no way back. `moving` until its new team's
+ * runner has it running, then `done`.
+ */
+export interface Move {
+  id: string;
+  agent: { instanceId: string; name: string };
+  from: string;
+  to: string;
+  state: 'moving' | 'done';
+  note?: string;
+  requestedAt: string;
+  updatedAt: string;
 }
 
 export interface Visit {

@@ -65,6 +65,11 @@
       "minLength": 1,
       "description": "At a host team: the visit this agent is here on. Its home names where it belongs."
     },
+    "move": {
+      "type": "string",
+      "minLength": 1,
+      "description": "At its new team, until its runner has it running: the permanent move that brought it."
+    },
     "needs": {
       "type": "object",
       "description": "What this agent depends on. A missing required tool is reported to the agent and the dashboard, and refuses a visit to a team without it.",

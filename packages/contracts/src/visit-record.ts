@@ -105,3 +105,32 @@ export function comeHome(home: ProjectDefinition, host: ProjectDefinition, visit
     host: host.team.filter((a) => a.visit !== visit.id),
   };
 }
+
+// ── Permanent moves ──────────────────────────────────────────────────────────
+
+/**
+ * Why `agentId` may not move from `from` to `to` for good, or null when it
+ * may. The new team must host agents from the old one; an agent away, on a
+ * visit, or with a visit under way stays where it is until that is over.
+ */
+export function moveProblem(from: ProjectDefinition, to: ProjectDefinition, agentId: string, openVisits: Visit[]): string | null {
+  const agent = from.team.find((a) => a.instanceId === agentId);
+  if (!agent) return `There is no agent ${agentId} on ${from.name}.`;
+  if (same(from.id, to.id)) return `${agent.name} is already on ${to.name}.`;
+  if (agent.away || agent.visit || agent.move) return `${agent.name} is on a visit or a move already; wait until it is over.`;
+  if (openVisits.some((v) => v.agent.instanceId === agentId)) return `${agent.name} has a visit under way; wait until it is over.`;
+  const fromTeam = { id: from.id, visits: { visitTo: [to.id] } };
+  const toTeam = { id: to.id, ...(to.settings?.visits && { visits: to.settings.visits }) };
+  if (!mayVisit(fromTeam, toTeam)) return `${to.name} does not take agents from ${from.name}.`;
+  if (to.team.some((a) => same(a.name, agent.name))) return `${to.name} already has someone called ${agent.name}.`;
+  return null;
+}
+
+/** The two teams once the agent has moved: gone from `from`, on `to`, marked with the move until its runner has it. */
+export function moveTeams(from: ProjectDefinition, to: ProjectDefinition, moveId: string, agentId: string): { from: DeployedAgent[]; to: DeployedAgent[] } {
+  const agent = from.team.find((a) => a.instanceId === agentId);
+  if (!agent) throw new VisitRuleError(409, `The agent is no longer on ${from.name}.`);
+  const moved: DeployedAgent = { ...agent, move: moveId };
+  delete moved.home;
+  return { from: from.team.filter((a) => a !== agent), to: [...to.team, moved] };
+}
