@@ -305,6 +305,32 @@ paths:
         '204': { description: Removed }
         '404': { $ref: '#/components/responses/NotFound' }
 
+  /api/v1/events:
+    get:
+      tags: [Projects]
+      summary: A stream of project changes
+      description: >
+        Server-sent events, one per saved or removed project, so a runner can
+        fetch its project again the moment it changes rather than polling.
+        Events carry the project id and revision, never the definition.
+        A heartbeat event is sent every 25 seconds.
+      operationId: streamProjectEvents
+      parameters:
+        - name: project
+          in: query
+          required: false
+          description: Only this project's events.
+          schema: { type: string }
+      responses:
+        '200':
+          description: >
+            An open stream. Each event is `project_changed` with data
+            `{ "type": "project_changed", "id": "...", "revision": 7 }`, or
+            `project_removed` with data `{ "type": "project_removed", "id": "..." }`.
+          content:
+            text/event-stream:
+              schema: { type: string }
+
   /api/v1/active:
     get:
       tags: [Projects]
