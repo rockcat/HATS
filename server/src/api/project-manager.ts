@@ -6,7 +6,8 @@ import { TelemetryStore } from '../store/telemetry-store.js';
 import { readEnvFile, writeEnvFile, withEffective } from './env-manager.js';
 import { applicable, lockedKeys } from '../settings-file.js';
 import { listFilesRecursive } from './api-utils.js';
-import { openFolder } from './open-folder.js';
+import { openFolder, inContainer } from './open-folder.js';
+import { zipProjectFiles } from './project-files-zip.js';
 import { projectLocked } from '../project/project-lock.js';
 import { log } from '../../../packages/core/src/logger.js';
 
@@ -185,8 +186,26 @@ export class ProjectManager {
       return true;
     }
 
+    if (pathname === '/api/project/files.zip' && method === 'GET') {
+      const dir = this.deps.getProjectDir();
+      if (!dir) { json(res, 404, { error: 'No project loaded' }); return true; }
+      const data = await zipProjectFiles(dir);
+      const name = (this.deps.getProjectId() ?? 'project').replace(/[^A-Za-z0-9_-]/g, '_');
+      res.writeHead(200, {
+        'Content-Type': 'application/zip',
+        'Content-Length': data.length,
+        'Content-Disposition': `attachment; filename="${name}-files.zip"`,
+      });
+      res.end(data);
+      return true;
+    }
+
     if (pathname === '/api/project' && method === 'GET') {
-      json(res, 200, { id: this.deps.getProjectId(), dir: this.deps.getProjectDir(), root: this.deps.getProjectsRoot(), locked: projectLocked() });
+      json(res, 200, {
+        id: this.deps.getProjectId(), dir: this.deps.getProjectDir(), root: this.deps.getProjectsRoot(), locked: projectLocked(),
+        // In a container there is no desktop to open the folder on.
+        canOpenFolder: !inContainer(),
+      });
       return true;
     }
 

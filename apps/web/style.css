@@ -3220,6 +3220,8 @@ main {
   transition: color 0.15s, border-color 0.15s;
 }
 .files-open-folder-btn:hover { color: var(--text); border-color: var(--border-hover); }
+a.files-open-folder-btn { display: inline-flex; align-items: center; gap: 4px; text-decoration: none; }
+a.files-open-folder-btn .svg-icon { width: 12px; height: 12px; }
 .files-open-folder-note {
   font-size: 10px; color: var(--text-muted); margin-left: 8px;
   overflow-wrap: anywhere;

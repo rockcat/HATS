@@ -247,6 +247,12 @@ export function startFilesRefresh() {
 }
 
 export function initFileUpload() {
+  // Only offered where the runner has a desktop to open it on — never in Docker.
+  fetch('/api/project').then(r => r.json()).then(p => {
+    const btn = document.getElementById('files-open-folder-btn');
+    if (btn) btn.hidden = !p.canOpenFolder;
+  }).catch(() => {});
+
   document.getElementById('files-open-folder-btn')?.addEventListener('click', async () => {
     try {
       const r = await fetch('/api/project/open-folder', { method: 'POST' });
