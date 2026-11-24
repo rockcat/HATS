@@ -456,23 +456,41 @@
 
   <!-- Edit Ticket Modal -->
   <div id="ticket-modal" class="modal-overlay" hidden>
-    <div class="modal" role="dialog" aria-modal="true">
+    <div class="modal ticket-modal" role="dialog" aria-modal="true">
       <div class="modal-header">
         <span id="modal-ticket-id" class="modal-ticket-id"></span>
         <button class="modal-close" id="modal-close" title="Close"><img src="assets/close.svg" class="svg-icon" alt="Close"></button>
       </div>
-      <div class="modal-body">
-        <div class="field-group">
-          <label class="field-label">Title</label>
-          <input type="text" id="edit-title" class="modal-input">
-        </div>
-        <div class="field-group">
-          <label class="field-label">Description</label>
-          <textarea id="edit-description" class="modal-textarea" rows="7"></textarea>
-        </div>
-        <div class="field-row">
+      <div class="modal-body ticket-modal-body">
+
+        <!-- Left: what the ticket is, and what has happened on it -->
+        <div class="ticket-modal-main">
           <div class="field-group">
-            <label class="field-label">Priority</label>
+            <label class="field-label" for="edit-title">Title</label>
+            <input type="text" id="edit-title" class="modal-input">
+          </div>
+          <div class="field-group ticket-desc-group">
+            <div class="ticket-desc-label-row">
+              <label class="field-label" for="edit-description">Description</label>
+              <button type="button" id="edit-description-toggle" class="ticket-desc-toggle">Edit</button>
+            </div>
+            <div id="edit-description-view" class="ticket-desc-view" title="Double-click to edit"></div>
+            <textarea id="edit-description" class="modal-textarea ticket-desc-input" rows="12" hidden></textarea>
+          </div>
+          <div class="field-group" id="modal-activity-section">
+            <label class="field-label">Activity</label>
+            <div id="modal-comments"></div>
+            <div class="modal-comment-input-row">
+              <input type="text" id="modal-comment-text" class="modal-input" placeholder="Add a comment…">
+              <button class="modal-btn secondary" id="modal-comment-submit">Post</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: its settings -->
+        <div class="ticket-modal-side">
+          <div class="field-group">
+            <label class="field-label" for="edit-priority">Priority</label>
             <select id="edit-priority" class="modal-select">
               <option value="low">Low</option>
               <option value="medium">Medium</option>
@@ -481,7 +499,7 @@
             </select>
           </div>
           <div class="field-group">
-            <label class="field-label">Column</label>
+            <label class="field-label" for="edit-column">Column</label>
             <select id="edit-column" class="modal-select">
               <option value="backlog">Backlog</option>
               <option value="ready">Ready</option>
@@ -492,38 +510,32 @@
             </select>
           </div>
           <div class="field-group" id="edit-closed-reason-group" style="display:none">
-            <label class="field-label">Closed reason</label>
+            <label class="field-label" for="edit-closed-reason">Closed reason</label>
             <select id="edit-closed-reason" class="modal-select">
               <option value="completed">Completed</option>
               <option value="cancelled">Cancelled</option>
             </select>
           </div>
           <div class="field-group">
-            <label class="field-label">Assignee</label>
+            <label class="field-label" for="edit-assignee">Assignee</label>
             <select id="edit-assignee" class="modal-select"></select>
           </div>
-        </div>
-        <div class="field-group">
-          <label class="field-label">Tags <span class="field-hint">(comma-separated)</span></label>
-          <input type="text" id="edit-tags" class="modal-input">
-        </div>
-        <div class="field-group">
-          <label class="field-label">Blocked by <span class="field-hint">(ticket IDs, comma-separated)</span></label>
-          <input type="text" id="edit-blocked-by" class="modal-input" placeholder="e.g. TKT-001, TKT-002">
-        </div>
-        <div class="field-group">
-          <label class="field-check" title="Work expected to take hours or days. The assignee is not chased for updates while it is in progress or blocked.">
-            <input type="checkbox" id="edit-long-running"> Long-running task <span class="field-hint">(not nudged for status updates)</span>
-          </label>
-        </div>
-        <div class="field-group" id="modal-activity-section">
-          <label class="field-label">Activity</label>
-          <div id="modal-comments"></div>
-          <div class="modal-comment-input-row">
-            <input type="text" id="modal-comment-text" class="modal-input" placeholder="Add a comment…">
-            <button class="modal-btn secondary" id="modal-comment-submit">Post</button>
+          <div class="field-group">
+            <label class="field-label" for="edit-tags">Tags <span class="field-hint">(comma-separated)</span></label>
+            <input type="text" id="edit-tags" class="modal-input">
+          </div>
+          <div class="field-group">
+            <label class="field-label" for="edit-blocked-by">Blocked by <span class="field-hint">(ticket IDs)</span></label>
+            <input type="text" id="edit-blocked-by" class="modal-input" placeholder="e.g. TKT-001, TKT-002">
+          </div>
+          <div class="field-group">
+            <label class="field-check" title="Work expected to take hours or days. The assignee is not chased for updates while it is in progress or blocked.">
+              <input type="checkbox" id="edit-long-running"> Long-running task
+            </label>
+            <span class="field-hint">Not nudged for status updates</span>
           </div>
         </div>
+
       </div>
       <div class="modal-footer">
         <span id="modal-error" class="modal-error"></span>

@@ -2,6 +2,7 @@
 
 import { esc } from './utils.js';
 import { state } from './state.js';
+import { setDescription, initTicketDescription } from './ticket-description.js';
 
 // Injected at init time to avoid circular dep with project.js.
 let _updateGoalBar = () => {};
@@ -251,6 +252,7 @@ export function initTicketEditing() {
   document.getElementById('modal-cancel').addEventListener('click', closeTicketModal);
   document.getElementById('modal-save').addEventListener('click', saveTicket);
   document.getElementById('modal-comment-submit').addEventListener('click', postComment);
+  initTicketDescription();
   document.getElementById('edit-column').addEventListener('change', e => {
     document.getElementById('edit-closed-reason-group').style.display =
       e.target.value === 'closed' ? '' : 'none';
@@ -278,7 +280,7 @@ function populateAssigneeDropdown(selected) {
 function openNewTicketModal() {
   document.getElementById('modal-ticket-id').textContent = 'New Ticket';
   document.getElementById('edit-title').value       = '';
-  document.getElementById('edit-description').value = '';
+  setDescription('');
   document.getElementById('edit-priority').value    = 'medium';
   document.getElementById('edit-column').value      = 'backlog';
   document.getElementById('edit-closed-reason-group').style.display = 'none';
@@ -300,7 +302,7 @@ function openTicketModal(id) {
 
   document.getElementById('modal-ticket-id').textContent = id;
   document.getElementById('edit-title').value       = ticket.title ?? '';
-  document.getElementById('edit-description').value = ticket.description ?? '';
+  setDescription(ticket.description);
   document.getElementById('edit-priority').value    = ticket.priority ?? 'medium';
   const col = ticket.column ?? 'backlog';
   document.getElementById('edit-column').value      = col;
