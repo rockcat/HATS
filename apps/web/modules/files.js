@@ -3,6 +3,7 @@
 import { esc } from './utils.js';
 import { fmtSize, fileIcon, fileExt } from './utils.js';
 import { getBackgrounds } from './avatars.js';
+import { fileUrl, dashboardLinkFor, fileFromSearch, baseName, copyWithFeedback } from './file-links.js';
 
 const VIEWABLE_EXTS = new Set(['txt', 'md', 'pdf', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg']);
 
@@ -80,6 +81,15 @@ export function initFileViewer() {
       if (dlLink) dlLink.click();
     }
   });
+
+  document.getElementById('file-viewer-copy-link').addEventListener('click', (e) => {
+    const path = document.getElementById('file-viewer-modal').dataset.path;
+    if (path) void copyWithFeedback(dashboardLinkFor(path), e.currentTarget);
+  });
+
+  // A dashboard link to a file opens on it.
+  const linked = fileFromSearch(window.location.search);
+  if (linked) openFileViewer(baseName(linked), linked);
 
   document.getElementById('file-viewer-close').addEventListener('click', () => {
     document.getElementById('file-viewer-modal').hidden = true;
@@ -162,16 +172,22 @@ export async function populateBackgroundSelect(selectedFile, selId = 'add-agent-
 }
 
 export function openFileViewer(name, relativePath) {
-  const url  = `/api/project/file?path=${encodeURIComponent(relativePath)}`;
+  const url  = fileUrl(relativePath);
   const ext  = fileExt(name);
   const modal = document.getElementById('file-viewer-modal');
   const body  = document.getElementById('file-viewer-body');
   const dl    = document.getElementById('file-viewer-download');
 
   document.getElementById('file-viewer-name').textContent = name;
+  modal.dataset.path = relativePath;
   dl.href     = url;
   dl.download = name;
   body.innerHTML = '';
+  if (!VIEWABLE_EXTS.has(ext)) {
+    body.innerHTML = `<div class="file-viewer-loading">This kind of file cannot be shown here — download it to open it.</div>`;
+    modal.hidden = false;
+    return;
+  }
 
   const imgExts = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg']);
   if (ext === 'pdf') {

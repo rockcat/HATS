@@ -10,6 +10,7 @@ import { Task, Meeting, TeamMessage, ScheduledMeeting, MeetingType } from './typ
 import { MeetingRoom } from './meeting-room.js';
 import { MeetingStore } from './meeting-store.js';
 import { buildMessage } from './orchestrator-utils.js';
+import { requestFiles } from './request-files.js';
 import { EmailAllowlistStore } from '../api/email-allowlist-store.js';
 import { repeatFromRequest, type Repeat } from '../api/agenda-store.js';
 import { missingToolMessage } from '../teams/tool-needs.js';
@@ -267,9 +268,9 @@ export async function executeToolCall(ctx: ToolCallContext, agentName: string, c
     }
 
     case 'escalate_to_human': {
-      const { message, urgency } = call.arguments as { message: string; urgency: 'low' | 'high' };
+      const { message, urgency, files } = call.arguments as { message: string; urgency: 'low' | 'high'; files?: unknown };
       ctx.findByName(agentName)?.markBlocked();
-      await ctx.store.append('escalation', { from: agentName, urgency, message });
+      await ctx.store.append('escalation', { from: agentName, urgency, message, files: requestFiles(files, message ?? '') });
       ctx.onHumanEscalation?.(agentName, message, urgency);
       return `Escalation raised. Waiting for human response.`;
     }

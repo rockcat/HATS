@@ -1,6 +1,35 @@
 // ── Human Requests panel ──────────────────────────────────────────────────────
 
 import { esc } from './utils.js';
+import { openFileViewer } from './files.js';
+import { dashboardLinkFor, baseName, copyWithFeedback } from './file-links.js';
+
+/** The documents a request is about, each to open or copy a link to. */
+function filesBody(req) {
+  if (!req.files?.length) return '';
+  return `<div class="request-files">${req.files.map(f => `
+      <div class="request-file" data-path="${esc(f)}">
+        <img src="assets/file.svg" class="svg-icon" alt="">
+        <span class="request-file-name" title="${esc(f)}">${esc(baseName(f))}</span>
+        <button class="request-file-open" title="Open ${esc(f)}">Open</button>
+        <button class="request-file-copy" title="Copy a link that opens the dashboard on this file">Copy link</button>
+      </div>`).join('')}
+    </div>`;
+}
+
+function wireFiles(item) {
+  for (const row of item.querySelectorAll('.request-file')) {
+    const path = row.dataset.path;
+    row.querySelector('.request-file-open').addEventListener('click', (e) => {
+      e.stopPropagation();
+      openFileViewer(baseName(path), path);
+    });
+    row.querySelector('.request-file-copy').addEventListener('click', (e) => {
+      e.stopPropagation();
+      void copyWithFeedback(dashboardLinkFor(path), e.currentTarget);
+    });
+  }
+}
 
 /** Fire an action and surface the failure in the row rather than swallowing it. */
 async function act(url, errorEl, body) {
@@ -141,8 +170,10 @@ export function renderRequests(requests) {
         <span class="request-time">${timeStr}</span>
       </div>
       <div class="request-message">${msgHtml}</div>
+      ${filesBody(req)}
       ${req.status === 'pending' ? pendingBody() : resolvedBody(req)}`;
 
+    wireFiles(item);
     if (req.status === 'pending') wirePending(item, req);
     el.appendChild(item);
   }

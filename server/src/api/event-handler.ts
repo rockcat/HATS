@@ -151,10 +151,12 @@ export function handleOrchestratorEvent(ev: StoredEvent, ctx: OrchestratorEventC
           if (message) ctx.kanban.addTicketComment(ticketId, from, `Blocked: ${message}`).catch(() => {});
         }
         const reqId   = `req-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+        const files = Array.isArray(ev['files']) ? (ev['files'] as string[]) : [];
         const request: HumanRequest = {
           id: reqId, agentName: from, message: message ?? '',
           urgency: urgency === 'high' ? 'high' : 'low',
           relatedTicketId: ticketId,
+          ...(files.length > 0 && { files }),
           status: 'pending', createdAt: new Date().toISOString(),
         };
         ctx.humanRequestStore.add(request).catch(() => {});

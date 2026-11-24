@@ -37,6 +37,8 @@ export interface HumanRequest {
   message: string;
   urgency: 'low' | 'high';
   relatedTicketId?: string;
+  /** Project files the request is about, as paths within the project — shown as links. */
+  files?: string[];
   /**
    * `dismissed` is a decision, not a deletion: the human is not going to answer
    * and the agent has been told so. An escalated agent waits until it hears

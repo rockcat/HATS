@@ -28,6 +28,11 @@ const ESCALATE_TO_HUMAN: ToolDefinition = {
         enum: ['low', 'high'],
         description: 'low = can wait for next check-in; high = blocking work, needs prompt response.',
       },
+      files: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Project files the human should look at — such as a document you want approved — as paths within the project, e.g. "outputs/plan.md". Each is shown as a link to open it.',
+      },
     },
     required: ['message', 'urgency'],
   },

@@ -3083,6 +3083,23 @@ main {
 .request-message ul, .request-message ol { margin: 4px 0; padding-left: 16px; }
 .request-message code { font-family: ui-monospace, monospace; font-size: 10px; background: var(--bg-2); padding: 1px 4px; border-radius: 3px; }
 
+.request-files { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+.request-file {
+  display: flex; align-items: center; gap: 6px;
+  padding: 4px 6px; border-radius: 4px; background: var(--surface-2);
+}
+.request-file .svg-icon { width: 14px; height: 14px; opacity: 0.8; }
+.request-file-name {
+  flex: 1; min-width: 0; font-size: 11px; color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.request-file-open, .request-file-copy {
+  font-size: 10px; padding: 2px 8px; border-radius: 3px; cursor: pointer;
+  border: 1px solid var(--border); background: transparent; color: var(--text);
+}
+.request-file-open { border-color: var(--hat-blue); color: var(--hat-blue); }
+.request-file-open:hover, .request-file-copy:hover { background: var(--border); }
+
 .request-reply-area {
   margin-top: 8px; border-top: 1px solid var(--border); padding-top: 8px;
 }
