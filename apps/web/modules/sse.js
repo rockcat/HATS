@@ -12,7 +12,6 @@ import { refreshAgentSpend } from './agent-model.js';
 import { appendCLIAgent, updateChatAgentSelect, initCLI } from './cli.js';
 import { applyTelemetrySummary, telScope, refreshTelemetryBar } from './telemetry.js';
 import { renderFilesList, fetchFiles, startFilesRefresh } from './files.js';
-import { initTabs } from './panels.js';
 import { isSignedOut, showLogin } from './auth.js';
 import { showTeamNews } from './team-news.js';
 import { fetchVisits } from './visits.js';
@@ -121,7 +120,6 @@ export function connect() {
       renderAllowlist(msg.allowlist ?? []);
       if (!_sseInited) {
         _sseInited = true;
-        initTabs();
         initKanbanDrag();
         initTicketEditing();
         initCLI();

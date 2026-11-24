@@ -25,8 +25,8 @@ import { initCLI }                                     from './modules/cli.js';
 import { appendCLILine }                               from './modules/cli.js';
 import { initGoogleReturn }                            from './modules/google-return.js';
 import { initAllowlist }                               from './modules/allowlist.js';
-import { initTabs, initBacklogCalendarTabs,
-         initPanelExpand, initMicButtons }             from './modules/panels.js';
+import { initMicButtons }                             from './modules/panels.js';
+import { initNav, showView }                           from './modules/nav.js';
 import { connect, fetchTools, applyState }             from './modules/sse.js';
 
 if (!await checkAuth()) throw new Error('Not authenticated');
@@ -61,8 +61,7 @@ initMCPEditor();
 initImpromptuMeeting();
 initCalendar();
 initMicButtons();
-initBacklogCalendarTabs();
-initPanelExpand();
+initNav();
 initTelemetry();
 initTelScopeToggle();
 initFileUpload();
@@ -76,10 +75,10 @@ initServiceStatus();
 // popup would have sent.
 initGoogleReturn({
   announce: (text) => appendCLILine(text, 'cli-system'),
-  showMcpTab: () => document.querySelector('.panel-tab[data-tab="mcp"]')?.click(),
+  showMcpTab: () => showView('mcp'),
 });
 
-// connect() opens the SSE stream; the 'init' event fires initTabs(),
+// connect() opens the SSE stream; the 'init' event fires
 // initKanbanDrag(), initTicketEditing(), initCLI(), initAgentDetail(),
 // initAllowlist() — those need the DOM and state, so they run after SSE init.
 connect();

@@ -371,14 +371,6 @@ header h1 {
 .service-open:hover { color: var(--text); }
 
 /* ── Layout ──────────────────────────────────────────── */
-main {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  grid-template-rows: 1fr 1fr;
-  flex: 1;
-  overflow: hidden;
-}
-
 .panel-header {
   display: flex;
   align-items: center;
@@ -391,27 +383,6 @@ main {
   padding: 10px 14px 9px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
-}
-
-/* ── Agents Panel (top-left) ─────────────────────────── */
-#agents-panel {
-  grid-column: 1;
-  grid-row: 1;
-  border-right: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-/* ── Tools Panel (bottom-left) ───────────────────────── */
-#tools-panel {
-  grid-column: 1;
-  grid-row: 2;
-  border-right: 1px solid var(--border);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
 }
 
 #tools-content {
@@ -652,16 +623,6 @@ main {
   background: color-mix(in srgb, var(--text-muted) 12%, transparent);
 }
 
-/* ── Active Kanban (top-right) ───────────────────────── */
-#kanban-active {
-  grid-column: 2;
-  grid-row: 1;
-  border-bottom: 1px solid var(--border);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
 #kanban-active .kanban-active-cols {
   display: flex;
   flex-direction: row;
@@ -711,30 +672,6 @@ main {
   flex: 1;
 }
 
-/* ── Backlog / Calendar (bottom-right) ───────────────── */
-#backlog-panel {
-  grid-column: 2;
-  grid-row: 2;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-/* Backlog tab pills (reuse panel-tab style but scoped) */
-.backlog-tab {
-  background: none;
-  border: none;
-  color: var(--text-muted);
-  font-size: 12px;
-  font-weight: 500;
-  padding: 0 10px;
-  height: 100%;
-  cursor: pointer;
-  border-bottom: 2px solid transparent;
-  white-space: nowrap;
-}
-.backlog-tab.active { color: var(--text); border-bottom-color: var(--hat-blue); }
-.backlog-tab:hover:not(.active) { color: var(--text); }
 
 #backlog-count {
   font-size: 11px;
@@ -1219,33 +1156,6 @@ main {
 /* ── Panel Tabs ───────────────────────────────────────── */
 .panel-header { position: relative; }
 
-.panel-header--tabs {
-  gap: 4px;
-  padding: 7px 10px;
-}
-
-.panel-tabs {
-  display: flex;
-  gap: 2px;
-  margin-left: auto;
-}
-
-.panel-tab {
-  font-size: 10px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  padding: 3px 8px;
-  border-radius: 4px;
-  border: 1px solid var(--border);
-  background: var(--surface-2);
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: color 0.15s, border-color 0.15s;
-  height: 100%;
-}
-.panel-tab:hover { color: var(--text); border-color: var(--border-hover); }
-.panel-tab.active { color: var(--text); border-color: var(--border-hover); outline: 1px solid var(--border-hover); outline-offset: -1px; }
 
 .tab-pane { display: none; flex: 1; overflow-y: auto; flex-direction: column; }
 .tab-pane.active { display: flex; }
@@ -3770,7 +3680,7 @@ a.files-open-folder-btn .svg-icon { width: 12px; height: 12px; }
   background: color-mix(in srgb, var(--accent) 10%, transparent);
 }
 
-/* ── Panel expand/restore ───────────────────────────── */
+/* ── Panel header actions ───────────────────────────── */
 
 .panel-header-action-btn {
   background: none;
@@ -3786,37 +3696,6 @@ a.files-open-folder-btn .svg-icon { width: 12px; height: 12px; }
 }
 .panel-header-action-btn:hover { opacity: 1; color: var(--text); }
 
-.panel-expand-btn {
-  background: none;
-  border: none;
-  color: var(--text-muted);
-  cursor: pointer;
-  padding: 2px 4px;
-  margin-left: auto; /* pushes to the right; overridden when preceded by action-btn */
-  opacity: 0.5;
-  line-height: 1;
-  display: flex;
-  align-items: center;
-}
-.panel-expand-btn:hover { opacity: 1; color: var(--text); }
-
-section.panel--expanded {
-  position: fixed !important;
-  top: 0; /* overridden by JS to match main's actual offset */
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 1000;
-  grid-column: unset !important;
-  grid-row: unset !important;
-  border: none !important;
-  border-radius: 0 !important;
-}
-
-/* Hide sibling panels while one is expanded */
-body.has-expanded-panel main > section:not(.panel--expanded) {
-  visibility: hidden;
-}
 
 /* ── Kanban panel header ─────────────────────────────── */
 

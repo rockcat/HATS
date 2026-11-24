@@ -1,86 +1,9 @@
-// ── Panel management: tabs, expand/collapse, mic buttons ─────────────────────
+// ── Panel helpers: mic buttons ───────────────────────────────────────────────
+//
+// Sections and the menu that switches between them live in nav.js.
 
-import { fetchMCPCatalogue } from './mcp.js';
-import { fetchGlobalAgents } from './library.js';
-import { fetchScheduledActions } from './schedules.js';
 import { appendCLILine } from './cli.js';
 import { micAction } from './mic-action.js';
-import { fetchVisits } from './visits.js';
-
-// ── Main panel tabs ───────────────────────────────────────────────────────────
-
-export function initTabs() {
-  document.querySelectorAll('.panel-tab').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const tab = btn.dataset.tab;
-      document.querySelectorAll('.panel-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
-      document.querySelectorAll('.tab-pane').forEach(p => p.classList.toggle('active', p.id === tab + '-content'));
-      if (tab === 'mcp')       fetchMCPCatalogue();
-      if (tab === 'cli')       document.getElementById('cli-input')?.focus();
-      if (tab === 'library')   fetchGlobalAgents();
-      if (tab === 'schedules') fetchScheduledActions();
-      if (tab === 'visits')    void fetchVisits();
-      const mcpEditBtn = document.getElementById('mcp-catalogue-edit-btn');
-      if (mcpEditBtn) mcpEditBtn.hidden = (tab !== 'mcp');
-    });
-  });
-}
-
-// ── Backlog / Calendar sub-tabs ───────────────────────────────────────────────
-
-export function initBacklogCalendarTabs() {
-  document.querySelectorAll('.backlog-tab').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const tab = btn.dataset.btab;
-      document.querySelectorAll('.backlog-tab').forEach(b => b.classList.toggle('active', b.dataset.btab === tab));
-      document.getElementById('backlog-list').classList.toggle('active', tab === 'backlog');
-      document.getElementById('backlog-list').hidden = tab !== 'backlog';
-      document.getElementById('calendar-pane').classList.toggle('active', tab === 'calendar');
-      document.getElementById('calendar-pane').hidden = tab !== 'calendar';
-      document.getElementById('cal-nav').hidden        = tab !== 'calendar';
-      document.getElementById('cal-view-tabs').hidden  = tab !== 'calendar';
-      document.getElementById('new-meeting-btn').hidden = tab !== 'calendar';
-      if (tab === 'calendar') import('./calendar.js').then(m => m.fetchCalendar());
-    });
-  });
-}
-
-// ── Panel expand / collapse ───────────────────────────────────────────────────
-
-export function collapseExpandedPanel() {
-  document.querySelectorAll('section.panel--expanded').forEach(p => {
-    p.classList.remove('panel--expanded');
-    p.style.top = '';
-    const b = p.querySelector('.panel-expand-btn');
-    if (b) b.innerHTML = '<img src="assets/expand.svg" class="svg-icon" alt="Expand">';
-  });
-  document.body.classList.remove('has-expanded-panel');
-}
-
-export function initPanelExpand() {
-  document.querySelectorAll('.panel-expand-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const panelId  = btn.dataset.panel;
-      const panel    = document.getElementById(panelId);
-      if (!panel) return;
-      const isExpanded = panel.classList.contains('panel--expanded');
-      collapseExpandedPanel();
-      if (!isExpanded) {
-        panel.classList.add('panel--expanded');
-        const mainEl = document.querySelector('main');
-        if (mainEl) panel.style.top = mainEl.getBoundingClientRect().top + 'px';
-        btn.innerHTML = '<img src="assets/reduce.svg" class="svg-icon" alt="Collapse">';
-        document.body.classList.add('has-expanded-panel');
-      }
-    });
-  });
-
-  document.addEventListener('keydown', e => {
-    if (e.key === 'Escape' && document.body.classList.contains('has-expanded-panel')) {
-      collapseExpandedPanel();
-    }
-  });
-}
 
 // ── Mic buttons ─────────────────────────────────────────────────────────────
 //

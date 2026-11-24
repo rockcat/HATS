@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Team Runner Dashboard</title>
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="layout.css">
   <script type="importmap">
   {
     "imports": {
@@ -80,50 +81,44 @@
     </div>
   </div>
 
-  <main>
+  <div class="app-shell">
 
-    <!-- Top-left: Agents -->
-    <section id="agents-panel">
+  <!-- Section menu: icons and names, folding down to icons only -->
+  <nav id="side-nav" class="side-nav" aria-label="Sections">
+    <button id="side-nav-toggle" class="side-nav-toggle" title="Fold the menu to icons" aria-expanded="true">
+      <img src="assets/menu-close.svg" class="svg-icon side-nav-toggle-icon" alt="">
+    </button>
+    <button class="side-nav-item" data-view="agents" title="Agents"><img src="assets/nav-agents.svg" class="svg-icon" alt=""><span class="side-nav-label">Agents</span></button>
+    <button class="side-nav-item" data-view="cli" title="Chat"><img src="assets/nav-chat.svg" class="svg-icon" alt=""><span class="side-nav-label">Chat</span></button>
+    <button class="side-nav-item" data-view="requests" title="Requests"><img src="assets/nav-requests.svg" class="svg-icon" alt=""><span class="side-nav-label">Requests</span><span id="requests-badge" class="tab-badge" hidden></span></button>
+    <button class="side-nav-item" data-view="board" title="Board"><img src="assets/nav-board.svg" class="svg-icon" alt=""><span class="side-nav-label">Board</span></button>
+    <button class="side-nav-item" data-view="calendar" title="Calendar"><img src="assets/nav-calendar.svg" class="svg-icon" alt=""><span class="side-nav-label">Calendar</span></button>
+    <button class="side-nav-item" data-view="files" title="Project Files"><img src="assets/nav-files.svg" class="svg-icon" alt=""><span class="side-nav-label">Project Files</span></button>
+    <button class="side-nav-item" data-view="visits" title="Visits"><img src="assets/nav-visits.svg" class="svg-icon" alt=""><span class="side-nav-label">Visits</span><span id="visits-badge" class="tab-badge" hidden></span></button>
+    <button class="side-nav-item" data-view="allowlist" title="Email Permissions"><img src="assets/nav-email.svg" class="svg-icon" alt=""><span class="side-nav-label">Email Permissions</span><span id="allowlist-badge" class="tab-badge" hidden></span></button>
+    <button class="side-nav-item" data-view="schedules" title="Schedules"><img src="assets/nav-schedules.svg" class="svg-icon" alt=""><span class="side-nav-label">Schedules</span></button>
+    <button class="side-nav-item" data-view="tools" title="Tools"><img src="assets/nav-tools.svg" class="svg-icon" alt=""><span class="side-nav-label">Tools</span></button>
+    <button class="side-nav-item" data-view="mcp" title="MCP Servers"><img src="assets/nav-mcp.svg" class="svg-icon" alt=""><span class="side-nav-label">MCP Servers</span></button>
+    <button class="side-nav-item" data-view="library" title="Agent Library"><img src="assets/nav-library.svg" class="svg-icon" alt=""><span class="side-nav-label">Agent Library</span></button>
+  </nav>
+
+  <main id="view-host">
+
+    <section class="view" data-view="agents" id="agents-panel">
       <div class="panel-header panel-header--agents">
         Agents
         <button id="add-agent-btn" class="panel-add-btn" title="Add new agent">+ Agent</button>
         <button id="load-agent-btn" class="panel-add-btn" title="Load an agent saved to a file">Load</button>
         <input type="file" id="load-agent-input" accept=".zip,application/zip" hidden>
         <button id="impromptu-meeting-btn" class="panel-add-btn" title="Start an impromptu meeting now"><img src="assets/meeting.svg" class="svg-icon" alt=""> Meet</button>
-        <button class="panel-expand-btn" data-panel="agents-panel" title="Expand"><img src="assets/expand.svg" class="svg-icon" alt="Expand"></button>
       </div>
       <div id="agents-container">
         <svg id="comms-overlay" aria-hidden="true"></svg>
       </div>
     </section>
 
-    <!-- Bottom-left: Tools & MCP -->
-    <section id="tools-panel">
-      <div class="panel-header panel-header--tabs">
-        <button class="panel-tab" data-tab="tools">Tools</button>
-        <button class="panel-tab" data-tab="mcp">MCP Servers</button>
-        <button class="panel-tab active" data-tab="cli">Chat</button>
-        <button class="panel-tab" data-tab="requests">Requests <span id="requests-badge" class="tab-badge" hidden></span></button>
-        <button class="panel-tab" data-tab="visits">Visits <span id="visits-badge" class="tab-badge" hidden></span></button>
-        <button class="panel-tab" data-tab="allowlist">Email Permissions <span id="allowlist-badge" class="tab-badge" hidden></span></button>
-        <button class="panel-tab" data-tab="files">Project Files</button>
-        <button class="panel-tab" data-tab="library">Agent Library</button>
-        <button class="panel-tab" data-tab="schedules">Schedules</button>
-        <button id="mcp-catalogue-edit-btn" class="panel-header-action-btn" title="Edit MCP catalogue" hidden><img src="assets/settings.svg" class="svg-icon" alt="Edit catalogue"></button>
-        <button class="panel-expand-btn" data-panel="tools-panel" title="Expand"><img src="assets/expand.svg" class="svg-icon" alt="Expand"></button>
-      </div>
-      <div id="tools-content" class="tab-pane"></div>
-      <div id="mcp-content" class="tab-pane"></div>
-      <div id="requests-content" class="tab-pane requests-pane"></div>
-      <div id="visits-content" class="tab-pane visits-pane"></div>
-      <div id="allowlist-content" class="tab-pane allowlist-pane">
-        <div class="allowlist-toolbar">
-          <input type="email" id="allowlist-add-input" class="allowlist-add-input" placeholder="Add email address…" autocomplete="off">
-          <input type="text" id="allowlist-add-reason" class="allowlist-add-reason" placeholder="Reason (optional)">
-          <button id="allowlist-add-btn" class="allowlist-add-btn">Add</button>
-        </div>
-        <div id="allowlist-list"></div>
-      </div>
+    <section class="view" data-view="cli">
+      <div class="panel-header">Chat</div>
       <div id="cli-content" class="tab-pane active">
         <div class="chat-agent-bar">
           <select id="chat-agent-select" class="chat-agent-select">
@@ -141,16 +136,93 @@
           <button id="cli-mic-btn" class="mic-btn" aria-label="Speak" title="Speak: hold, or click to start and click again to stop"><img src="assets/mic.svg" class="svg-icon" alt="Mic"></button>
         </div>
       </div>
-      <div id="library-content" class="tab-pane library-pane">
-        <div id="library-agent-list" class="library-agent-list"></div>
-      </div>
-      <div id="schedules-content" class="tab-pane schedules-pane">
-        <div class="schedules-toolbar">
-          <button id="schedules-new-btn" class="panel-add-btn">+ New Action</button>
+    </section>
+
+    <section class="view" data-view="requests">
+      <div class="panel-header">Requests</div>
+      <div id="requests-content" class="tab-pane active requests-pane"></div>
+    </section>
+
+    <section class="view view--board" data-view="board">
+      <div id="kanban-active">
+        <div class="panel-header panel-header--kanban">
+          Board
+          <select id="kanban-filter-user" class="kanban-filter-select" title="Filter by assignee">
+            <option value="">All users</option>
+          </select>
+          <select id="kanban-filter-tag" class="kanban-filter-select" title="Filter by tag">
+            <option value="">All tags</option>
+          </select>
+          <button id="new-ticket-btn" class="panel-add-btn" title="Create a new ticket">+ New Ticket</button>
+          <button id="board-refresh-btn" class="panel-add-btn" title="Refresh board"><img src="assets/refresh.svg" class="svg-icon" alt="Refresh"></button>
         </div>
-        <div id="schedules-list" class="schedules-list"></div>
+        <div class="kanban-active-cols">
+        <div class="kanban-col" id="col-ready">
+          <div class="kanban-col-header">
+            <span class="kanban-col-label col-ready">Ready</span>
+            <span class="kanban-col-count"></span>
+          </div>
+          <div class="task-list"></div>
+        </div>
+        <div class="kanban-col" id="col-in_progress">
+          <div class="kanban-col-header">
+            <span class="kanban-col-label col-in_progress">In Progress</span>
+            <span class="kanban-col-count"></span>
+          </div>
+          <div class="task-list"></div>
+        </div>
+        <div class="kanban-col" id="col-blocked">
+          <div class="kanban-col-header">
+            <span class="kanban-col-label col-blocked">Blocked</span>
+            <span class="kanban-col-count"></span>
+          </div>
+          <div class="task-list"></div>
+        </div>
+        <div class="kanban-col" id="col-review">
+          <div class="kanban-col-header">
+            <span class="kanban-col-label col-review">Review</span>
+            <span class="kanban-col-count"></span>
+          </div>
+          <div class="task-list"></div>
+        </div>
+        <div class="kanban-col" id="col-closed">
+          <div class="kanban-col-header">
+            <span class="kanban-col-label col-closed">Closed</span>
+            <span class="kanban-col-count"></span>
+          </div>
+          <div class="task-list"></div>
+        </div>
+        </div><!-- .kanban-active-cols -->
       </div>
-      <div id="files-content" class="tab-pane files-pane">
+      <div id="backlog-resizer" class="board-resizer" role="separator" aria-orientation="horizontal"
+           aria-label="Resize the backlog" tabindex="0" title="Drag to resize the backlog"></div>
+      <div id="backlog-panel">
+        <div class="panel-header">Backlog <span id="backlog-count"></span></div>
+        <div id="backlog-list" class="btab-pane active"></div>
+      </div>
+    </section>
+
+    <section class="view" data-view="calendar">
+      <div class="panel-header panel-header--calendar">
+        Calendar
+        <div id="cal-nav" class="cal-nav">
+          <button id="cal-prev" class="cal-nav-btn" title="Previous"><img src="assets/chevron_left.svg" class="svg-icon" alt="Previous"></button>
+          <span id="cal-period"></span>
+          <button id="cal-next" class="cal-nav-btn" title="Next"><img src="assets/chevron_right.svg" class="svg-icon" alt="Next"></button>
+        </div>
+        <div id="cal-view-tabs" class="cal-view-tabs">
+          <button class="cal-view-btn active" data-view="week">Week</button>
+          <button class="cal-view-btn" data-view="day">Day</button>
+          <button class="cal-view-btn" data-view="agenda">Agenda</button>
+        </div>
+        <button id="new-meeting-btn" class="panel-add-btn">+ Meeting</button>
+      </div>
+      <div id="calendar-pane" class="btab-pane active"></div>
+    </section>
+
+    <section class="view" data-view="files">
+      <div class="panel-header">Project Files</div>
+      <div id="files-content" class="tab-pane active files-pane">
         <div class="files-toolbar files-toolbar--top">
           <button id="files-open-folder-btn" class="files-open-folder-btn" title="Open project folder in file explorer" hidden>Open folder ↗</button>
           <a id="files-download-all" class="files-open-folder-btn" href="/api/project/files.zip" download title="Download the project's sources, outputs and ticket work as one zip"><img src="assets/download.svg" class="svg-icon" alt=""> Download all</a>
@@ -181,82 +253,55 @@
       </div>
     </section>
 
-    <!-- Top-right: Active kanban columns -->
-    <section id="kanban-active">
-      <div class="panel-header panel-header--kanban">
-        Board
-        <select id="kanban-filter-user" class="kanban-filter-select" title="Filter by assignee">
-          <option value="">All users</option>
-        </select>
-        <select id="kanban-filter-tag" class="kanban-filter-select" title="Filter by tag">
-          <option value="">All tags</option>
-        </select>
-        <button id="new-ticket-btn" class="panel-add-btn" title="Create a new ticket">+ New Ticket</button>
-        <button id="board-refresh-btn" class="panel-add-btn" title="Refresh board"><img src="assets/refresh.svg" class="svg-icon" alt="Refresh"></button>
-        <button class="panel-expand-btn" data-panel="kanban-active" title="Expand"><img src="assets/expand.svg" class="svg-icon" alt="Expand"></button>
-      </div>
-      <div class="kanban-active-cols">
-      <div class="kanban-col" id="col-ready">
-        <div class="kanban-col-header">
-          <span class="kanban-col-label col-ready">Ready</span>
-          <span class="kanban-col-count"></span>
-        </div>
-        <div class="task-list"></div>
-      </div>
-      <div class="kanban-col" id="col-in_progress">
-        <div class="kanban-col-header">
-          <span class="kanban-col-label col-in_progress">In Progress</span>
-          <span class="kanban-col-count"></span>
-        </div>
-        <div class="task-list"></div>
-      </div>
-      <div class="kanban-col" id="col-blocked">
-        <div class="kanban-col-header">
-          <span class="kanban-col-label col-blocked">Blocked</span>
-          <span class="kanban-col-count"></span>
-        </div>
-        <div class="task-list"></div>
-      </div>
-      <div class="kanban-col" id="col-review">
-        <div class="kanban-col-header">
-          <span class="kanban-col-label col-review">Review</span>
-          <span class="kanban-col-count"></span>
-        </div>
-        <div class="task-list"></div>
-      </div>
-      <div class="kanban-col" id="col-closed">
-        <div class="kanban-col-header">
-          <span class="kanban-col-label col-closed">Closed</span>
-          <span class="kanban-col-count"></span>
-        </div>
-        <div class="task-list"></div>
-      </div>
-      </div><!-- .kanban-active-cols -->
+    <section class="view" data-view="visits">
+      <div class="panel-header">Visits</div>
+      <div id="visits-content" class="tab-pane active visits-pane"></div>
     </section>
 
-    <!-- Bottom-right: Backlog / Calendar -->
-    <section id="backlog-panel">
-      <div class="panel-header panel-header--tabs">
-        <button class="backlog-tab active" data-btab="backlog">Backlog <span id="backlog-count"></span></button>
-        <button class="backlog-tab" data-btab="calendar">Calendar</button>
-        <div id="cal-nav" class="cal-nav" hidden>
-          <button id="cal-prev" class="cal-nav-btn" title="Previous"><img src="assets/chevron_left.svg" class="svg-icon" alt="Previous"></button>
-          <span id="cal-period"></span>
-          <button id="cal-next" class="cal-nav-btn" title="Next"><img src="assets/chevron_right.svg" class="svg-icon" alt="Next"></button>
+    <section class="view" data-view="allowlist">
+      <div class="panel-header">Email Permissions</div>
+      <div id="allowlist-content" class="tab-pane active allowlist-pane">
+        <div class="allowlist-toolbar">
+          <input type="email" id="allowlist-add-input" class="allowlist-add-input" placeholder="Add email address…" autocomplete="off">
+          <input type="text" id="allowlist-add-reason" class="allowlist-add-reason" placeholder="Reason (optional)">
+          <button id="allowlist-add-btn" class="allowlist-add-btn">Add</button>
         </div>
-        <div id="cal-view-tabs" class="cal-view-tabs" hidden>
-          <button class="cal-view-btn active" data-view="week">Week</button>
-          <button class="cal-view-btn" data-view="day">Day</button>
-          <button class="cal-view-btn" data-view="agenda">Agenda</button>
-        </div>
-        <button id="new-meeting-btn" class="panel-add-btn" hidden>+ Meeting</button>
-        <button class="panel-expand-btn" data-panel="backlog-panel" title="Expand"><img src="assets/expand.svg" class="svg-icon" alt="Expand"></button>
+        <div id="allowlist-list"></div>
       </div>
-      <div id="backlog-list" class="btab-pane active"></div>
-      <div id="calendar-pane" class="btab-pane" hidden></div>
+    </section>
+
+    <section class="view" data-view="schedules">
+      <div class="panel-header">Schedules</div>
+      <div id="schedules-content" class="tab-pane active schedules-pane">
+        <div class="schedules-toolbar">
+          <button id="schedules-new-btn" class="panel-add-btn">+ New Action</button>
+        </div>
+        <div id="schedules-list" class="schedules-list"></div>
+      </div>
+    </section>
+
+    <section class="view" data-view="tools">
+      <div class="panel-header">Tools</div>
+      <div id="tools-content" class="tab-pane active"></div>
+    </section>
+
+    <section class="view" data-view="mcp">
+      <div class="panel-header">
+        MCP Servers
+        <button id="mcp-catalogue-edit-btn" class="panel-header-action-btn" title="Edit MCP catalogue"><img src="assets/settings.svg" class="svg-icon" alt="Edit catalogue"></button>
+      </div>
+      <div id="mcp-content" class="tab-pane active"></div>
+    </section>
+
+    <section class="view" data-view="library">
+      <div class="panel-header">Agent Library</div>
+      <div id="library-content" class="tab-pane active library-pane">
+        <div id="library-agent-list" class="library-agent-list"></div>
+      </div>
     </section>
 
   </main>
+  </div><!-- .app-shell -->
 
   <!-- Meeting overlay — shown when a meeting is active -->
   <div id="meeting-overlay" class="meeting-overlay" hidden>
