@@ -69,3 +69,20 @@
 .header-icon-btn:focus-visible { outline: 2px solid var(--hat-blue); outline-offset: 1px; }
 .header-icon-btn.mute-btn--active { background: rgba(248, 81, 73, 0.15); border-color: var(--hat-red); }
 .header-icon-btn.mute-btn--active .svg-icon { opacity: 1; }
+
+/* Listen: blue while on, fainter with nothing open to hear, pulsing while
+   it hears you, and a slow breath while turning that into text. */
+.header-icon-btn.listen-btn--on { background: rgba(88, 166, 255, 0.15); border-color: var(--hat-blue); }
+.header-icon-btn.listen-btn--on .svg-icon { opacity: 1; }
+.header-icon-btn.listen-btn--nowhere { background: none; border-style: dashed; }
+.header-icon-btn.listen-btn--nowhere .svg-icon { opacity: 0.5; }
+.header-icon-btn.listen-btn--hearing { animation: listen-pulse 0.9s ease-in-out infinite; }
+.header-icon-btn.listen-btn--busy { animation: listen-pulse 1.8s ease-in-out infinite; }
+@keyframes listen-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(88, 166, 255, 0.55); }
+  50%      { box-shadow: 0 0 0 5px rgba(88, 166, 255, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .header-icon-btn.listen-btn--hearing,
+  .header-icon-btn.listen-btn--busy { animation: none; background: rgba(88, 166, 255, 0.35); }
+}

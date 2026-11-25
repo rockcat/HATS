@@ -28,6 +28,7 @@ import { initAllowlist }                               from './modules/allowlist
 import { initMicButtons }                             from './modules/panels.js';
 import { initNav, showView }                           from './modules/nav.js';
 import { initTheme }                                   from './modules/theme.js';
+import { initListen }                                  from './modules/listen.js';
 import { connect, fetchTools, applyState }             from './modules/sse.js';
 
 if (!await checkAuth()) throw new Error('Not authenticated');
@@ -58,6 +59,7 @@ initProjectBadge();
 initGoalBar();
 initSettings();
 initTheme();
+initListen();
 loadSpecialisations();
 initMCPEditor();
 initImpromptuMeeting();
