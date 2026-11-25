@@ -37,8 +37,10 @@ class ConversationThreads extends HTMLElement {
     this._stopPolling();
   }
 
-  attributeChangedCallback(name, _old, value) {
-    if (name === 'agent') {
+  attributeChangedCallback(name, old, value) {
+    // The agent list re-sets the same agent on every update; only a different
+    // agent starts afresh, or messages still being sent would vanish.
+    if (name === 'agent' && value !== old) {
       this._agentName = value;
       this._activeThread = null;
       this._newThreadMode = false;
@@ -263,22 +265,41 @@ class ConversationThreads extends HTMLElement {
         const ci  = this._shadow.querySelector('#general-compose .compose-input');
         const msg = ci?.value.trim();
         if (!msg) return;
-        this._pendingMessages = [...this._pendingMessages, { role: 'user', content: msg, timestamp: new Date().toISOString(), _pending: true }];
         if (ci) { ci.value = ''; ci.style.height = 'auto'; }
-        this._render();
-        this._shadow.getElementById('general-messages').scrollTop = this._shadow.getElementById('general-messages').scrollHeight;
-        this._doSend(msg, 'general').then(() => this._bumpPolling());
+        this._sendTo('general', msg);
       }
     } else if (panel === 'thread') {
       const ci  = this._shadow.querySelector('#thread-compose .compose-input');
       const msg = ci?.value.trim();
       if (!msg || !this._activeThread) return;
-      this._pendingThreadMessages = [...this._pendingThreadMessages, { role: 'user', content: msg, timestamp: new Date().toISOString(), _pending: true }];
       if (ci) { ci.value = ''; ci.style.height = 'auto'; }
-      this._render();
-      this._shadow.getElementById('thread-messages').scrollTop = this._shadow.getElementById('thread-messages').scrollHeight;
-      this._doSend(msg, this._activeThread).then(() => this._bumpPolling());
+      this._sendTo('thread', msg);
     }
+  }
+
+  /** Show a message as sent, in #general or the open thread, and send it. */
+  _sendTo(panel, msg) {
+    const pending = { role: 'user', content: msg, timestamp: new Date().toISOString(), _pending: true };
+    const inThread = panel === 'thread';
+    if (inThread) this._pendingThreadMessages = [...this._pendingThreadMessages, pending];
+    else this._pendingMessages = [...this._pendingMessages, pending];
+    this._render();
+    const area = this._shadow.getElementById(inThread ? 'thread-messages' : 'general-messages');
+    if (area) area.scrollTop = area.scrollHeight;
+    this._doSend(msg, inThread ? this._activeThread : 'general').then(() => this._bumpPolling());
+  }
+
+  // ── For listen mode ───────────────────────────────────────────────────────
+
+  /** The thread open beside #general, or null. */
+  get activeThread() { return this._activeThread; }
+
+  /** Send what was said to the open thread, or #general: as if typed there. */
+  sendText(text) {
+    const msg = text?.trim();
+    if (!msg || !this._agentName) return false;
+    this._sendTo(this._activeThread ? 'thread' : 'general', msg);
+    return true;
   }
 
   async _doSend(text, threadId) {
