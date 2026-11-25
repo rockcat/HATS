@@ -1,0 +1,95 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 730" width="960" height="730" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <title>A visit between runners on different machines, through one Project Server</title>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#57606a"/>
+    </marker>
+  </defs>
+
+  <rect width="960" height="730" fill="#ffffff"/>
+
+  <!-- The network -->
+  <rect x="12" y="12" width="936" height="660" rx="16" fill="none" stroke="#8c959f" stroke-dasharray="8 6"/>
+  <text x="30" y="36" font-size="13" font-weight="600" fill="#57606a">Your network (LAN)</text>
+
+  <!-- Machine C: the shared services -->
+  <rect x="300" y="44" width="360" height="160" rx="12" fill="#f6f8fa" stroke="#57606a" stroke-width="1.5"/>
+  <text x="480" y="68" text-anchor="middle" font-size="15" font-weight="700" fill="#1f2328">Machine C · 192.168.1.10</text>
+  <rect x="320" y="80" width="320" height="72" rx="8" fill="#ffffff" stroke="#8250df" stroke-width="2"/>
+  <text x="480" y="106" text-anchor="middle" font-size="15" font-weight="700" fill="#8250df">Project Server :3020 (the master)</text>
+  <text x="480" y="126" text-anchor="middle" font-size="12.5" fill="#57606a">teams, visit settings, visits, travel packs</text>
+  <text x="480" y="143" text-anchor="middle" font-size="12.5" fill="#57606a">checks both teams agree</text>
+  <rect x="320" y="162" width="152" height="28" rx="6" fill="#ffffff" stroke="#d0d7de"/>
+  <text x="396" y="181" text-anchor="middle" font-size="12" fill="#57606a">Agent Library :3010</text>
+  <rect x="488" y="162" width="152" height="28" rx="6" fill="#ffffff" stroke="#d0d7de"/>
+  <text x="564" y="181" text-anchor="middle" font-size="12" fill="#57606a">Speech :3050</text>
+
+  <!-- Machine A: Website -->
+  <rect x="30" y="330" width="360" height="326" rx="12" fill="#ddf4ff" stroke="#54aeff" stroke-width="1.5"/>
+  <text x="50" y="358" font-size="15" font-weight="700" fill="#0969da">Machine A · Website runner</text>
+  <text x="50" y="378" font-size="12.5" fill="#57606a">:3071 · visitTo: insights</text>
+
+  <rect x="50" y="392" width="320" height="52" rx="8" fill="#ffffff" stroke="#54aeff"/>
+  <text x="66" y="414" font-size="14" font-weight="600" fill="#1f2328">Wren · front-end developer</text>
+  <text x="66" y="433" font-size="12.5" fill="#57606a">has the pricing-page ticket</text>
+
+  <rect x="50" y="454" width="320" height="52" rx="8" fill="#ffffff" stroke="#54aeff"/>
+  <text x="66" y="476" font-size="14" font-weight="600" fill="#1f2328">Ticket: Pricing page</text>
+  <text x="66" y="495" font-size="12.5" fill="#57606a">the result lands here as a comment</text>
+
+  <rect x="50" y="516" width="320" height="74" rx="8" fill="#ffffff" stroke="#8c959f" stroke-dasharray="5 4"/>
+  <text x="66" y="538" font-size="13.5" font-weight="600" fill="#1f2328">Wren's place, kept on machine A</text>
+  <text x="66" y="558" font-size="12.5" fill="#57606a">logins, conversations, scheduled actions,</text>
+  <text x="66" y="577" font-size="12.5" fill="#57606a">other tickets; restored when Wren is back</text>
+
+  <rect x="50" y="602" width="320" height="38" rx="6" fill="#f6f8fa" stroke="#d0d7de"/>
+  <text x="62" y="618" font-size="11" fill="#57606a">the runner's setting</text>
+  <text x="62" y="633" font-size="11.5" font-family="ui-monospace, Consolas, monospace" fill="#1f2328">PROJECT_SERVER_URL=http://192.168.1.10:3020</text>
+
+  <!-- Machine B: Insights -->
+  <rect x="570" y="330" width="360" height="326" rx="12" fill="#fff8c5" stroke="#d4a72c" stroke-width="1.5"/>
+  <text x="590" y="358" font-size="15" font-weight="700" fill="#9a6700">Machine B · Insights runner</text>
+  <text x="590" y="378" font-size="12.5" fill="#57606a">:3072 · hostFrom: website · admin approves</text>
+
+  <rect x="590" y="392" width="320" height="52" rx="8" fill="#ffffff" stroke="#d4a72c"/>
+  <text x="606" y="414" font-size="14" font-weight="600" fill="#1f2328">Wren, visiting</text>
+  <text x="606" y="433" font-size="12.5" fill="#57606a">own ticket here · <tspan font-weight="700" fill="#1f2328">4</tspan> reads the CSV below</text>
+
+  <rect x="590" y="454" width="320" height="52" rx="8" fill="#ffffff" stroke="#d4a72c"/>
+  <text x="606" y="476" font-size="14" font-weight="600" fill="#1f2328">sales-2026-q3.csv</text>
+  <text x="606" y="495" font-size="12.5" fill="#57606a">never leaves machine B</text>
+
+  <rect x="590" y="516" width="320" height="74" rx="8" fill="#ffffff" stroke="#d4a72c"/>
+  <text x="606" y="538" font-size="14" font-weight="600" fill="#1f2328">An Insights admin</text>
+  <text x="606" y="558" font-size="12.5" fill="#57606a">approves, refuses or ends the visit;</text>
+  <text x="606" y="577" font-size="12.5" fill="#57606a">only a summary goes home</text>
+
+  <rect x="590" y="602" width="320" height="38" rx="6" fill="#f6f8fa" stroke="#d0d7de"/>
+  <text x="602" y="618" font-size="11" fill="#57606a">the runner's setting</text>
+  <text x="602" y="633" font-size="11.5" font-family="ui-monospace, Consolas, monospace" fill="#1f2328">PROJECT_SERVER_URL=http://192.168.1.10:3020</text>
+
+
+  <!-- Machine A ⇄ Project Server -->
+  <path d="M200 328 L 348 206" fill="none" stroke="#57606a" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <path d="M420 206 L 272 328" fill="none" stroke="#1a7f37" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <text x="250" y="226" text-anchor="end" font-size="12.5" fill="#1f2328"><tspan font-weight="700" fill="#1f2328">1</tspan> request_visit</text>
+  <text x="250" y="245" text-anchor="end" font-size="12.5" fill="#0969da"><tspan font-weight="700" fill="#0969da">3</tspan> travel pack out</text>
+  <text x="250" y="262" text-anchor="end" font-size="11.5" fill="#57606a">settings + memory,</text>
+  <text x="250" y="277" text-anchor="end" font-size="11.5" fill="#57606a">no logins</text>
+  <text x="372" y="262" font-size="12.5" fill="#1a7f37"><tspan font-weight="700" fill="#1a7f37">5</tspan> result home</text>
+  <text x="372" y="279" font-size="11.5" fill="#57606a">onto the ticket</text>
+
+  <!-- Machine B ⇄ Project Server -->
+  <path d="M760 328 L 612 206" fill="none" stroke="#57606a" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <path d="M540 206 L 688 328" fill="none" stroke="#0969da" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <text x="710" y="226" font-size="12.5" fill="#1f2328"><tspan font-weight="700" fill="#1f2328">2</tspan> approve</text>
+  <text x="710" y="245" font-size="12.5" fill="#1a7f37"><tspan font-weight="700" fill="#1a7f37">5</tspan> finish_visit</text>
+  <text x="710" y="262" font-size="11.5" fill="#57606a">the result,</text>
+  <text x="710" y="277" font-size="11.5" fill="#57606a">not the data</text>
+  <text x="588" y="262" text-anchor="end" font-size="12.5" fill="#0969da"><tspan font-weight="700" fill="#0969da">3</tspan> Wren arrives</text>
+  <text x="588" y="279" text-anchor="end" font-size="11.5" fill="#57606a">from the pack</text>
+
+  <!-- Footnote -->
+  <text x="480" y="698" text-anchor="middle" font-size="13" fill="#1f2328">Runners never talk to each other: every step of a visit goes through the one Project Server.</text>
+  <text x="480" y="718" text-anchor="middle" font-size="12.5" fill="#57606a">It can run on a machine of its own, as here, or on either runner's machine.</text>
+</svg>

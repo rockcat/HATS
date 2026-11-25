@@ -152,12 +152,36 @@ Each one shows a different safety rule:
 - `maxHours: 1` means a stuck demo ends on its own. That's also a natural moment to show the deadline.
 - If Wren goes straight to the ticket without looking for a team, prompt it: *"Insights has the sales data; ask to visit them."*
 
+## Running across machines
+
+The two runners don't have to be on the same computer. Runners never talk to each other directly: every step of a visit goes through the Project Server. So any runner on your network can take part, as long as it uses the same Project Server as the others.
+
+![The Website runner on machine A and the Insights runner on machine B, both using one Project Server on machine C](visit-demo-two-machines.svg)
+
+**Setup:**
+
+1. **Choose one machine for the shared services:** the Project Server (:3020), the Agent Template Library (:3010) and the Speech Service (:3050). It can be a machine of its own, or one of the runner machines.
+2. **Open those ports to the other machines.** On Windows, allow incoming connections on them in the firewall.
+3. **Point every other machine's runner at it.** With Docker, put these in that machine's `.env`. Compose passes them to the runner as `PROJECT_SERVER_URL` and so on.
+   ```
+   DOCKER_PROJECT_SERVER_URL=http://192.168.1.10:3020
+   DOCKER_AGENT_LIBRARY_URL=http://192.168.1.10:3010
+   DOCKER_SPEECH_SERVICE_URL=http://192.168.1.10:3050
+   ```
+4. **Run each team's runner on the machine where its files should live.** In the diagram, the sales file stays on machine B. Only Wren's result crosses the network.
+
+**Limits and cautions:**
+
+- **One Project Server only.** Visits work only between teams on the same Project Server. Two installations, each with its own Project Server, can't visit each other. `"*"` in `visitTo` or `hostFrom` means any team on that Project Server.
+- **The Project Server doesn't ask anyone to sign in.** Anyone who can reach port 3020 can read and change projects and approve visits. Use it on a network you trust, or limit port 3020 to your runner machines' addresses.
+
 ## Files in this folder
 
 | File | What it is |
 |---|---|
 | [`README.md`](README.md) | This guide |
 | [`visit-demo.svg`](visit-demo.svg) | The diagram at the top |
+| [`visit-demo-two-machines.svg`](visit-demo-two-machines.svg) | The same visit, with the runners on different machines |
 | [`seed.mjs`](seed.mjs) | Sets up both teams, the sales file and the ticket |
 | [`docker-compose.visit-demo.yml`](docker-compose.visit-demo.yml) | One runner per team, on :3071 and :3072 |
 | [`sales-2026-q3.csv`](sales-2026-q3.csv) | Made-up sales for one quarter: date, region, plan, monthly price, seats |
