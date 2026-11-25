@@ -26,6 +26,7 @@ const TEAMS = {
   website: { name: 'Website', url: trim(process.env['WEBSITE_RUNNER_URL'] ?? 'http://localhost:3071') },
   insights: { name: 'Insights', url: trim(process.env['INSIGHTS_RUNNER_URL'] ?? 'http://localhost:3072') },
 };
+const PROJECT_SERVER = trim(process.env['PROJECT_SERVER_URL'] ?? 'http://localhost:3020');
 const AGENT = 'Wren';
 const ASK = 'Pick up the pricing-page ticket. Insights has the sales data: ask to visit them.';
 const realTime = process.argv.includes('--real-time');
@@ -107,9 +108,11 @@ async function until(label, test, { timeout, every = 3000, sides = [] }) {
  */
 let visitId = null;
 async function wrensVisit(insights) {
+  // A runner lists only open visits, so once it is found, it is read from
+  // the Project Server: a visit that has come home is no longer open.
+  if (visitId) return (await fetch(`${PROJECT_SERVER}/api/v1/visits/${encodeURIComponent(visitId)}`)).json();
   const started = new Date(t0).toISOString();
   const { visits = [] } = await insights.api('/api/visits');
-  if (visitId) return visits.find((v) => v.id === visitId) ?? null;
   const first = visits
     .filter((v) => v.agent?.name === AGENT && (v.history?.[0]?.at ?? '') >= started)
     .sort((a, b) => (a.history[0].at < b.history[0].at ? -1 : 1))[0];
@@ -194,7 +197,8 @@ async function demo(website, insights) {
   await show(website, 'board');
   await website.page.locator(`[data-ticket-id="${ticket.id}"]`).first().click();
   await caption(website, `The result comes home as a comment on ${ticket.id}`);
-  await website.page.evaluate(() => document.querySelector('#modal-comments, .modal-comments')?.scrollIntoView?.({ block: 'end' }));
+  // The last comment is the result: show all of it.
+  await website.page.evaluate(() => document.querySelector('#modal-comments')?.lastElementChild?.scrollIntoView?.({ block: 'end' }));
   await show(insights, 'files');
   await caption(insights, 'The sales file never left Insights');
   await sleep(8000);
