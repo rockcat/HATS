@@ -9,7 +9,7 @@ import { getAvatars } from './avatars.js';
 import { getSpecValue, setSpecValue } from './specialisations.js';
 import { loadProviders, refreshProviderModels, populateProviderSelect, populateModelSelect } from './providers.js';
 import { updatePricingHint, updateContextWindowPlaceholder } from './pricing.js';
-import { populateBackgroundSelect } from './files.js';
+import { populateBackgroundSelect } from './backgrounds.js';
 import { fetchGlobalAgents } from './library.js';
 
 // Injected at init time to break library ↔ add-agent circular dep.

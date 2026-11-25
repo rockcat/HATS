@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { folderNoteText } from './files.js';
+import { folderNoteText } from './files-actions.js';
 
 describe('the note shown when the folder cannot be opened', () => {
   it('points into the data folder when that is all the runner knows', () => {

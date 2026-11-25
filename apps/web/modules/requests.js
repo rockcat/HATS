@@ -1,7 +1,7 @@
 // ── Human Requests panel ──────────────────────────────────────────────────────
 
 import { esc } from './utils.js';
-import { openFileViewer } from './files.js';
+import { openFileViewer } from './file-preview.js';
 import { dashboardLinkFor, baseName, copyWithFeedback } from './file-links.js';
 
 /** The documents a request is about, each to open or copy a link to. */

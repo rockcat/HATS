@@ -6,9 +6,9 @@ import { checkAuth }                                   from './modules/auth.js';
 import { loadSpecialisations }                         from './modules/specialisations.js';
 import { initTelemetry, initTelScopeToggle,
          applyTelemetrySummary }                       from './modules/telemetry.js';
-import { fetchFiles, startFilesRefresh,
-         initFileUpload, initFileViewer,
-         initGenBgModal }                              from './modules/files.js';
+import { fetchFiles, startFilesRefresh, initFileUpload } from './modules/files.js';
+import { initFileViewer }                            from './modules/file-preview.js';
+import { initGenBgModal }                            from './modules/backgrounds.js';
 import { fetchCalendar, initCalendar,
          initImpromptuMeeting }                        from './modules/calendar.js';
 import { updateGoalBar, initGoalBar,

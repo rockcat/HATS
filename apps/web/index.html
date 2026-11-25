@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="layout.css">
   <link rel="stylesheet" href="theme.css">
+  <link rel="stylesheet" href="files.css">
   <script>
     // The remembered theme, before the page draws (see modules/theme.js).
     try { if (localStorage.getItem('dashboardTheme') === 'light') document.documentElement.dataset.theme = 'light'; } catch {}
@@ -300,37 +301,31 @@
       <div id="calendar-pane" class="btab-pane active"></div>
     </section>
 
-    <section class="view" data-view="files">
+    <section class="view view--files" data-view="files">
       <div class="panel-header">Project Files</div>
-      <div id="files-content" class="tab-pane active files-pane">
-        <div class="files-toolbar files-toolbar--top">
-          <button id="files-open-folder-btn" class="files-open-folder-btn" title="Open project folder in file explorer" hidden>Open folder ↗</button>
-          <a id="files-download-all" class="files-open-folder-btn" href="/api/project/files.zip" download title="Download the project's sources, outputs and ticket work as one zip"><img src="assets/download.svg" class="svg-icon" alt=""> Download all</a>
-          <span id="files-open-folder-note" class="files-open-folder-note" hidden></span>
-          <button id="files-clear-btn" class="files-clear-btn" title="Clear all project files, tickets and history">Clear project</button>
-        </div>
-        <details class="files-section" open>
-          <summary class="files-section-summary">
-            <span class="files-section-label">Sources</span>
-            <label class="files-upload-btn" title="Upload a file to sources/">
+      <div id="files-content" class="files-pane">
+        <div class="files-toolbar">
+          <button type="button" id="files-up" class="files-btn files-btn--icon" title="Up one folder (Backspace)" aria-label="Up one folder">↑</button>
+          <nav id="files-crumbs" class="files-crumbs" aria-label="Folder"></nav>
+          <div class="files-toolbar-actions">
+            <div class="files-view-switch" role="group" aria-label="Show files as">
+              <button type="button" id="files-view-list" class="files-btn files-btn--icon" title="List" aria-label="List" aria-pressed="true">☰</button>
+              <button type="button" id="files-view-icons" class="files-btn files-btn--icon" title="Icons" aria-label="Icons" aria-pressed="false">▦</button>
+            </div>
+            <label class="files-btn files-btn--primary" title="Upload files into Sources">
               + Upload
               <input type="file" id="files-upload-input" multiple hidden>
             </label>
-          </summary>
-          <div id="files-sources-list" class="files-list"></div>
-        </details>
-        <details class="files-section" open>
-          <summary class="files-section-summary">
-            <span class="files-section-label">Outputs</span>
-          </summary>
-          <div id="files-outputs-list" class="files-list"></div>
-        </details>
-        <details id="files-tickets-section" class="files-section" hidden>
-          <summary class="files-section-summary">
-            <span class="files-section-label">Ticket Work</span>
-          </summary>
-          <div id="files-tickets-list"></div>
-        </details>
+            <button type="button" id="files-open-folder-btn" class="files-btn" title="Open the project folder">Open folder ↗</button>
+            <a id="files-download-all" class="files-btn" href="/api/project/files.zip" download title="Download the project's sources, outputs and ticket work as one zip"><img src="assets/download.svg" class="svg-icon" alt=""> Download all</a>
+            <button type="button" id="files-clear-btn" class="files-btn files-btn--danger" title="Clear all project files, tickets and history">Clear project</button>
+          </div>
+        </div>
+        <div id="files-open-folder-note" class="files-open-folder-note" hidden></div>
+        <div class="files-split">
+          <div id="files-items" class="files-items files-items--list" role="listbox" aria-label="Files"></div>
+          <aside id="files-preview" class="files-preview" aria-label="Preview"></aside>
+        </div>
       </div>
     </section>
 

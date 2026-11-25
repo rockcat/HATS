@@ -36,7 +36,7 @@
 :root[data-theme="light"] .header-btn:not(.header-btn--icon) .svg-icon,
 :root[data-theme="light"] .modal-btn.primary .svg-icon,
 :root[data-theme="light"] .panel-add-btn .svg-icon,
-:root[data-theme="light"] .files-upload-btn .svg-icon,
+:root[data-theme="light"] .files-btn--primary .svg-icon,
 :root[data-theme="light"] .meeting-send-btn .svg-icon,
 :root[data-theme="light"] .settings-tab-btn.active .svg-icon,
 :root[data-theme="light"] .toggle-slider-opt.active .svg-icon { filter: none; }
