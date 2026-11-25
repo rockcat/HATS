@@ -98,11 +98,21 @@ async function until(label, test, { timeout, every = 3000, sides = [] }) {
   }
 }
 
-/** Wren's visit from Website to Insights, made after the recording began. */
+/**
+ * Wren's visit from Website to Insights, made after the recording began:
+ * the first one, then that one by its id. Back with a partial result, Wren
+ * may ask again, and that second request must not stand in for the first.
+ */
+let visitId = null;
 async function wrensVisit(insights) {
   const started = new Date(t0).toISOString();
   const { visits = [] } = await insights.api('/api/visits');
-  return visits.find((v) => v.agent?.name === AGENT && (v.history?.[0]?.at ?? '') >= started) ?? null;
+  if (visitId) return visits.find((v) => v.id === visitId) ?? null;
+  const first = visits
+    .filter((v) => v.agent?.name === AGENT && (v.history?.[0]?.at ?? '') >= started)
+    .sort((a, b) => (a.history[0].at < b.history[0].at ? -1 : 1))[0];
+  if (first) visitId = first.id;
+  return first ?? null;
 }
 
 /**
