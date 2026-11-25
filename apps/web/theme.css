@@ -72,6 +72,29 @@
 
 /* Listen: blue while on, fainter with nothing open to hear, pulsing while
    it hears you, and a slow breath while turning that into text. */
+/* ── Notices (modules/notice.js) ── */
+.notices {
+  /* Top right, under the header: clear of the message box and its Send button. */
+  position: fixed; right: 16px; top: 84px; z-index: 3000;
+  display: flex; flex-direction: column; gap: 8px; align-items: flex-end;
+  max-width: min(420px, calc(100vw - 32px)); pointer-events: none;
+}
+.notice {
+  display: flex; gap: 10px; align-items: flex-start; pointer-events: auto;
+  padding: 10px 12px; border-radius: 8px; font-size: 13px; line-height: 1.45;
+  background: var(--surface); color: var(--text);
+  border: 1px solid var(--border); border-left: 4px solid var(--hat-blue);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.notice--error { border-left-color: var(--hat-red); }
+.notice-text { flex: 1; }
+.notice-close {
+  background: none; border: none; color: var(--text-muted); cursor: pointer;
+  font-size: 16px; line-height: 1; padding: 0 2px;
+}
+.notice-close:hover { color: var(--text); }
+
 .header-icon-btn.listen-btn--on {
   background: rgba(88, 166, 255, 0.15); border-color: var(--hat-blue);
   /* Grows with the microphone's level; full width is speaking level. */

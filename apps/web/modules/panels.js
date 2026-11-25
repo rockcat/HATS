@@ -2,7 +2,7 @@
 //
 // Sections and the menu that switches between them live in nav.js.
 
-import { appendCLILine } from './cli.js';
+import { notify } from './notice.js';
 import { micAction } from './mic-action.js';
 import { transcribe } from './transcribe.js';
 
@@ -13,7 +13,7 @@ import { transcribe } from './transcribe.js';
 // returned in silence — indistinguishable from a dead button, and a click is
 // what most people try first.
 //
-// Every failure is now said out loud in the CLI pane. They were all
+// Every failure is now shown as a notice (notice.js). They were all
 // console.warn before, so a refused microphone, a missing OPENAI_API_KEY or
 // a Whisper error all looked identical: nothing happening.
 
@@ -39,7 +39,7 @@ export function initMicBtn(btnId, inputId) {
   };
   setState('idle');
 
-  const say = (text) => appendCLILine(text, 'cli-error');
+  const say = (text) => notify(text, 'error');
 
   const startRecording = async () => {
     chunks = [];
@@ -119,6 +119,6 @@ export function initMicBtn(btnId, inputId) {
   window.addEventListener('touchend', release);
 }
 export function initMicButtons() {
-  initMicBtn('cli-mic-btn',     'cli-input');
+  // Chat has listen mode instead (listen.js); a meeting keeps its own button.
   initMicBtn('meeting-mic-btn', 'meeting-input');
 }

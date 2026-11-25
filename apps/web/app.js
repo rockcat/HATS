@@ -22,7 +22,7 @@ import { initServiceStatus }                           from './modules/services.
 import { initMCPEditor }                               from './modules/mcp.js';
 import { initAgentDetail, closeAgentDetail }           from './modules/agent-detail.js';
 import { initCLI }                                     from './modules/cli.js';
-import { appendCLILine }                               from './modules/cli.js';
+import { notify }                                      from './modules/notice.js';
 import { initGoogleReturn }                            from './modules/google-return.js';
 import { initAllowlist }                               from './modules/allowlist.js';
 import { initMicButtons }                             from './modules/panels.js';
@@ -78,7 +78,7 @@ initServiceStatus();
 // result in the query string, and nobody listening for the message that a
 // popup would have sent.
 initGoogleReturn({
-  announce: (text) => appendCLILine(text, 'cli-system'),
+  announce: (text) => notify(text),
   showMcpTab: () => showView('mcp'),
 });
 

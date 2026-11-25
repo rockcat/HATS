@@ -15,7 +15,7 @@
 import { listenTarget, describeTarget, vadStep, VAD, QUIET, nextFloor, thresholdFor } from './listen-logic.js';
 import { isSpeechPlaying } from './speech-activity.js';
 import { transcribe } from './transcribe.js';
-import { appendCLILine } from './cli.js';
+import { notify } from './notice.js';
 
 const TICK_MS = 50;
 /** This long with not one non-zero sample means the input is broken. */
@@ -27,7 +27,7 @@ let status = 'off';   // off | listening | hearing | transcribing
 // The header's, and the meeting's: a meeting covers the header.
 const button = () => document.getElementById('listen-btn');
 const meetingButton = () => document.getElementById('meeting-listen-btn');
-const say = (text) => appendCLILine(text, 'cli-error');
+const say = (text) => notify(text, 'error');
 
 /** What is on screen now, as listen-logic reads it. */
 function page() {
