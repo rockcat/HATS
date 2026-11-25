@@ -85,7 +85,7 @@ export function serviceTargets(
       probe: (url) => new AgentLibraryClient(url, PROBE_TIMEOUT_MS).isHealthy(),
     },
     {
-      id: 'project-server', label: 'Project Server', url: urls.projectServerUrl,
+      id: 'project-server', label: 'Project Designer', url: urls.projectServerUrl,
       openUrl: designerUrl(urls.projectServerUrl, env),
       probe: (url) => new ProjectServerClient(url, PROBE_TIMEOUT_MS).isHealthy(),
     },
