@@ -152,6 +152,29 @@ Each one shows a different safety rule:
 - `maxHours: 1` means a stuck demo ends on its own. That's also a natural moment to show the deadline.
 - If Wren goes straight to the ticket without looking for a team, prompt it: *"Insights has the sales data; ask to visit them."*
 
+## Recording the demo
+
+`record.mjs` plays the demo script with real agents and records it as one video: Website above, Insights below, with captions. It runs Chrome through Playwright and joins the recordings with ffmpeg, so it needs both. Start from a fresh demo:
+
+```bash
+node --env-file=.env docs/visit-demo/seed.mjs --reset
+docker compose --project-directory . -f docs/visit-demo/docker-compose.visit-demo.yml up -d --force-recreate
+node --env-file=.env docs/visit-demo/seed.mjs
+node --env-file=.env docs/visit-demo/record.mjs
+```
+
+The runners are recreated because the reset deletes the folders they had open. `--force-recreate` also makes sure they run the newest build of the image.
+
+The run takes about two minutes. While the agents think, the screen barely changes, so a long wait keeps only its first and last few seconds, with a caption such as *"2 min later"*. Add `--real-time` to keep everything, or `--side-by-side` to put the teams next to each other.
+
+It writes `docs/visit-demo/recording/`, which git ignores:
+
+- `visit-demo.mp4`, the video;
+- the two raw recordings;
+- `timeline.json`, which records when each wait began and ended.
+
+It stops with a reason if a step doesn't happen in time, for example if Wren can't ask to visit because the runner manager isn't running.
+
 ## Running across machines
 
 The two runners don't have to be on the same computer. Runners never talk to each other directly: every step of a visit goes through the Project Server, and agents find other teams through the runner manager. So any runner on your network can take part, as long as it uses the same Project Server and runner manager as the others.
@@ -188,6 +211,8 @@ The two runners don't have to be on the same computer. Runners never talk to eac
 | [`seed.mjs`](seed.mjs) | Sets up both teams, the sales file and the ticket |
 | [`docker-compose.visit-demo.yml`](docker-compose.visit-demo.yml) | One runner per team, on :3071 and :3072 |
 | [`sales-2026-q3.csv`](sales-2026-q3.csv) | Made-up sales for one quarter: date, region, plan, monthly price, seats |
+| [`record.mjs`](record.mjs) | Plays the demo and records it as a video |
+| [`record-video.mjs`](record-video.mjs), [`record-cuts.mjs`](record-cuts.mjs) | Join the recordings, and cut the long waits |
 
 ## Settings used
 
