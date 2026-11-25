@@ -72,7 +72,12 @@
 
 /* Listen: blue while on, fainter with nothing open to hear, pulsing while
    it hears you, and a slow breath while turning that into text. */
-.header-icon-btn.listen-btn--on { background: rgba(88, 166, 255, 0.15); border-color: var(--hat-blue); }
+.header-icon-btn.listen-btn--on {
+  background: rgba(88, 166, 255, 0.15); border-color: var(--hat-blue);
+  /* Grows with the microphone's level; full width is speaking level. */
+  box-shadow: 0 0 0 calc(var(--listen-level, 0) * 5px) rgba(88, 166, 255, 0.55);
+  transition: box-shadow 80ms linear;
+}
 .header-icon-btn.listen-btn--on .svg-icon { opacity: 1; }
 .header-icon-btn.listen-btn--nowhere { background: none; border-style: dashed; }
 .header-icon-btn.listen-btn--nowhere .svg-icon { opacity: 0.5; }

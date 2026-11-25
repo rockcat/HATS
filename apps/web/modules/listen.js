@@ -12,12 +12,14 @@
 // Where speech goes and when it starts and stops are decided in
 // listen-logic.js; this is the part with a microphone and a page.
 
-import { listenTarget, describeTarget, vadStep, QUIET } from './listen-logic.js';
+import { listenTarget, describeTarget, vadStep, VAD, QUIET, nextFloor, thresholdFor } from './listen-logic.js';
 import { isSpeechPlaying } from './speech-activity.js';
 import { transcribe } from './transcribe.js';
 import { appendCLILine } from './cli.js';
 
 const TICK_MS = 50;
+/** This long with not one non-zero sample means the input is broken. */
+const SILENT_MIC_MS = 4000;
 
 let session = null;   // { stream, ctx, analyser, samples, timer, vad, recorder, chunks, target }
 let status = 'off';   // off | listening | hearing | transcribing
@@ -32,8 +34,13 @@ function page() {
   const overlay = document.getElementById('meeting-overlay');
   const input = document.getElementById('meeting-human-input');
   const threads = document.getElementById('chat-threads');
+  const detailModal = document.getElementById('agent-detail-modal');
+  const detail = document.getElementById('agent-detail-threads');
+  const detailOpen = !!detailModal && !detailModal.hidden;
   return {
     meetingOpen: !!overlay && !overlay.hidden && !!input && !input.hidden,
+    detailAgent: detailOpen ? detail?.getAttribute('agent') || null : null,
+    detailThread: detailOpen ? detail?.activeThread ?? null : null,
     view: document.querySelector('#view-host > .view.active')?.dataset.view ?? null,
     chatAgent: document.getElementById('chat-agent-select')?.value || null,
     chatThread: threads?.activeThread ?? null,
@@ -53,8 +60,9 @@ function show() {
   btn.title = status === 'off' ? 'Listen: talk to the open chat or meeting'
     : status === 'hearing' ? 'Hearing you…'
     : status === 'transcribing' ? 'Turning that into text…'
-    : `Listening, ${describeTarget(target)}. Click to stop.`;
+    : `Listening, ${describeTarget(target)}. ${loudness()} Click to stop.`;
   btn.setAttribute('aria-label', btn.title);
+  btn.style.setProperty('--listen-level', on && session ? String(Math.min(1, session.level / session.threshold)) : '0');
 
   const inMeeting = meetingButton();
   if (inMeeting) {
@@ -62,6 +70,13 @@ function show() {
     inMeeting.setAttribute('aria-pressed', String(on));
     inMeeting.title = btn.title;
   }
+}
+
+/** What the microphone hears, against what counts as speech, in words. */
+function loudness() {
+  if (!session) return '';
+  const pct = Math.round((100 * session.level) / session.threshold);
+  return `Microphone at ${pct}% of speaking level.`;
 }
 
 function setStatus(next) {
@@ -105,7 +120,7 @@ async function send(target, text) {
     document.getElementById('meeting-send-btn')?.click();
     return;
   }
-  const threads = document.getElementById('chat-threads');
+  const threads = document.getElementById(target.panel);
   if (threads?.getAttribute('agent') === target.agent && threads.sendText?.(text)) return;
   // The chat moved on while this was being transcribed: send where it was said.
   await fetch('/api/cli', {
@@ -132,10 +147,26 @@ async function finishUtterance(s, keep) {
 }
 
 function tick(s) {
+  const now = Date.now();
+  s.level = level(s);
+  s.loudest = Math.max(s.loudest, s.level);
+  // A ring on the button shows what the microphone hears, live.
+  button()?.style.setProperty('--listen-level', String(Math.min(1, s.level / s.threshold)));
+  // Nothing at all from the microphone is a broken input, not a quiet room.
+  if (!s.warned && now - s.startedAt > SILENT_MIC_MS && s.loudest === 0) {
+    s.warned = true;
+    say(`Listen mode is getting pure silence from the microphone (${s.ctx.state}). Check the browser is using the right microphone, and that it isn't muted.`);
+  }
+
   // Deaf while an agent talks, unless already hearing the human.
   if (!s.recorder && (isSpeechPlaying() || status === 'transcribing')) { s.vad = QUIET; return; }
 
-  const step = vadStep(s.vad, level(s), Date.now());
+  // Learn the room's background noise while nobody is speaking.
+  if (!s.vad.speaking) {
+    s.floor = nextFloor(s.floor, s.level);
+    s.threshold = thresholdFor(s.floor);
+  }
+  const step = vadStep(s.vad, s.level, now, { ...VAD, threshold: s.threshold });
   s.vad = step.at;
   if (step.event === 'start') {
     const target = listenTarget(page());
@@ -146,20 +177,27 @@ function tick(s) {
 }
 
 async function startListening() {
+  // Made here, inside the click, before anything is awaited: an AudioContext
+  // made later may start suspended, and a suspended one hears only silence.
+  const ctx = new AudioContext();
   let stream;
   try {
     stream = await navigator.mediaDevices.getUserMedia({
       audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
     });
   } catch (err) {
+    void ctx.close().catch(() => {});
     say(`Microphone unavailable: ${err?.message ?? err}. Check the site's microphone permission.`);
     return;
   }
-  const ctx = new AudioContext();
+  await ctx.resume().catch(() => {});
   const analyser = ctx.createAnalyser();
   analyser.fftSize = 1024;
   ctx.createMediaStreamSource(stream).connect(analyser);
-  const s = { stream, ctx, analyser, samples: new Float32Array(analyser.fftSize), vad: QUIET, recorder: null, chunks: [], target: null };
+  const s = {
+    stream, ctx, analyser, samples: new Float32Array(analyser.fftSize), vad: QUIET, recorder: null, chunks: [], target: null,
+    level: 0, loudest: 0, floor: 0, threshold: thresholdFor(0), startedAt: Date.now(), warned: false,
+  };
   s.timer = setInterval(() => tick(s), TICK_MS);
   session = s;
   setStatus('listening');
