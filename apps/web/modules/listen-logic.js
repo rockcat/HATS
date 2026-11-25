@@ -7,22 +7,31 @@
  * Where something said now should go, or null when nothing is open to hear
  * it, in which case it is not even transcribed.
  *
- * A meeting on screen comes first: it sits over everything else. Then the
- * Chat section with an agent chosen: the thread open there, or the agent's
- * #general.
+ * A meeting on screen comes first: it sits over everything else. Then an
+ * agent's own panel, opened by clicking it in the Agents section, which sits
+ * over the sections. Then the Chat section with an agent chosen. Each goes to
+ * the thread open there, or the agent's #general; `panel` is the id of the
+ * conversation it was said into.
  *
  * @param {{
  *   meetingOpen: boolean,
+ *   detailAgent?: string | null,
+ *   detailThread?: string | null,
  *   view: string | null,
  *   chatAgent: string | null,
  *   chatThread: string | null,
  * }} page
- * @returns {{kind: 'meeting'} | {kind: 'agent', agent: string, thread: string} | null}
+ * @returns {{kind: 'meeting'}
+ *   | {kind: 'agent', agent: string, thread: string, panel: string}
+ *   | null}
  */
 export function listenTarget(page) {
   if (page.meetingOpen) return { kind: 'meeting' };
+  if (page.detailAgent) {
+    return { kind: 'agent', agent: page.detailAgent, thread: page.detailThread || 'general', panel: 'agent-detail-threads' };
+  }
   if (page.view === 'cli' && page.chatAgent) {
-    return { kind: 'agent', agent: page.chatAgent, thread: page.chatThread || 'general' };
+    return { kind: 'agent', agent: page.chatAgent, thread: page.chatThread || 'general', panel: 'chat-threads' };
   }
   return null;
 }
@@ -38,7 +47,8 @@ export function describeTarget(target) {
 
 /** How loud, how long. Tuned by ear on a laptop microphone. */
 export const VAD = {
-  /** RMS level, 0–1, above which the room counts as someone speaking. */
+  /** RMS level, 0–1, above which the room counts as someone speaking.
+   *  listen.js replaces it with one suited to the room: see thresholdFor. */
   threshold: 0.025,
   /** Quiet for this long ends what was being said. */
   silenceMs: 1200,
@@ -78,3 +88,32 @@ export function vadStep(at, level, now, opts = VAD) {
 }
 
 export const QUIET = Object.freeze({ speaking: false, startedAt: 0, lastLoudAt: 0 });
+
+// ── How loud counts as speaking, in this room ───────────────────────────────
+//
+// A fixed threshold suits one microphone in one room. Instead the background
+// level is tracked while nobody is speaking, and speech is anything clearly
+// above it, within limits: a silent room still needs a real voice, and a noisy
+// one cannot set the bar so high that nobody is heard.
+
+export const NOISE = {
+  /** Speech is this many times the background level. */
+  ratio: 3,
+  /** Never lower than this, so a silent room does not trigger on breathing. */
+  min: 0.008,
+  /** Never higher than this, so a noisy room still hears a normal voice. */
+  max: 0.04,
+  /** How fast the background estimate rises; it falls at once. */
+  rise: 0.02,
+};
+
+/** The background level, after hearing `level` while nobody was speaking. */
+export function nextFloor(floor, level) {
+  if (!(floor > 0) || level < floor) return level;
+  return floor + (level - floor) * NOISE.rise;
+}
+
+/** How loud counts as speaking, over this background level. */
+export function thresholdFor(floor) {
+  return Math.min(NOISE.max, Math.max(NOISE.min, floor * NOISE.ratio));
+}
