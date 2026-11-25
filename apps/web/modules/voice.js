@@ -193,7 +193,10 @@ export function stopAllSpeech() {
 export function toggleMute() {
   speechMuted = !speechMuted;
   const btn = document.getElementById('mute-btn');
-  btn.textContent = speechMuted ? 'Unmute' : 'Mute';
+  btn.title = speechMuted ? 'Speech is muted — click to unmute' : 'Mute all speech';
+  btn.setAttribute('aria-label', btn.title);
+  btn.setAttribute('aria-pressed', String(speechMuted));
+  btn.querySelector('img').src = speechMuted ? 'assets/volume-off.svg' : 'assets/volume-up.svg';
   btn.classList.toggle('mute-btn--active', speechMuted);
   if (speechMuted) stopAllSpeech();
 }

@@ -6,6 +6,11 @@
   <title>Team Runner Dashboard</title>
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="layout.css">
+  <link rel="stylesheet" href="theme.css">
+  <script>
+    // The remembered theme, before the page draws (see modules/theme.js).
+    try { if (localStorage.getItem('dashboardTheme') === 'light') document.documentElement.dataset.theme = 'light'; } catch {}
+  </script>
   <script type="importmap">
   {
     "imports": {
@@ -30,9 +35,12 @@
       <button id="telemetry-btn" class="telemetry-detail-btn" title="View LLM usage details"><img src="assets/info.svg" class="svg-icon" alt="Info"></button>
     </div>
     <div id="service-status" class="service-status" title="External services"></div>
-    <button id="mute-btn" class="header-btn mute-btn" title="Mute / unmute all speech">Mute</button>
     <span id="current-user-label" class="current-user-label"></span>
     <button id="logout-btn" class="header-btn" title="Sign out">Sign out</button>
+    <div class="header-icons">
+      <button id="mute-btn" class="header-icon-btn" title="Mute all speech" aria-label="Mute all speech" aria-pressed="false"><img src="assets/volume-up.svg" class="svg-icon" alt=""></button>
+      <button id="theme-btn" class="header-icon-btn" title="Switch to the light theme" aria-label="Switch to the light theme"><img src="assets/light-mode.svg" class="svg-icon" alt=""></button>
+    </div>
     <div id="connection-status" class="status-dot" title="Connecting…"></div>
   </header>
 

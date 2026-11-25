@@ -21,11 +21,12 @@ export function initKanban({ updateGoalBar }) {
   });
 }
 
+// The theme's colours, so each reads on light ground as well as dark.
 const PRIORITY_COLOR = {
-  critical: '#f85149',
-  high:     '#e3b341',
-  medium:   '#58a6ff',
-  low:      '#8b949e',
+  critical: 'var(--hat-red)',
+  high:     'var(--hat-yellow)',
+  medium:   'var(--hat-blue)',
+  low:      'var(--text-muted)',
 };
 
 const ACTIVE_COLUMNS = ['ready', 'in_progress', 'blocked', 'review', 'closed'];
@@ -118,7 +119,7 @@ function ticketHTML(ticket) {
     <div class="task-card${blockers.length ? ' task-card--blocked' : ''}${human ? ' task-card--human' : ''}" data-ticket-id="${esc(ticket.id)}" draggable="true" title="Drag to move · Click to edit">
       <div class="ticket-top">
         <span class="ticket-id">${esc(ticket.id)}</span>
-        <span class="priority-badge" style="color:${priColor};border-color:${priColor}40">${esc(priority)}</span>
+        <span class="priority-badge" style="color:${priColor};border-color:color-mix(in srgb, ${priColor} 25%, transparent)">${esc(priority)}</span>
       </div>
       <div class="ticket-title">${esc(title)}</div>
       ${projectHTML}
@@ -148,7 +149,7 @@ function backlogRowHTML(ticket) {
       <span class="backlog-project">${projectName ? `📁 ${esc(projectName)}` : ''}</span>
       <span class="backlog-assignee">${esc(assignee)}</span>
       <span class="backlog-tags">${tags}</span>
-      <span class="backlog-priority" style="color:${priColor};border-color:${priColor}40">${esc(priority)}</span>
+      <span class="backlog-priority" style="color:${priColor};border-color:color-mix(in srgb, ${priColor} 25%, transparent)">${esc(priority)}</span>
     </div>`;
 }
 

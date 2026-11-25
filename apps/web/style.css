@@ -15,6 +15,7 @@
   --hat-yellow: #e3b341;
   --hat-green:  #3fb950;
   --hat-blue:   #58a6ff;
+  --accent:     var(--hat-blue);
 
   --state-idle:       #8b949e;
   --state-working:    #1f6feb;
@@ -153,19 +154,6 @@ header h1 {
   transition: opacity 0.15s;
 }
 .header-btn:hover { opacity: 0.85; }
-
-.mute-btn {
-  background: transparent;
-  border-color: var(--border);
-  color: var(--text-muted);
-  margin-left: 0;
-}
-.mute-btn:hover { background: var(--surface-2); color: var(--text); opacity: 1; }
-.mute-btn--active {
-  background: rgba(248,81,73,0.15);
-  border-color: #f85149;
-  color: #f85149;
-}
 
 .header-btn--ghost {
   background: transparent;

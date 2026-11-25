@@ -1,0 +1,71 @@
+/* ── Light theme ───────────────────────────────────────────────────────────────
+   The dashboard is drawn from the colours in style.css's :root. The light theme
+   gives them light values; html[data-theme="light"] is set by modules/theme.js. */
+
+:root { color-scheme: dark; }
+
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --bg:           #f6f8fa;
+  --surface:      #ffffff;
+  --surface-2:    #eaeef2;
+  --border:       #d0d7de;
+  --border-hover: #afb8c1;
+  --text:         #1f2328;
+  --text-muted:   #59636e;
+
+  --green-text:   #1a7f37;
+
+  --hat-white:  #8c959f;
+  --hat-red:    #cf222e;
+  --hat-black:  #24292f;
+  --hat-yellow: #9a6700;
+  --hat-green:  #1a7f37;
+  --hat-blue:   #0969da;
+
+  --state-idle:       #8c959f;
+  --state-working:    #0969da;
+  --state-waiting:    #9a6700;
+  --state-discussing: #8250df;
+}
+
+/* The icons are drawn white for the dark theme: darken them on light ground,
+   but not where they sit on a coloured button. */
+:root[data-theme="light"] .svg-icon { filter: invert(0.85); }
+:root[data-theme="light"] .header-btn:not(.header-btn--icon) .svg-icon,
+:root[data-theme="light"] .modal-btn.primary .svg-icon,
+:root[data-theme="light"] .panel-add-btn .svg-icon,
+:root[data-theme="light"] .files-upload-btn .svg-icon,
+:root[data-theme="light"] .meeting-send-btn .svg-icon,
+:root[data-theme="light"] .settings-tab-btn.active .svg-icon,
+:root[data-theme="light"] .toggle-slider-opt.active .svg-icon { filter: none; }
+
+/* Colours that were fixed for the dark theme. */
+:root[data-theme="light"] .kp-todo { background: var(--border); }
+:root[data-theme="light"] .col-in_progress { color: var(--hat-blue); }
+:root[data-theme="light"] .col-blocked     { color: var(--hat-red); }
+:root[data-theme="light"] .col-ready       { color: var(--hat-green); }
+:root[data-theme="light"] .col-review      { color: var(--hat-yellow); }
+:root[data-theme="light"] .col-closed      { color: var(--text-muted); }
+
+/* ── Header icon buttons: speech and theme ─────────────── */
+.header-icons { display: flex; align-items: center; gap: 4px; }
+.header-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: none;
+  cursor: pointer;
+}
+.header-icon-btn .svg-icon { width: 20px; height: 20px; opacity: 0.75; }
+.header-icon-btn:hover { background: var(--surface-2); border-color: var(--border); }
+.header-icon-btn:hover .svg-icon { opacity: 1; }
+.header-icon-btn:focus-visible { outline: 2px solid var(--hat-blue); outline-offset: 1px; }
+.header-icon-btn.mute-btn--active { background: rgba(248, 81, 73, 0.15); border-color: var(--hat-red); }
+.header-icon-btn.mute-btn--active .svg-icon { opacity: 1; }

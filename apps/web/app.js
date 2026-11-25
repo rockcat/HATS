@@ -27,6 +27,7 @@ import { initGoogleReturn }                            from './modules/google-re
 import { initAllowlist }                               from './modules/allowlist.js';
 import { initMicButtons }                             from './modules/panels.js';
 import { initNav, showView }                           from './modules/nav.js';
+import { initTheme }                                   from './modules/theme.js';
 import { connect, fetchTools, applyState }             from './modules/sse.js';
 
 if (!await checkAuth()) throw new Error('Not authenticated');
@@ -56,6 +57,7 @@ initAddAgent({ fetchGlobalAgentsOverride: fetchGlobalAgents });
 initProjectBadge();
 initGoalBar();
 initSettings();
+initTheme();
 loadSpecialisations();
 initMCPEditor();
 initImpromptuMeeting();
