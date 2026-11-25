@@ -90,6 +90,24 @@ body.nav-folded { --side-nav-width: 50px; }
 /* Settings at the bottom. */
 .side-nav-settings { margin-top: auto; }
 
+/* ── Settings: its form scrolls, Save stays in view ──── */
+.view--settings .settings-body { flex: 1; min-height: 0; overflow-y: auto; }
+.view--settings .settings-body > * { max-width: 760px; }
+.settings-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  flex-shrink: 0;
+}
+.settings-footer .settings-msg { margin-right: auto; }
+.view--settings .settings-tab-btn[hidden],
+.settings-footer[hidden],
+.settings-footer [hidden] { display: none; }
+
 /* Folded: icons only, a badge sits on its icon's corner. */
 body.nav-folded .side-nav-label { display: none; }
 body.nav-folded .side-nav-item .tab-badge {

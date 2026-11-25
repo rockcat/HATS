@@ -22,6 +22,7 @@ const ON_SHOW = {
   visits:    () => void fetchVisits(),
   calendar:  () => import('./calendar.js').then(m => m.fetchCalendar()),
   cli:       () => document.getElementById('cli-input')?.focus(),
+  settings:  () => import('./settings.js').then(m => m.openSettings()),
 };
 
 const remembered = (key) => { try { return localStorage.getItem(key); } catch { return null; } };

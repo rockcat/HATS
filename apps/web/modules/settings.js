@@ -1,4 +1,4 @@
-// ── Settings modal ────────────────────────────────────────────────────────────
+// ── Settings section ────────────────────────────────────────────────────────────
 
 import { esc } from './utils.js';
 import { setToolCallDetail, toolCallDetail } from './agent-detail.js';
@@ -27,13 +27,11 @@ export const GROUP_ORDER = ['API Keys', 'Models', 'Local Models', 'Other'];
 let activeTab = 'general';
 
 export function initSettings() {
-  document.getElementById('settings-btn').addEventListener('click', openSettings);
   document.getElementById('mute-btn').addEventListener('click', toggleMute);
-  document.getElementById('settings-close').addEventListener('click', closeSettings);
-  document.getElementById('settings-cancel').addEventListener('click', closeSettings);
+  // Cancel puts back what is saved; the section is shown and left from the menu.
+  document.getElementById('settings-cancel').addEventListener('click', openSettings);
   document.getElementById('settings-save').addEventListener('click', saveSettings);
-  document.getElementById('settings-modal').addEventListener('click', e => {
-    if (e.target === document.getElementById('settings-modal')) closeSettings();
+  document.getElementById('settings-view').addEventListener('click', e => {
     const opt = e.target.closest('.toggle-slider-opt');
     if (opt) {
       const slider = opt.closest('.toggle-slider');
@@ -43,9 +41,6 @@ export function initSettings() {
     const tab = e.target.closest('.settings-tab-btn');
     if (tab) switchTab(tab.dataset.tab);
   });
-  document.addEventListener('keydown', e => {
-    if (e.key === 'Escape' && !document.getElementById('settings-modal').hidden) closeSettings();
-  });
   document.getElementById('logout-btn')?.addEventListener('click', logout);
 }
 
@@ -54,6 +49,7 @@ function switchTab(tab) {
   document.querySelectorAll('.settings-tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
   document.getElementById('settings-save').hidden   = tab !== 'general';
   document.getElementById('settings-cancel').hidden = tab !== 'general';
+  document.querySelector('.settings-footer').hidden = tab !== 'general';
   if (tab === 'general') {
     openSettings();
   } else if (tab === 'users') {
@@ -64,16 +60,15 @@ function switchTab(tab) {
 export function openSettings() {
   activeTab = 'general';
   refreshProviderModels();
-  const modal = document.getElementById('settings-modal');
   const body  = document.getElementById('settings-body');
   const msg   = document.getElementById('settings-msg');
   msg.textContent = '';
   msg.className   = 'settings-msg';
   body.innerHTML  = '<p class="settings-loading">Loading…</p>';
-  modal.hidden    = false;
   document.querySelectorAll('.settings-tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === 'general'));
   document.getElementById('settings-save').hidden   = false;
   document.getElementById('settings-cancel').hidden = false;
+  document.querySelector('.settings-footer').hidden = false;
 
   Promise.all([
     // Ask for the running value of every setting shown, not just what is on file.
@@ -225,10 +220,6 @@ export function renderSettingsBody(entries, providers, humanName, logPrompts) {
       btn.querySelector('.eye-icon').textContent = inp.type === 'password' ? '👁' : '🙈';
     });
   });
-}
-
-export function closeSettings() {
-  document.getElementById('settings-modal').hidden = true;
 }
 
 // ── Users tab ─────────────────────────────────────────────────────────────────
@@ -469,7 +460,6 @@ export function saveSettings() {
       } else {
         msg.textContent = 'Saved.';
         msg.className   = 'settings-msg settings-msg--ok';
-        setTimeout(closeSettings, 800);
       }
     })
     .catch(() => {

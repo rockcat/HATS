@@ -2470,19 +2470,11 @@ header h1 {
   background: rgba(227,179,65,0.10);
 }
 
-/* ── Settings modal ──────────────────────────────────── */
-.settings-modal {
-  width: min(560px, 95vw);
-  max-height: 85vh;
-  display: flex;
-  flex-direction: column;
-}
-
+/* ── Settings ─────────────────────────────────────────── */
 .settings-body {
   overflow-y: auto;
-  padding: 0 !important;
+  padding: 0;
   position: relative;
-  min-height: 40vh;
 }
 
 .settings-section {

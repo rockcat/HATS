@@ -99,10 +99,28 @@
     <button class="side-nav-item" data-view="tools" title="Tools"><img src="assets/nav-tools.svg" class="svg-icon" alt=""><span class="side-nav-label">Tools</span></button>
     <button class="side-nav-item" data-view="mcp" title="MCP Servers"><img src="assets/nav-mcp.svg" class="svg-icon" alt=""><span class="side-nav-label">MCP Servers</span></button>
     <button class="side-nav-item" data-view="library" title="Agent Library"><img src="assets/nav-library.svg" class="svg-icon" alt=""><span class="side-nav-label">Agent Library</span></button>
-    <button id="settings-btn" class="side-nav-action side-nav-settings" title="Settings"><img src="assets/settings.svg" class="svg-icon" alt=""><span class="side-nav-label">Settings</span></button>
+    <button id="settings-btn" class="side-nav-item side-nav-settings" data-view="settings" title="Settings"><img src="assets/settings.svg" class="svg-icon" alt=""><span class="side-nav-label">Settings</span></button>
   </nav>
 
   <main id="view-host">
+
+    <section class="view view--settings" data-view="settings" id="settings-view">
+      <div class="panel-header panel-header--settings">
+        <span id="settings-title">Settings</span>
+        <div class="settings-tabs">
+          <button class="settings-tab-btn active" data-tab="general">General</button>
+          <button class="settings-tab-btn" data-tab="users">Users</button>
+        </div>
+      </div>
+      <div class="settings-body" id="settings-body">
+        <p class="settings-loading">Loading…</p>
+      </div>
+      <div class="settings-footer">
+        <span id="settings-msg" class="settings-msg"></span>
+        <button class="modal-btn secondary" id="settings-cancel" title="Discard unsaved changes">Cancel</button>
+        <button class="modal-btn primary" id="settings-save">Save changes</button>
+      </div>
+    </section>
 
     <section class="view" data-view="agents" id="agents-panel">
       <div class="panel-header panel-header--agents">
@@ -542,28 +560,6 @@
         <span id="modal-error" class="modal-error"></span>
         <button class="modal-btn secondary" id="modal-cancel">Cancel</button>
         <button class="modal-btn primary" id="modal-save">Save changes</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Settings Modal -->
-  <div id="settings-modal" class="modal-overlay" hidden>
-    <div class="modal settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
-      <div class="modal-header">
-        <span id="settings-title" class="modal-ticket-id">Settings</span>
-        <div class="settings-tabs">
-          <button class="settings-tab-btn active" data-tab="general">General</button>
-          <button class="settings-tab-btn" data-tab="users">Users</button>
-        </div>
-        <button class="modal-close" id="settings-close" title="Close"><img src="assets/close.svg" class="svg-icon" alt="Close"></button>
-      </div>
-      <div class="modal-body settings-body" id="settings-body">
-        <p class="settings-loading">Loading…</p>
-      </div>
-      <div class="modal-footer">
-        <span id="settings-msg" class="settings-msg"></span>
-        <button class="modal-btn secondary" id="settings-cancel">Cancel</button>
-        <button class="modal-btn primary" id="settings-save">Save changes</button>
       </div>
     </div>
   </div>
