@@ -10,9 +10,9 @@ This page covers:
 - what each service is for;
 - how to sign in to a runner;
 - the calls you will most likely need, with examples;
-- every route the runner serves.
+- where to find every route: a browsable docs page, and the OpenAPI documents.
 
-For how the services fit together, see [SERVICES.md](SERVICES.md).
+For how the services fit together, see [SERVICES.md](SERVICES.md). To browse every route, open `/api-docs` on a runner.
 
 ## The services
 
@@ -38,7 +38,7 @@ flowchart LR
 
 | Service | Default address | Sign-in | Spec |
 | --- | --- | --- | --- |
-| **Team Runner**, dashboard API | `http://localhost:3001/api/…` | Yes | None. This page is the reference. |
+| **Team Runner**, dashboard API | `http://localhost:3001/api/…` | Yes | [runner.openapi.yaml](../packages/contracts/openapi/runner.openapi.yaml) |
 | **Team Runner**, Embodiment API | `http://localhost:3001/api/embodiment/v1/…` | Yes | [embodiment.openapi.yaml](../packages/contracts/openapi/embodiment.openapi.yaml) |
 | **Project Server** | `http://localhost:3020/api/v1/…` | No | [project-server.openapi.yaml](../packages/contracts/openapi/project-server.openapi.yaml) |
 | **Agent Library** | `http://localhost:3010/api/v1/…` | No | [agent-library.openapi.yaml](../packages/contracts/openapi/agent-library.openapi.yaml) |
@@ -217,185 +217,33 @@ curl -X POST $PS/api/v1/projects/website/team -H "Content-Type: application/json
 The runner running that project picks up the changes from the Project Server's
 `/api/v1/events` stream.
 
-## Runner reference
+## Reference: every route
 
-Every route below is under `http://<runner>:3001` and needs a sign-in. The
-source is in [server/src/api/](../server/src/api/), and routes are tried in the
-order [api-server.ts](../server/src/api/api-server.ts) lists them.
+Each API has an OpenAPI document listing every route with its parameters and
+request bodies. There are two ways to read them.
 
-### Sign-in and users
+**In the browser:** open `http://localhost:3001/api-docs` while signed in to the
+dashboard. It is one page for all four APIs; choose one from the menu at the
+top right. Add `?api=project-server`, `embodiment` or `agent-library` to the
+address to open a specific one. For the runner's own API, **Try it out**
+sends real requests, signed in as you.
 
-| Method | Path | Does |
+The runner reads the Project Server's and Agent Library's documents from those
+services when they are running. Otherwise it shows the copy that shipped with
+it.
+
+**As files:**
+
+| API | Document | Served at |
 | --- | --- | --- |
-| POST | `/api/auth/login` | Swaps `{username, password}` for `{token, user}`. Open to all. |
-| POST | `/api/auth/logout` | Ends the session |
-| GET | `/api/auth/me` | Who is signed in |
-| POST | `/api/auth/pair/generate` | Starts pairing a phone |
-| GET | `/api/auth/pair/{token}` | The phone confirms pairing. Open to all. |
-| GET, POST | `/api/users` | List users, or create one with `{username, password, role}` (admin) |
-| PUT, DELETE | `/api/users/{id}` | Change or remove a user |
-| DELETE | `/api/users/{id}/api-keys/{keyId}` | Revoke an API key |
+| Team Runner | [runner.openapi.yaml](../packages/contracts/openapi/runner.openapi.yaml) | `/api/openapi/runner.yaml` |
+| Embodiment | [embodiment.openapi.yaml](../packages/contracts/openapi/embodiment.openapi.yaml) | `/api/openapi/embodiment.yaml` |
+| Project Server | [project-server.openapi.yaml](../packages/contracts/openapi/project-server.openapi.yaml) | `:3020/api/v1/openapi.yaml` |
+| Agent Library | [agent-library.openapi.yaml](../packages/contracts/openapi/agent-library.openapi.yaml) | `:3010/api/v1/openapi.yaml` |
 
-When `AUTH_SERVICE_URL` is set, the runner forwards all of these to that auth
-service, so several runners share one set of users.
+Any OpenAPI tool can read these, for example to generate a client.
 
-### Talking and meetings
-
-| Method | Path | Does |
-| --- | --- | --- |
-| POST | `/api/cli` | Runs a command-box line. See [Talk to an agent](#talk-to-an-agent). |
-| GET | `/events` | The live stream. See [Follow what happens](#follow-what-happens-live). |
-| POST | `/api/meetings/start` | Starts a meeting now |
-| GET | `/api/meetings/{id}/minutes` | A meeting's minutes |
-| GET, POST | `/api/scheduled-meetings` | List, or schedule a meeting |
-| POST | `/api/scheduled-meetings/{id}/launch` | Starts a scheduled meeting now |
-| POST | `/api/scheduled-meetings/{id}/cancel` | Cancels one |
-| DELETE | `/api/scheduled-meetings/{id}` | Removes one |
-| GET | `/api/human-requests` | Agents' open questions for you |
-| POST | `/api/human-requests/{id}/respond` | Answers one |
-| POST | `/api/human-requests/{id}/dismiss` | Dismisses one |
-| DELETE | `/api/human-requests/{id}` | Removes one |
-| DELETE | `/api/human-requests/answered` | Clears every answered question |
-
-### The board
-
-| Method | Path | Does |
-| --- | --- | --- |
-| GET | `/api/kanban` | The board by column. `?includeBacklog=true` includes the backlog. |
-| GET, POST | `/api/kanban/tickets` | List tickets, or add one |
-| PATCH | `/api/kanban/tickets/{id}` | Changes a ticket, including moving it to another column |
-| POST | `/api/kanban/tickets/{id}/comments` | Comments on a ticket |
-
-### The project
-
-| Method | Path | Does |
-| --- | --- | --- |
-| GET | `/api/project` | The project this runner is running |
-| GET | `/api/projects` | Every project it can see |
-| POST | `/api/project/switch` | Runs a different project, unless the runner is locked to one |
-| GET, PUT | `/api/project/goal` | Read or set the goal |
-| GET, PUT | `/api/project/human-name` | What the agents call you |
-| POST | `/api/project/clear` | Clears the project's runtime state |
-| POST | `/api/project/add-agent` | Adds an agent to this project |
-| GET | `/api/project/files` | `{sources, outputs, tickets}` |
-| GET | `/api/project/file?path=…` | One file |
-| GET | `/api/project/files.zip` | Every file, zipped |
-| POST | `/api/project/upload` | Adds a file to `sources/` (raw body, `X-Filename` header) |
-| POST | `/api/project/open-folder` | Opens the folder on the runner's machine |
-| GET | `/api/projects/{id}/export` | Exports a whole project |
-| POST | `/api/projects/import` | Imports one |
-
-### Agents
-
-`{name}` is the agent's name.
-
-| Method | Path | Does |
-| --- | --- | --- |
-| POST | `/api/agents` | Adds an agent to the team |
-| DELETE | `/api/agents/{name}` | Removes one |
-| PATCH | `/api/agents/{name}/…` | Changes one setting: `name`, `identity`, `specialisation`, `hat`, `prompt`, `config`, `limits`, `voice`, `email`, `avatar`, `background`, `mcp-servers` |
-| GET | `/api/agents/{name}/memory` | What the agent remembers |
-| GET | `/api/agents/{name}/prompt-preview` | Its full system prompt, as the model sees it |
-| GET | `/api/prompt-preview` | The same, for an agent not yet added |
-| GET | `/api/agents/{name}/personal-mcp` | Its own MCP servers |
-| PUT, DELETE | `/api/agents/{name}/personal-mcp/{server}` | Adds or removes one |
-| PUT | `/api/agents/{name}/scheduled-actions` | Sets its scheduled actions |
-| GET | `/api/agents/{name}/export` | Exports an agent |
-| POST | `/api/agents/{name}/duplicate`, `/send`, `/to-library` | Copies it, sends it to another runner, or saves it to the Agent Library |
-| POST | `/api/agents/import` | Imports an agent |
-| POST | `/api/agents/external/callback` | Where external agents report back |
-| GET | `/api/personas` | The personas you can start an agent from |
-| GET, POST | `/api/global-agents` | Agents shared by every project |
-| PATCH, DELETE | `/api/global-agents/{id}` | Changes or removes one |
-| PUT | `/api/global-agents/{id}/scheduled-actions` | Sets its scheduled actions |
-
-### Visits and moves
-
-These answer `404` when the runner has no Project Server.
-
-| Method | Path | Does |
-| --- | --- | --- |
-| GET | `/api/visits` | Visits involving this team |
-| POST | `/api/visits/{id}/approve`, `/refuse`, `/recall`, `/end` | Decides on a visit, or brings the agent home, with `{note?}` (admin) |
-| GET | `/api/moves/targets` | Teams an agent may move to |
-| POST | `/api/moves` | Moves an agent to another team for good, with `{agent, to, note?}` (admin) |
-
-See [visit-demo](visit-demo/README.md) for visits end to end.
-
-### Schedules
-
-| Method | Path | Does |
-| --- | --- | --- |
-| GET, POST | `/api/agenda` | An agent's agenda, `?agent=Name`, or add an entry with `{agentName, label, description}` plus one of `intervalMinutes`, `cron` or `delayMinutes` |
-| PATCH, DELETE | `/api/agenda/{id}` | Changes or removes an entry |
-| POST | `/api/agenda/{id}/run` | Runs it now |
-| GET, POST | `/api/scheduled-actions` | List or add a scheduled action |
-| PATCH, DELETE | `/api/scheduled-actions/{id}` | Changes or removes one |
-| POST | `/api/scheduled-actions/{id}/run` | Runs it now |
-
-### Tools, models and costs
-
-| Method | Path | Does |
-| --- | --- | --- |
-| GET | `/api/mcp/tools` | Tools the agents can use now |
-| GET, POST | `/api/mcp/catalogue` | The MCP catalogue, or add a server to it |
-| PATCH, DELETE | `/api/mcp/catalogue/{id}` | Changes or removes a server |
-| POST | `/api/mcp/enable`, `/api/mcp/disable` | Turns a server on or off |
-| GET | `/api/providers` | Model providers, and which have keys |
-| GET | `/api/providers/models` | Their models |
-| GET | `/api/pricing` | Model prices |
-| POST | `/api/pricing/refresh` | Fetches prices again |
-| GET | `/api/telemetry/all` | Usage and costs |
-
-### Speech and images
-
-| Method | Path | Does |
-| --- | --- | --- |
-| GET | `/api/voices` | Voices available |
-| POST | `/api/speech/synthesise` | `{text, voice?, speakerName?}` → audio. Needs the Speech Service. |
-| POST | `/api/speech/preview` | A sample of a voice |
-| POST | `/api/speech/transcribe` | Recorded audio → `{text}`. Needs `OPENAI_API_KEY`. |
-| GET | `/api/images/backgrounds` | Background images |
-| POST | `/api/images/generate` | Generates one |
-
-### Settings and status
-
-| Method | Path | Does |
-| --- | --- | --- |
-| GET | `/api/services` | Which services are up |
-| GET, POST | `/api/env` | Read or change the runner's settings |
-| GET, POST | `/api/email-allowlist` | Who agents may email |
-| PATCH, DELETE | `/api/email-allowlist/{id}` | Changes or removes an entry |
-| GET | `/api/auth/google/start`, `/api/auth/google/agent/start` | Connects a Google account, for the team or one agent |
-| GET | `/api/auth/google/callback` | Where Google sends you back |
-| GET | `/api/auth/google/status`, `/api/auth/google/agent/status` | Whether one is connected |
-| DELETE | `/api/auth/google`, `/api/auth/google/agent` | Disconnects it |
-| any | `/api/runners/…` | Forwarded to the runner manager's `/api/v1/runners/…`, when `RUNNER_MANAGER_URL` is set |
-
-## Project Server reference
-
-All under `http://<project-server>:3020`. The full detail, including request
-and response shapes, is in
-[project-server.openapi.yaml](../packages/contracts/openapi/project-server.openapi.yaml),
-also served live at `/api/v1/openapi.yaml`.
-
-| Method | Path | Does |
-| --- | --- | --- |
-| GET | `/api/v1/health` | Is it up? |
-| GET | `/api/v1/schemas/{name}` | A JSON Schema: `project` or `deployedAgent` |
-| GET, POST | `/api/v1/projects` | List projects, or create one |
-| GET, PUT, PATCH | `/api/v1/projects/{id}` | Read, replace or update a project |
-| DELETE | `/api/v1/projects/{id}` | Removes it. `?purge=true` also deletes its folder. |
-| GET, POST | `/api/v1/projects/{id}/team` | List the team, or add `{agent}` |
-| PATCH, DELETE | `/api/v1/projects/{id}/team/{instanceId}` | Changes or removes an agent |
-| GET, PUT | `/api/v1/active` | Which project a runner should load |
-| GET | `/api/v1/events` | A stream of project changes |
-| GET, POST | `/api/v1/visits` | List visits (`?project=…&open=true`), or request one |
-| GET | `/api/v1/visits/{id}` | One visit |
-| POST | `/api/v1/visits/{id}/{step}` | Moves it on: `approve`, `refuse`, `cancel`, `leave`, `return`, `home` |
-| GET | `/api/v1/visits/{id}/pack/{out\|back}` | Its travel pack |
-
-Runners also use these routes, which are not in the spec yet:
+The Project Server document is missing three routes that runners use:
 
 | Method | Path | Does |
 | --- | --- | --- |
@@ -407,17 +255,28 @@ The runner manager has its own routes: `/api/v1/teams`, used for
 `discover_teams`, and `/api/v1/runners/heartbeat`, `/goodbye` and others, used
 for the project switcher.
 
-## Keeping this page right
+## Keeping the runner document right
 
-The runner has no OpenAPI spec, so this page is its reference. When you add a
-route to a router in `server/src/api/`, add a row here too.
+`server/src/api/runner-openapi.test.ts` reads every route from the runner's
+routers and compares them with `runner.openapi.yaml`. The test fails when:
 
-This command lists every route, to compare with the tables above:
+- the code serves a route the document doesn't list;
+- the code names a method the document leaves out for that route;
+- the document lists a route that no router serves.
 
-```bash
-grep -rnoE "pathname(\.match\(|\.startsWith\(| === )[^&]*&& method === '[A-Z]+'" server/src/api packages/auth/src
+So a route can't be added, renamed or removed without updating the document.
+
+The routes are read from source by
+[route-inventory.ts](../server/src/api/route-inventory.ts), which understands
+these forms:
+
+```ts
+pathname === '/api/x'
+pathname.match(/^\/api\/x\/[^/]+\/y$/)
+pathname.startsWith('/api/x/') && pathname.endsWith('/y')
+pathname.startsWith('/api/x/')                    // → /api/x/{id}
+const STEP = /^\/api\/x\/([^/]+)\/(a|b)$/;        // → /api/x/{id}/a and /b
 ```
 
-The command misses routes written in other styles, such as
-[visit-router.ts](../server/src/api/visit-router.ts) and the transfer routers,
-so check those by hand.
+A route written any other way is invisible to the test, so write new routes in
+one of these forms.

@@ -24,17 +24,23 @@ running project; it just means the project can no longer be re-synced from it.
 `templateRevision` records which revision the copy was taken from, which is how
 the Project Designer shows drift.
 
-## The three APIs
+## The four APIs
 
 | Service | Document | Default |
 | --- | --- | --- |
 | Agent Template Library | `openapi/agent-library.openapi.yaml` | `http://localhost:3010` |
 | Project Server | `openapi/project-server.openapi.yaml` | `http://localhost:3020` |
 | Embodiment API | `openapi/embodiment.openapi.yaml` | `http://localhost:3001/api/embodiment/v1` |
+| Team Runner (dashboard) | `openapi/runner.openapi.yaml` | `http://localhost:3001/api` |
 
 Each service serves its own spec live at `<base>/openapi.yaml` (and
 `/openapi.json`), and every schema at `<base>/schemas/{name}`. Point a code
 generator at a running service and it will match what that service actually does.
+
+The Team Runner's document is the exception: it is served at
+`/api/openapi/runner.yaml`, and `server/src/api/runner-openapi.test.ts` fails
+when it and the runner's routes disagree. `/api-docs` on a runner shows all
+four in one page.
 
 ## Changing a contract
 
