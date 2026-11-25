@@ -115,6 +115,9 @@ every agent's system prompt to keep all thinking anchored to the objective.
 A runner works on one project at a time. To run several at once, give each its
 own runner against the same services — see [MULTIPLE-PROJECTS.md](MULTIPLE-PROJECTS.md).
 
+Teams can lend each other agents. An agent can **visit** another team to use what only that team has,
+then come home with the result — see the [visiting agents demo](visit-demo/README.md).
+
 ## The Dashboard
 
 The HATS web UI is a four-panel dashboard:
