@@ -129,7 +129,7 @@ export class ServiceStatusRouter {
   }
 
   async handleRoutes(pathname: string, method: string, _req: IncomingMessage, res: ServerResponse): Promise<boolean> {
-    if (pathname !== '/api/services' || method !== 'GET') return false;
+    if (!(pathname === '/api/services' && method === 'GET')) return false;
 
     // Every open dashboard polls this; share one round of probes between them.
     if (!this.cached || Date.now() - this.cached.at > CACHE_MS) {
