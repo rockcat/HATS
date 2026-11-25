@@ -5,6 +5,16 @@ import type { Move, Visit, VisitEnd, VisitReason, VisitResult } from '../../cont
 
 const BASE = '/api/v1/visits';
 
+/**
+ * The HTTP client answers a 404 with undefined. For a call that must return
+ * something, that is the Project Server saying "no such thing": say so,
+ * rather than hand back undefined dressed as a visit.
+ */
+function found<T>(value: T | undefined, missing: string): T {
+  if (value === undefined) throw new Error(missing);
+  return value;
+}
+
 export class VisitsClient {
   private readonly http: HttpClient;
 
@@ -18,7 +28,8 @@ export class VisitsClient {
 
   /** Ask for a visit. Throws with the reason when it may not happen. */
   async request(req: { agent: string; home: string; host: string; reason: VisitReason }): Promise<Visit> {
-    return (await this.http.post<Visit>(BASE, req))!;
+    return found(await this.http.post<Visit>(BASE, req),
+      `There is no team "${req.host}", or no agent ${req.agent} at ${req.home}, on the Project Server.`);
   }
 
   get(id: string): Promise<Visit | undefined> {
@@ -52,7 +63,8 @@ export class VisitsClient {
 
   /** Move an agent to another team for good, with its pack. Throws with the reason when it may not. */
   async move(req: { agent: string; from: string; to: string; note?: string; pack: unknown }): Promise<Move> {
-    return (await this.http.post<Move>('/api/v1/moves', req))!;
+    return found(await this.http.post<Move>('/api/v1/moves', req),
+      `There is no team "${req.to}", or no agent ${req.agent} at ${req.from}, on the Project Server.`);
   }
 
   movePack(id: string): Promise<unknown | undefined> {
@@ -61,7 +73,7 @@ export class VisitsClient {
 
   /** The new team's runner has the agent running. */
   async moveDone(id: string): Promise<Move> {
-    return (await this.http.post<Move>(`/api/v1/moves/${encodeURIComponent(id)}/done`, {}))!;
+    return found(await this.http.post<Move>(`/api/v1/moves/${encodeURIComponent(id)}/done`, {}), `There is no move ${id}.`);
   }
 
   /** Every project, to choose where an agent goes. */
@@ -75,6 +87,6 @@ export class VisitsClient {
   }
 
   private async step(id: string, step: string, body: unknown): Promise<Visit> {
-    return (await this.http.post<Visit>(`${BASE}/${encodeURIComponent(id)}/${step}`, body))!;
+    return found(await this.http.post<Visit>(`${BASE}/${encodeURIComponent(id)}/${step}`, body), `There is no visit ${id}.`);
   }
 }
