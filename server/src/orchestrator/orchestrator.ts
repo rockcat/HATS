@@ -7,7 +7,7 @@ import { IAgent } from '../agent/iagent.js';
 import { AgentConfig } from '../agent/types.js';
 import { HatType } from '../../../packages/core/src/hats/types.js';
 import type { PromptMode } from '../../../packages/core/src/prompt/types.js';
-import { getToolsForHat } from '../../../packages/core/src/tools/definitions.js';
+import { getToolsForHat, getAllToolsForHat } from '../../../packages/core/src/tools/definitions.js';
 import { AIProvider } from '../providers/types.js';
 import { EventStore } from '../store/event-store.js';
 import { MCPRegistry } from '../mcp/mcp-registry.js';
@@ -1090,12 +1090,18 @@ export class TeamOrchestrator {
     return this.store.subscribe(fn);
   }
 
+  /**
+   * Every built-in tool each agent has: those sent in every call, those it
+   * finds with search_tools (onDemand), and the teams tools it has now.
+   */
   getToolInfo() {
-    const toolMeta = new Map<string, { description: string; agents: string[] }>();
+    const toolMeta = new Map<string, { description: string; onDemand: boolean; agents: string[] }>();
     for (const agent of this.agents.values()) {
-      for (const tool of getToolsForHat(agent.config.hatType)) {
+      const always = new Set(getToolsForHat(agent.config.hatType).map((t) => t.name));
+      for (const tool of [...getAllToolsForHat(agent.config.hatType), ...this.teamsToolsFor(agent.name)]) {
         if (!toolMeta.has(tool.name)) {
-          toolMeta.set(tool.name, { description: tool.description, agents: [] });
+          const onDemand = !always.has(tool.name) && !(TEAMS_TOOL_NAMES as readonly string[]).includes(tool.name);
+          toolMeta.set(tool.name, { description: tool.description, onDemand, agents: [] });
         }
         toolMeta.get(tool.name)!.agents.push(agent.name);
       }
@@ -1104,6 +1110,7 @@ export class TeamOrchestrator {
       builtin: Array.from(toolMeta.entries()).map(([name, meta]) => ({
         name,
         description: meta.description,
+        onDemand: meta.onDemand,
         agents: meta.agents,
       })),
       mcp: this.mcp.getToolsByServer(),

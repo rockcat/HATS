@@ -379,6 +379,15 @@ header h1 {
   line-height: 1.4;
 }
 
+.tool-on-demand {
+  font-size: 9px;
+  padding: 0 4px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text-muted);
+  vertical-align: 1px;
+}
+
 .tool-agents {
   margin-top: 3px;
   display: flex;

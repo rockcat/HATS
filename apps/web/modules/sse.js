@@ -29,9 +29,12 @@ function renderTools(tools) {
       const badges = (tool.agents ?? [])
         .map(a => `<span class="tool-agent-badge">${a}</span>`)
         .join('');
+      const found = tool.onDemand
+        ? ` <span class="tool-on-demand" title="Not sent in every call: the agent finds it with search_tools when it needs it">on demand</span>`
+        : '';
       html += `
         <div class="tool-row">
-          <span class="tool-name">${tool.name}</span>
+          <span class="tool-name">${tool.name}</span>${found}
           <span class="tool-desc">${tool.description}</span>
           ${badges ? `<div class="tool-agents">${badges}</div>` : ''}
         </div>`;
