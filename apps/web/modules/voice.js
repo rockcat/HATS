@@ -6,6 +6,8 @@
 //   3. Browser decodes base64 WAV, plays via Web Audio API
 //   4. Audio clock drives avatarAPI.beginSpeech(visemes, getTime) for sync lipsync
 
+import { speechStarted, speechEnded } from './speech-activity.js';
+
 let cachedVoices = null;  // PiperVoice[] | null — loaded once
 
 export async function getVoices() {
@@ -149,6 +151,7 @@ export async function playSpeechChunk(chunk) {
 
   const startAt = ctx.currentTime;
   source.start(startAt);
+  speechStarted();
 
   const latency = (ctx.outputLatency ?? 0) + (ctx.baseLatency ?? 0);
 
@@ -160,6 +163,7 @@ export async function playSpeechChunk(chunk) {
     const finish = () => {
       if (done) return;
       done = true;
+      speechEnded();
       clearTimeout(safetyTimer);
       if (currentSource === source) currentSource = null;
       window.avatarAPI?.endSpeech();

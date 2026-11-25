@@ -4,6 +4,7 @@
 
 import { collectVisemeMeshes, stepMorphWeights, applyMorphWeights } from './morph-lipsync.js';
 import { applyGlbRestPose } from './modules/avatar-core.js';
+import { speechStarted, speechEnded } from './modules/speech-activity.js';
 
 // Lazily resolved Three.js handles — null until first meeting opens
 let THREE = null;
@@ -263,6 +264,7 @@ async function playSpeechChunk(chunk, name) {
         // Schedule start explicitly so lipsync base time is deterministic
         const startAt = ctx.currentTime;
         source.start(startAt);
+        speechStarted();
 
         // Store speech state on the slot so renderAllSlots drives visemes via RAF
         const visemes = chunk.visemes ?? [];
@@ -282,6 +284,7 @@ async function playSpeechChunk(chunk, name) {
         const finish = () => {
           if (done) return;
           done = true;
+          speechEnded();
           clearTimeout(safetyTimer);
           if (slots[name]) {
             slots[name].speechVisemes  = null;
