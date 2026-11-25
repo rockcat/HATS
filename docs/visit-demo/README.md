@@ -163,11 +163,13 @@ The two runners don't have to be on the same computer. Runners never talk to eac
 1. **Choose one machine for the shared services:** the Project Server (:3020), the Agent Template Library (:3010) and the Speech Service (:3050). It can be a machine of its own, or one of the runner machines.
 2. **Open those ports to the other machines.** On Windows, allow incoming connections on them in the firewall.
 3. **Point every other machine's runner at it.** With Docker, put these in that machine's `.env`. Compose passes them to the runner as `PROJECT_SERVER_URL` and so on.
-   ```
+
+   ```ini
    DOCKER_PROJECT_SERVER_URL=http://192.168.1.10:3020
    DOCKER_AGENT_LIBRARY_URL=http://192.168.1.10:3010
    DOCKER_SPEECH_SERVICE_URL=http://192.168.1.10:3050
    ```
+
 4. **Run each team's runner on the machine where its files should live.** In the diagram, the sales file stays on machine B. Only Wren's result crosses the network.
 
 **Limits and cautions:**
