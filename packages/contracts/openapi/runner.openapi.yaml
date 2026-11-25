@@ -1,0 +1,1027 @@
+openapi: 3.1.0
+info:
+  title: HATS Team Runner API
+  version: 1.0.0
+  description: |
+    The runner's own API: everything the dashboard does, available to scripts.
+    It is not versioned and moves with the dashboard. An app that talks to agents
+    and should keep working as HATS changes should use the Embodiment API.
+
+    Every route needs a sign-in, except `POST /api/auth/login` and
+    `GET /api/auth/pair/{token}`. Send an API key as `X-API-Key`, or a token from
+    `/api/auth/login` as `Authorization: Bearer …`. A signed-in browser sends its
+    cookie, so "Try it out" works from the docs page.
+
+    `server/src/api/runner-openapi.test.ts` checks this document against the
+    routes in the code, both ways. Change them together.
+  license:
+    name: SEE LICENSE IN LICENSE.txt
+servers:
+  - url: /
+    description: This runner
+
+security:
+  - apiKey: []
+  - bearer: []
+
+tags:
+  - { name: Sign-in, description: Sessions, phone pairing and users }
+  - { name: Talking, description: Messages to agents, their questions for you, and the live stream }
+  - { name: Meetings }
+  - { name: Board, description: The kanban board }
+  - { name: Project, description: The project this runner is running, and its files }
+  - { name: Agents, description: The team, one agent at a time }
+  - { name: Shared agents, description: Agents shared by every project }
+  - { name: Visits, description: Agents working at, or moving to, another team }
+  - { name: Schedules, description: Agendas and scheduled actions }
+  - { name: Tools, description: MCP servers and tools }
+  - { name: Models, description: Providers, models, prices and usage }
+  - { name: Speech and images }
+  - { name: Settings, description: Settings, status, email and Google }
+  - { name: Docs, description: These documents }
+
+components:
+  securitySchemes:
+    apiKey: { type: apiKey, in: header, name: X-API-Key }
+    bearer: { type: http, scheme: bearer }
+  parameters:
+    agent: { name: name, in: path, required: true, description: "The agent's name, or its instance id", schema: { type: string } }
+    id: { name: id, in: path, required: true, schema: { type: string } }
+  schemas:
+    Error:
+      type: object
+      properties: { error: { type: string } }
+    Ok:
+      type: object
+      properties: { ok: { type: boolean, const: true } }
+    Ticket:
+      type: object
+      properties:
+        id: { type: string, examples: [TKT-001] }
+        title: { type: string }
+        description: { type: string }
+        priority: { type: string, enum: [low, medium, high, critical] }
+        column: { type: string, examples: [backlog, todo, in_progress, review, closed] }
+        assignee: { type: string }
+        creator: { type: string }
+        tags: { type: array, items: { type: string } }
+        blockedBy: { type: array, items: { type: string } }
+        longRunning: { type: boolean }
+        closedReason: { type: string, enum: [completed, cancelled] }
+        comments: { type: array, items: { $ref: '#/components/schemas/Comment' } }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    Comment:
+      type: object
+      properties:
+        id: { type: string }
+        author: { type: string }
+        text: { type: string }
+        ts: { type: string, format: date-time }
+    FileEntry:
+      type: object
+      properties:
+        name: { type: string }
+        path: { type: string, description: Relative to the project folder }
+        size: { type: integer }
+    Note:
+      type: object
+      properties: { note: { type: string } }
+    Schedule:
+      type: object
+      description: How often. Give one of these.
+      properties:
+        intervalMinutes: { type: number }
+        cron: { type: string, examples: ['0 9 * * 1-5'] }
+        delayMinutes: { type: number, description: Once, after this long }
+  responses:
+    Ok: { description: Done, content: { application/json: { schema: { $ref: '#/components/schemas/Ok' } } } }
+    Json: { description: OK, content: { application/json: { schema: { type: object } } } }
+    List: { description: OK, content: { application/json: { schema: { type: array, items: { type: object } } } } }
+    BadRequest: { description: Missing or bad fields, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    NotFound: { description: Not found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    Forbidden: { description: Admins only, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+
+paths:
+  # ── Sign-in ──────────────────────────────────────────────────────────────────
+  /api/auth/login:
+    post:
+      tags: [Sign-in]
+      summary: Swap a username and password for a session token
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties: { username: { type: string }, password: { type: string } }
+      responses:
+        '200':
+          description: Signed in. Also sets the session cookie.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { ok: { type: boolean }, token: { type: string }, user: { type: object } }
+        '401': { description: Wrong username or password }
+  /api/auth/logout:
+    post: { tags: [Sign-in], summary: End this session, operationId: logout, responses: { '200': { $ref: '#/components/responses/Ok' } } }
+  /api/auth/me:
+    get: { tags: [Sign-in], summary: Who is signed in, operationId: me, responses: { '200': { $ref: '#/components/responses/Json' } } }
+  /api/auth/pair/generate:
+    post: { tags: [Sign-in], summary: Start pairing a phone, operationId: pairGenerate, description: Returns a one-time token and a QR code for the phone to scan., responses: { '200': { $ref: '#/components/responses/Json' } } }
+  /api/auth/pair/{token}:
+    get:
+      tags: [Sign-in]
+      summary: The phone confirms pairing
+      operationId: pairConfirm
+      security: []
+      parameters: [{ name: token, in: path, required: true, schema: { type: string } }]
+      responses: { '200': { description: An API key for the phone }, '404': { $ref: '#/components/responses/NotFound' } }
+  /api/users:
+    get: { tags: [Sign-in], summary: List users, operationId: listUsers, responses: { '200': { $ref: '#/components/responses/List' } } }
+    post:
+      tags: [Sign-in]
+      summary: Create a user (admin)
+      operationId: createUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties: { username: { type: string }, password: { type: string }, role: { type: string, enum: [user, admin] } }
+      responses: { '201': { $ref: '#/components/responses/Json' }, '403': { $ref: '#/components/responses/Forbidden' }, '409': { description: That username is taken } }
+  /api/users/{id}:
+    parameters: [{ $ref: '#/components/parameters/id' }]
+    put:
+      tags: [Sign-in]
+      summary: Change a user's password or role
+      operationId: updateUser
+      requestBody: { content: { application/json: { schema: { type: object, properties: { password: { type: string }, role: { type: string, enum: [user, admin] } } } } } }
+      responses: { '200': { $ref: '#/components/responses/Json' } }
+    delete: { tags: [Sign-in], summary: Remove a user, operationId: deleteUser, responses: { '200': { $ref: '#/components/responses/Ok' } } }
+  /api/users/{id}/api-keys/{keyId}:
+    delete:
+      tags: [Sign-in]
+      summary: Revoke an API key
+      operationId: revokeApiKey
+      parameters: [{ $ref: '#/components/parameters/id' }, { name: keyId, in: path, required: true, schema: { type: string } }]
+      responses: { '200': { $ref: '#/components/responses/Ok' } }
+
+  # ── Talking ──────────────────────────────────────────────────────────────────
+  /api/cli:
+    post:
+      tags: [Talking]
+      summary: Run a command-box line
+      operationId: cli
+      description: |
+        The same lines as the dashboard's command box:
+
+        - `@Name message` sends a message to an agent, in `threadId` (default: its #general)
+        - `task Name: description` gives an agent a task; `task Name [folder]: …` names the folder too
+        - `reply Name: message` answers an agent's question
+        - `resume` restarts unfinished tasks and tickets
+
+        It returns once the line is accepted. The agent's reply arrives on `/events`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [line]
+              properties:
+                line: { type: string, examples: ['@Poppy what is on the board today?'] }
+                threadId: { type: string, default: general }
+      responses:
+        '200':
+          description: What the command box would print
+          content: { application/json: { schema: { type: object, properties: { output: { type: string, examples: ['→ Sent to Poppy'] } } } } }
+  /events:
+    get:
+      tags: [Talking]
+      summary: Everything that happens, live
+      operationId: events
+      description: |
+        Server-sent events, each a JSON object with a `type`: `init` once on
+        connecting, then `agent_update`, `agent_stream`, `cli_output`,
+        `kanban_update`, `board_update`, `files_update`, `meeting_*`,
+        `requests_update`, `team_news`, `telemetry_update`, `tools_update` and
+        others. Internal, and may change; the Embodiment API's stream is the
+        stable one.
+      responses: { '200': { description: An event stream, content: { text/event-stream: {} } } }
+  /api/events:
+    get:
+      tags: [Talking]
+      summary: The orchestrator's event log
+      operationId: eventLog
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, default: 100 } }
+        - { name: since, in: query, description: An ISO time, schema: { type: string } }
+      responses: { '200': { $ref: '#/components/responses/List' } }
+  /api/human-requests:
+    get: { tags: [Talking], summary: Agents' questions for you, operationId: listHumanRequests, responses: { '200': { $ref: '#/components/responses/List' } } }
+  /api/human-requests/answered:
+    delete: { tags: [Talking], summary: Clear every answered question, operationId: clearAnsweredRequests, responses: { '200': { $ref: '#/components/responses/Json' } } }
+  /api/human-requests/{id}:
+    delete: { tags: [Talking], summary: Remove a question, operationId: deleteHumanRequest, parameters: [{ $ref: '#/components/parameters/id' }], responses: { '200': { $ref: '#/components/responses/Ok' }, '404': { $ref: '#/components/responses/NotFound' } } }
+  /api/human-requests/{id}/respond:
+    post:
+      tags: [Talking]
+      summary: Answer a question
+      operationId: respondToRequest
+      parameters: [{ $ref: '#/components/parameters/id' }]
+      requestBody: { required: true, content: { application/json: { schema: { type: object, properties: { response: { type: string } } } } } }
+      responses: { '200': { $ref: '#/components/responses/Json' }, '404': { $ref: '#/components/responses/NotFound' } }
+  /api/human-requests/{id}/dismiss:
+    post:
+      tags: [Talking]
+      summary: Dismiss a question, optionally saying why
+      operationId: dismissRequest
+      parameters: [{ $ref: '#/components/parameters/id' }]
+      requestBody: { content: { application/json: { schema: { $ref: '#/components/schemas/Note' } } } }
+      responses: { '200': { $ref: '#/components/responses/Json' }, '404': { $ref: '#/components/responses/NotFound' } }
+
+  # ── Meetings ─────────────────────────────────────────────────────────────────
+  /api/meetings:
+    get: { tags: [Meetings], summary: Meetings, running and past, operationId: listMeetings, responses: { '200': { $ref: '#/components/responses/List' } } }
+  /api/meetings/start:
+    post:
+      tags: [Meetings]
+      summary: Start a meeting now
+      operationId: startMeeting
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [topic, facilitator]
+              properties:
+                topic: { type: string }
+                agenda: { type: string }
+                facilitator: { type: string, description: An agent's name }
+                participants: { type: array, items: { type: string } }
+      responses: { '200': { $ref: '#/components/responses/Json' }, '400': { $ref: '#/components/responses/BadRequest' } }
+  /api/meetings/{id}/minutes:
+    get: { tags: [Meetings], summary: A meeting's minutes, operationId: meetingMinutes, parameters: [{ $ref: '#/components/parameters/id' }], responses: { '200': { $ref: '#/components/responses/Json' }, '404': { $ref: '#/components/responses/NotFound' } } }
+  /api/meetings/{id}/cancel:
+    post: { tags: [Meetings], summary: End a running meeting, operationId: cancelMeeting, parameters: [{ $ref: '#/components/parameters/id' }], responses: { '200': { $ref: '#/components/responses/Json' } } }
+  /api/meetings/{id}/human-turn:
+    post:
+      tags: [Meetings]
+      summary: Say your piece, when it is your turn
+      operationId: meetingHumanTurn
+      parameters: [{ $ref: '#/components/parameters/id' }]
+      requestBody: { content: { application/json: { schema: { type: object, properties: { content: { type: string } } } } } }
+      responses: { '200': { $ref: '#/components/responses/Json' } }
+  /api/meetings/{id}/human-interject:
+    post:
+      tags: [Meetings]
+      summary: Interrupt, when it is not your turn
+      operationId: meetingInterject
+      parameters: [{ $ref: '#/components/parameters/id' }]
+      requestBody: { content: { application/json: { schema: { type: object, properties: { content: { type: string } } } } } }
+      responses: { '200': { $ref: '#/components/responses/Json' } }
+  /api/meetings/{id}/raise-hand:
+    post:
+      tags: [Meetings]
+      summary: Raise or lower a hand
+      operationId: meetingRaiseHand
+      parameters: [{ $ref: '#/components/parameters/id' }]
+      requestBody: { content: { application/json: { schema: { type: object, properties: { participant: { type: string }, raised: { type: boolean } } } } } }
+      responses: { '200': { $ref: '#/components/responses/Json' } }
+  /api/meetings/{id}/turn-ack:
+    post: { tags: [Meetings], summary: The dashboard has finished playing a turn, operationId: meetingTurnAck, parameters: [{ $ref: '#/components/parameters/id' }], responses: { '200': { $ref: '#/components/responses/Ok' } } }
+  /api/scheduled-meetings:
+    get: { tags: [Meetings], summary: Scheduled meetings, operationId: listScheduledMeetings, responses: { '200': { $ref: '#/components/responses/List' } } }
+    post:
+      tags: [Meetings]
+      summary: Schedule a meeting
+      operationId: scheduleMeeting
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type, topic, facilitator, participants, scheduledFor]
+              properties:
+                type: { type: string, enum: [standup, sprint_planning, retro, review, ad_hoc] }
+                topic: { type: string }
+                agenda: { type: string }
+                facilitator: { type: string }
+                participants: { type: array, items: { type: string } }
+                scheduledFor: { type: string, format: date-time }
+      responses: { '201': { $ref: '#/components/responses/Json' }, '400': { $ref: '#/components/responses/BadRequest' } }
+  /api/scheduled-meetings/{id}:
+    delete: { tags: [Meetings], summary: Remove a scheduled meeting, operationId: deleteScheduledMeeting, parameters: [{ $ref: '#/components/parameters/id' }], responses: { '200': { $ref: '#/components/responses/Ok' } } }
+  /api/scheduled-meetings/{id}/cancel:
+    post: { tags: [Meetings], summary: Cancel a scheduled meeting, operationId: cancelScheduledMeeting, parameters: [{ $ref: '#/components/parameters/id' }], responses: { '200': { $ref: '#/components/responses/Json' } } }
+  /api/scheduled-meetings/{id}/launch:
+    post: { tags: [Meetings], summary: Start a scheduled meeting now, operationId: launchScheduledMeeting, parameters: [{ $ref: '#/components/parameters/id' }], responses: { '200': { $ref: '#/components/responses/Json' } } }
+
+  # ── Board ────────────────────────────────────────────────────────────────────
+  /api/kanban:
+    get:
+      tags: [Board]
+      summary: The board, by column
+      operationId: board
+      parameters: [{ name: includeBacklog, in: query, schema: { type: boolean, default: false } }]
+      responses: { '200': { $ref: '#/components/responses/Json' } }
+  /api/kanban/tickets:
+    get:
+      tags: [Board]
+      summary: Every ticket
+      operationId: listTickets
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { type: object, properties: { tickets: { type: array, items: { $ref: '#/components/schemas/Ticket' } } } } } }
+    post:
+      tags: [Board]
+      summary: Add a ticket
+      operationId: createTicket
+      description: |
+        Only `title` is needed. A ticket with the same title, ignoring case, is
+        refused with 409 and returned as `existing`, so a seed script can run
+        twice. A ticket created `in_progress` with an `assignee` starts at once.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title]
+              properties:
+                title: { type: string }
+                description: { type: string }
+                priority: { type: string, default: medium }
+                column: { type: string, default: backlog }
+                assignee: { type: string }
+                tags: { type: array, items: { type: string } }
+                blockedBy: { type: array, items: { type: string } }
+                longRunning: { type: boolean }
+      responses:
+        '201': { description: Added, content: { application/json: { schema: { $ref: '#/components/schemas/Ticket' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409': { description: A ticket with that title exists, content: { application/json: { schema: { type: object, properties: { error: { type: string }, existing: { $ref: '#/components/schemas/Ticket' } } } } } }
+  /api/kanban/tickets/{id}:
+    patch:
+      tags: [Board]
+      summary: Change a ticket, or move it to another column
+      operationId: updateTicket
+      parameters: [{ $ref: '#/components/parameters/id' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title: { type: string }
+                description: { type: string }
+                priority: { type: string }
+                column: { type: string }
+                closedReason: { type: string, enum: [completed, cancelled] }
+                assignee: { type: [string, 'null'] }
+                tags: { type: array, items: { type: string } }
+                blockedBy: { type: array, items: { type: string } }
+                longRunning: { type: boolean }
+      responses:
+        '200': { description: The ticket, content: { application/json: { schema: { $ref: '#/components/schemas/Ticket' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/kanban/tickets/{id}/comments:
+    post:
+      tags: [Board]
+      summary: Comment on a ticket; its assignee is told
+      operationId: commentOnTicket
+      parameters: [{ $ref: '#/components/parameters/id' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [text], properties: { author: { type: string, default: human }, text: { type: string } } } } }
+      responses:
+        '201': { description: The comment, content: { application/json: { schema: { $ref: '#/components/schemas/Comment' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ── Project ──────────────────────────────────────────────────────────────────
+  /api/project:
+    get: { tags: [Project], summary: The project this runner is running, operationId: project, responses: { '200': { $ref: '#/components/responses/Json' } } }
+  /api/projects:
+    get: { tags: [Project], summary: Every project this runner can see, operationId: listProjects, responses: { '200': { $ref: '#/components/responses/List' } } }
+  /api/project/switch:
+    post:
+      tags: [Project]
+      summary: Run a different project
+      operationId: switchProject
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [id], properties: { id: { type: string } } } } } }
+      responses: { '200': { $ref: '#/components/responses/Json' }, '409': { description: This runner is locked to its project, or busy } }
+  /api/project/goal:
+    get: { tags: [Project], summary: The goal, operationId: getGoal, responses: { '200': { $ref: '#/components/responses/Json' } } }
+    put:
+      tags: [Project]
+      summary: Set the goal
+      operationId: setGoal
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [goal], properties: { goal: { type: string } } } } } }
+      responses: { '200': { $ref: '#/components/responses/Json' } }
+  /api/project/human-name:
+    get: { tags: [Project], summary: What the agents call you, operationId: getHumanName, responses: { '200': { $ref: '#/components/responses/Json' } } }
+    put:
+      tags: [Project]
+      summary: Set what the agents call you
+      operationId: setHumanName
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [humanName], properties: { humanName: { type: string } } } } } }
+      responses: { '200': { $ref: '#/components/responses/Json' } }
+  /api/project/clear:
+    post: { tags: [Project], summary: Clear the project's runtime state, operationId: clearProject, responses: { '200': { $ref: '#/components/responses/Json' } } }
+  /api/project/add-agent:
+    post:
+      tags: [Project]
+      summary: Add a shared agent to this project
+      operationId: addSharedAgentToProject
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [agentId], properties: { agentId: { type: string } } } } } }
+      responses: { '200': { $ref: '#/components/responses/Json' } }
+  /api/project/files:
+    get:
+      tags: [Project]
+      summary: The project's files
+      operationId: listFiles
+      responses:
+        '200':
+          description: "`sources/` is what you gave the team, `outputs/` what it made, and `tickets` each ticket's own folder"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sources: { type: array, items: { $ref: '#/components/schemas/FileEntry' } }
+                  outputs: { type: array, items: { $ref: '#/components/schemas/FileEntry' } }
+                  tickets: { type: array, items: { type: object, properties: { id: { type: string }, files: { type: array, items: { $ref: '#/components/schemas/FileEntry' } } } } }
+  /api/project/file:
+    get:
+      tags: [Project]
+      summary: Download one file
+      operationId: getFile
+      parameters: [{ name: path, in: query, required: true, description: Relative to the project folder, schema: { type: string, examples: [outputs/report.md] } }]
+      responses: { '200': { description: The file }, '400': { $ref: '#/components/responses/BadRequest' }, '404': { $ref: '#/components/responses/NotFound' } }
+  /api/project/files.zip:
+    get: { tags: [Project], summary: Every file, zipped, operationId: filesZip, responses: { '200': { description: A zip, content: { application/zip: {} } } } }
+  /api/project/upload:
+    post:
+      tags: [Project]
+      summary: Add a file to sources/
+      operationId: uploadFile
+      description: The body is the file itself, not a form. Its name comes from `X-Filename`.
+      parameters: [{ name: X-Filename, in: header, required: true, schema: { type: string, examples: [sales.csv] } }]
+      requestBody: { required: true, content: { application/octet-stream: { schema: { type: string, format: binary } } } }
+      responses:
+        '201': { description: Saved, content: { application/json: { schema: { type: object, properties: { ok: { type: boolean }, path: { type: string, examples: [sources/sales.csv] } } } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /api/project/open-folder:
+    post: { tags: [Project], summary: Open the project folder on the runner's machine, operationId: openFolder, responses: { '200': { $ref: '#/components/responses/Json' } } }
+  /api/projects/{id}/export:
+    get:
+      tags: [Project]
+      summary: Export a whole project as a bundle
+      operationId: exportProject
+      parameters: [{ $ref: '#/components/parameters/id' }, { name: credentials, in: query, schema: { type: boolean, default: false } }]
+      responses: { '200': { description: The bundle } }
+  /api/projects/import:
+    post:
+      tags: [Project]
+      summary: Import a project bundle
+      operationId: importProject
+      parameters: [{ name: as, in: query, description: A new id for it, schema: { type: string } }]
+      requestBody: { required: true, content: { application/octet-stream: { schema: { type: string, format: binary } } } }
+      responses: { '201': { $ref: '#/components/responses/Json' } }
+
+  # ── Agents ───────────────────────────────────────────────────────────────────
+  /api/team:
+    get: { tags: [Agents], summary: The team, its tasks and meetings, operationId: team, responses: { '200': { $ref: '#/components/responses/Json' } } }
+  /api/agents:
+    get: { tags: [Agents], summary: Every agent and what it is doing, operationId: listAgents, responses: { '200': { $ref: '#/components/responses/List' } } }
+    post:
+      tags: [Agents]
+      summary: Add an agent to the team
+      operationId: createAgent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                hatTypes: { type: array, items: { type: string, enum: [none, white, red, black, yellow, green, blue] } }
+                specialisation: { type: string }
+                backstory: { type: string }
+                visualDescription: { type: string }
+                provider: { type: string }
+                model: { type: string }
+                externalEndpoint: { type: object, description: For an agent that runs elsewhere and reports back to /api/agents/external/callback }
+      responses: { '201': { $ref: '#/components/responses/Json' }, '400': { $ref: '#/components/responses/BadRequest' } }
+  /api/agents/import:
+    post:
+      tags: [Agents]
+      summary: Import an agent bundle
+      operationId: importAgent
+      parameters: [{ name: name, in: query, description: A new name for it, schema: { type: string } }]
+      requestBody: { required: true, content: { application/octet-stream: { schema: { type: string, format: binary } } } }
+      responses: { '201': { $ref: '#/components/responses/Json' } }
+  /api/agents/external/callback:
+    post:
+      tags: [Agents]
+      summary: Where an external agent sends its reply
+      operationId: externalAgentCallback
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [agentId, messageId, response], properties: { agentId: { type: string }, messageId: { type: string }, response: { type: string } } } } } }
+      responses: { '200': { $ref: '#/components/responses/Json' } }
+  /api/agents/{name}:
+    delete: { tags: [Agents], summary: Remove an agent, operationId: deleteAgent, parameters: [{ $ref: '#/components/parameters/agent' }], responses: { '200': { $ref: '#/components/responses/Ok' } } }
+  /api/agents/{name}/feed:
+    get: { tags: [Agents], summary: What the agent has been doing, operationId: agentFeed, parameters: [{ $ref: '#/components/parameters/agent' }], responses: { '200': { $ref: '#/components/responses/List' } } }
+  /api/agents/{name}/threads:
+    get: { tags: [Agents], summary: The agent's conversation threads, operationId: agentThreads, parameters: [{ $ref: '#/components/parameters/agent' }], responses: { '200': { $ref: '#/components/responses/Json' } } }
+  /api/agents/{name}/history:
+    get:
+      tags: [Agents]
+      summary: One thread's messages
+      operationId: agentHistory
+      parameters: [{ $ref: '#/components/parameters/agent' }, { name: thread, in: query, schema: { type: string, default: general } }]
+      responses: { '200': { $ref: '#/components/responses/List' } }
+  /api/agents/{name}/memory:
+    get: { tags: [Agents], summary: What the agent remembers, operationId: agentMemory, parameters: [{ $ref: '#/components/parameters/agent' }], responses: { '200': { $ref: '#/components/responses/Json' } } }
+  /api/agents/{name}/prompt-preview:
+    get:
+      tags: [Agents]
+      summary: The agent's system prompt, as the model sees it
+      operationId: agentPromptPreview
+      parameters:
+        - { $ref: '#/components/parameters/agent' }
+        - { name: specialisation, in: query, schema: { type: string } }
+        - { name: name, in: query, schema: { type: string } }
+        - { name: instructions, in: query, schema: { type: string } }
+      responses: { '200': { $ref: '#/components/responses/Json' } }
+  /api/prompt-preview:
+    get:
+      tags: [Agents]
+      summary: The system prompt an agent not yet added would have
+      operationId: promptPreview
+      parameters:
+        - { name: name, in: query, schema: { type: string } }
+        - { name: specialisation, in: query, schema: { type: string } }
+        - { name: backstory, in: query, schema: { type: string } }
+        - { name: visualDescription, in: query, schema: { type: string } }
+      responses: { '200': { $ref: '#/components/responses/Json' } }
+  /api/agents/{name}/prompt:
+    patch:
+      tags: [Agents]
+      summary: Set the agent's own instructions
+      operationId: setAgentPrompt
+      parameters: [{ $ref: '#/components/parameters/agent' }]
+      requestBody: { content: { application/json: { schema: { type: object, properties: { instructions: { type: string }, promptMode: { type: string } } } } } }
+      responses: { '200': { $ref: '#/components/responses/Json' } }
+  /api/agents/{name}/limits:
+    patch: { tags: [Agents], summary: Set the agent's spending and step limits, operationId: setAgentLimits, parameters: [{ $ref: '#/components/parameters/agent' }], requestBody: { content: { application/json: { schema: { type: object } } } }, responses: { '200': { $ref: '#/components/responses/Json' } } }
+  /api/agents/{name}/config:
+    patch:
+      tags: [Agents]
+      summary: Set the agent's model
+      operationId: setAgentModel
+      parameters: [{ $ref: '#/components/parameters/agent' }]
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [provider, model], properties: { provider: { type: string }, model: { type: string } } } } } }
+      responses: { '200': { $ref: '#/components/responses/Json' } }
+  /api/agents/{name}/name:
+    patch:
+      tags: [Agents]
+      summary: Rename the agent
+      operationId: renameAgent
+      parameters: [{ $ref: '#/components/parameters/agent' }]
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [name], properties: { name: { type: string } } } } } }
+      responses: { '200': { $ref: '#/components/responses/Json' } }
+  /api/agents/{name}/specialisation:
+    patch:
+      tags: [Agents]
+      summary: Set the agent's specialisation
+      operationId: setAgentSpecialisation
+      parameters: [{ $ref: '#/components/parameters/agent' }]
+      requestBody: { content: { application/json: { schema: { type: object, properties: { specialisation: { type: string } } } } } }
+      responses: { '200': { $ref: '#/components/responses/Json' } }
+  /api/agents/{name}/identity:
+    patch:
+      tags: [Agents]
+      summary: Set how the agent looks and its backstory
+      operationId: setAgentIdentity
+      parameters: [{ $ref: '#/components/parameters/agent' }]
+      requestBody: { content: { application/json: { schema: { type: object, properties: { visualDescription: { type: string }, backstory: { type: string } } } } } }
+      responses: { '200': { $ref: '#/components/responses/Json' } }
+  /api/agents/{name}/hat:
+    patch:
+      tags: [Agents]
+      summary: Set the agent's thinking hats
+      operationId: setAgentHats
+      parameters: [{ $ref: '#/components/parameters/agent' }]
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [hatTypes], properties: { hatTypes: { type: array, items: { type: string } } } } } } }
+      responses: { '200': { $ref: '#/components/responses/Json' } }
+  /api/agents/{name}/voice:
+    patch:
+      tags: [Agents]
+      summary: Set the agent's voice
+      operationId: setAgentVoice
+      parameters: [{ $ref: '#/components/parameters/agent' }]
+      requestBody: { content: { application/json: { schema: { type: object, properties: { voice: { type: string }, speakerName: { type: string } } } } } }
+      responses: { '200': { $ref: '#/components/responses/Json' } }
+  /api/agents/{name}/email:
+    patch:
+      tags: [Agents]
+      summary: Set the agent's email address
+      operationId: setAgentEmail
+      parameters: [{ $ref: '#/components/parameters/agent' }]
+      requestBody: { content: { application/json: { schema: { type: object, properties: { email: { type: string } } } } } }
+      responses: { '200': { $ref: '#/components/responses/Json' } }
+  /api/agents/{name}/avatar:
+    patch:
+      tags: [Agents]
+      summary: Set the agent's avatar
+      operationId: setAgentAvatar
+      parameters: [{ $ref: '#/components/parameters/agent' }]
+      requestBody: { content: { application/json: { schema: { type: object, properties: { avatar: { type: string } } } } } }
+      responses: { '200': { $ref: '#/components/responses/Json' } }
+  /api/agents/{name}/background:
+    patch:
+      tags: [Agents]
+      summary: Set the scene behind the agent
+      operationId: setAgentBackground
+      parameters: [{ $ref: '#/components/parameters/agent' }]
+      requestBody: { content: { application/json: { schema: { type: object, properties: { background: { type: string } } } } } }
+      responses: { '200': { $ref: '#/components/responses/Json' } }
+  /api/agents/{name}/mcp-servers:
+    patch:
+      tags: [Agents]
+      summary: Choose which MCP servers the agent may use
+      operationId: setAgentMcpServers
+      parameters: [{ $ref: '#/components/parameters/agent' }]
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [servers], properties: { servers: { type: [array, 'null'], items: { type: string }, description: null for all of them } } } } } }
+      responses: { '200': { $ref: '#/components/responses/Json' } }
+  /api/agents/{name}/tools:
+    parameters: [{ $ref: '#/components/parameters/agent' }]
+    get:
+      tags: [Agents]
+      summary: Every tool the agent can reach, and which are sent with every call
+      operationId: agentTools
+      parameters: [{ name: default, in: query, description: 1 to see the default choice, schema: { type: string } }]
+      responses: { '200': { $ref: '#/components/responses/Json' } }
+    patch:
+      tags: [Agents]
+      summary: Choose which tools are sent with every call
+      operationId: setAgentTools
+      requestBody: { required: true, content: { application/json: { schema: { type: object, properties: { upfront: { type: [array, 'null'], items: { type: string }, description: null for the default } } } } } }
+      responses: { '200': { $ref: '#/components/responses/Ok' }, '400': { $ref: '#/components/responses/BadRequest' } }
+  /api/agents/{name}/personal-mcp:
+    get: { tags: [Agents], summary: The agent's own MCP servers, operationId: agentPersonalMcp, parameters: [{ $ref: '#/components/parameters/agent' }], responses: { '200': { $ref: '#/components/responses/Json' } } }
+  /api/agents/{name}/personal-mcp/{server}:
+    parameters: [{ $ref: '#/components/parameters/agent' }, { name: server, in: path, required: true, schema: { type: string } }]
+    put:
+      tags: [Agents]
+      summary: Give the agent its own credentials for a server
+      operationId: setAgentPersonalMcp
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [credentials], properties: { credentials: { type: object, additionalProperties: { type: string } } } } } } }
+      responses: { '200': { $ref: '#/components/responses/Json' } }
+    delete: { tags: [Agents], summary: Remove them, operationId: deleteAgentPersonalMcp, responses: { '200': { $ref: '#/components/responses/Json' } } }
+  /api/agents/{name}/scheduled-actions:
+    put:
+      tags: [Agents]
+      summary: Choose the agent's scheduled actions
+      operationId: setAgentScheduledActions
+      parameters: [{ $ref: '#/components/parameters/agent' }]
+      requestBody: { content: { application/json: { schema: { type: object, properties: { scheduledActionIds: { type: array, items: { type: string } } } } } } }
+      responses: { '200': { $ref: '#/components/responses/Json' } }
+  /api/agents/{name}/export:
+    get:
+      tags: [Agents]
+      summary: Export an agent as a bundle
+      operationId: exportAgent
+      parameters: [{ $ref: '#/components/parameters/agent' }, { name: credentials, in: query, schema: { type: boolean, default: false } }]
+      responses: { '200': { description: The bundle } }
+  /api/agents/{name}/duplicate:
+    post:
+      tags: [Agents]
+      summary: Copy an agent into this team
+      operationId: duplicateAgent
+      parameters: [{ $ref: '#/components/parameters/agent' }]
+      requestBody: { content: { application/json: { schema: { type: object, properties: { name: { type: string } } } } } }
+      responses: { '201': { $ref: '#/components/responses/Json' } }
+  /api/agents/{name}/send:
+    post: { tags: [Agents], summary: Send a copy of an agent to another runner, operationId: sendAgent, parameters: [{ $ref: '#/components/parameters/agent' }], requestBody: { content: { application/json: { schema: { type: object } } } }, responses: { '200': { $ref: '#/components/responses/Json' } } }
+  /api/agents/{name}/to-library:
+    post:
+      tags: [Agents]
+      summary: Save an agent to the Agent Library
+      operationId: agentToLibrary
+      parameters: [{ $ref: '#/components/parameters/agent' }]
+      requestBody: { content: { application/json: { schema: { type: object, properties: { name: { type: string } } } } } }
+      responses: { '201': { $ref: '#/components/responses/Json' } }
+  /api/personas:
+    get: { tags: [Agents], summary: Personas an agent can start from, operationId: personas, responses: { '200': { $ref: '#/components/responses/Json' } } }
+  /api/specialisations:
+    get: { tags: [Agents], summary: Known specialisations, operationId: specialisations, responses: { '200': { $ref: '#/components/responses/Json' } } }
+  /api/avatars:
+    get: { tags: [Agents], summary: Avatars to choose from, operationId: avatars, responses: { '200': { $ref: '#/components/responses/Json' } } }
+  /api/tasks:
+    get: { tags: [Agents], summary: Tasks given to agents, operationId: listTasks, responses: { '200': { $ref: '#/components/responses/List' } } }
+
+  # ── Shared agents ────────────────────────────────────────────────────────────
+  /api/global-agents:
+    get: { tags: [Shared agents], summary: Agents shared by every project, operationId: listGlobalAgents, responses: { '200': { $ref: '#/components/responses/List' } } }
+    post:
+      tags: [Shared agents]
+      summary: Create a shared agent
+      operationId: createGlobalAgent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                hatTypes: { type: array, items: { type: string } }
+                specialisation: { type: string }
+                backstory: { type: string }
+                visualDescription: { type: string }
+                provider: { type: string }
+                model: { type: string }
+      responses: { '201': { $ref: '#/components/responses/Json' } }
+  /api/global-agents/{id}:
+    parameters: [{ $ref: '#/components/parameters/id' }]
+    patch: { tags: [Shared agents], summary: Change a shared agent, operationId: updateGlobalAgent, requestBody: { content: { application/json: { schema: { type: object } } } }, responses: { '200': { $ref: '#/components/responses/Json' }, '404': { $ref: '#/components/responses/NotFound' } } }
+    delete: { tags: [Shared agents], summary: Remove a shared agent, operationId: deleteGlobalAgent, responses: { '200': { $ref: '#/components/responses/Ok' } } }
+  /api/global-agents/{id}/scheduled-actions:
+    put:
+      tags: [Shared agents]
+      summary: Choose a shared agent's scheduled actions
+      operationId: setGlobalAgentScheduledActions
+      parameters: [{ $ref: '#/components/parameters/id' }]
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [scheduledActionIds], properties: { scheduledActionIds: { type: array, items: { type: string } } } } } } }
+      responses: { '200': { $ref: '#/components/responses/Json' } }
+
+  # ── Visits ───────────────────────────────────────────────────────────────────
+  /api/visits:
+    get: { tags: [Visits], summary: Visits involving this team, operationId: listVisits, description: 404 when the runner has no Project Server., responses: { '200': { description: OK, content: { application/json: { schema: { type: object, properties: { visits: { type: array, items: { type: object } } } } } } } } }
+  /api/visits/{id}/approve:
+    post: { tags: [Visits], summary: Let a visit happen (admin), operationId: approveVisit, parameters: [{ $ref: '#/components/parameters/id' }], requestBody: { content: { application/json: { schema: { $ref: '#/components/schemas/Note' } } } }, responses: { '200': { $ref: '#/components/responses/Json' }, '403': { $ref: '#/components/responses/Forbidden' }, '409': { description: Out of order, or no longer allowed } } }
+  /api/visits/{id}/refuse:
+    post: { tags: [Visits], summary: Refuse a visit (admin), operationId: refuseVisit, parameters: [{ $ref: '#/components/parameters/id' }], requestBody: { content: { application/json: { schema: { $ref: '#/components/schemas/Note' } } } }, responses: { '200': { $ref: '#/components/responses/Json' }, '403': { $ref: '#/components/responses/Forbidden' } } }
+  /api/visits/{id}/recall:
+    post: { tags: [Visits], summary: Call a visiting agent home (admin), operationId: recallVisit, parameters: [{ $ref: '#/components/parameters/id' }], requestBody: { content: { application/json: { schema: { $ref: '#/components/schemas/Note' } } } }, responses: { '200': { $ref: '#/components/responses/Json' }, '403': { $ref: '#/components/responses/Forbidden' } } }
+  /api/visits/{id}/end:
+    post: { tags: [Visits], summary: Send a visitor home, from the host (admin), operationId: endVisit, parameters: [{ $ref: '#/components/parameters/id' }], requestBody: { content: { application/json: { schema: { $ref: '#/components/schemas/Note' } } } }, responses: { '202': { $ref: '#/components/responses/Ok' }, '403': { $ref: '#/components/responses/Forbidden' } } }
+  /api/moves/targets:
+    get: { tags: [Visits], summary: Teams an agent may move to, operationId: moveTargets, responses: { '200': { $ref: '#/components/responses/Json' } } }
+  /api/moves:
+    post:
+      tags: [Visits]
+      summary: Move an agent to another team for good (admin)
+      operationId: moveAgent
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [agent, to], properties: { agent: { type: string }, to: { type: string }, note: { type: string } } } } } }
+      responses: { '201': { $ref: '#/components/responses/Json' }, '400': { $ref: '#/components/responses/BadRequest' }, '403': { $ref: '#/components/responses/Forbidden' } }
+
+  # ── Schedules ────────────────────────────────────────────────────────────────
+  /api/agenda:
+    get:
+      tags: [Schedules]
+      summary: Agenda entries
+      operationId: listAgenda
+      parameters: [{ name: agent, in: query, schema: { type: string } }]
+      responses: { '200': { $ref: '#/components/responses/List' } }
+    post:
+      tags: [Schedules]
+      summary: Add an agenda entry
+      operationId: addAgendaEntry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - { $ref: '#/components/schemas/Schedule' }
+                - type: object
+                  required: [agentName, label, description]
+                  properties: { agentName: { type: string }, label: { type: string }, description: { type: string } }
+      responses: { '201': { $ref: '#/components/responses/Json' }, '400': { $ref: '#/components/responses/BadRequest' } }
+  /api/agenda/{id}:
+    parameters: [{ $ref: '#/components/parameters/id' }]
+    patch: { tags: [Schedules], summary: Change an agenda entry, operationId: updateAgendaEntry, requestBody: { content: { application/json: { schema: { type: object } } } }, responses: { '200': { $ref: '#/components/responses/Json' }, '404': { $ref: '#/components/responses/NotFound' } } }
+    delete: { tags: [Schedules], summary: Remove an agenda entry, operationId: deleteAgendaEntry, responses: { '200': { $ref: '#/components/responses/Ok' }, '404': { $ref: '#/components/responses/NotFound' } } }
+  /api/agenda/{id}/run:
+    post: { tags: [Schedules], summary: Run an agenda entry now, operationId: runAgendaEntry, parameters: [{ $ref: '#/components/parameters/id' }], responses: { '200': { $ref: '#/components/responses/Json' }, '404': { $ref: '#/components/responses/NotFound' } } }
+  /api/scheduled-actions:
+    get: { tags: [Schedules], summary: Scheduled actions, operationId: listScheduledActions, responses: { '200': { $ref: '#/components/responses/List' } } }
+    post:
+      tags: [Schedules]
+      summary: Add a scheduled action
+      operationId: addScheduledAction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [label]
+              properties:
+                label: { type: string }
+                description: { type: string }
+                intervalMinutes: { type: number }
+                cron: { type: string }
+                type: { type: string }
+                mcpToolCall: { type: object }
+      responses: { '201': { $ref: '#/components/responses/Json' }, '400': { $ref: '#/components/responses/BadRequest' } }
+  /api/scheduled-actions/{id}:
+    parameters: [{ $ref: '#/components/parameters/id' }]
+    patch: { tags: [Schedules], summary: Change a scheduled action, operationId: updateScheduledAction, requestBody: { content: { application/json: { schema: { type: object } } } }, responses: { '200': { $ref: '#/components/responses/Json' } } }
+    delete: { tags: [Schedules], summary: Remove a scheduled action, operationId: deleteScheduledAction, responses: { '200': { $ref: '#/components/responses/Ok' } } }
+  /api/scheduled-actions/{id}/run:
+    post: { tags: [Schedules], summary: Run a scheduled action now, operationId: runScheduledAction, parameters: [{ $ref: '#/components/parameters/id' }], responses: { '200': { $ref: '#/components/responses/Json' } } }
+
+  # ── Tools ────────────────────────────────────────────────────────────────────
+  /api/tools:
+    get: { tags: [Tools], summary: Every tool, by server, operationId: toolInfo, responses: { '200': { $ref: '#/components/responses/Json' } } }
+  /api/mcp/tools:
+    get: { tags: [Tools], summary: Tools the agents can use now, operationId: mcpTools, responses: { '200': { $ref: '#/components/responses/Json' } } }
+  /api/mcp/catalogue:
+    get: { tags: [Tools], summary: The MCP server catalogue, operationId: mcpCatalogue, responses: { '200': { $ref: '#/components/responses/Json' } } }
+    post:
+      tags: [Tools]
+      summary: Add a server to the catalogue
+      operationId: addCatalogueEntry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, name, category, config]
+              properties:
+                id: { type: string }
+                name: { type: string }
+                category: { type: string, enum: [productivity, files, web, data, dev] }
+                config: { type: object, properties: { transport: { type: string, enum: [stdio, sse, http] } } }
+      responses: { '201': { $ref: '#/components/responses/Ok' }, '400': { $ref: '#/components/responses/BadRequest' }, '409': { description: That id is taken } }
+  /api/mcp/catalogue/{id}:
+    parameters: [{ $ref: '#/components/parameters/id' }]
+    patch: { tags: [Tools], summary: Change a catalogue entry, operationId: updateCatalogueEntry, requestBody: { content: { application/json: { schema: { type: object } } } }, responses: { '200': { $ref: '#/components/responses/Ok' } } }
+    delete: { tags: [Tools], summary: Remove a catalogue entry, operationId: deleteCatalogueEntry, responses: { '200': { $ref: '#/components/responses/Ok' } } }
+  /api/mcp/enable:
+    post: { tags: [Tools], summary: Start a catalogue server, operationId: enableMcp, requestBody: { required: true, content: { application/json: { schema: { type: object, required: [id], properties: { id: { type: string } } } } } }, responses: { '200': { $ref: '#/components/responses/Json' } } }
+  /api/mcp/disable:
+    post: { tags: [Tools], summary: Stop a catalogue server, operationId: disableMcp, requestBody: { required: true, content: { application/json: { schema: { type: object, required: [id], properties: { id: { type: string } } } } } }, responses: { '200': { $ref: '#/components/responses/Ok' } } }
+  /api/mcp/test-call:
+    post:
+      tags: [Tools]
+      summary: Call a tool once, to try it
+      operationId: mcpTestCall
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [toolName]
+              properties: { toolName: { type: string }, args: { type: object }, agentName: { type: string }, serverName: { type: string } }
+      responses: { '200': { $ref: '#/components/responses/Json' } }
+
+  # ── Models ───────────────────────────────────────────────────────────────────
+  /api/providers:
+    get: { tags: [Models], summary: Model providers, and which have keys, operationId: providers, responses: { '200': { $ref: '#/components/responses/Json' } } }
+  /api/providers/models:
+    get:
+      tags: [Models]
+      summary: Each provider's models
+      operationId: providerModels
+      parameters: [{ name: refresh, in: query, schema: { type: boolean } }]
+      responses: { '200': { $ref: '#/components/responses/Json' } }
+  /api/pricing:
+    get: { tags: [Models], summary: Model prices, operationId: pricing, responses: { '200': { $ref: '#/components/responses/Json' } } }
+  /api/pricing/refresh:
+    post: { tags: [Models], summary: Fetch model prices again, operationId: refreshPricing, responses: { '200': { $ref: '#/components/responses/Json' } } }
+  /api/telemetry:
+    get: { tags: [Models], summary: This project's model calls and their cost, operationId: telemetry, responses: { '200': { $ref: '#/components/responses/Json' } } }
+  /api/telemetry/all:
+    get: { tags: [Models], summary: Costs across every project; the last week's calls, all-time totals, operationId: telemetryAll, responses: { '200': { $ref: '#/components/responses/Json' } } }
+
+  # ── Speech and images ────────────────────────────────────────────────────────
+  /api/voices:
+    get: { tags: [Speech and images], summary: Voices available, operationId: voices, responses: { '200': { $ref: '#/components/responses/Json' } } }
+  /api/speech/synthesise:
+    post:
+      tags: [Speech and images]
+      summary: Speak text in a voice
+      operationId: synthesise
+      description: Needs the Speech Service.
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [text], properties: { text: { type: string }, voice: { type: string }, speakerName: { type: string } } } } } }
+      responses: { '200': { description: Audio, with viseme timings }, '503': { description: No Speech Service } }
+  /api/speech/preview:
+    post:
+      tags: [Speech and images]
+      summary: A sample of a voice
+      operationId: previewVoice
+      requestBody: { content: { application/json: { schema: { type: object, properties: { voice: { type: string }, speakerName: { type: string } } } } } }
+      responses: { '200': { description: Audio, content: { audio/wav: {} } } }
+  /api/speech/transcribe:
+    post:
+      tags: [Speech and images]
+      summary: Turn recorded speech into text
+      operationId: transcribe
+      description: Uses OpenAI Whisper, so it needs `OPENAI_API_KEY`.
+      requestBody: { required: true, content: { application/octet-stream: { schema: { type: string, format: binary } } } }
+      responses:
+        '200': { description: The words, content: { application/json: { schema: { type: object, properties: { text: { type: string } } } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '502': { description: Whisper failed }
+  /api/images/backgrounds:
+    get: { tags: [Speech and images], summary: Background images, operationId: backgrounds, responses: { '200': { $ref: '#/components/responses/List' } } }
+  /api/images/generate:
+    post:
+      tags: [Speech and images]
+      summary: Generate a background image
+      operationId: generateImage
+      requestBody: { required: true, content: { application/json: { schema: { type: object, properties: { prompt: { type: string }, name: { type: string } } } } } }
+      responses: { '200': { $ref: '#/components/responses/Json' } }
+
+  # ── Settings ─────────────────────────────────────────────────────────────────
+  /api/services:
+    get: { tags: [Settings], summary: Which services are up, operationId: services, responses: { '200': { $ref: '#/components/responses/Json' } } }
+  /api/env:
+    get:
+      tags: [Settings]
+      summary: The runner's settings
+      operationId: getEnv
+      parameters: [{ name: keys, in: query, description: Comma-separated keys whose running value to report too, schema: { type: string } }]
+      responses: { '200': { $ref: '#/components/responses/Json' } }
+    post:
+      tags: [Settings]
+      summary: Change settings
+      operationId: setEnv
+      description: Locked keys are saved but not applied, and are listed in `locked`.
+      requestBody: { required: true, content: { application/json: { schema: { type: object, additionalProperties: { type: string } } } } }
+      responses: { '200': { description: Saved, content: { application/json: { schema: { type: object, properties: { ok: { type: boolean }, locked: { type: array, items: { type: string } } } } } } } }
+  /api/debug/logging:
+    get: { tags: [Settings], summary: Whether prompts are logged, operationId: getPromptLogging, responses: { '200': { $ref: '#/components/responses/Json' } } }
+    post:
+      tags: [Settings]
+      summary: Turn prompt logging on or off
+      operationId: setPromptLogging
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [enabled], properties: { enabled: { type: boolean } } } } } }
+      responses: { '200': { $ref: '#/components/responses/Json' } }
+  /api/email-allowlist:
+    get: { tags: [Settings], summary: Who agents may email, operationId: emailAllowlist, responses: { '200': { $ref: '#/components/responses/Json' } } }
+    post:
+      tags: [Settings]
+      summary: Allow an address
+      operationId: allowEmail
+      requestBody: { required: true, content: { application/json: { schema: { type: object, properties: { email: { type: string }, reason: { type: string } } } } } }
+      responses: { '201': { $ref: '#/components/responses/Json' } }
+  /api/email-allowlist/{id}:
+    parameters: [{ $ref: '#/components/parameters/id' }]
+    patch: { tags: [Settings], summary: Approve or reject a requested address, operationId: decideEmail, requestBody: { content: { application/json: { schema: { type: object, properties: { action: { type: string } } } } } }, responses: { '200': { $ref: '#/components/responses/Json' } } }
+    delete: { tags: [Settings], summary: Remove an address, operationId: removeEmail, responses: { '200': { $ref: '#/components/responses/Ok' } } }
+  /api/auth/google/start:
+    get: { tags: [Settings], summary: Connect the team's Google account, operationId: googleStart, responses: { '302': { description: To Google } } }
+  /api/auth/google/agent/start:
+    get: { tags: [Settings], summary: Connect one agent's Google account, operationId: googleAgentStart, parameters: [{ name: agent, in: query, required: true, schema: { type: string } }], responses: { '302': { description: To Google } } }
+  /api/auth/google/callback:
+    get: { tags: [Settings], summary: Where Google sends you back, operationId: googleCallback, responses: { '200': { description: A page that closes itself } } }
+  /api/auth/google/status:
+    get: { tags: [Settings], summary: Whether the team's account is connected, operationId: googleStatus, responses: { '200': { $ref: '#/components/responses/Json' } } }
+  /api/auth/google/agent/status:
+    get: { tags: [Settings], summary: Whether an agent's account is connected, operationId: googleAgentStatus, parameters: [{ name: agent, in: query, required: true, schema: { type: string } }], responses: { '200': { $ref: '#/components/responses/Json' } } }
+  /api/auth/google:
+    delete: { tags: [Settings], summary: Disconnect the team's account, operationId: googleDisconnect, responses: { '200': { $ref: '#/components/responses/Ok' } } }
+  /api/auth/google/agent:
+    delete: { tags: [Settings], summary: Disconnect an agent's account, operationId: googleAgentDisconnect, parameters: [{ name: agent, in: query, required: true, schema: { type: string } }], responses: { '200': { $ref: '#/components/responses/Ok' } } }
+  /api/runners:
+    get: { tags: [Settings], summary: Every runner, from the runner manager, operationId: listRunners, description: Forwarded to the runner manager's `/api/v1/runners` when `RUNNER_MANAGER_URL` is set; 404 otherwise., responses: { '200': { $ref: '#/components/responses/Json' }, '404': { $ref: '#/components/responses/NotFound' } } }
+  /api/runners/{path}:
+    parameters: [{ name: path, in: path, required: true, description: The rest of the runner manager's path, schema: { type: string } }]
+    get: { tags: [Settings], summary: Forwarded to the runner manager, operationId: runnerManagerGet, responses: { '200': { $ref: '#/components/responses/Json' } } }
+    post: { tags: [Settings], summary: Forwarded to the runner manager, operationId: runnerManagerPost, responses: { '200': { $ref: '#/components/responses/Json' } } }
+
+  # ── Docs ─────────────────────────────────────────────────────────────────────
+  /api/openapi/{name}:
+    get:
+      tags: [Docs]
+      summary: One of the API documents
+      operationId: openApiDocument
+      description: |
+        `runner` is this document, and `embodiment` the runner's public API.
+        `project-server` and `agent-library` are fetched from those services,
+        or come from the copy shipped with the runner when they cannot be reached.
+        The page at `/api-docs` shows them all.
+      parameters: [{ name: name, in: path, required: true, schema: { type: string, enum: [runner.yaml, embodiment.yaml, project-server.yaml, agent-library.yaml] } }]
+      responses: { '200': { description: The document, content: { application/yaml: {} } }, '404': { $ref: '#/components/responses/NotFound' } }

@@ -11,6 +11,7 @@ export const OPENAPI_FILES = {
   agentLibrary:  'agent-library.openapi.yaml',
   projectServer: 'project-server.openapi.yaml',
   embodiment:    'embodiment.openapi.yaml',
+  runner:        'runner.openapi.yaml',
 } as const;
 
 export type OpenApiName = keyof typeof OPENAPI_FILES;
