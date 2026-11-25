@@ -217,6 +217,18 @@ const CHECK_EMAIL_PERMISSIONS: ToolDefinition = {
   parameters: { type: 'object', properties: {}, required: [] },
 };
 
+const LIST_APPROVED_EMAILS: ToolDefinition = {
+  name: 'list_approved_emails',
+  description: 'Look up the email addresses this team may send to: every address a human has approved, whoever asked for it. Check here before sending an email. An address that is not listed must be asked for with request_email_approval first.',
+  parameters: {
+    type: 'object',
+    properties: {
+      search: { type: 'string', description: 'Optional: part of an address, a domain such as "@acme.com", or a word from why it was approved.' },
+    },
+    required: [],
+  },
+};
+
 // ── Agent self-scheduling tools (all agents) ──────────────────────────────────
 
 const SCHEDULE_ACTION: ToolDefinition = {
@@ -286,7 +298,7 @@ const CORE_TOOLS = [ESCALATE_TO_HUMAN, REPORT_TASK_COMPLETE, SEND_MESSAGE, DISEN
 const CORE_TOOLS_BLUE = [...CORE_TOOLS, ASSIGN_TASK];
 
 // On-demand tools are discoverable via search_tools / get_tool but not sent upfront.
-const ON_DEMAND_TOOLS = [READ_FILE, WRITE_FILE, LIST_FILES, WEB_SEARCH, FETCH_URL, REQUEST_EMAIL_APPROVAL, CHECK_EMAIL_PERMISSIONS, SCHEDULE_ACTION, LIST_MY_ACTIONS, CANCEL_ACTION];
+const ON_DEMAND_TOOLS = [READ_FILE, WRITE_FILE, LIST_FILES, WEB_SEARCH, FETCH_URL, REQUEST_EMAIL_APPROVAL, CHECK_EMAIL_PERMISSIONS, LIST_APPROVED_EMAILS, SCHEDULE_ACTION, LIST_MY_ACTIONS, CANCEL_ACTION];
 const ON_DEMAND_TOOLS_BLUE = [...ON_DEMAND_TOOLS, REQUEST_MEETING, SCHEDULE_MEETING];
 
 /** Returns the minimum core tool set sent in every LLM call. */

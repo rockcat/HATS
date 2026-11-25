@@ -12,6 +12,7 @@ import { MeetingStore } from './meeting-store.js';
 import { buildMessage } from './orchestrator-utils.js';
 import { requestFiles } from './request-files.js';
 import { EmailAllowlistStore } from '../api/email-allowlist-store.js';
+import { describeApprovedEmails } from './email-lookup.js';
 import { repeatFromRequest, type Repeat } from '../api/agenda-store.js';
 import { missingToolMessage } from '../teams/tool-needs.js';
 import { DISCOVER_TEAMS } from '../../../packages/core/src/tools/teams.js';
@@ -219,7 +220,7 @@ export function buildToolExecutor(ctx: ToolCallContext, mcp: MCPRegistry) {
           const emails  = extractEmailsFromArgs(call.arguments ?? {});
           const blocked = emails.filter(e => !allowlist.isApproved(e));
           if (blocked.length > 0) {
-            result = `Blocked: email address(es) not in the approved allowlist: ${blocked.join(', ')}. Use the request_email_approval tool to request approval, then retry once the human has approved it.`;
+            result = `Blocked: email address(es) not in the approved allowlist: ${blocked.join(', ')}. list_approved_emails shows who you may send to; for anyone else, use request_email_approval, then retry once the human has approved it.`;
             await ctx.store.append('tool_result', { agent: agentName, tool: call.name, result });
             return result;
           }
@@ -510,6 +511,12 @@ export async function executeToolCall(ctx: ToolCallContext, agentName: string, c
       });
       await ctx.store.append('email_approval_requested', { from: agentName, email: email.trim().toLowerCase(), reason });
       return `Approval request submitted for ${email}. Please wait — the human will review it in the Allowlist panel before you can use it.`;
+    }
+
+    case 'list_approved_emails': {
+      const store = ctx.emailAllowlistRef.store;
+      if (!store) return 'Email allowlist is not configured in this project.';
+      return describeApprovedEmails(store.list(), (call.arguments as { search?: string }).search);
     }
 
     case 'check_email_permissions': {
