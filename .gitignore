@@ -53,3 +53,4 @@ runtime_data/data/sessions.json
 
 # Per-runner data folders (docker-compose.multi.yml)
 runners/
+docs/visit-demo/recording/
