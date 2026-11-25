@@ -7,13 +7,46 @@
 
 import { esc, fileExt } from './utils.js';
 import { parseCsv } from './csv.js';
+import { htmlForPreview, SANDBOX } from './html-preview.js';
 import { fileUrl, dashboardLinkFor, fileFromSearch, baseName, copyWithFeedback } from './file-links.js';
 
 /** Text larger than this is not loaded to preview; download it instead. */
 const MAX_TEXT_BYTES = 2 * 1024 * 1024;
 const CSV_ROWS = 500;
 
-const TEXT_EXTS = ['txt', 'log', 'js', 'mjs', 'ts', 'py', 'html', 'css', 'xml', 'yaml', 'yml', 'sh', 'sql', 'ini', 'toml', 'env'];
+const TEXT_EXTS = ['txt', 'log', 'js', 'mjs', 'ts', 'py', 'css', 'xml', 'yaml', 'yml', 'sh', 'sql', 'ini', 'toml', 'env'];
+
+/**
+ * An HTML page, sandboxed (see html-preview.js): still by default, with a
+ * button to run its scripts, and its source a click away.
+ */
+function renderHtml(el, { text }) {
+  el.innerHTML = `<div class="file-preview-bar">
+      <span class="file-preview-bar-note">Scripts are off. The page can't load anything from the internet.</span>
+      <button type="button" class="files-btn" data-html="scripts" title="Run this page's scripts. It still can't reach the dashboard or act as you.">Run scripts</button>
+      <button type="button" class="files-btn" data-html="source">Source</button>
+    </div>
+    <iframe class="file-viewer-iframe file-preview-html" title="HTML preview"></iframe>`;
+  const frame = el.querySelector('iframe');
+  const note = el.querySelector('.file-preview-bar-note');
+  const show = (scripts) => {
+    frame.setAttribute('sandbox', scripts ? SANDBOX.scripts : SANDBOX.still);
+    frame.srcdoc = htmlForPreview(text, { scripts });
+  };
+  show(false);
+  el.querySelector('[data-html="scripts"]').addEventListener('click', (e) => {
+    show(true);
+    note.textContent = 'Scripts are running, sandboxed: the page can reach the internet, but not the dashboard or your session.';
+    e.currentTarget.disabled = true;
+  });
+  el.querySelector('[data-html="source"]').addEventListener('click', (e) => {
+    const showing = frame.hidden;
+    frame.hidden = !showing;
+    el.querySelector('.file-preview-source')?.remove();
+    if (!showing) frame.insertAdjacentHTML('afterend', `<pre class="file-viewer-pre file-preview-source">${esc(text)}</pre>`);
+    e.currentTarget.textContent = showing ? 'Source' : 'Page';
+  });
+}
 
 const PREVIEWERS = [
   {
@@ -53,6 +86,7 @@ const PREVIEWERS = [
       el.innerHTML = `<pre class="file-viewer-pre">${esc(shown)}</pre>`;
     },
   },
+  { exts: ['html', 'htm'], text: true, render: renderHtml },
   {
     exts: TEXT_EXTS, text: true,
     render: (el, { text }) => { el.innerHTML = `<pre class="file-viewer-pre">${esc(text)}</pre>`; },
