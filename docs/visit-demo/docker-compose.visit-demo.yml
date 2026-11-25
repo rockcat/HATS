@@ -8,6 +8,12 @@
 # Both use the services already running on this machine: the Project Server
 # (which holds the visits), the Agent Template Library and the Speech Service.
 # Ports 3071 and 3072 keep clear of the usual runner on 3001.
+#
+# A project name of its own: run from the root of the repository, Compose
+# would otherwise name it after the folder, as the main docker-compose.yml is,
+# and each would warn that the other's containers are orphans.
+
+name: hats-visit-demo
 
 x-runner: &runner
   build: .
