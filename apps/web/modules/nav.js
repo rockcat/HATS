@@ -21,7 +21,7 @@ const ON_SHOW = {
   schedules: () => fetchScheduledActions(),
   visits:    () => void fetchVisits(),
   calendar:  () => import('./calendar.js').then(m => m.fetchCalendar()),
-  cli:       () => document.getElementById('cli-input')?.focus(),
+  cli:       () => document.getElementById('chat-threads')?.focusCompose?.(),
   settings:  () => import('./settings.js').then(m => m.openSettings()),
   costs:     () => import('./telemetry.js').then(m => m.loadTelemetryDetail()),
 };

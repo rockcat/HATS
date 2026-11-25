@@ -1,29 +1,27 @@
-// ── CLI tab ───────────────────────────────────────────────────────────────────
+// ── Chat section ─────────────────────────────────────────────────────────────
+//
+// Choosing which agent to talk to, and running the commands typed into the
+// message box (see chat-commands.js). The conversation itself is the
+// <conversation-threads> element in thread-viewer.js.
 
 import { state } from './state.js';
+import { chatCommand } from './chat-commands.js';
+import { notify } from './notice.js';
 
-let cliInited      = false;
-let cliReplyTarget = null;
+let cliInited = false;
 
-export function setCliReply(agentName) {
-  cliReplyTarget = agentName;
-  const bar   = document.getElementById('cli-reply-bar');
-  const label = document.getElementById('cli-reply-label');
-  if (!bar || !label) return;
-  if (agentName) {
-    label.textContent = `Replying to ${agentName}`;
-    bar.hidden = false;
-  } else {
-    bar.hidden = true;
-    label.textContent = '';
-  }
-  const input = document.getElementById('cli-input');
-  if (input) {
-    if (agentName && !input.value.startsWith(`@${agentName} `)) {
-      input.value = `@${agentName} `;
-    }
-    input.focus();
-    input.selectionStart = input.selectionEnd = input.value.length;
+/** Run a command line, and show its answer. */
+async function runCommand(line) {
+  try {
+    const res = await fetch('/api/cli', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ line }),
+    });
+    const data = await res.json().catch(() => ({}));
+    notify(data.output || data.error || `${line}: done`, res.ok ? 'info' : 'error');
+  } catch (err) {
+    notify(`Could not run "${line}": ${err?.message ?? err}`, 'error');
   }
 }
 
@@ -31,116 +29,15 @@ export function initCLI() {
   if (cliInited) return;
   cliInited = true;
 
-  const input = document.getElementById('cli-input');
-  if (!input) return;
-
-  document.getElementById('cli-reply-cancel')?.addEventListener('click', () => {
-    setCliReply(null);
-    input.value = '';
-    input.focus();
-  });
-
   document.getElementById('chat-agent-select')?.addEventListener('change', updateChatThreads);
   updateChatAgentSelect();
 
-  // ── @ mention menu ────────────────────────────────────────────────────────────
-
-  let menuEl  = null;
-  let menuIdx = 0;
-  let atStart = -1;
-
-  const agentNames = () => (state.agents ?? []).map(a => a.name);
-
-  const filtered = () => {
-    if (atStart < 0) return [];
-    const fragment = input.value.slice(atStart + 1).toLowerCase();
-    return agentNames().filter(n => n.toLowerCase().startsWith(fragment));
-  };
-
-  const closeMenu = () => {
-    menuEl?.remove();
-    menuEl  = null;
-    atStart = -1;
-    menuIdx = 0;
-  };
-
-  const renderMenu = () => {
-    const items = filtered();
-    if (!items.length) { closeMenu(); return; }
-
-    if (!menuEl) {
-      menuEl = document.createElement('div');
-      menuEl.className = 'at-mention-menu';
-      document.getElementById('cli-input-row').appendChild(menuEl);
-    }
-
-    const fragment = atStart >= 0 ? input.value.slice(atStart) : '@';
-    menuEl.innerHTML = `<div class="at-mention-hint">@${fragment.slice(1) || '…'}  ↑↓ navigate · Enter select · Esc cancel</div>`;
-
-    items.forEach((name, i) => {
-      const el = document.createElement('div');
-      el.className = 'at-mention-item' + (i === menuIdx ? ' selected' : '');
-      el.innerHTML = `<span class="at-mention-arrow">▶</span><span>${name}</span>`;
-      el.addEventListener('mousedown', e => {
-        e.preventDefault();
-        selectItem(name);
-      });
-      menuEl.appendChild(el);
-    });
-  };
-
-  const selectItem = (name) => {
-    if (atStart < 0) return;
-    const before = input.value.slice(0, atStart);
-    input.value  = before + '@' + name + ' ';
-    closeMenu();
-    input.focus();
-  };
-
-  input.addEventListener('input', () => {
-    const val    = input.value;
-    const cursor = input.selectionStart ?? val.length;
-    const segment = val.slice(0, cursor);
-    const idx     = segment.lastIndexOf('@');
-
-    if (idx >= 0 && !segment.slice(idx + 1).includes(' ')) {
-      atStart = idx;
-      menuIdx = 0;
-      renderMenu();
-    } else {
-      closeMenu();
-    }
-  });
-
-  input.addEventListener('keydown', e => {
-    if (menuEl) {
-      const items = filtered();
-      if (e.key === 'ArrowDown')  { e.preventDefault(); menuIdx = Math.min(menuIdx + 1, items.length - 1); renderMenu(); return; }
-      if (e.key === 'ArrowUp')    { e.preventDefault(); menuIdx = Math.max(menuIdx - 1, 0); renderMenu(); return; }
-      if ((e.key === 'Enter' || e.key === 'Tab') && items[menuIdx]) { e.preventDefault(); selectItem(items[menuIdx]); return; }
-      if (e.key === 'Escape') { e.preventDefault(); closeMenu(); return; }
-    }
-
-    if (e.key === 'Enter' && !menuEl) {
-      const line = input.value.trim();
-      if (!line) return;
-      input.value = '';
-      setCliReply(null);
-      appendCLILine('> ' + line, 'cli-input-echo');
-
-      fetch('/api/cli', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ line }),
-      })
-        .then(r => r.json())
-        .then(data => { if (data.output) appendCLILine(data.output, 'cli-response'); })
-        .catch(err => appendCLILine('Error: ' + err, 'cli-error'));
-    }
-  });
-
-  document.addEventListener('click', e => {
-    if (menuEl && !menuEl.contains(e.target) && e.target !== input) closeMenu();
+  // A conversation asks before sending; a command is claimed and run instead.
+  document.addEventListener('chat-compose', (e) => {
+    const line = chatCommand(e.detail?.text);
+    if (!line) return;
+    e.preventDefault();
+    void runCommand(line);
   });
 }
 
@@ -171,16 +68,6 @@ export function updateChatThreads() {
   const name = sel.value;
   if (name) el.setAttribute('agent', name);
   else el.removeAttribute('agent');
-}
-
-export function appendCLILine(text, cls) {
-  const out = document.getElementById('cli-output');
-  if (!out) return;
-  const el = document.createElement('div');
-  el.className = 'cli-line ' + (cls || '');
-  el.textContent = text;
-  out.appendChild(el);
-  out.scrollTop = out.scrollHeight;
 }
 
 export function appendCLIAgent(from) {

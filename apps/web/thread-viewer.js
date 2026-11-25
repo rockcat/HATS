@@ -1,6 +1,9 @@
 // thread-viewer.js — <conversation-threads agent="Name"> web component
 // Slack-style two-column threaded conversation viewer with compose support
 
+/** The message box's tooltip: the commands it also takes. */
+const COMPOSE_HINT = 'Enter to send. Also takes commands: task Name: what to do · reply Name: answer · resume';
+
 class ConversationThreads extends HTMLElement {
   static get observedAttributes() { return ['agent']; }
 
@@ -279,6 +282,10 @@ class ConversationThreads extends HTMLElement {
 
   /** Show a message as sent, in #general or the open thread, and send it. */
   _sendTo(panel, msg) {
+    // The page may claim it first: `task …`, `reply …` and `resume` are run
+    // as commands, not sent to the agent (see modules/chat-commands.js).
+    const ask = new CustomEvent('chat-compose', { detail: { text: msg }, bubbles: true, composed: true, cancelable: true });
+    if (!this.dispatchEvent(ask)) return;
     const pending = { role: 'user', content: msg, timestamp: new Date().toISOString(), _pending: true };
     const inThread = panel === 'thread';
     if (inThread) this._pendingThreadMessages = [...this._pendingThreadMessages, pending];
@@ -293,6 +300,13 @@ class ConversationThreads extends HTMLElement {
 
   /** The thread open beside #general, or null. */
   get activeThread() { return this._activeThread; }
+
+  /** Put the cursor in the open thread's message box, or #general's. */
+  focusCompose() {
+    const box = this._shadow.querySelector(this._activeThread ? '#thread-compose .compose-input' : '#general-compose .compose-input')
+      ?? this._shadow.querySelector('#general-compose .compose-input');
+    box?.focus();
+  }
 
   /** Send what was said to the open thread, or #general: as if typed there. */
   sendText(text) {
@@ -360,7 +374,7 @@ class ConversationThreads extends HTMLElement {
             ${this._newThreadMode ? `
               <input id="new-thread-name" class="thread-name-input" placeholder="Thread name…" autocomplete="off" />
             ` : ''}
-            <textarea class="compose-input" rows="1" placeholder="${this._newThreadMode ? 'First message…' : 'Message #general… (Enter to send)'}"></textarea>
+            <textarea class="compose-input" rows="1" title="${COMPOSE_HINT}" placeholder="${this._newThreadMode ? 'First message…' : 'Message #general… (Enter to send)'}"></textarea>
             <div class="compose-footer">
               ${!this._newThreadMode ? `<button class="new-thread-btn" title="Start a new thread">+ Thread</button>` : '<span></span>'}
               <button class="compose-send-btn${this._sending ? ' compose-send-btn--busy' : ''}" data-panel="general"${this._sending ? ' disabled' : ''}>Send</button>
@@ -377,7 +391,7 @@ class ConversationThreads extends HTMLElement {
             ${this._renderMessages([...this._activeMessages, ...this._pendingThreadMessages], this._activeThread, this._isThinking(this._pendingThreadMessages))}
           </div>
           <div class="compose-bar" id="thread-compose" data-panel="thread">
-            <textarea class="compose-input" rows="1" placeholder="Reply in thread… (Enter to send)"></textarea>
+            <textarea class="compose-input" rows="1" title="${COMPOSE_HINT}" placeholder="Reply in thread… (Enter to send)"></textarea>
             <div class="compose-footer">
               <span></span>
               <button class="compose-send-btn${this._sending ? ' compose-send-btn--busy' : ''}" data-panel="thread"${this._sending ? ' disabled' : ''}>Reply</button>
