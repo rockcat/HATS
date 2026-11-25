@@ -35,7 +35,7 @@ export const REQUEST_VISIT: ToolDefinition = {
   parameters: {
     type: 'object',
     properties: {
-      team: { type: 'string', description: 'The team to visit, as discover_teams named it.' },
+      team: { type: 'string', description: 'The team to visit: the id discover_teams shows in brackets, e.g. "insights". Its name works too.' },
       ticket: { type: 'string', description: 'Your ticket the visit is for, e.g. "TKT-012".' },
       purpose: { type: 'string', description: 'What you will do there.' },
       expected_result: { type: 'string', description: 'What you will bring back.' },

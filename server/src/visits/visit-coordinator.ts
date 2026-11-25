@@ -27,6 +27,7 @@ import { packAgent, unpackAgent } from '../agent-transfer/agent-bundle.js';
 import { restoreAgent } from '../agent-transfer/agent-transfer.js';
 import { captureFrom, targetFor, type AgentIo } from '../agent-transfer/agent-io.js';
 import { MEMORY_FILE, mergeMemory, movingPack, openPack, outgoingPack, returningPack } from './travel-pack.js';
+import { resolveTeam } from './team-name.js';
 
 export interface CoordinatorDeps {
   client: VisitsClient;
@@ -99,8 +100,10 @@ export class VisitCoordinator implements VisitTools {
     if (!ticket) return `There is no ticket ${ticketId || '(none given)'} on this board: a visit is for one of your tickets.`;
     if (ticket.column === 'closed') return `${ticketId} is closed, so there is nothing to visit for.`;
 
+    // The agent may name the team as discover_teams showed it, not by its id.
+    const projects = await this.d.client.projects().catch(() => []);
     const visit = await this.d.client.request({
-      agent: agent.id, home: this.project, host: String(args['team'] ?? '').trim(),
+      agent: agent.id, home: this.project, host: resolveTeam(String(args['team'] ?? ''), projects),
       reason: { ticket: ticketId, purpose: String(args['purpose'] ?? ''), expectedResult: String(args['expected_result'] ?? '') },
     });
     await board!.addComment(ticketId, agent.name, `Asked to visit ${visit.host}: ${visit.reason.purpose}`).catch(() => {});
