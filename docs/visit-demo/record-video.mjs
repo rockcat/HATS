@@ -1,6 +1,6 @@
-// Two recordings, one per team, made into one video: side by side, with the
-// long waits cut out (see record-cuts.mjs). Needs ffmpeg on the PATH, or
-// FFMPEG set to where it is.
+// Two recordings, one per team, made into one video: one above the other
+// (which embeds in a page better) or side by side, with the long waits cut
+// out (see record-cuts.mjs). Needs ffmpeg on the PATH, or FFMPEG set to it.
 
 import { spawn } from 'node:child_process';
 
@@ -24,16 +24,18 @@ function run(cmd, args) {
 }
 
 /**
- * @param {{ left: { path: string, offset: number }, right: { path: string, offset: number },
- *           keep: { start: number, end: number }[], out: string }} job
- *   offset: ms from the start of the run to the start of that recording
+ * @param {{ first: { path: string, offset: number }, second: { path: string, offset: number },
+ *           keep: { start: number, end: number }[], out: string, layout?: 'stacked' | 'side' }} job
+ *   first goes on top (or left). offset: ms from the start of the run to the start of that recording.
  */
-export async function sideBySide({ left, right, keep, out }) {
-  const side = (input, { offset }) =>
-    `[${input}:v]fps=${FPS},select='${selectExpr(keep, offset)}',setpts=N/${FPS}/TB,scale=-2:720[v${input}]`;
-  const filter = `${side(0, left)};${side(1, right)};[v0][v1]hstack=inputs=2:shortest=1[out]`;
+export async function combine({ first, second, keep, out, layout = 'stacked' }) {
+  const fit = layout === 'stacked' ? 'scale=1280:-2' : 'scale=-2:720';
+  const part = (input, { offset }) =>
+    `[${input}:v]fps=${FPS},select='${selectExpr(keep, offset)}',setpts=N/${FPS}/TB,${fit}[v${input}]`;
+  const stack = layout === 'stacked' ? 'vstack' : 'hstack';
+  const filter = `${part(0, first)};${part(1, second)};[v0][v1]${stack}=inputs=2:shortest=1[out]`;
   await run(process.env.FFMPEG || 'ffmpeg', [
-    '-y', '-i', left.path, '-i', right.path,
+    '-y', '-i', first.path, '-i', second.path,
     '-filter_complex', filter, '-map', '[out]',
     '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '23', '-movflags', '+faststart', out,
   ]);

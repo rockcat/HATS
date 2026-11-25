@@ -1,10 +1,10 @@
-// Records the visit demo: Website on the left, Insights on the right, as Wren
+// Records the visit demo: Website above, Insights below (or side by side), as Wren
 // asks to visit, is approved, works at Insights and comes home with the
 // result. Real agents do the work, so it costs model calls and takes minutes;
 // the long waits are cut from the video (see record-cuts.mjs).
 //
 //   node --env-file=.env docs/visit-demo/record.mjs            cut the waits
-//   node --env-file=.env docs/visit-demo/record.mjs --real-time
+//   node --env-file=.env docs/visit-demo/record.mjs --real-time --side-by-side
 //
 // Needs the demo running and seeded (README.md), Chrome, and ffmpeg. Writes
 // docs/visit-demo/recording/: visit-demo.mp4, the two raw recordings, and
@@ -15,11 +15,12 @@ import { mkdir, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { keepSegments, laterText } from './record-cuts.mjs';
-import { sideBySide } from './record-video.mjs';
+import { combine } from './record-video.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const OUT = path.join(HERE, 'recording');
-const SIZE = { width: 1120, height: 720 };
+// Wide and short: two of them stacked still fit a page.
+const SIZE = { width: 1280, height: 640 };
 const trim = (u) => u.replace(/\/+$/, '');
 const TEAMS = {
   website: { name: 'Website', url: trim(process.env['WEBSITE_RUNNER_URL'] ?? 'http://localhost:3071') },
@@ -28,6 +29,7 @@ const TEAMS = {
 const AGENT = 'Wren';
 const ASK = 'Pick up the pricing-page ticket. Insights has the sales data: ask to visit them.';
 const realTime = process.argv.includes('--real-time');
+const layout = process.argv.includes('--side-by-side') ? 'side' : 'stacked';
 
 const t0 = Date.now();
 const now = () => Date.now() - t0;
@@ -226,10 +228,10 @@ async function main() {
   await writeFile(path.join(OUT, 'timeline.json'), JSON.stringify({ total, offsets: { website: website.offset, insights: insights.offset }, waits, keep }, null, 2));
   const out = path.join(OUT, 'visit-demo.mp4');
   log('making the video…');
-  await sideBySide({
-    left: { path: raw.website, offset: website.offset },
-    right: { path: raw.insights, offset: insights.offset },
-    keep, out,
+  await combine({
+    first: { path: raw.website, offset: website.offset },
+    second: { path: raw.insights, offset: insights.offset },
+    keep, out, layout,
   });
   const kept = keep.reduce((s, k) => s + k.end - k.start, 0);
   log(`${out}: ${(kept / 1000).toFixed(0)}s of ${(total / 1000).toFixed(0)}s recorded`);
