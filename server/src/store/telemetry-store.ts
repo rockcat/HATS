@@ -96,22 +96,7 @@ export class TelemetryStore {
    * The difference is the whole log versus a handful of rows, and it grows.
    */
   getSummary(): TelemetrySummary {
-    const db = this.database();
-
-    const totals = db.prepare(
-      `SELECT COUNT(*) AS calls, COALESCE(SUM(inputTokens), 0) AS inTok,
-              COALESCE(SUM(outputTokens), 0) AS outTok, COALESCE(SUM(cost), 0) AS cost
-       FROM telemetry`,
-    ).get() as { calls: number; inTok: number; outTok: number; cost: number };
-
-    return {
-      totalCalls:        totals.calls,
-      totalInputTokens:  totals.inTok,
-      totalOutputTokens: totals.outTok,
-      totalCost:         totals.cost,
-      byModel: this.groupedBy('model'),
-      byAgent: this.groupedBy('agent'),
-    };
+    return summaryOf(this.database());
   }
 
   /** The same shape, from the records themselves — for callers holding a list. */
@@ -130,25 +115,6 @@ export class TelemetryStore {
       a.calls++; a.inputTokens += r.inputTokens; a.outputTokens += r.outputTokens; a.cost += r.cost;
     }
     return { totalCalls, totalInputTokens: totalIn, totalOutputTokens: totalOut, totalCost, byModel, byAgent };
-  }
-
-  private groupedBy(column: 'model' | 'agent'): TelemetrySummary['byModel'] {
-    // The column name is one of two literals, never anything a caller chose.
-    const rows = this.database().prepare(
-      `SELECT ${column} AS key, COUNT(*) AS calls,
-              COALESCE(SUM(inputTokens), 0) AS inTok,
-              COALESCE(SUM(outputTokens), 0) AS outTok,
-              COALESCE(SUM(cost), 0) AS cost
-       FROM telemetry GROUP BY ${column}`,
-    ).all() as unknown as Array<{ key: string; calls: number; inTok: number; outTok: number; cost: number }>;
-
-    const out: TelemetrySummary['byModel'] = {};
-    for (const row of rows) {
-      out[row.key] = {
-        calls: row.calls, inputTokens: row.inTok, outputTokens: row.outTok, cost: row.cost,
-      };
-    }
-    return out;
   }
 
   private database(): DatabaseSync {
@@ -210,4 +176,83 @@ export class TelemetryStore {
     console.log(`[Telemetry] Imported ${imported} record(s) from ${path.basename(this.filePath)}`
       + `${skipped ? ` (${skipped} unreadable line(s) skipped)` : ''}`);
   }
+}
+
+// ── Reading a project's telemetry table ───────────────────────────────────────
+// Module functions rather than methods, so the all-projects total can read
+// another project's database the same way this store reads its own.
+
+type Bucket = TelemetrySummary['byModel'][string];
+
+function groupedBy(db: DatabaseSync, column: 'model' | 'agent'): Record<string, Bucket> {
+  // The column name is one of two literals, never anything a caller chose.
+  const rows = db.prepare(
+    `SELECT ${column} AS key, COUNT(*) AS calls,
+            COALESCE(SUM(inputTokens), 0) AS inTok,
+            COALESCE(SUM(outputTokens), 0) AS outTok,
+            COALESCE(SUM(cost), 0) AS cost
+     FROM telemetry GROUP BY ${column}`,
+  ).all() as unknown as Array<{ key: string; calls: number; inTok: number; outTok: number; cost: number }>;
+
+  const out: Record<string, Bucket> = {};
+  for (const row of rows) {
+    out[row.key] = { calls: row.calls, inputTokens: row.inTok, outputTokens: row.outTok, cost: row.cost };
+  }
+  return out;
+}
+
+/** Totals from a database holding a telemetry table, without reading the detail. */
+export function summaryOf(db: DatabaseSync): TelemetrySummary {
+  const totals = db.prepare(
+    `SELECT COUNT(*) AS calls, COALESCE(SUM(inputTokens), 0) AS inTok,
+            COALESCE(SUM(outputTokens), 0) AS outTok, COALESCE(SUM(cost), 0) AS cost
+     FROM telemetry`,
+  ).get() as { calls: number; inTok: number; outTok: number; cost: number };
+
+  return {
+    totalCalls:        totals.calls,
+    totalInputTokens:  totals.inTok,
+    totalOutputTokens: totals.outTok,
+    totalCost:         totals.cost,
+    byModel: groupedBy(db, 'model'),
+    byAgent: groupedBy(db, 'agent'),
+  };
+}
+
+/** The records made at or after `since` (an ISO timestamp), oldest first. */
+export function recordsSince(db: DatabaseSync, since: string): TelemetryRecord[] {
+  return db.prepare(
+    `SELECT id, ts, agent, provider, model, promptLength, inputTokens, outputTokens, cost
+     FROM telemetry WHERE ts >= ? ORDER BY ts, rowid`,
+  ).all(since) as unknown as TelemetryRecord[];
+}
+
+const emptySummary = (): TelemetrySummary => ({
+  totalCalls: 0, totalInputTokens: 0, totalOutputTokens: 0, totalCost: 0, byModel: {}, byAgent: {},
+});
+
+function addBuckets(into: Record<string, Bucket>, from: Record<string, Bucket>): Record<string, Bucket> {
+  const out = { ...into };
+  for (const [key, b] of Object.entries(from)) {
+    const was = out[key] ?? { calls: 0, inputTokens: 0, outputTokens: 0, cost: 0 };
+    out[key] = {
+      calls: was.calls + b.calls,
+      inputTokens: was.inputTokens + b.inputTokens,
+      outputTokens: was.outputTokens + b.outputTokens,
+      cost: was.cost + b.cost,
+    };
+  }
+  return out;
+}
+
+/** Several projects' totals as one. */
+export function mergeSummaries(summaries: TelemetrySummary[]): TelemetrySummary {
+  return summaries.reduce((all, s) => ({
+    totalCalls:        all.totalCalls + s.totalCalls,
+    totalInputTokens:  all.totalInputTokens + s.totalInputTokens,
+    totalOutputTokens: all.totalOutputTokens + s.totalOutputTokens,
+    totalCost:         all.totalCost + s.totalCost,
+    byModel: addBuckets(all.byModel, s.byModel),
+    byAgent: addBuckets(all.byAgent, s.byAgent),
+  }), emptySummary());
 }

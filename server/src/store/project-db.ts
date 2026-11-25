@@ -58,13 +58,26 @@ export function openProjectDb(dbPath: string): DatabaseSync {
  * WAL of a running project is rarely empty.
  */
 export function snapshotProjectDb(dbPath: string, dest: string): void {
+  withProjectDb(dbPath, (db) => db.exec(`VACUUM INTO '${dest.replace(/'/g, "''")}'`));
+}
+
+/**
+ * Use a project's database, open or not: the open project's connection is
+ * shared, and any other is closed again afterwards rather than kept.
+ */
+export function withProjectDb<T>(dbPath: string, use: (db: DatabaseSync) => T): T {
   const wasOpen = open.has(dbPath);
   const db = openProjectDb(dbPath);
   try {
-    db.exec(`VACUUM INTO '${dest.replace(/'/g, "''")}'`);
+    return use(db);
   } finally {
     if (!wasOpen) closeProjectDb(dbPath);
   }
+}
+
+/** Does this database have the table yet? */
+export function hasTable(db: DatabaseSync, table: string): boolean {
+  return db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(table) !== undefined;
 }
 
 /** Close a project's database. Called when switching project. */

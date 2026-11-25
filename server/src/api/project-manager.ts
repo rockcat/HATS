@@ -3,6 +3,7 @@ import { readFile, writeFile, mkdir, readdir, stat, rm } from 'fs/promises';
 import * as path from 'path';
 import { TeamOrchestrator } from '../orchestrator/orchestrator.js';
 import { TelemetryStore } from '../store/telemetry-store.js';
+import { allProjectsTelemetry } from '../store/all-projects-telemetry.js';
 import { readEnvFile, writeEnvFile, withEffective } from './env-manager.js';
 import { applicable, lockedKeys } from '../settings-file.js';
 import { listFilesRecursive } from './api-utils.js';
@@ -420,20 +421,10 @@ export class ProjectManager {
     }
 
     if (pathname === '/api/telemetry/all' && method === 'GET') {
-      const root = this.deps.getProjectsRoot();
-      if (!root) { json(res, 200, { summary: null }); return true; }
       try {
-        const dirs = await readdir(root, { withFileTypes: true });
-        const allRecords: import('../store/telemetry-store.js').TelemetryRecord[] = [];
-        await Promise.all(dirs.filter(e => e.isDirectory()).map(async (d) => {
-          try {
-            const raw = await readFile(path.join(root, d.name, 'telemetry.jsonl'), 'utf-8');
-            for (const line of raw.split('\n')) {
-              if (line.trim()) allRecords.push(JSON.parse(line));
-            }
-          } catch { /* project has no telemetry yet */ }
-        }));
-        json(res, 200, { summary: (await import('../store/telemetry-store.js')).TelemetryStore.summarize(allRecords) });
+        // A week of calls is all the hourly chart shows; the totals are all time.
+        const since = new Date(Date.now() - 7 * 24 * 3600_000).toISOString();
+        json(res, 200, await allProjectsTelemetry(this.deps.getProjectsRoot(), this.deps.getProjectDir(), since));
       } catch (err) {
         json(res, 500, { error: (err as Error).message });
       }
