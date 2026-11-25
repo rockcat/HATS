@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HATS API Docs</title>
+  <link rel="stylesheet" href="/nm/swagger-ui-dist/swagger-ui.css">
+  <style>
+    body { margin: 0; background: #fafafa; font-family: system-ui, sans-serif; }
+    .docs-bar { display: flex; gap: 16px; align-items: center; padding: 10px 20px; background: #1b1b1f; color: #eee; font-size: 14px; }
+    .docs-bar a { color: #9ecbff; }
+    .docs-bar strong { font-size: 16px; }
+    .docs-note { margin: 20px; padding: 12px 16px; border-left: 4px solid #d9822b; background: #fff4e5; }
+    .docs-note[hidden] { display: none; }
+    /* The standalone layout's own top bar carries the API menu; its logo is Swagger's, not ours. */
+    .swagger-ui .topbar { background: #2b2b31; padding: 6px 0; }
+    .swagger-ui .topbar .link { visibility: hidden; }
+  </style>
+</head>
+<body>
+  <div class="docs-bar">
+    <strong>HATS API Docs</strong>
+    <span>Choose an API at the top right.</span>
+    <a href="/">Back to the dashboard</a>
+  </div>
+  <p id="signed-out" class="docs-note" hidden>
+    You are not signed in, so the documents cannot be loaded.
+    <a href="/">Sign in to the dashboard</a>, then come back to this page.
+  </p>
+  <div id="swagger-ui"></div>
+
+  <script src="/nm/swagger-ui-dist/swagger-ui-bundle.js"></script>
+  <script src="/nm/swagger-ui-dist/swagger-ui-standalone-preset.js"></script>
+  <script type="module">
+    // The documents are under /api/, so they need the dashboard's sign-in;
+    // the browser sends its cookie with every request from this page, "Try it out" included.
+    const APIS = [
+      { name: 'Team Runner (this dashboard)', url: '/api/openapi/runner.yaml' },
+      { name: 'Embodiment (public, versioned)', url: '/api/openapi/embodiment.yaml' },
+      { name: 'Project Server', url: '/api/openapi/project-server.yaml' },
+      { name: 'Agent Library', url: '/api/openapi/agent-library.yaml' },
+    ];
+
+    const me = await fetch('/api/auth/me').catch(() => null);
+    if (!me?.ok) document.getElementById('signed-out').hidden = false;
+
+    const wanted = new URLSearchParams(location.search).get('api');
+    window.ui = window.SwaggerUIBundle({
+      urls: APIS,
+      'urls.primaryName': APIS.find((a) => a.url.includes(`/${wanted}.yaml`))?.name ?? APIS[0].name,
+      dom_id: '#swagger-ui',
+      deepLinking: true,
+      presets: [window.SwaggerUIBundle.presets.apis, window.SwaggerUIStandalonePreset],
+      layout: 'StandaloneLayout',
+      // The Project Server and Agent Library documents name their own address,
+      // which the browser may not reach; this runner's do not.
+      tryItOutEnabled: false,
+    });
+  </script>
+</body>
+</html>

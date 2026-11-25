@@ -47,6 +47,7 @@ import { repeatFromRequest, type Repeat } from './agenda-store.js';
 import { cronError } from '../../../packages/core/src/schedule/cron.js';
 import { switchRefusal } from '../project/project-lock.js';
 import { handleVisitRoutes } from './visit-router.js';
+import { handleDocsRoutes } from './docs-router.js';
 import type { VisitCoordinator } from '../visits/visit-coordinator.js';
 import { forwardAsset, upstreamFor } from './static-assets.js';
 
@@ -174,6 +175,7 @@ export class APIServer {
   private meetingRouter: MeetingRouter;
   private speechRouter: SpeechRouter;
   private serviceStatusRouter: ServiceStatusRouter;
+  private docsUrls: { projectServerUrl: string | null; agentLibraryUrl: string | null };
   private projectManager: ProjectManager;
   private agentRouter: AgentRouter;
   private agentTransferRouter: AgentTransferRouter;
@@ -264,6 +266,7 @@ export class APIServer {
       json: (r, s, b) => self.json(r, s, b),
       readBodyBuffer,
     });
+    this.docsUrls = { projectServerUrl: config.projectServerUrl ?? null, agentLibraryUrl: config.agentLibraryUrl ?? null };
     this.serviceStatusRouter = new ServiceStatusRouter({
       targets: () => serviceTargets({
         agentLibraryUrl:  config.agentLibraryUrl ?? null,
@@ -753,6 +756,7 @@ export class APIServer {
     if (await this.meetingRouter.handleRoutes(pathname, method, req, res))            return;
     if (await this.speechRouter.handleRoutes(pathname, method, req, res))             return;
     if (await this.serviceStatusRouter.handleRoutes(pathname, method, req, res))      return;
+    if (await handleDocsRoutes({ ...this.docsUrls, json: (r, s, b) => this.json(r, s, b) }, pathname, method, req, res)) return;
     if (await this.projectTransferRouter.handleRoutes(pathname, method, url, req, res)) return;
     if (await this.projectManager.handleRoutes(pathname, method, url, req, res))      return;
     if (await this.agentTransferRouter.handleRoutes(pathname, method, url, req, res)) return;
@@ -819,7 +823,9 @@ export class APIServer {
     if (pathname.startsWith('/nm/'))          { serveFile(path.join(NM_DIR,          pathname.slice(4)),  NM_DIR,          res, 'application/javascript',   AVATAR_CACHE, undefined, fromLibrary(AVATAR_CACHE)); return; }
     if (pathname.startsWith('/avatars/'))     { serveFile(path.join(AVATARS_DIR,     pathname.slice(9)),  AVATARS_DIR,     res, 'application/octet-stream', AVATAR_CACHE, undefined, fromLibrary(AVATAR_CACHE)); return; }
     if (pathname.startsWith('/backgrounds/')) { serveFile(path.join(BACKGROUNDS_DIR, pathname.slice(13)), BACKGROUNDS_DIR, res, 'image/png',                AVATAR_CACHE, undefined, fromLibrary(AVATAR_CACHE)); return; }
-    serveFile(path.join(PUBLIC_DIR, pathname === '/' ? 'index.html' : pathname.slice(1)), PUBLIC_DIR, res, 'application/octet-stream', STATIC_CACHE, req);
+    // /api-docs is public, like the dashboard page; the documents it reads are not.
+    const page = pathname === '/' ? 'index.html' : pathname === '/api-docs' ? 'api-docs.html' : pathname.slice(1);
+    serveFile(path.join(PUBLIC_DIR, page), PUBLIC_DIR, res, 'application/octet-stream', STATIC_CACHE, req);
   }
 
   // ── Shared helpers ────────────────────────────────────────────────────────
