@@ -114,7 +114,12 @@
   <main id="view-host">
 
     <section class="view view--costs" data-view="costs">
-      <div class="panel-header">Costs <span id="tel-detail-scope" class="tel-detail-scope">This project</span></div>
+      <div class="panel-header">Costs
+        <div class="tel-scope-switch" role="group" aria-label="Show costs for">
+          <button type="button" class="tel-scope-opt active" data-scope="project" aria-pressed="true">This project</button>
+          <button type="button" class="tel-scope-opt" data-scope="all" aria-pressed="false">All time</button>
+        </div>
+      </div>
       <div class="telemetry-body" id="telemetry-body">
         <div class="telemetry-summary-bar">
           <div class="telemetry-summary-item">

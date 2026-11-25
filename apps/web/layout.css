@@ -90,13 +90,29 @@ body.nav-folded { --side-nav-width: 50px; }
 /* ── Costs: the details for the scope chosen in the header ── */
 .view--costs .telemetry-body { flex: 1; min-height: 0; max-height: none; }
 .view--costs .telemetry-body > * { max-width: 960px; width: 100%; }
-.tel-detail-scope {
-  margin-left: 8px;
-  font-weight: 400;
+.tel-scope-switch {
+  display: inline-flex;
+  margin-left: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.tel-scope-opt {
+  padding: 3px 10px;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 500;
   text-transform: none;
   letter-spacing: 0;
-  color: var(--text-muted);
+  cursor: pointer;
 }
+.tel-scope-opt + .tel-scope-opt { border-left: 1px solid var(--border); }
+.tel-scope-opt:hover { background: var(--surface-2); color: var(--text); }
+.tel-scope-opt.active { background: var(--accent); color: #fff; }
+.tel-scope-opt:focus-visible { outline: 2px solid var(--hat-blue); outline-offset: -2px; }
 
 /* Settings at the bottom. */
 .side-nav-settings { margin-top: auto; }

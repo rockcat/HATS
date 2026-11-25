@@ -23,17 +23,32 @@ export function refreshTelemetryBar() {
   fetch(telemetryUrl()).then(r => r.json()).then(d => { if (d.summary) applyTelemetrySummary(d.summary); }).catch(() => {});
 }
 
-export function initTelScopeToggle() {
+/**
+ * Show this project's costs, or every project's. The header's switch and the
+ * Costs section's both set it, and both show it.
+ */
+export function setTelScope(scope) {
+  telScope = scope === 'all' ? 'all' : 'project';
   const btn = document.getElementById('tel-scope-btn');
-  if (!btn) return;
-  btn.addEventListener('click', () => {
-    telScope = telScope === 'project' ? 'all' : 'project';
+  if (btn) {
     btn.textContent = telScope === 'all' ? 'All time' : 'Project';
     btn.classList.toggle('tel-scope-btn--all', telScope === 'all');
-    refreshTelemetryBar();
-    // The details follow the header's choice when they are showing.
-    if (document.querySelector('.view--costs.active')) void loadTelemetryDetail();
-  });
+  }
+  for (const opt of document.querySelectorAll('.tel-scope-opt')) {
+    const on = opt.dataset.scope === telScope;
+    opt.classList.toggle('active', on);
+    opt.setAttribute('aria-pressed', String(on));
+  }
+  refreshTelemetryBar();
+  if (document.querySelector('.view--costs.active')) void loadTelemetryDetail();
+}
+
+export function initTelScopeToggle() {
+  document.getElementById('tel-scope-btn')?.addEventListener('click', () =>
+    setTelScope(telScope === 'project' ? 'all' : 'project'));
+  for (const opt of document.querySelectorAll('.tel-scope-opt')) {
+    opt.addEventListener('click', () => setTelScope(opt.dataset.scope));
+  }
 }
 
 export function drawPie(canvas, data) {
@@ -241,7 +256,6 @@ export function renderLegend(elId, data, total) {
 
 /** Fill the Costs section for the scope chosen in the header. */
 export async function loadTelemetryDetail() {
-  document.getElementById('tel-detail-scope').textContent = telScope === 'all' ? 'All time' : 'This project';
   try {
     renderTelemetryDetail(await fetch(telemetryUrl()).then(r => r.json()));
   } catch { /* left as it was */ }
