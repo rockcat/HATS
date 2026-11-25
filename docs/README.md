@@ -314,3 +314,5 @@ Changing an API or a document shape means changing a contract in
 `packages/contracts` — see [its README](../packages/contracts/README.md) for the
 steps, and [SERVICES.md](SERVICES.md) for how the pieces fit
 together.
+
+Every HTTP route, with examples for scripting the runner, is in [API.md](API.md).
