@@ -32,7 +32,7 @@
       <span class="telemetry-stat"><span class="telemetry-label">Out</span> <span id="tel-out">0</span></span>
       <span class="telemetry-sep">|</span>
       <span class="telemetry-stat"><span class="telemetry-label">Cost</span> <span id="tel-cost">$0.0000</span></span>
-      <button id="telemetry-btn" class="telemetry-detail-btn" title="View LLM usage details"><img src="assets/info.svg" class="svg-icon" alt="Info"></button>
+      <button id="telemetry-btn" class="telemetry-detail-btn" title="Show the cost details"><img src="assets/info.svg" class="svg-icon" alt="Info"></button>
     </div>
     <div id="service-status" class="service-status" title="External services"></div>
     <span id="current-user-label" class="current-user-label"></span>
@@ -107,10 +107,67 @@
     <button class="side-nav-item" data-view="tools" title="Tools"><img src="assets/nav-tools.svg" class="svg-icon" alt=""><span class="side-nav-label">Tools</span></button>
     <button class="side-nav-item" data-view="mcp" title="MCP Servers"><img src="assets/nav-mcp.svg" class="svg-icon" alt=""><span class="side-nav-label">MCP Servers</span></button>
     <button class="side-nav-item" data-view="library" title="Agent Library"><img src="assets/nav-library.svg" class="svg-icon" alt=""><span class="side-nav-label">Agent Library</span></button>
+    <button class="side-nav-item" data-view="costs" title="Costs"><img src="assets/nav-costs.svg" class="svg-icon" alt=""><span class="side-nav-label">Costs</span></button>
     <button id="settings-btn" class="side-nav-item side-nav-settings" data-view="settings" title="Settings"><img src="assets/settings.svg" class="svg-icon" alt=""><span class="side-nav-label">Settings</span></button>
   </nav>
 
   <main id="view-host">
+
+    <section class="view view--costs" data-view="costs">
+      <div class="panel-header">Costs <span id="tel-detail-scope" class="tel-detail-scope">This project</span></div>
+      <div class="telemetry-body" id="telemetry-body">
+        <div class="telemetry-summary-bar">
+          <div class="telemetry-summary-item">
+            <span class="telemetry-summary-label">Total Calls</span>
+            <span id="tel-total-calls" class="telemetry-summary-value">0</span>
+          </div>
+          <div class="telemetry-summary-item">
+            <span class="telemetry-summary-label">Tokens In</span>
+            <span id="tel-total-in" class="telemetry-summary-value">0</span>
+          </div>
+          <div class="telemetry-summary-item">
+            <span class="telemetry-summary-label">Tokens Out</span>
+            <span id="tel-total-out" class="telemetry-summary-value">0</span>
+          </div>
+          <div class="telemetry-summary-item">
+            <span class="telemetry-summary-label">Total Cost</span>
+            <span id="tel-total-cost" class="telemetry-summary-value">$0.0000</span>
+          </div>
+        </div>
+        <div class="telemetry-charts">
+          <div class="telemetry-chart-section">
+            <div class="telemetry-chart-title">Cost by Model</div>
+            <canvas id="tel-chart-model" width="180" height="180"></canvas>
+            <div id="tel-legend-model" class="tel-legend"></div>
+          </div>
+          <div class="telemetry-chart-section">
+            <div class="telemetry-chart-title">Cost by Agent</div>
+            <canvas id="tel-chart-agent" width="180" height="180"></canvas>
+            <div id="tel-legend-agent" class="tel-legend"></div>
+          </div>
+        </div>
+        <div class="tel-hourly-section">
+          <div class="telemetry-chart-title">Hourly Cost — Last 7 Days</div>
+          <div class="tel-hourly-scroll">
+            <canvas id="tel-hourly-canvas"></canvas>
+          </div>
+          <div id="tel-hourly-legend" class="tel-legend tel-hourly-legend"></div>
+        </div>
+        <div id="tel-hourly-tooltip" class="tel-hourly-tooltip" hidden></div>
+        <table class="telemetry-table">
+          <thead>
+            <tr>
+              <th>Model</th>
+              <th>Calls</th>
+              <th>Tokens In</th>
+              <th>Tokens Out</th>
+              <th>Cost</th>
+            </tr>
+          </thead>
+          <tbody id="tel-table-body"></tbody>
+        </table>
+      </div>
+    </section>
 
     <section class="view view--settings" data-view="settings" id="settings-view">
       <div class="panel-header panel-header--settings">
@@ -989,67 +1046,6 @@
     </div>
   </div>
 
-  <!-- Telemetry Modal -->
-  <div id="telemetry-modal" class="modal-overlay" hidden>
-    <div class="modal telemetry-modal" role="dialog" aria-modal="true">
-      <div class="modal-header">
-        <span class="modal-ticket-id">LLM Telemetry</span>
-        <button class="modal-close" id="telemetry-close" title="Close"><img src="assets/close.svg" class="svg-icon" alt="Close"></button>
-      </div>
-      <div class="modal-body telemetry-body">
-        <div class="telemetry-summary-bar">
-          <div class="telemetry-summary-item">
-            <span class="telemetry-summary-label">Total Calls</span>
-            <span id="tel-total-calls" class="telemetry-summary-value">0</span>
-          </div>
-          <div class="telemetry-summary-item">
-            <span class="telemetry-summary-label">Tokens In</span>
-            <span id="tel-total-in" class="telemetry-summary-value">0</span>
-          </div>
-          <div class="telemetry-summary-item">
-            <span class="telemetry-summary-label">Tokens Out</span>
-            <span id="tel-total-out" class="telemetry-summary-value">0</span>
-          </div>
-          <div class="telemetry-summary-item">
-            <span class="telemetry-summary-label">Total Cost</span>
-            <span id="tel-total-cost" class="telemetry-summary-value">$0.0000</span>
-          </div>
-        </div>
-        <div class="telemetry-charts">
-          <div class="telemetry-chart-section">
-            <div class="telemetry-chart-title">Cost by Model</div>
-            <canvas id="tel-chart-model" width="180" height="180"></canvas>
-            <div id="tel-legend-model" class="tel-legend"></div>
-          </div>
-          <div class="telemetry-chart-section">
-            <div class="telemetry-chart-title">Cost by Agent</div>
-            <canvas id="tel-chart-agent" width="180" height="180"></canvas>
-            <div id="tel-legend-agent" class="tel-legend"></div>
-          </div>
-        </div>
-        <div class="tel-hourly-section">
-          <div class="telemetry-chart-title">Hourly Cost — Last 7 Days</div>
-          <div class="tel-hourly-scroll">
-            <canvas id="tel-hourly-canvas"></canvas>
-          </div>
-          <div id="tel-hourly-legend" class="tel-legend tel-hourly-legend"></div>
-        </div>
-        <div id="tel-hourly-tooltip" class="tel-hourly-tooltip" hidden></div>
-        <table class="telemetry-table">
-          <thead>
-            <tr>
-              <th>Model</th>
-              <th>Calls</th>
-              <th>Tokens In</th>
-              <th>Tokens Out</th>
-              <th>Cost</th>
-            </tr>
-          </thead>
-          <tbody id="tel-table-body"></tbody>
-        </table>
-      </div>
-    </div>
-  </div>
 
 
   <!-- Scheduled Action Modal -->

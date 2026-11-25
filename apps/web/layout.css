@@ -87,6 +87,17 @@ body.nav-folded { --side-nav-width: 50px; }
 .side-nav-project[data-locked] { cursor: default; }
 .side-nav-sep { flex-shrink: 0; height: 1px; margin: 4px 2px; background: var(--border); }
 
+/* ── Costs: the details for the scope chosen in the header ── */
+.view--costs .telemetry-body { flex: 1; min-height: 0; max-height: none; }
+.view--costs .telemetry-body > * { max-width: 960px; width: 100%; }
+.tel-detail-scope {
+  margin-left: 8px;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--text-muted);
+}
+
 /* Settings at the bottom. */
 .side-nav-settings { margin-top: auto; }
 

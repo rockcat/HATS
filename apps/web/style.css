@@ -3469,11 +3469,6 @@ a.files-open-folder-btn .svg-icon { width: 12px; height: 12px; }
 
 /* ── Telemetry modal ────────────────────────────────── */
 
-.telemetry-modal {
-  max-width: 680px;
-  width: 100%;
-}
-
 .telemetry-body {
   display: flex;
   flex-direction: column;

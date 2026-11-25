@@ -10,6 +10,8 @@ export const PIE_COLORS = [
 
 export let telScope = 'project'; // 'project' | 'all'
 
+const telemetryUrl = () => (telScope === 'all' ? '/api/telemetry/all' : '/api/telemetry');
+
 export function applyTelemetrySummary(summary) {
   if (!summary) return;
   document.getElementById('tel-in').textContent   = fmtTokens(summary.totalInputTokens  ?? 0);
@@ -18,8 +20,7 @@ export function applyTelemetrySummary(summary) {
 }
 
 export function refreshTelemetryBar() {
-  const url = telScope === 'all' ? '/api/telemetry/all' : '/api/telemetry';
-  fetch(url).then(r => r.json()).then(d => { if (d.summary) applyTelemetrySummary(d.summary); }).catch(() => {});
+  fetch(telemetryUrl()).then(r => r.json()).then(d => { if (d.summary) applyTelemetrySummary(d.summary); }).catch(() => {});
 }
 
 export function initTelScopeToggle() {
@@ -30,6 +31,8 @@ export function initTelScopeToggle() {
     btn.textContent = telScope === 'all' ? 'All time' : 'Project';
     btn.classList.toggle('tel-scope-btn--all', telScope === 'all');
     refreshTelemetryBar();
+    // The details follow the header's choice when they are showing.
+    if (document.querySelector('.view--costs.active')) void loadTelemetryDetail();
   });
 }
 
@@ -189,7 +192,7 @@ export function renderHourlyChart(records) {
   requestAnimationFrame(() => { if (wrap) wrap.scrollLeft = wrap.scrollWidth; });
 }
 
-export function renderTelemetryModal(data) {
+export function renderTelemetryDetail(data) {
   const { summary } = data;
   if (!summary) return;
 
@@ -236,19 +239,16 @@ export function renderLegend(elId, data, total) {
   }).join('');
 }
 
+/** Fill the Costs section for the scope chosen in the header. */
+export async function loadTelemetryDetail() {
+  document.getElementById('tel-detail-scope').textContent = telScope === 'all' ? 'All time' : 'This project';
+  try {
+    renderTelemetryDetail(await fetch(telemetryUrl()).then(r => r.json()));
+  } catch { /* left as it was */ }
+}
+
 export function initTelemetry() {
-  const btn   = document.getElementById('telemetry-btn');
-  const modal = document.getElementById('telemetry-modal');
-  const close = document.getElementById('telemetry-close');
-
-  btn.addEventListener('click', async () => {
-    modal.hidden = false;
-    try {
-      const data = await fetch('/api/telemetry').then(r => r.json());
-      renderTelemetryModal(data);
-    } catch { /* ignore */ }
-  });
-
-  close.addEventListener('click', () => { modal.hidden = true; });
-  modal.addEventListener('click', e => { if (e.target === modal) modal.hidden = true; });
+  // The header's summary opens the Costs section.
+  document.getElementById('telemetry-btn')?.addEventListener('click', () =>
+    import('./nav.js').then(m => m.showView('costs')));
 }

@@ -23,6 +23,7 @@ const ON_SHOW = {
   calendar:  () => import('./calendar.js').then(m => m.fetchCalendar()),
   cli:       () => document.getElementById('cli-input')?.focus(),
   settings:  () => import('./settings.js').then(m => m.openSettings()),
+  costs:     () => import('./telemetry.js').then(m => m.loadTelemetryDetail()),
 };
 
 const remembered = (key) => { try { return localStorage.getItem(key); } catch { return null; } };
