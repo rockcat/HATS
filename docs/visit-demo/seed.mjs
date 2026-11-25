@@ -124,12 +124,26 @@ function fail(message) {
 
 // ── Step 1: the teams, on the Project Server ─────────────────────────────────
 
+/**
+ * Visits outlive the teams they join, so a reset closes the open ones first:
+ * left open, a request from an agent that no longer exists waits at the host.
+ */
+async function cancelOpenVisits(team) {
+  const open = await call(`${PROJECT_SERVER}/api/v1/visits?project=${team.id}&open=true`);
+  for (const visit of open.body?.visits ?? []) {
+    const done = await call(`${PROJECT_SERVER}/api/v1/visits/${visit.id}/cancel`,
+      jsonBody('POST', { note: 'The demo was reset.' }));
+    if (done.ok) console.log(`  cancelled ${visit.agent?.name ?? 'an agent'}'s visit, ${visit.home} → ${visit.host}`);
+  }
+}
+
 async function ensureTeam(team, reset) {
   const url = `${PROJECT_SERVER}/api/v1/projects/${team.id}`;
   let existing = await call(url);
   if (existing.status === 0) fail(`Could not reach the Project Server at ${PROJECT_SERVER}.`);
 
   if (existing.ok && reset) {
+    await cancelOpenVisits(team);
     await call(`${url}?purge=true`, { method: 'DELETE' });
     existing = { ok: false, status: 404 };
     console.log(`  removed ${team.name}, to start again`);
