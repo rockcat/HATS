@@ -85,7 +85,7 @@ stateDiagram-v2
 
 ### What you need
 
-- **The shared services, running:** the Project Server (`:3020`), the Agent Template Library (`:3010`) and the Speech Service. These are the same ones a normal HATS install uses.
+- **The shared services, running:** the Project Server (`:3020`), the runner manager (`:3080`), the Agent Template Library (`:3010`) and the Speech Service. These are the same ones a normal HATS install uses. Without the runner manager, agents aren't given `discover_teams` or `request_visit`, so they can't ask to visit.
 - **A `.env` with an API key for the agents' model.** The agents use `ANTHROPIC_MODEL` unless you set `DEMO_PROVIDER` and `DEMO_MODEL`.
 - **One runner per team,** because each runner holds one project. The compose file in this folder starts both: Website on **:3071** and Insights on **:3072**. They don't clash with the usual runner on :3001. See [MULTIPLE-PROJECTS.md](../MULTIPLE-PROJECTS.md) for how several runners share one installation.
 
@@ -154,18 +154,19 @@ Each one shows a different safety rule:
 
 ## Running across machines
 
-The two runners don't have to be on the same computer. Runners never talk to each other directly: every step of a visit goes through the Project Server. So any runner on your network can take part, as long as it uses the same Project Server as the others.
+The two runners don't have to be on the same computer. Runners never talk to each other directly: every step of a visit goes through the Project Server, and agents find other teams through the runner manager. So any runner on your network can take part, as long as it uses the same Project Server and runner manager as the others.
 
 ![The Website runner on machine A and the Insights runner on machine B, both using one Project Server on machine C](visit-demo-two-machines.svg)
 
 **Setup:**
 
-1. **Choose one machine for the shared services:** the Project Server (:3020), the Agent Template Library (:3010) and the Speech Service (:3050). It can be a machine of its own, or one of the runner machines.
+1. **Choose one machine for the shared services:** the Project Server (:3020), the runner manager (:3080), the Agent Template Library (:3010) and the Speech Service (:3050). It can be a machine of its own, or one of the runner machines.
 2. **Open those ports to the other machines.** On Windows, allow incoming connections on them in the firewall.
 3. **Point every other machine's runner at it.** With Docker, put these in that machine's `.env`. Compose passes them to the runner as `PROJECT_SERVER_URL` and so on.
 
    ```ini
    DOCKER_PROJECT_SERVER_URL=http://192.168.1.10:3020
+   DOCKER_RUNNER_MANAGER_URL=http://192.168.1.10:3080
    DOCKER_AGENT_LIBRARY_URL=http://192.168.1.10:3010
    DOCKER_SPEECH_SERVICE_URL=http://192.168.1.10:3050
    ```

@@ -33,7 +33,10 @@ x-runner-env: &runner-env
   SPEECH_SERVICE_URL: ${DOCKER_SPEECH_SERVICE_URL:-http://host.docker.internal:3050}
   AGENT_LIBRARY_URL: ${DOCKER_AGENT_LIBRARY_URL:-http://host.docker.internal:3010}
   PROJECT_SERVER_URL: ${DOCKER_PROJECT_SERVER_URL:-http://host.docker.internal:3020}
-  HATS_ENV_LOCKED: RUNTIME_DIR,OLLAMA_BASE_URL,SPEECH_SERVICE_URL,AGENT_LIBRARY_URL,PROJECT_SERVER_URL,TEAM_PROJECT,HATS_PROJECT_LOCKED
+  # How agents find other teams: discover_teams asks the runner manager, and
+  # without it neither discover_teams nor request_visit is offered.
+  RUNNER_MANAGER_URL: ${DOCKER_RUNNER_MANAGER_URL-http://host.docker.internal:3080}
+  HATS_ENV_LOCKED: RUNTIME_DIR,OLLAMA_BASE_URL,SPEECH_SERVICE_URL,AGENT_LIBRARY_URL,PROJECT_SERVER_URL,RUNNER_MANAGER_URL,TEAM_PROJECT,HATS_PROJECT_LOCKED
 
 services:
   runner-website:
