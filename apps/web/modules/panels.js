@@ -4,6 +4,7 @@
 
 import { appendCLILine } from './cli.js';
 import { micAction } from './mic-action.js';
+import { transcribe } from './transcribe.js';
 
 // ── Mic buttons ─────────────────────────────────────────────────────────────
 //
@@ -72,25 +73,13 @@ export function initMicBtn(btnId, inputId) {
       return;
     }
 
-    try {
-      const mimeType = chunks[0].type || 'audio/webm';
-      const blob     = new Blob(chunks, { type: mimeType });
-      const res      = await fetch('/api/speech/transcribe', {
-        method: 'POST',
-        headers: { 'Content-Type': mimeType },
-        body: blob,
-      });
-      const data = await res.json().catch(() => ({}));
-
-      if (!res.ok)          say(`Could not transcribe: ${data.error ?? `HTTP ${res.status}`}`);
-      else if (!data.text)  say('Nothing was heard in that recording.');
-      else {
-        const sep = inp.value && !inp.value.endsWith(' ') ? ' ' : '';
-        inp.value += sep + data.text;
-        inp.focus();
-      }
-    } catch (err) {
-      say(`Could not reach the transcription service: ${err?.message ?? err}`);
+    const heard = await transcribe(chunks);
+    if (heard.error)       say(heard.error);
+    else if (!heard.text)  say('Nothing was heard in that recording.');
+    else {
+      const sep = inp.value && !inp.value.endsWith(' ') ? ' ' : '';
+      inp.value += sep + heard.text;
+      inp.focus();
     }
 
     setState('idle');
