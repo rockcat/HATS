@@ -20,21 +20,6 @@
   <header>
     <h1>Team Runner Dashboard
     </h1>
-    <div class="project-selector">
-      <h1>Project:</h1>
-      <span class="project-badge-wrap">
-        <button id="project-badge" class="project-badge" title="Click to switch project"></button>
-        <div id="project-switcher" class="project-switcher" hidden>
-          <div class="project-switcher-new">
-            <input type="text" id="project-switcher-input" class="project-switcher-input"
-                   placeholder="Project name or new id…" spellcheck="false" autocomplete="off">
-            <button id="project-switcher-load" class="project-switcher-load-btn">Load</button>
-          </div>
-          <div id="project-switcher-list" class="project-switcher-list"></div>
-        </div>
-      </span>
-      <button id="files-clear-btn" class="files-clear-btn" title="Clear all project files, tickets and history">Clear</button>
-    </div>
     <div class="telemetry-bar" id="telemetry-bar" title="LLM usage totals">
       <button id="tel-scope-btn" class="tel-scope-btn" title="Toggle project / all-time">Project</button>
       <span class="telemetry-stat"><span class="telemetry-label">In</span> <span id="tel-in">0</span></span>
@@ -46,7 +31,6 @@
     </div>
     <div id="service-status" class="service-status" title="External services"></div>
     <button id="mute-btn" class="header-btn mute-btn" title="Mute / unmute all speech">Mute</button>
-    <button id="settings-btn" class="header-btn header-btn--icon" title="Settings"><img src="assets/settings.svg" class="svg-icon" alt="Settings"></button>
     <span id="current-user-label" class="current-user-label"></span>
     <button id="logout-btn" class="header-btn" title="Sign out">Sign out</button>
     <div id="connection-status" class="status-dot" title="Connecting…"></div>
@@ -83,11 +67,26 @@
 
   <div class="app-shell">
 
+  <!-- Project switcher: opened from the menu's project item, kept outside the menu so its scrolling does not clip it -->
+  <div id="project-switcher" class="project-switcher" hidden>
+    <div class="project-switcher-new">
+      <input type="text" id="project-switcher-input" class="project-switcher-input"
+             placeholder="Project name or new id…" spellcheck="false" autocomplete="off">
+      <button id="project-switcher-load" class="project-switcher-load-btn">Load</button>
+    </div>
+    <div id="project-switcher-list" class="project-switcher-list"></div>
+  </div>
+
   <!-- Section menu: icons and names, folding down to icons only -->
   <nav id="side-nav" class="side-nav" aria-label="Sections">
     <button id="side-nav-toggle" class="side-nav-toggle" title="Fold the menu to icons" aria-expanded="true">
       <img src="assets/menu-close.svg" class="svg-icon side-nav-toggle-icon" alt="">
     </button>
+    <button id="project-badge" class="side-nav-action side-nav-project" title="Click to switch project">
+      <img src="assets/nav-project.svg" class="svg-icon" alt="">
+      <span class="side-nav-label"><span class="side-nav-caption">Project</span><span id="project-name" class="side-nav-project-name"></span></span>
+    </button>
+    <div class="side-nav-sep" role="separator"></div>
     <button class="side-nav-item" data-view="agents" title="Agents"><img src="assets/nav-agents.svg" class="svg-icon" alt=""><span class="side-nav-label">Agents</span></button>
     <button class="side-nav-item" data-view="cli" title="Chat"><img src="assets/nav-chat.svg" class="svg-icon" alt=""><span class="side-nav-label">Chat</span></button>
     <button class="side-nav-item" data-view="requests" title="Requests"><img src="assets/nav-requests.svg" class="svg-icon" alt=""><span class="side-nav-label">Requests</span><span id="requests-badge" class="tab-badge" hidden></span></button>
@@ -100,6 +99,7 @@
     <button class="side-nav-item" data-view="tools" title="Tools"><img src="assets/nav-tools.svg" class="svg-icon" alt=""><span class="side-nav-label">Tools</span></button>
     <button class="side-nav-item" data-view="mcp" title="MCP Servers"><img src="assets/nav-mcp.svg" class="svg-icon" alt=""><span class="side-nav-label">MCP Servers</span></button>
     <button class="side-nav-item" data-view="library" title="Agent Library"><img src="assets/nav-library.svg" class="svg-icon" alt=""><span class="side-nav-label">Agent Library</span></button>
+    <button id="settings-btn" class="side-nav-action side-nav-settings" title="Settings"><img src="assets/settings.svg" class="svg-icon" alt=""><span class="side-nav-label">Settings</span></button>
   </nav>
 
   <main id="view-host">
@@ -227,6 +227,7 @@
           <button id="files-open-folder-btn" class="files-open-folder-btn" title="Open project folder in file explorer" hidden>Open folder ↗</button>
           <a id="files-download-all" class="files-open-folder-btn" href="/api/project/files.zip" download title="Download the project's sources, outputs and ticket work as one zip"><img src="assets/download.svg" class="svg-icon" alt=""> Download all</a>
           <span id="files-open-folder-note" class="files-open-folder-note" hidden></span>
+          <button id="files-clear-btn" class="files-clear-btn" title="Clear all project files, tickets and history">Clear project</button>
         </div>
         <details class="files-section" open>
           <summary class="files-section-summary">

@@ -89,10 +89,17 @@ export function initGoalBar() {
 
 // ── Project badge & switcher ──────────────────────────────────────────────────
 
+const projectNameEl = () => document.getElementById('project-name');
+const projectName = () => projectNameEl()?.textContent ?? '';
+function setProjectName(text) {
+  const el = projectNameEl();
+  if (el) el.textContent = text;
+}
+
 export function updateProjectBadge(id, dir) {
   const badge = document.getElementById('project-badge');
   if (!badge) return;
-  badge.textContent = id;
+  setProjectName(id);
   if (!badge.dataset.locked) badge.title = dir ?? id;
 }
 
@@ -202,8 +209,8 @@ export function doSwitchProject(id) {
   const switcher = document.getElementById('project-switcher');
   const badge    = document.getElementById('project-badge');
   switcher.hidden = true;
-  const prevId    = badge.textContent;
-  badge.textContent = '…';
+  const prevId    = projectName();
+  setProjectName('…');
 
   _closeAgentDetail();
 
@@ -220,7 +227,7 @@ export function doSwitchProject(id) {
     .then(res => {
       switchModal.hidden = true;
       if (res.error) {
-        badge.textContent = prevId;
+        setProjectName(prevId);
         console.error('Project switch failed:', res.error);
         return;
       }
@@ -237,6 +244,6 @@ export function doSwitchProject(id) {
     })
     .catch(() => {
       switchModal.hidden = true;
-      badge.textContent  = prevId;
+      setProjectName(prevId);
     });
 }

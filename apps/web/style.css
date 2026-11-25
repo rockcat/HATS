@@ -180,46 +180,11 @@ header h1 {
   color: var(--hat-yellow);
 }
 
-.project-selector {
-  position: relative;
-  margin-left: 40px;
-  display: flex;
-  align-items: center;
-}
-
-.project-selector h1 {
-  display: inline-block;
-  padding-right: 10px;
-}
-
-.project-badge.project-badge--locked { cursor: default; }
-
-.project-badge-wrap {
-  position: relative;
-  display: inline-block;
-  vertical-align: middle;
-}
-
-.project-badge {
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--text-muted);
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 2px 8px;
-  font-family: ui-monospace, monospace;
-  letter-spacing: 0.03em;
-  cursor: pointer;
-  transition: border-color 0.15s, color 0.15s;
-}
-.project-badge:hover { border-color: var(--border-hover); color: var(--text); }
-
 /* ── Project switcher popover ──────────────── */
 .project-switcher {
   position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
+  top: 44px;
+  left: calc(var(--side-nav-width) + 6px);
   z-index: 200;
   background: var(--surface);
   border: 1px solid var(--border);
@@ -3209,7 +3174,7 @@ a.files-open-folder-btn .svg-icon { width: 12px; height: 12px; }
   background: none; border: 1px solid var(--hat-red); border-radius: 4px;
   padding: 3px 9px; cursor: pointer; opacity: 0.7;
   transition: opacity 0.15s;
-  margin-left: 8px;
+  margin-left: auto;
 }
 .files-clear-btn:hover { opacity: 1; }
 .files-clear-btn:disabled { opacity: 0.4; cursor: wait; }
