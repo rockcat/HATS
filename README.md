@@ -1,124 +1,147 @@
-# HATS — AI agents that disagree to make better decisions
+# HATS — teams of AI agents that think differently, and work together
 
-Don't ask one AI, start running a team.
+Don't ask one AI. Run a team.
 
-Run meetings, plan work, and stress-test ideas with a team of AI agents that think differently — and challenge each other on purpose.
+HATS gives you a team of AI agents, each with its own role, personality, model, memory and tools. They plan work on a Kanban board, hold meetings with faces and voices, argue on purpose, and get things done. You lead the team, and they ask you when they need you.
 
-Most AI tools give you one answer.
-HATS gives you a panel of perspectives.
+Run one team on your laptop, or many teams across machines, each in its own project. When one team needs something only another team has, an agent can **visit** that team, do the work there, and come home with the answer.
 
-## What makes HATS different?
+- **Agents that disagree on purpose.** Roles based on the Six Thinking Hats: facts, feelings, risks, benefits, ideas and process.
+- **A board that runs itself.** Moving a ticket to In Progress hands it to its agent as a task.
+- **Meetings with faces and voices.** 3D avatars, a voice for each agent, and mouths that move with the words.
+- **Agents that travel.** One team lends an agent to another to use what only that team has, and only the result comes back.
+- **Your models.** Claude, GPT, Gemini, or local models through Ollama and LM Studio, chosen per agent, with what each one costs.
+- **Real tools.** Email, calendars, files, a web browser, search, Google Workspace and more, through MCP.
 
-HATS is inspired by the Six Thinking Hats framework — but implemented as a real multi-agent system with structured disagreement.
+[![Six AI agents plan a startup and argue about it](docs/images/meeting_snapshot.png)](https://youtu.be/-oQs3qht9CU)
 
-Each agent has a role:
+*Six agents plan a startup and argue about it. Click for the video.*
 
-⚪ White Hat — facts, gaps, assumptions
+## Agents that visit other teams
 
-🔴 Red Hat — human impact, intuition
+Most multi-agent systems are one team in one place. In HATS, every agent has a **home team**, and teams can lend each other agents.
 
-⚫ Black Hat — risks, failure modes
+Say the Website team needs real sales figures for its pricing page, and only the Insights team has the sales data. Copying the file across would put the raw data somewhere it shouldn't be. Instead:
 
-🟡 Yellow Hat — upside, opportunity
+1. **Wren, Website's developer, asks to visit Insights.** It says why (the ticket it is working on) and what it will bring back.
+2. **Both teams have to agree.** Website allows visits to Insights, Insights hosts visitors from Website, and an Insights admin approves this particular visit.
+3. **Wren travels light.** It takes its settings and memory. Its logins, conversations and scheduled actions stay at home.
+4. **At Insights, Wren gets a ticket of its own**, reads the sales file there, and works out the figures.
+5. **Wren comes home with the result**, which lands on its ticket as a comment. The sales file never leaves Insights.
 
-🟢 Green Hat — creativity, alternatives
+![Wren visits the Insights team to work out the pricing-page figures, and brings back only the result](docs/visit-demo/visit-demo.svg)
 
-🔵 Blue Hat — facilitation, synthesis
+Visits are built to be safe by default:
 
-**They don’t just respond — they debate.**
+- **Only the answer travels.** The host decides what the visitor remembers when it leaves.
+- **Nothing is allowed unless both sides say so**, and the host can require an admin to approve each visit.
+- **A visitor uses only what the host gives it.** Its own logins stay at home.
+- **Visits end.** Each has a deadline. The home team can recall its agent and the host can send it home at any time. If its ticket is closed while it is away, it is called back.
 
-## Why this matters
+Agents find teams to visit by what they offer, and an admin can also move an agent to another team for good. Today visits work between teams in one installation, on one machine or several. Visits between installations run by different people, over the internet, are designed and come next.
 
-LLMs tend to:
+**Watch it happen:** a 52-second recording of a real run, with Website above and Insights below.
 
-- agree with you
-- sound confident even when wrong
-- miss blind spots
+[![Wren asks to visit Insights, and the Insights admin approves](docs/visit-demo/recording/visit-demo-poster.png)](docs/visit-demo/recording/visit-demo.mp4)
 
-HATS fixes that by:
+To run the demo yourself, see [the visiting agents demo](docs/visit-demo/README.md). The design is in [team-visits.md](docs/team-visits.md).
 
-- introducing structured conflict
-- forcing multiple perspectives
-- simulating real team dynamics
+## What a team can do
 
-### Example use cases
+### Think differently
 
-- Run a product planning meeting
-- Stress-test a startup idea
-- Explore trade-offs in architecture decisions
-- Replace async brainstorming sessions
+Each agent wears one or more of the Six Thinking Hats:
 
-## Watch 6 AI agents plan a startup and argue about it
+| Hat | Brings |
+| --- | --- |
+| ⚪ White | Facts, gaps and assumptions |
+| 🔴 Red | Human impact and intuition |
+| ⚫ Black | Risks and failure modes |
+| 🟡 Yellow | Upside and opportunity |
+| 🟢 Green | Creativity and alternatives |
+| 🔵 Blue | Facilitation and the final call |
 
-Click for a demo video:
-[![Demo video](docs/images/meeting_snapshot.png)](https://youtu.be/-oQs3qht9CU)
+LLMs tend to agree with you and sound sure when they're wrong. A team built from different hats challenges itself, so you see the blind spots before you commit.
 
-## Architecture highlights
+### Run the work
 
-- Multi-agent orchestration
-- Per-agent model selection:
-- OpenAI / Claude / Gemini
-- Local support via Ollama / LM Studio
-- Token + cost tracking per agent
-- Voice + 3D avatar support
+- **A Kanban board** with six columns, from Backlog to Done. Tickets go to their agents as tasks, a resolved blocker frees the tickets waiting on it, and tickets for you are highlighted.
+- **Meetings:** standups, sprint planning, retrospectives, reviews and ad hoc, scheduled or on demand. You take part, and can download the transcript.
+- **Chat** with the team or with one agent, in threads.
+- **Talk instead of typing.** Listen mode sends what you say to the open chat or meeting.
+- **Scheduled actions,** cron-style, for things an agent should do every morning or every Friday.
+- **Requests and approvals.** Agents ask you when they need a decision, and before they email anyone new.
 
-## Live Meetings with Faces and Voices
+### Remember and stay organised
 
-When a meeting starts, HATS opens a stage of animated 3D avatars rendered in real time using Three.js. Each agent speaks aloud via Piper TTS with
-per-agent voice models. Lip sync is driven by Rhubarb, mapping phonetic audio timing to ARKit visemes so mouths move in sync with speech.
+- **Memory:** each agent keeps its own.
+- **A calendar** for each agent, as a real `.ics` file, that sends and answers invitations by email.
+- **Project files** in an explorer, with previews of documents, spreadsheets, CSV, images and sandboxed HTML.
+- **People:** agents can recognise who they are talking to through a camera, only with consent.
 
-![Agent Config[]](docs/images/agent_config.png)
+### Use real tools
 
-Five meeting types are supported — Standup, Sprint Planning, Retrospective, Review, and Ad Hoc — all schedulable in advance via a built-in calendar or
-launched instantly on demand. Humans participate directly, taking turns in the conversation. The full transcript can be downloaded as Markdown when
-the meeting ends.
+Tools come through the Model Context Protocol (MCP), and each one can be switched on for the whole team or for one agent:
 
-## A Kanban Board That Works Itself
+| Category | Tools |
+| --- | --- |
+| Productivity | Memory, Slack, Google Workspace (Gmail, Calendar, Drive, Chat, Contacts), Microsoft 365 |
+| Email and messaging | IMAP and POP3 email, WhatsApp, X, Threads, LinkedIn |
+| Files and documents | Filesystem, Excel, Word, PDF, PowerPoint, SFTP |
+| Web | Brave Search, a Playwright browser |
+| Data and development | SQLite, PostgreSQL, GitHub |
 
-HATS includes a six-column Kanban board — Backlog, Ready, In Progress, Blocked, Review, Done — with full drag-and-drop. When a ticket moves to In
-Progress, it is automatically dispatched to the assigned agent as a live task. When a blocker is resolved, dependent tickets are automatically
-unblocked and advanced. Tickets assigned to the human team lead are highlighted in orange so nothing falls through the cracks.
+Agents find the tools they need by searching, so a long tool list doesn't crowd every prompt. External agents such as Claude Code can join a team as members.
 
-Agents interact with the board through the Kanban MCP server, creating, moving, and commenting on tickets as part of their normal workflow.
+### Keep an eye on cost
 
-## MCP and Tools
+Every call is counted by agent, model and project, with prices fetched from the providers. Each agent can have an hourly budget, and pauses when it reaches it.
 
-Through the Model Context Protocol \(MCP), HATS ships integrations across five categories:
+![The dashboard](docs/images/dashboard.png)
 
-|Category|Tools|
-|-|-|
-|Productivity|Kanban, Memory (knowledge graph), Slack|
-|Files & Documents|Filesystem, Excel, Word, PDF, PowerPoint|
-|Web|Brave Search, Browser (Playwright)|
-|Databases|SQLite, PostgreSQL|
-|Development|GitHub|
+## How it fits together
 
-All servers are togglable from the UI and report live connection status and credential requirements.
+HATS is a **runner** for each team, and a set of shared **services**.
 
-## Project-Scoped, Multi-Team
+```mermaid
+flowchart LR
+  subgraph Services["Shared services"]
+    LIB["Agent Template Library :3010<br/>reusable agents"]
+    PS["Project Server :3020<br/>projects, teams, visits"]
+    DES["Project Designer :3030<br/>compose a team"]
+    RM["Runner manager :3080<br/>finds and starts runners"]
+    AUTH["Auth :3090<br/>one sign-in"]
+    SP["Speech :3050<br/>voices"]
+  end
+  R1["Runner: Website team :3001<br/>agents, board, meetings, dashboard"]
+  R2["Runner: Insights team"]
+  R1 <--> PS
+  R2 <--> PS
+  R1 --> LIB
+  R1 --> SP
+  R1 -.reports in.-> RM
+  R2 -.reports in.-> RM
+  RM -.starts.-> R2
+  R1 <-. visit .-> R2
+```
 
-Every HATS project is isolated — its own Kanban board, meeting calendar, agent configurations, sources/ and outputs/ file folders, telemetry log, and
-state snapshot. Projects can be created, switched, and loaded without restarting. A project goal set by the team lead is automatically injected into
-every agent's system prompt to keep all thinking anchored to the objective.
+- **The Team Runner** holds one team: its agents, board, meetings, chat and tools. It serves the dashboard on port 3001.
+- **The Agent Template Library** holds reusable agents. A team takes a copy and can tailor it.
+- **The Project Server** holds each project's definition: its goal, its team, the tools it shares, and visits between teams.
+- **The Project Designer** is where you put a team together.
+- **The runner manager** knows every runner in the installation, starts one per project, and helps agents find teams to visit.
+- **The auth service** gives one sign-in for every runner.
+- **The Speech Service** runs the voices (Piper), so many runners can share them.
 
-## The Dashboard
+Everything is optional. With no services running, a runner falls back to local files and works on its own, so you can start with one runner and add the rest when you need them.
 
-The HATS web UI is a four-panel dashboard:
+Every service publishes an OpenAPI document, and a running runner shows them all at `/api-docs`. The runner's **Embodiment API** gives an agent a face, a voice and a conversation in any web page or app. The Companion app is one example: a single agent in a browser tab that can see through the camera and hear through the microphone.
 
-- Agents — Live status, communication overlay, add/configure agents
-- Active Board — Kanban columns with real-time updates and drag-and-drop
-- Tools — MCP server controls, CLI, file upload/download, tool explorer
-- Backlog & Calendar — Unstarted tickets and weekly/daily/agenda calendar views
-
-A persistent progress bar below the header shows the project goal alongside a three-segment ticket progress indicator (Done / Active / Backlog) that
-updates live as work moves through the board.
-
-![Dashboard[]](docs/images/dashboard.png)
-
-HATS is built on Node.js with a TypeScript backend, Three.js avatar rendering, and a plain
-HTML/CSS/JS frontend requiring no build step.
+More detail: [SERVICES.md](docs/SERVICES.md), [ARCHITECTURE.md](docs/ARCHITECTURE.md) and [API.md](docs/API.md).
 
 ## Getting started
+
+You need Node.js 22 or later, and a key for at least one model provider, or a local model through Ollama or LM Studio.
 
 ```bash
 git clone https://github.com/rockcat/HATS.git
@@ -130,18 +153,18 @@ npm run services         # the Agent Template Library, Project Server and the re
 npm run dev              # the team runner, in another terminal
 ```
 
-Open the dashboard at <http://localhost:3001>. The [full guide](docs/README.md) covers voices, avatars, MCP servers and everything else.
+Open the dashboard at <http://localhost:3001>. To try the runner on its own, `npm run start:standalone` needs no services.
 
-To install on a server from published Docker images instead, see [deploy/](deploy/README.md).
+The [full guide](docs/README.md) covers voices, avatars, lip sync and MCP servers. To install on a server from published Docker images, see [deploy/](deploy/README.md). To run several teams at once, see [MULTIPLE-PROJECTS.md](docs/MULTIPLE-PROJECTS.md).
 
 ## What's in this repository
 
 | Folder | What it is |
 | --- | --- |
-| `server/` | The team runner: agents, meetings, the board, tools, and the HTTP API (port 3001) |
+| `server/` | The team runner: agents, meetings, the board, tools and the HTTP API |
 | `apps/web/` | The runner's dashboard |
-| `apps/` | The services, one folder each: Agent Template Library, Project Server, Project Designer, runner manager, auth, speech, companion and more |
-| `packages/` | Code they share, imported as `@hats/*`: contracts, clients, core, auth, service-kit, speech-core |
+| `apps/` | The services, one folder each: Agent Template Library, Project Server, Project Designer, runner manager, auth, speech, Companion and more |
+| `packages/` | Code they share, imported as `@hats/*` |
 | `deploy/` | Installers and the compose file for a machine that runs the published images |
 | `docs/` | Guides, architecture and API documents |
 
@@ -150,4 +173,8 @@ npm test             # every test, across the runner, services and packages
 npm run typecheck
 ```
 
-The HTTP APIs are documented in [docs/API.md](docs/API.md), and a running runner serves them all at `/api-docs`.
+HATS is built with Node.js and TypeScript, Three.js for the avatars, and a plain HTML, CSS and JavaScript dashboard with no build step.
+
+## Licence
+
+HATS is free for non-commercial use under the [HATS Non-Commercial License](LICENSE.txt). Commercial use needs a licence from Ely House 25 Ltd; the licence says how to ask.
