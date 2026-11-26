@@ -6,6 +6,9 @@
   "author": "Ely House 25 Ltd",
   "type": "module",
   "main": "server/dist/server/src/index.js",
+  "engines": {
+    "node": ">=22.13.0"
+  },
   "workspaces": [
     "packages/auth",
     "packages/clients",

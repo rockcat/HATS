@@ -141,7 +141,7 @@ More detail: [SERVICES.md](docs/SERVICES.md), [ARCHITECTURE.md](docs/ARCHITECTUR
 
 ## Getting started
 
-You need Node.js 22 or later, and a key for at least one model provider, or a local model through Ollama or LM Studio.
+You need Node.js 22.13 or later (24 is recommended: the email tools need it), and a key for at least one model provider, or a local model through Ollama or LM Studio.
 
 ```bash
 git clone https://github.com/rockcat/HATS.git

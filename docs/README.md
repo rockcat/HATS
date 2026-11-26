@@ -145,7 +145,7 @@ The scripts folder contains two scripts: `setup.bat` for Windows and `setup.sh` 
 
 ### Node.js
 
-Node.js 20+ is required.
+Node.js 22.13 or later is required: the runner keeps its data in `node:sqlite`, which needs no flag from 22.13. Node 24 is recommended, because the email MCP server (`@codefuturist/email-mcp`) needs it from version 0.2.1; on 22, npx quietly installs an older release that cannot save sent mail.
 
 ```bash
 npm install
