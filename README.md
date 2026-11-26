@@ -72,6 +72,10 @@ LLMs tend to agree with you and sound sure when they're wrong. A team built from
 - **Scheduled actions,** cron-style, for things an agent should do every morning or every Friday.
 - **Requests and approvals.** Agents ask you when they need a decision, and before they email anyone new.
 
+![A launch-readiness meeting: four agents with avatars, and the conversation beside them](docs/images/meeting.jpg)
+
+*A launch-readiness meeting. Amara, the Blue Hat, sets a go/no-go gate and asks each agent for their biggest risk; Kofi, speaking, agrees and adds a condition.*
+
 ### Remember and stay organised
 
 - **Memory:** each agent keeps its own.
@@ -97,7 +101,9 @@ Agents find the tools they need by searching, so a long tool list doesn't crowd 
 
 Every call is counted by agent, model and project, with prices fetched from the providers. Each agent can have an hourly budget, and pauses when it reaches it.
 
-![The dashboard](docs/images/dashboard.png)
+![The dashboard, showing the board: tickets in progress, blocked, in review and closed, and the backlog](docs/images/dashboard.png)
+
+*The dashboard: one section at a time from the menu on the left, here the board.*
 
 ## How it fits together
 
