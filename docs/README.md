@@ -100,7 +100,7 @@ Through the Model Context Protocol \(MCP), HATS ships integrations across five c
 |-|-|
 |Productivity|Kanban, Memory (knowledge graph), Slack|
 |Files & Documents|Filesystem, Excel, Word, PDF, PowerPoint|
-|Web|Brave Search, Puppeteer/Chrome|
+|Web|Brave Search, Browser (Playwright)|
 |Databases|SQLite, PostgreSQL|
 |Development|GitHub|
 
@@ -111,6 +111,12 @@ All servers are togglable from the UI and report live connection status and cred
 Every HATS project is isolated — its own Kanban board, meeting calendar, agent configurations, sources/ and outputs/ file folders, telemetry log, and
 state snapshot. Projects can be created, switched, and loaded without restarting. A project goal set by the team lead is automatically injected into
 every agent's system prompt to keep all thinking anchored to the objective.
+
+A runner works on one project at a time. To run several at once, give each its
+own runner against the same services — see [MULTIPLE-PROJECTS.md](MULTIPLE-PROJECTS.md).
+
+Teams can lend each other agents. An agent can **visit** another team to use what only that team has,
+then come home with the result — see the [visiting agents demo](visit-demo/README.md).
 
 ## The Dashboard
 
@@ -308,3 +314,5 @@ Changing an API or a document shape means changing a contract in
 `packages/contracts` — see [its README](../packages/contracts/README.md) for the
 steps, and [SERVICES.md](SERVICES.md) for how the pieces fit
 together.
+
+Every HTTP route, with examples for scripting the runner, is in [API.md](API.md).

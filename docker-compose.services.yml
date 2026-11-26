@@ -1,0 +1,129 @@
+# The services.
+#
+#   docker compose -f docker-compose.services.yml up -d
+#   docker compose -f docker-compose.services.yml logs -f companion
+#
+# The runner is not here. It has its own compose file, docker-compose.yml,
+# and is started from that when it is wanted:
+#
+#   docker compose up -d
+#
+# These services reach it on the host at 3001, which is the port it publishes.
+# That works whether it is running in a container, from source, or on another
+# machine entirely — set TEAM_RUNNER_URL in .env to point somewhere else.
+#
+# All seven are built from one image, Dockerfile.services: they share a
+# dependency tree and a source tree and differ only in which file they start.
+
+x-service: &service
+  build:
+    context: .
+    dockerfile: Dockerfile.services
+    target: services
+  image: hats-services:latest
+  restart: unless-stopped
+  env_file: [.env]
+  volumes:
+    # One directory for the whole installation, outside both repositories.
+    # Set HATS_DATA in .env; see docs/runtime-data.md.
+    - ${HATS_DATA:-../hats-data}:/workspace/HATS/runtime_data
+  environment: &service-env
+    NODE_ENV: production
+    RUNTIME_DIR: /workspace/HATS/runtime_data
+    # Service names, not localhost: inside a container localhost is the
+    # container itself, and every one of these would reach nothing.
+    AGENT_LIBRARY_URL: http://agent-library:3010
+    PROJECT_SERVER_URL: http://project-server:3020
+    SPEECH_SERVICE_URL: http://speech-service:3050
+    # The runner is outside this compose project, so it is reached on the
+    # host rather than by service name. Override in .env to point at another
+    # machine.
+    TEAM_RUNNER_URL: ${TEAM_RUNNER_URL:-http://host.docker.internal:3001}
+  extra_hosts:
+    # Docker Desktop provides this; Linux needs it spelled out.
+    - "host.docker.internal:host-gateway"
+
+services:
+  # Each is optional. The runner falls back to local disk with no project
+  # server and to its bundled agents.json with no library, so starting a
+  # subset is a working system rather than a broken one.
+
+  agent-library:
+    <<: *service
+    ports: ["3010:3010"]
+    command: ["node", "--import", "tsx/esm", "apps/agent-library/src/main.ts"]
+
+  project-server:
+    <<: *service
+    ports: ["3020:3020"]
+    command: ["node", "--import", "tsx/esm", "apps/project-server/src/main.ts"]
+
+  project-designer:
+    <<: *service
+    ports: ["3030:3030"]
+    command: ["node", "--import", "tsx/esm", "apps/project-designer/src/main.ts"]
+
+  embodiment-test:
+    <<: *service
+    ports: ["3040:3040"]
+    command: ["node", "--import", "tsx/esm", "apps/embodiment-test/src/main.ts"]
+
+  companion:
+    <<: *service
+    ports: ["3060:3060"]
+    command: ["node", "--import", "tsx/esm", "apps/companion/src/main.ts"]
+
+  project-view:
+    <<: *service
+    ports: ["3070:3070"]
+    command: ["node", "--import", "tsx/esm", "apps/project-view/src/main.ts"]
+
+  # One sign-in for every runner. A runner uses it when given
+  # AUTH_SERVICE_URL: http://localhost:3090 from source, or
+  # http://host.docker.internal:3090 from the runner's own compose file.
+  auth-service:
+    <<: *service
+    ports: ["3090:3090"]
+    command: ["node", "--import", "tsx/esm", "apps/auth-service/src/main.ts"]
+
+  # Lists every runner and starts one per project. Published here because the
+  # runner is outside this compose project and reports in from the host; the
+  # installed docker-compose.yml keeps it private. Runners it starts join this
+  # project's network, so they reach the services by name.
+  runner-manager:
+    <<: *service
+    ports: ["3080:3080"]
+    command: ["node", "--import", "tsx/esm", "apps/runner-manager/src/main.ts"]
+    volumes:
+      - ${HATS_DATA:-../hats-data}:/workspace/HATS/runtime_data
+      # Docker itself, to start runners. Whoever holds this can do anything
+      # on the host; the manager only starts runner containers, for admins.
+      - /var/run/docker.sock:/var/run/docker.sock
+      # The installation's settings, passed on to each runner it starts.
+      - ./.env:/hats/.env:ro
+    environment:
+      <<: *service-env
+      AUTH_SERVICE_URL: http://auth-service:3090
+      RUNNER_MANAGER_URL: http://runner-manager:3080
+      RUNNER_IMAGE: ${RUNNER_IMAGE:-hats:latest}
+      HATS_ENV_FILE: /hats/.env
+
+  # The odd one out: it spawns a Piper HTTP server per voice, so it needs a
+  # Python runtime the other six never touch. Same source, different stage.
+  speech-service:
+    <<: *service
+    build:
+      context: .
+      dockerfile: Dockerfile.services
+      target: speech
+    image: hats-speech:latest
+    # Only 3050. The Piper servers it spawns listen on 5100 upwards, but it
+    # is the only thing that talks to them — voice-manager reaches them on
+    # localhost, inside this container. Publishing them exposed twenty ports
+    # nothing consumes, and collided with anything else already using them.
+    ports: ["3050:3050"]
+    environment:
+      <<: *service-env
+      PYTHON_BIN: python3
+      PIPER_VOICES_DIR: /workspace/HATS/runtime_data/piper_voices
+    command: ["node", "--import", "tsx/esm", "apps/speech-service/src/main.ts"]

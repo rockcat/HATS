@@ -1,16 +1,12 @@
-# Build the services images and publish them to GitHub Container Registry.
+# Build the images and publish them to GitHub Container Registry.
 #
-#   ghcr.io/rockcat/hats-services   the six Node services
+#   ghcr.io/rockcat/hats-runner     the runner                   (Dockerfile)
+#   ghcr.io/rockcat/hats-services   the Node services            (Dockerfile.services)
 #   ghcr.io/rockcat/hats-speech     the Speech Service, with Python and Piper
 #
 # Tagged :latest on every push to main, :0.1.3 and :0.1 for a tag v0.1.3,
-# and :sha-abc1234 always. Both are private, like this repository: a machine
-# that pulls them logs in to ghcr.io first — deploy/install.ps1 does that.
-#
-# The Dockerfile expects this repository and hats-runner side by side, as
-# they are on a development machine, because the services are built against
-# the runner's shared packages. So both are checked out, and the context is
-# the directory holding them.
+# and :sha-abc1234 always. A new machine pulls these instead of building —
+# see deploy/.
 
 name: Docker images
 
@@ -19,10 +15,6 @@ on:
     branches: [main]
     tags: ['v*']
   workflow_dispatch:
-    inputs:
-      runner_ref:
-        description: hats-runner branch, tag or commit to build against
-        default: main
 
 permissions:
   contents: read
@@ -34,24 +26,17 @@ jobs:
     strategy:
       matrix:
         include:
-          - target: services
-            image: hats-services
-          - target: speech
-            image: hats-speech
+          - image: hats-runner
+            file: Dockerfile
+            target: runner
+          - image: hats-services
+            file: Dockerfile.services
+            target: services
+          - image: hats-speech
+            file: Dockerfile.services
+            target: speech
     steps:
       - uses: actions/checkout@v4
-        with:
-          path: HATS
-
-      - uses: actions/checkout@v4
-        with:
-          repository: ${{ github.repository_owner }}/HATS-runner
-          ref: ${{ inputs.runner_ref || 'main' }}
-          path: hats-runner
-          # hats-runner is private, and the workflow's own token reads only
-          # this repository. RUNNER_REPO_TOKEN is a fine-grained token with
-          # Contents: read on HATS-runner, stored as an Actions secret here.
-          token: ${{ secrets.RUNNER_REPO_TOKEN }}
 
       - uses: docker/setup-buildx-action@v3
 
@@ -74,7 +59,7 @@ jobs:
       - uses: docker/build-push-action@v6
         with:
           context: .
-          file: HATS/Dockerfile
+          file: ${{ matrix.file }}
           target: ${{ matrix.target }}
           platforms: linux/amd64
           push: true

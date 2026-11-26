@@ -102,7 +102,7 @@
       "command": "npx",
       "args": [
         "-y",
-        "@brave/brave-search-mcp-server@2"
+        "@modelcontextprotocol/server-brave-search"
       ],
       "env": {
         "BRAVE_API_KEY": ""
@@ -203,22 +203,27 @@
     "url": "https://github.com/modelcontextprotocol/servers/tree/main/src/postgres"
   },
   {
-    "id": "puppeteer",
-    "name": "Puppeteer / Browser",
-    "description": "Control a headless Chrome browser — navigate pages, take screenshots, fill forms",
+    "id": "playwright",
+    "name": "Browser (Playwright)",
+    "description": "Browse the web in a real browser — open pages, click, fill in forms, read what is on screen and take screenshots",
     "category": "web",
     "users": [
-      "human"
+      "human",
+      "agent"
     ],
     "config": {
       "transport": "stdio",
       "command": "npx",
       "args": [
         "-y",
-        "@modelcontextprotocol/server-puppeteer"
+        "@playwright/mcp",
+        "--headless",
+        "--user-data-dir",
+        "{AGENT_DIR}/browser-profile"
       ]
     },
-    "url": "https://github.com/modelcontextprotocol/servers/tree/main/src/puppeteer"
+    "notes": "Uses Google Chrome. If Chrome is not installed, run \"npx playwright install chrome\" once on the machine running the runner.",
+    "url": "https://github.com/microsoft/playwright-mcp"
   },
   {
     "id": "slack",

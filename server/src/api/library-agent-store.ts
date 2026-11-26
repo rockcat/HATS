@@ -1,0 +1,212 @@
+/**
+ * An agent store backed by the standalone Agent Library service.
+ *
+ * With this in place the Team Runner no longer owns agent definitions — it
+ * reads and writes them through the library API. Credentials are the one
+ * exception: per-agent MCP secrets stay on the runner in a local sidecar file
+ * and are never sent to a shared library.
+ */
+
+import { readFile, writeFile, mkdir } from 'fs/promises';
+import * as path from 'path';
+import { AgentLibraryClient } from '../../../packages/clients/src/agent-library-client.js';
+import type { AgentTemplate, HatTypeName, ProviderName } from '../../../packages/contracts/src/types.js';
+import type { AgentDefinition } from '../store/team-snapshot.js';
+import type { HatType } from '../../../packages/core/src/hats/types.js';
+import { log } from '../../../packages/core/src/logger.js';
+import type { AgentDefinitionStore } from './agent-store.js';
+
+/** Fields that must never leave the runner. */
+interface LocalAgentSecrets {
+  personalMcpCredentials?: Record<string, Record<string, string>>;
+  teamContext?: string;
+}
+
+export function templateToDefinition(template: AgentTemplate, secrets: LocalAgentSecrets = {}): AgentDefinition {
+  const def: AgentDefinition = {
+    id: template.id,
+    identity: { name: template.name, ...template.identity },
+    hatType: template.hats as unknown as HatType[],
+    model: template.model.model,
+    providerName: template.model.provider,
+    scheduledActionIds: template.scheduledActionIds ?? [],
+  };
+  // Without it an external agent such as Claude Code comes back as an
+  // ordinary one on a provider called "external", which runs nothing.
+  if (template.externalEndpoint) def.externalEndpoint = template.externalEndpoint as AgentDefinition['externalEndpoint'];
+  if (template.tools?.enabledMcpServers) def.enabledMcpServers = template.tools.enabledMcpServers;
+  if (template.tools?.disabledPersonalMcpServers) def.disabledPersonalMcpServers = template.tools.disabledPersonalMcpServers;
+  if (template.tools?.upfrontTools) def.upfrontTools = template.tools.upfrontTools;
+  if (template.limits?.maxContextTokens !== undefined) def.maxContextTokens = template.limits.maxContextTokens;
+  if (template.limits?.maxCostPerHour !== undefined) def.maxCostPerHour = template.limits.maxCostPerHour;
+  if (secrets.personalMcpCredentials) def.personalMcpCredentials = secrets.personalMcpCredentials;
+  if (secrets.teamContext) def.teamContext = secrets.teamContext;
+  return def;
+}
+
+/** Pull out the fields that must stay on this machine. */
+function extractSecrets(def: AgentDefinition): LocalAgentSecrets {
+  const secrets: LocalAgentSecrets = {};
+  if (def.personalMcpCredentials) secrets.personalMcpCredentials = def.personalMcpCredentials;
+  if (def.teamContext) secrets.teamContext = def.teamContext;
+  return secrets;
+}
+
+function definitionToTemplateInput(def: AgentDefinition) {
+  const { name, ...identity } = def.identity;
+  const limits: Record<string, number> = {};
+  if (def.maxContextTokens !== undefined) limits['maxContextTokens'] = def.maxContextTokens;
+  if (def.maxCostPerHour !== undefined) limits['maxCostPerHour'] = def.maxCostPerHour;
+
+  const tools: Record<string, string[]> = {};
+  if (def.enabledMcpServers) tools['enabledMcpServers'] = def.enabledMcpServers;
+  if (def.disabledPersonalMcpServers) tools['disabledPersonalMcpServers'] = def.disabledPersonalMcpServers;
+  // Left out, saving a template from here dropped the tools chosen for it.
+  if (def.upfrontTools) tools['upfrontTools'] = def.upfrontTools;
+
+  return {
+    name,
+    hats: def.hatType as unknown as HatTypeName[],
+    identity: { ...identity, visualDescription: identity.visualDescription || 'a focused, capable team member' },
+    model: { provider: def.providerName as ProviderName, model: def.model },
+    ...(def.externalEndpoint && { externalEndpoint: def.externalEndpoint as AgentTemplate['externalEndpoint'] }),
+    ...(Object.keys(limits).length > 0 && { limits }),
+    ...(Object.keys(tools).length > 0 && { tools }),
+    scheduledActionIds: def.scheduledActionIds ?? [],
+  };
+}
+
+export class LibraryAgentStore implements AgentDefinitionStore {
+  private readonly client: AgentLibraryClient;
+  private readonly secretsPath: string;
+  /** Library entries, keyed by template id. This is what `list()` exposes. */
+  private readonly templates = new Map<string, AgentDefinition>();
+  private secrets: Record<string, LocalAgentSecrets> = {};
+  /** The write in flight for each template, so writes to one template queue up. */
+  private readonly writes = new Map<string, Promise<unknown>>();
+
+  constructor(client: AgentLibraryClient, secretsPath: string) {
+    this.client = client;
+    this.secretsPath = secretsPath;
+  }
+
+  /** True when the library service answered during the last load. */
+  private reachable = false;
+  get isReachable(): boolean { return this.reachable; }
+  get libraryUrl(): string { return this.client.baseUrl; }
+
+  /**
+   * Credentials held back from the shared library, for one agent.
+   *
+   * Looked up by the running agent's instance id first, then by the template it
+   * was deployed from: an agent configured before it was ever deployed has its
+   * secrets filed under the template id.
+   */
+  secretsFor(id: string, templateId?: string): LocalAgentSecrets {
+    return this.secrets[id] ?? (templateId ? this.secrets[templateId] : undefined) ?? {};
+  }
+
+  /** Store credentials for an agent without touching the shared library. */
+  async setSecrets(id: string, secrets: LocalAgentSecrets): Promise<void> {
+    this.secrets[id] = secrets;
+    await this.writeSecrets();
+  }
+
+  async load(): Promise<void> {
+    this.secrets = await this.readSecrets();
+    try {
+      const templates = await this.client.listTemplates();
+      this.templates.clear();
+      for (const template of templates) {
+        this.templates.set(template.id, templateToDefinition(template, this.secrets[template.id] ?? {}));
+      }
+      this.reachable = true;
+      log.info(`[AgentLibrary] loaded ${this.templates.size} template(s) from ${this.client.baseUrl}`);
+    } catch (err) {
+      this.reachable = false;
+      log.warn(`[AgentLibrary] ${this.client.baseUrl} unreachable — the library will be empty this session: ${(err as Error).message}`);
+    }
+  }
+
+  list(): AgentDefinition[] { return [...this.templates.values()]; }
+
+  get(id: string): AgentDefinition | undefined {
+    return this.templates.get(id);
+  }
+
+  has(id: string): boolean {
+    return this.templates.has(id);
+  }
+
+  /** Create or edit a library template. */
+  async addOrUpdate(def: AgentDefinition): Promise<AgentDefinition> {
+    const secrets = extractSecrets(def);
+    const input = definitionToTemplateInput(def);
+
+    // A new agent that brings its own id keeps it. The built-in Claude Code is
+    // found again by its id at every start; given a fresh one by the library
+    // it was never found, and each start added another.
+    let saved: AgentTemplate | undefined;
+    try {
+      saved = !def.id
+        ? await this.client.createTemplate(input)
+        : this.templates.has(def.id)
+          ? await this.serialised(def.id, () => this.client.updateTemplate(def.id!, input))
+          : await this.serialised(def.id, () => this.client.putTemplate(def.id!, input));
+    } catch (err) {
+      log.warn(`[AgentLibrary] could not save "${def.identity.name}": ${(err as Error).message}`);
+    }
+
+    const id = saved?.id ?? def.id;
+    if (id) { this.secrets[id] = secrets; await this.writeSecrets(); }
+
+    const stored = saved ? templateToDefinition(saved, secrets) : { ...def, ...(id && { id }) };
+    if (stored.id) this.templates.set(stored.id, stored);
+    return stored;
+  }
+
+  /**
+   * Run writes to one template one at a time.
+   *
+   * Saving an agent is two requests (the edit, then its scheduled actions).
+   * Overlapping writes to one template collide in the library's temp file —
+   * "ENOENT … .json.tmp" — and the loser is lost.
+   */
+  private serialised<T>(id: string, write: () => Promise<T>): Promise<T> {
+    const next = (this.writes.get(id) ?? Promise.resolve()).catch(() => {}).then(write);
+    this.writes.set(id, next);
+    void next.finally(() => { if (this.writes.get(id) === next) this.writes.delete(id); }).catch(() => {});
+    return next;
+  }
+
+  async remove(id: string): Promise<boolean> {
+    if (!this.templates.has(id)) return false;
+    try {
+      await this.client.deleteTemplate(id);
+    } catch (err) {
+      log.warn(`[AgentLibrary] could not delete ${id}: ${(err as Error).message}`);
+      return false;
+    }
+    this.templates.delete(id);
+    delete this.secrets[id];
+    await this.writeSecrets();
+    return true;
+  }
+
+  private async readSecrets(): Promise<Record<string, LocalAgentSecrets>> {
+    try {
+      return JSON.parse(await readFile(this.secretsPath, 'utf-8')) as Record<string, LocalAgentSecrets>;
+    } catch {
+      return {};
+    }
+  }
+
+  private async writeSecrets(): Promise<void> {
+    try {
+      await mkdir(path.dirname(this.secretsPath), { recursive: true });
+      await writeFile(this.secretsPath, JSON.stringify(this.secrets, null, 2), 'utf-8');
+    } catch (err) {
+      log.warn(`[AgentLibrary] could not persist local agent credentials: ${(err as Error).message}`);
+    }
+  }
+}

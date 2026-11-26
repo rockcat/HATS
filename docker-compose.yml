@@ -1,135 +1,65 @@
-# The services in this repository.
-#
-#   docker compose up -d
-#   docker compose logs -f companion
-#
-# The runner is not here. It has its own repository and its own compose file,
-# and is started from there when it is wanted:
-#
-#   docker compose -f ../hats-runner/docker-compose.yml up -d
-#
-# These services reach it on the host at 3001, which is the port it publishes.
-# That works whether it is running in a container, from source, or on another
-# machine entirely — set TEAM_RUNNER_URL in .env to point somewhere else.
-#
-# All seven are built from one image: they share a dependency tree and a
-# source tree and differ only in which file they start.
-#
-# The build context is the parent directory because package.json depends on
-# the shared libraries by relative path (file:../hats-runner/packages/*).
-# Copying that layout into the image is what lets npm ci resolve them. Only
-# the libraries are copied — Dockerfile.dockerignore excludes the rest of the
-# runner repo, so none of the runner itself can end up in a services image.
-
-x-service: &service
-  build:
-    context: ..
-    dockerfile: HATS/Dockerfile
-    target: services
-  image: hats-services:latest
-  restart: unless-stopped
-  env_file: [.env]
-  volumes:
-    # One directory for the whole installation, outside both repositories.
-    # Set HATS_DATA in .env; see docs/runtime-data.md.
-    - ${HATS_DATA:-../hats-data}:/workspace/HATS/runtime_data
-  environment: &service-env
-    NODE_ENV: production
-    RUNTIME_DIR: /workspace/HATS/runtime_data
-    # Service names, not localhost: inside a container localhost is the
-    # container itself, and every one of these would reach nothing.
-    AGENT_LIBRARY_URL: http://agent-library:3010
-    PROJECT_SERVER_URL: http://project-server:3020
-    SPEECH_SERVICE_URL: http://speech-service:3050
-    # The runner is outside this compose project, so it is reached on the
-    # host rather than by service name. Override in .env to point at another
-    # machine.
-    TEAM_RUNNER_URL: ${TEAM_RUNNER_URL:-http://host.docker.internal:3001}
-  extra_hosts:
-    # Docker Desktop provides this; Linux needs it spelled out.
-    - "host.docker.internal:host-gateway"
-
 services:
-  # Each is optional. The runner falls back to local disk with no project
-  # server and to its bundled agents.json with no library, so starting a
-  # subset is a working system rather than a broken one.
-
-  agent-library:
-    <<: *service
-    ports: ["3010:3010"]
-    command: ["node", "--import", "tsx/esm", "apps/agent-library/src/main.ts"]
-
-  project-server:
-    <<: *service
-    ports: ["3020:3020"]
-    command: ["node", "--import", "tsx/esm", "apps/project-server/src/main.ts"]
-
-  project-designer:
-    <<: *service
-    ports: ["3030:3030"]
-    command: ["node", "--import", "tsx/esm", "apps/project-designer/src/main.ts"]
-
-  embodiment-test:
-    <<: *service
-    ports: ["3040:3040"]
-    command: ["node", "--import", "tsx/esm", "apps/embodiment-test/src/main.ts"]
-
-  companion:
-    <<: *service
-    ports: ["3060:3060"]
-    command: ["node", "--import", "tsx/esm", "apps/companion/src/main.ts"]
-
-  project-view:
-    <<: *service
-    ports: ["3070:3070"]
-    command: ["node", "--import", "tsx/esm", "apps/project-view/src/main.ts"]
-
-  # One sign-in for every runner. A runner uses it when given
-  # AUTH_SERVICE_URL: http://localhost:3090 from source, or
-  # http://host.docker.internal:3090 from the runner's own compose file.
-  auth-service:
-    <<: *service
-    ports: ["3090:3090"]
-    command: ["node", "--import", "tsx/esm", "apps/auth-service/src/main.ts"]
-
-  # Lists every runner and starts one per project. Published here because the
-  # runner is outside this compose project and reports in from the host; the
-  # installed docker-compose.yml keeps it private. Runners it starts join this
-  # project's network, so they reach the services by name.
-  runner-manager:
-    <<: *service
-    ports: ["3080:3080"]
-    command: ["node", "--import", "tsx/esm", "apps/runner-manager/src/main.ts"]
+  hats:
+    build: .
+    image: hats:latest
+    restart: unless-stopped
+    # On stopping, the runner lets turns in progress finish for up to 20
+    # seconds, then saves. Docker's default 10 would kill it first.
+    stop_grace_period: 30s
+    ports:
+      - "3001:3001"
     volumes:
-      - ${HATS_DATA:-../hats-data}:/workspace/HATS/runtime_data
-      # Docker itself, to start runners. Whoever holds this can do anything
-      # on the host; the manager only starts runner containers, for admins.
-      - /var/run/docker.sock:/var/run/docker.sock
-      # The installation's settings, passed on to each runner it starts.
-      - ./.env:/hats/.env:ro
+      # The installation's data directory. Default is this repo's own, which
+      # is right for a standalone runner; set HATS_DATA to share one with
+      # the services rather than keeping two that silently diverge.
+      - ${HATS_DATA:-./runtime_data}:/app/runtime_data
+    env_file:
+      # Docker injects these directly; no --env-file flag needed in CMD
+      - .env
     environment:
-      <<: *service-env
-      AUTH_SERVICE_URL: http://auth-service:3090
-      RUNNER_MANAGER_URL: http://runner-manager:3080
-      RUNNER_IMAGE: ${RUNNER_IMAGE:-hats:latest}
-      HATS_ENV_FILE: /hats/.env
-
-  # The odd one out: it spawns a Piper HTTP server per voice, so it needs a
-  # Python runtime the other six never touch. Same source, different stage.
-  speech-service:
-    <<: *service
-    build:
-      context: ..
-      dockerfile: HATS/Dockerfile
-      target: speech
-    image: hats-speech:latest
-    # Only 3050. The Piper servers it spawns listen on 5100 upwards, but it
-    # is the only thing that talks to them — voice-manager reaches them on
-    # localhost, inside this container. Publishing them exposed twenty ports
-    # nothing consumes, and collided with anything else already using them.
-    ports: ["3050:3050"]
-    environment:
-      <<: *service-env
-      PYTHON_BIN: python3
-      PIPER_VOICES_DIR: /workspace/HATS/runtime_data/piper_voices
-    command: ["node", "--import", "tsx/esm", "apps/speech-service/src/main.ts"]
+      NODE_ENV: production
+      RUNTIME_DIR: /app/runtime_data
+      # Where that data folder is on this machine. The container cannot open a
+      # folder on your desktop, so "Open folder" shows you this path instead.
+      HATS_HOST_DATA: ${HATS_DATA:-./runtime_data}
+      # Scheduled tasks set to a time of day run in this timezone. Set TZ in
+      # .env to yours (e.g. Europe/London) or "daily at 9:00" means 9:00 UTC.
+      TZ: ${TZ:-UTC}
+      # localhost in .env means the container itself here, not your machine.
+      # Overrides .env; set DOCKER_OLLAMA_BASE_URL to point somewhere else.
+      OLLAMA_BASE_URL: ${DOCKER_OLLAMA_BASE_URL:-http://host.docker.internal:11434/v1}
+      # Voices come from the Speech Service, not the runner — without it the
+      # voice list is empty. Set DOCKER_SPEECH_SERVICE_URL to point elsewhere.
+      SPEECH_SERVICE_URL: ${DOCKER_SPEECH_SERVICE_URL:-http://host.docker.internal:3050}
+      # Optional: when these do not answer, the runner uses the local agents.json
+      # and project folders instead.
+      AGENT_LIBRARY_URL: ${DOCKER_AGENT_LIBRARY_URL:-http://host.docker.internal:3010}
+      PROJECT_SERVER_URL: ${DOCKER_PROJECT_SERVER_URL:-http://host.docker.internal:3020}
+      # One sign-in shared with every runner, and the runner manager the
+      # project badge opens and launches runners through; with one, this runner
+      # never switches projects itself. Not optional once set: with no auth
+      # service answering, nobody can sign in. Set either to nothing in .env
+      # (DOCKER_AUTH_SERVICE_URL=) to run this runner on its own.
+      AUTH_SERVICE_URL: ${DOCKER_AUTH_SERVICE_URL-http://host.docker.internal:3090}
+      RUNNER_MANAGER_URL: ${DOCKER_RUNNER_MANAGER_URL-http://host.docker.internal:3080}
+      # Settings saved in the dashboard are kept in the data directory and
+      # reloaded at startup — but never for these, which must stay as set
+      # above. A localhost saved from the Settings panel would undo them.
+      HATS_ENV_LOCKED: RUNTIME_DIR,OLLAMA_BASE_URL,SPEECH_SERVICE_URL,AGENT_LIBRARY_URL,PROJECT_SERVER_URL,AUTH_SERVICE_URL,RUNNER_MANAGER_URL
+    extra_hosts:
+      # Docker Desktop provides host.docker.internal; plain Linux Docker needs this.
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      # Two things this had wrong. It ran curl, which node:22-slim does not
+      # carry, so the check could not execute at all. And every /api/ route
+      # requires authentication, so even once it ran it got a 401 and called
+      # a perfectly healthy runner unhealthy.
+      #
+      # Any reply under 500 means alive: a 401 proves the HTTP server and the
+      # auth layer are both up, which is a better liveness signal than a
+      # static file would be. Only a 5xx or a refused connection is a failure.
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3001/api/state').then(r => process.exit(r.status < 500 ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s

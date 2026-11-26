@@ -1,0 +1,183 @@
+import { AgendaEntry, AgendaStore, nextRunAfter } from '../api/agenda-store.js';
+import { MCPRegistry } from '../mcp/mcp-registry.js';
+import { TeamMessage } from './types.js';
+import { buildMessage } from './orchestrator-utils.js';
+import { log } from '../../../packages/core/src/logger.js';
+import { fillScheduleFields, type ScheduleFieldValues } from '../../../packages/core/src/schedule/fields.js';
+
+/** What one run did — shown to whoever pressed Run now. */
+export interface RunOutcome {
+  /** Whether the agent was sent a message. A tool call whose condition is not met sends none. */
+  delivered: boolean;
+  /** A tool call's result, so its condition can be checked against it. */
+  result?: string;
+  error?: string;
+}
+
+/** Quick retries before a failing entry falls back to its normal interval. */
+const QUICK_RETRIES = 3;
+
+/**
+ * What to record when an entry fails. The first few failures retry on the next
+ * check — usually a server that has not finished connecting. After that it
+ * waits its normal interval, so a broken entry does not fail every minute
+ * forever; a one-off that keeps failing is switched off.
+ */
+export function failureUpdate(entry: AgendaEntry, message: string, now: number, checkIntervalMs: number): Partial<AgendaEntry> {
+  const failures = (entry.failures ?? 0) + 1;
+  const base = { lastError: message, lastErrorAt: now, failures };
+  if (failures < QUICK_RETRIES) return { ...base, nextRunAt: now + checkIntervalMs };
+  const next = nextRunAfter(entry, now);
+  return next === null ? { ...base, enabled: false } : { ...base, nextRunAt: next };
+}
+
+/** What marks a message as a scheduled run, and the prompt it is answered with. */
+const scheduledExtras = (entry: AgendaEntry): Partial<TeamMessage> =>
+  ({ isScheduled: true, ...(entry.promptMode && { promptMode: entry.promptMode }) });
+
+export class AgendaRunner {
+  private store: AgendaStore;
+  private deliverMessage: (agentName: string, msg: TeamMessage) => Promise<void>;
+  private mcp: MCPRegistry | null;
+  private getPersonalMcp: (agentName: string) => MCPRegistry | null;
+  private fieldsFor: (agentName: string) => ScheduleFieldValues;
+  private timer: ReturnType<typeof setInterval> | null = null;
+  private readonly checkIntervalMs: number;
+  /** Agents whose actions wait, still due, until they are back: those away on a visit. */
+  private waiting: (agentName: string) => boolean = () => false;
+
+  /** Hold the actions of agents for which `waiting` is true, rather than firing them at nobody. */
+  setWaiting(waiting: (agentName: string) => boolean): void { this.waiting = waiting; }
+
+  constructor(
+    store: AgendaStore,
+    deliverMessage: (agentName: string, msg: TeamMessage) => Promise<void>,
+    mcp: MCPRegistry | null = null,
+    getPersonalMcp: (agentName: string) => MCPRegistry | null = () => null,
+    checkIntervalMs = 60_000,
+    fieldsFor: (agentName: string) => ScheduleFieldValues = () => ({}),
+  ) {
+    this.store = store;
+    this.deliverMessage = deliverMessage;
+    this.mcp = mcp;
+    this.getPersonalMcp = getPersonalMcp;
+    this.checkIntervalMs = checkIntervalMs;
+    this.fieldsFor = fieldsFor;
+  }
+
+  start(): void {
+    if (this.timer) return;
+    // Every enabled task fires once at startup — but on the first check, not
+    // immediately. The runner starts before the team is restored and before
+    // personal MCP servers connect, so an immediate run reached no agent and
+    // no tools, failed, and was not tried again for a whole interval.
+    let first = true;
+    this.timer = setInterval(() => { void this.tick(first); first = false; }, this.checkIntervalMs);
+    log.info(`[Agenda] Runner started — checking every ${this.checkIntervalMs / 1000}s`);
+  }
+
+  stop(): void {
+    if (this.timer) { clearInterval(this.timer); this.timer = null; }
+  }
+
+  async tick(fireAll = false): Promise<void> {
+    const due = (fireAll
+      ? this.store.list().filter(e => e.enabled)
+      : this.store.listDue()).filter(e => !this.waiting(e.agentName));
+    if (due.length === 0) return;
+    const now = Date.now();
+    for (const entry of due) {
+      try {
+        log.info(`[Agenda] Firing "${entry.label}" for ${entry.agentName}`);
+        await this.fire(entry);
+        const done = { lastRunAt: now, lastError: undefined, lastErrorAt: undefined, failures: 0 };
+        const next = nextRunAfter(entry, now);
+        await this.store.update(entry.id, next === null ? { ...done, enabled: false } : { ...done, nextRunAt: next });
+      } catch (err) {
+        const message = (err as Error).message;
+        log.error(`[Agenda] "${entry.label}" for ${entry.agentName} failed: ${message}`);
+        await this.store.update(entry.id, failureUpdate(entry, message, now, this.checkIntervalMs));
+      }
+    }
+  }
+
+  /**
+   * Fire one entry now, whether or not it is due or switched on — to try it
+   * out. Its schedule is left alone: the next run stays where it was and a
+   * one-off is not used up. The outcome is still recorded as its last run.
+   */
+  async runNow(id: string): Promise<RunOutcome> {
+    const entry = this.store.get(id);
+    if (!entry) throw new Error('No such scheduled task');
+    const now = Date.now();
+    log.info(`[Agenda] Running "${entry.label}" for ${entry.agentName} now, on request`);
+    try {
+      const outcome = await this.fire(entry);
+      await this.store.update(id, { lastRunAt: now, lastError: undefined, lastErrorAt: undefined });
+      return outcome;
+    } catch (err) {
+      const message = (err as Error).message;
+      log.error(`[Agenda] "${entry.label}" for ${entry.agentName} failed: ${message}`);
+      await this.store.update(id, { lastError: message, lastErrorAt: now });
+      return { delivered: false, error: message };
+    }
+  }
+
+  private fire(entry: AgendaEntry): Promise<RunOutcome> {
+    return entry.type === 'mcp_tool_call' && entry.mcpToolCall
+      ? this.fireMcpToolCall(entry)
+      : this.firePrompt(entry);
+  }
+
+  /** The text with its ${date}, ${human} and the rest filled in for now. */
+  private fill(text: string, agentName: string): string {
+    return fillScheduleFields(text, this.fieldsFor(agentName), new Date());
+  }
+
+  private async firePrompt(entry: AgendaEntry): Promise<RunOutcome> {
+    const repeatNote = entry.cron
+      ? `This task runs automatically on a schedule (cron "${entry.cron}") and has just fired. Do NOT schedule it again — just do it now.`
+      : entry.intervalSeconds
+      ? `This task runs automatically every ${Math.round(entry.intervalSeconds / 60)} minute(s) and has just fired. Do NOT schedule it again — just do it now.`
+      : 'This is a one-off task. Do NOT schedule it again — just do it now.';
+    const content = `Do this now — ${entry.label}:\n\n${this.fill(entry.description, entry.agentName)}\n\n(${repeatNote})\n\nIf there is nothing to do right now, call disengage_conversation immediately and produce no text response.`;
+    const msg = buildMessage('human', entry.agentName, 'direct', content, scheduledExtras(entry));
+    await this.deliverMessage(entry.agentName, msg);
+    return { delivered: true };
+  }
+
+  private async fireMcpToolCall(entry: AgendaEntry): Promise<RunOutcome> {
+    const spec = entry.mcpToolCall!;
+    // Resolve registry: personal MCP takes priority if specified, else shared
+    const registry = spec.personalMcpAgentName
+      ? (this.getPersonalMcp(spec.personalMcpAgentName) ?? this.mcp)
+      : this.mcp;
+    if (!registry) throw new Error('no MCP servers are running');
+    // A failed call is a failed run: thrown so tick() retries it soon rather
+    // than recording it as done.
+    const result = await registry.callTool(spec.toolName, spec.args);
+
+    let shouldMessage = true;
+    if (spec.condition.trim()) {
+      try {
+        // eslint-disable-next-line no-new-func
+        const fn = new Function('result', `return !!(${spec.condition})`);
+        shouldMessage = fn(result) as boolean;
+      } catch (err) {
+        log.warn(`[Agenda] Condition eval error for "${entry.label}":`, (err as Error).message);
+        shouldMessage = false;
+      }
+    }
+
+    if (!shouldMessage) {
+      log.info(`[Agenda] Condition not met for "${entry.label}" — skipping agent message`);
+      return { delivered: false, result };
+    }
+
+    // Its own fields first, so a result that happens to hold "${date}" stays as it is.
+    const text = this.fill(spec.messageTemplate, entry.agentName).replace(/\$\{result\}/g, result);
+    const msg = buildMessage('human', entry.agentName, 'direct', text, scheduledExtras(entry));
+    await this.deliverMessage(entry.agentName, msg);
+    return { delivered: true, result };
+  }
+}

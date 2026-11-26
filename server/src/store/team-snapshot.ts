@@ -1,0 +1,114 @@
+import { AgentIdentity, ExternalAgentEndpoint } from '../agent/types.js';
+import { HatType } from '../../../packages/core/src/hats/types.js';
+import type { PromptMode } from '../../../packages/core/src/prompt/types.js';
+import { MCPServerDef } from '../mcp/mcp-client.js';
+import { Task, Meeting } from '../orchestrator/types.js';
+
+export const SNAPSHOT_VERSION = 2;
+
+export interface McpToolCallSpec {
+  serverName: string;
+  toolName: string;                    // full namespaced: mcp__<server>__<tool>
+  args: Record<string, unknown>;
+  condition: string;                   // JS expression; `result` (string) is in scope
+  messageTemplate: string;            // sent to agent when condition passes; ${result} interpolated
+  personalMcpAgentName?: string;      // if set, use this agent's personal MCP registry
+}
+
+export interface HistoryEntry {
+  role: 'user' | 'assistant' | 'tool';
+  content: string;
+  timestamp: string;
+  toolCalls?: unknown;
+  toolCallId?: string;
+  toolName?: string;
+}
+
+// Global agent definition (config only — no history)
+export interface AgentDefinition {
+  id: string;
+  /** The library template a project's agent was copied from, when there is one. */
+  templateId?: string;
+  identity: AgentIdentity;
+  hatType: HatType[];
+  model: string;
+  providerName: string;
+  teamContext?: string;
+  enabledMcpServers?: string[];
+  personalMcpCredentials?: Record<string, Record<string, string>>;
+  disabledPersonalMcpServers?: string[];
+  /** MCP tools sent in every call; the rest are found with search_tools. Unset: the default. */
+  upfrontTools?: string[];
+  scheduledActionIds: string[];
+  maxContextTokens?: number;
+  maxCostPerHour?: number;
+  needs?: import('../../../packages/contracts/src/types.js').AgentNeeds;
+  /** Free text added to the agent's system prompt. */
+  instructions?: string;
+  promptMode?: PromptMode;
+  /** If set, this is an external agent — no local LLM is used. */
+  externalEndpoint?: ExternalAgentEndpoint;
+}
+
+// Global scheduled action definition
+export type ScheduledActionType = 'prompt' | 'mcp_tool_call';
+
+export interface ScheduledActionDef {
+  id: string;
+  label: string;
+  description: string;
+  intervalSeconds: number | null;
+  /** Run at these times instead of on an interval. */
+  cron?: string;
+  createdAt: string;
+  type?: ScheduledActionType;
+  mcpToolCall?: McpToolCallSpec;
+  /** The prompt the agent answers this with; its own setting when absent. */
+  promptMode?: PromptMode;
+}
+
+// V1 format kept for migration only
+export interface AgentSnapshot {
+  id: string;
+  identity: AgentIdentity;
+  hatType: HatType | HatType[];
+  model: string;
+  providerName: string;
+  teamContext?: string;
+  enabledMcpServers?: string[];
+  personalMcpCredentials?: Record<string, Record<string, string>>;
+  history: HistoryEntry[];
+}
+
+export interface TeamSnapshotV1 {
+  version: 1;
+  savedAt: string;
+  humanName: string;
+  agents: AgentSnapshot[];
+  tasks: Task[];
+  meetings: Meeting[];
+  mcpServers: MCPServerDef[];
+}
+
+export interface TeamSnapshotV2 {
+  version: 2;
+  savedAt: string;
+  humanName: string;
+  agentIds: string[];
+  /**
+   * Each agent's config as it is in this project, keyed by agent id. An agent
+   * starts as a copy of its library template and is tailored from there, so
+   * this, not the library, is what a restore builds it from. Older snapshots
+   * lack it and fall back to the store.
+   */
+  agents?: Record<string, AgentDefinition>;
+  /** @deprecated single 'general' thread only — use agentThreads when present */
+  agentHistories: Record<string, HistoryEntry[]>;
+  /** All threads keyed by agentId → threadKey → messages */
+  agentThreads?: Record<string, Record<string, HistoryEntry[]>>;
+  tasks: Task[];
+  meetings: Meeting[];
+  mcpServers: MCPServerDef[];
+}
+
+export type TeamSnapshot = TeamSnapshotV1 | TeamSnapshotV2;

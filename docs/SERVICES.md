@@ -203,6 +203,7 @@ change one.
 | Agent Template Library | `agent-library.openapi.yaml` | `:3010/api/v1/openapi.yaml` |
 | Project Server | `project-server.openapi.yaml` | `:3020/api/v1/openapi.yaml` |
 | Embodiment | `embodiment.openapi.yaml` | `:3001/api/embodiment/v1/openapi.yaml` |
+| Team Runner | `runner.openapi.yaml` | `:3001/api/openapi/runner.yaml`, and every API at `:3001/api-docs` |
 
 ## The Embodiment API
 

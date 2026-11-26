@@ -1,0 +1,206 @@
+/* ── Layout: the section menu and the one section it shows ─────────────────────
+   The menu runs down the left and folds to its icons (body.nav-folded). Each
+   section fills the rest of the page; only the active one is shown. */
+
+:root { --side-nav-width: 196px; }
+body.nav-folded { --side-nav-width: 50px; }
+
+.app-shell {
+  position: relative;
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ── Menu ──────────────────────────────────────────────── */
+.side-nav {
+  flex-shrink: 0;
+  width: var(--side-nav-width);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  overflow-x: hidden;
+  transition: width 0.15s ease;
+}
+
+.side-nav-toggle,
+.side-nav-item,
+.side-nav-action {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 36px;
+  padding: 0 9px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.side-nav-toggle { margin-bottom: 4px; }
+.side-nav-toggle .svg-icon,
+.side-nav-item .svg-icon,
+.side-nav-action .svg-icon { flex-shrink: 0; width: 20px; height: 20px; opacity: 0.75; }
+
+.side-nav-item:hover,
+.side-nav-action:hover,
+.side-nav-toggle:hover { background: var(--surface-2); color: var(--text); }
+.side-nav-item:hover .svg-icon,
+.side-nav-action:hover .svg-icon { opacity: 1; }
+
+.side-nav-item.active {
+  background: var(--surface-2);
+  color: var(--text);
+  box-shadow: inset 3px 0 0 var(--hat-blue);
+}
+.side-nav-item.active .svg-icon { opacity: 1; }
+
+.side-nav-toggle:focus-visible,
+.side-nav-action:focus-visible,
+.side-nav-item:focus-visible { outline: 2px solid var(--hat-blue); outline-offset: -2px; }
+
+.side-nav-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.side-nav-item .tab-badge { margin-left: auto; }
+
+/* Project at the top: which one is open, and the way to switch. */
+.side-nav-project { min-height: 44px; }
+.side-nav-project .side-nav-label { display: flex; flex-direction: column; line-height: 1.25; }
+.side-nav-caption { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.7; }
+.side-nav-project-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text);
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+}
+.side-nav-project[data-locked] { cursor: default; }
+.side-nav-sep { flex-shrink: 0; height: 1px; margin: 4px 2px; background: var(--border); }
+
+/* ── Costs: the details for the scope chosen in the header ── */
+.view--costs .telemetry-body { flex: 1; min-height: 0; max-height: none; }
+.view--costs .telemetry-body > * { max-width: 960px; width: 100%; }
+.tel-scope-switch {
+  display: inline-flex;
+  margin-left: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.tel-scope-opt {
+  padding: 3px 10px;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+  cursor: pointer;
+}
+.tel-scope-opt + .tel-scope-opt { border-left: 1px solid var(--border); }
+.tel-scope-opt:hover { background: var(--surface-2); color: var(--text); }
+.tel-scope-opt.active { background: var(--accent); color: #fff; }
+.tel-scope-opt:focus-visible { outline: 2px solid var(--hat-blue); outline-offset: -2px; }
+
+/* Settings at the bottom. */
+.side-nav-settings { margin-top: auto; }
+
+/* ── Settings: its form scrolls, Save stays in view ──── */
+.view--settings .settings-body { flex: 1; min-height: 0; overflow-y: auto; }
+.view--settings .settings-body > * { max-width: 760px; }
+.settings-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  flex-shrink: 0;
+}
+.settings-footer .settings-msg { margin-right: auto; }
+.view--settings .settings-tab-btn[hidden],
+.settings-footer[hidden],
+.settings-footer [hidden] { display: none; }
+
+/* Folded: icons only, a badge sits on its icon's corner. */
+body.nav-folded .side-nav-label { display: none; }
+body.nav-folded .side-nav-item .tab-badge {
+  position: absolute;
+  top: 3px;
+  left: 24px;
+  margin: 0;
+}
+
+/* ── Sections ─────────────────────────────────────────── */
+main#view-host {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  overflow: hidden;
+}
+
+#view-host > .view {
+  display: none;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  overflow: hidden;
+}
+#view-host > .view.active { display: flex; }
+
+#view-host > .view > .tab-pane { flex: 1; min-height: 0; }
+
+.panel-header--calendar { gap: 8px; }
+
+/* ── Board: columns above, a resizable backlog below ──── */
+.view--board { --backlog-height: 34%; }
+
+.view--board #kanban-active {
+  flex: 1;
+  min-height: 120px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.view--board #backlog-panel {
+  flex: 0 0 var(--backlog-height);
+  min-height: 80px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.board-resizer {
+  flex: 0 0 6px;
+  cursor: row-resize;
+  background: var(--border);
+  border-top: 2px solid var(--bg);
+  border-bottom: 2px solid var(--bg);
+  touch-action: none;
+}
+.board-resizer:hover,
+.board-resizer:focus-visible,
+.view--board.resizing .board-resizer { background: var(--hat-blue); outline: none; }
+.view--board.resizing { user-select: none; cursor: row-resize; }
+
+/* ── Narrow screens: the menu is always folded ────────── */
+@media (max-width: 720px) {
+  :root { --side-nav-width: 50px; }
+  .side-nav-label { display: none; }
+  .side-nav-toggle { display: none; }
+  .side-nav-item .tab-badge { position: absolute; top: 3px; left: 24px; margin: 0; }
+}

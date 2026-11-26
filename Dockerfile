@@ -1,136 +1,111 @@
 # syntax=docker/dockerfile:1
 
-# ─── The HATS services ───────────────────────────────────────────────────────
+# Ordered so an edit to the source reruns only the compile, which takes
+# seconds. Both installs depend on package*.json alone, so they are reused
+# until a dependency changes. (Pruning dev dependencies after the compile
+# instead re-resolved and audited the whole tree on every edit: three of the
+# build's four minutes.)
 #
-# One image for all of them. They share a dependency tree and a source tree,
-# and differ only in which file they start, so seven Dockerfiles would be
-# seven copies of this one drifting apart. Compose picks the service with a
-# command.
+# No system packages: the runner has no native addons. The ones that needed
+# Cairo, Mesa, SDL and a compiler belong to packages/avatar-camera, which is
+# not part of this image.
+
+# ─── Stage 0: the manifests npm installs from ────────────────────────────────
 #
-# The build context is the directory holding BOTH repositories, not this one:
-#
-#   workspace/
-#     HATS/           ← this repository
-#     hats-runner/    ← the shared libraries live here
-#
-# because package.json depends on them by relative path
-# (file:../hats-runner/packages/core and friends). Copying that layout into
-# the image is what lets `npm ci` resolve them. When the libraries are
-# published to a registry this goes away and the context becomes this
-# directory alone.
-#
-# Build from the parent:  docker build -f HATS/Dockerfile ..
-# Or just: docker compose build
-
-# Builds are ordered slowest-changing first, so an edit to the source reuses
-# every install below it: npm only runs when a manifest changes, and Python
-# and Piper only when the speech stage itself does.
-
-# ─── Stage 0: what every image starts from ───────────────────────────────────
-FROM node:22-slim AS node-base
-WORKDIR /workspace/HATS
-
-# Every service reads it, none of them should be baked with it: runtime_data
-# holds projects, avatars and voices, which belong to the installation rather
-# than the image.
-VOLUME ["/workspace/HATS/runtime_data"]
-ENV NODE_ENV=production \
-    RUNTIME_DIR=/workspace/HATS/runtime_data
+# The root's, and each workspace package's: npm ci stops if a workspace it
+# lists is missing. Manifests only, so editing a package's source reinstalls
+# nothing.
+FROM scratch AS manifests
+COPY package*.json /
+COPY packages/auth/package.json        /packages/auth/
+COPY packages/clients/package.json     /packages/clients/
+COPY packages/contracts/package.json   /packages/contracts/
+COPY packages/core/package.json        /packages/core/
+COPY packages/service-kit/package.json /packages/service-kit/
+COPY packages/speech-core/package.json /packages/speech-core/
 
 
-# ─── Stage 1: dependencies ───────────────────────────────────────────────────
-FROM node:22-slim AS deps
-WORKDIR /workspace
-
-# The libraries' manifests only: their sources are copied later, so editing a
-# library does not reinstall anything. They carry no native code, so there is
-# nothing to compile and no build toolchain needed.
-COPY hats-runner/packages/core/package*.json        ./hats-runner/packages/core/
-COPY hats-runner/packages/contracts/package*.json   ./hats-runner/packages/contracts/
-COPY hats-runner/packages/clients/package*.json     ./hats-runner/packages/clients/
-COPY hats-runner/packages/service-kit/package*.json ./hats-runner/packages/service-kit/
-COPY hats-runner/packages/speech-core/package*.json ./hats-runner/packages/speech-core/
-COPY hats-runner/packages/auth/package*.json        ./hats-runner/packages/auth/
-
-# A library's own dependencies have to be installed beside it, not in the
-# consumer. Node resolves a symlinked package from where it really is, so it
-# walks up from hats-runner/packages/<lib>/ and never reaches HATS/node_modules
-# — the first build of this looked fine and then died on `Cannot find package
-# 'ajv' imported from .../contracts/src/validate.ts`.
+# ─── Stage 1: production dependencies ────────────────────────────────────────
+FROM node:24-slim AS prod-deps
+WORKDIR /build
+COPY --from=manifests / ./
 # The cache mount keeps npm's downloads between builds.
-RUN --mount=type=cache,target=/root/.npm \
-    for lib in /workspace/hats-runner/packages/*/; do \
-      if [ -f "$lib/package-lock.json" ]; then \
-        echo "installing dependencies of $(basename "$lib")" && \
-        (cd "$lib" && npm ci --omit=dev --no-audit --no-fund); \
-      fi; \
-    done
-
-COPY HATS/package.json HATS/package-lock.json ./HATS/
-WORKDIR /workspace/HATS
 RUN --mount=type=cache,target=/root/.npm npm ci --omit=dev --no-audit --no-fund
 
 
-# ─── Stage 2: the services ───────────────────────────────────────────────────
-FROM node-base AS services-base
+# ─── Stage 2: builder ────────────────────────────────────────────────────────
+FROM node:24-slim AS builder
+WORKDIR /build
 
-COPY --from=deps /workspace/hats-runner /workspace/hats-runner
-COPY --from=deps /workspace/HATS/node_modules ./node_modules
-# The libraries' sources, beside the dependencies installed for them above.
-COPY hats-runner/packages/ /workspace/hats-runner/packages/
-COPY HATS/package.json ./
-COPY HATS/apps/     ./apps/
-COPY HATS/packages/ ./packages/
-COPY HATS/scripts/  ./scripts/
+# Every dependency, for the compiler. Electron is a dev dependency of the
+# desktop app, not of the runner: skip its 100MB download.
+ENV ELECTRON_SKIP_BINARY_DOWNLOAD=1
+COPY --from=manifests / ./
+RUN --mount=type=cache,target=/root/.npm npm ci --no-audit --no-fund
 
-# 3010 library · 3020 projects · 3030 designer · 3040 embodiment
-# 3060 companion · 3070 project view · 3080 runner manager · 3090 auth
-EXPOSE 3010 3020 3030 3040 3060 3070 3080 3090
+# Source files. packages/ holds the shared contracts and service clients the
+# server imports, so it is part of the compilation unit.
+COPY server/tsconfig.json ./server/tsconfig.json
+COPY server/src/          ./server/src/
+COPY packages/            ./packages/
+COPY apps/web/            ./apps/web/
+COPY scripts/             ./scripts/
 
-# Overridden per service by compose. The library is the one most things need.
-CMD ["node", "--import", "tsx/esm", "apps/agent-library/src/main.ts"]
+# Compile TypeScript → server/dist/. The image runs the compiled code, and
+# built-in MCP servers use it too once server/dist exists.
+RUN npm run build
 
 
-# ─── Stage 2b: the services, with the default avatars ────────────────────────
+# ─── Stage 3: runner ─────────────────────────────────────────────────────────
+FROM node:24-slim AS runner
+WORKDIR /app
+
+# Production dependencies only, from their own stage, so this layer is reused
+# until a dependency changes. three, which the dashboard's browser loads from
+# /nm/, is not one: the runner fetches it from the Agent Template Library.
+COPY --from=prod-deps /build/node_modules ./node_modules
+COPY --from=builder /build/server/dist  ./server/dist
+COPY --from=builder /build/scripts      ./scripts
+# tsc emits only .js, but the compiled code finds these assets relative to its
+# own location — dist mirrors the repo, so they must sit beside it in dist:
+#   contracts/src/validate.ts → ../schemas, contracts/src/openapi.ts → ../openapi
+#   api-server.ts (static UI) → apps/web
+COPY --from=builder /build/packages/contracts/schemas ./server/dist/packages/contracts/schemas
+COPY --from=builder /build/packages/contracts/openapi ./server/dist/packages/contracts/openapi
+COPY --from=builder /build/apps/web     ./server/dist/apps/web
+COPY package.json ./
+
+# runtime_data/ is always mounted — never bake project data into the image.
+# What the repository ships there (the MCP catalogue and model pricing — see
+# .dockerignore; the avatars come with the services) is carried as defaults
+# instead, and copied into the data
+# directory on startup wherever it is missing: a new installation starts with
+# them and an existing one keeps its own.
+COPY runtime_data/ ./defaults/
+VOLUME ["/app/runtime_data"]
+
+# Speech, the Agent Library and the Project Server are separate services — see
+# the *_URL settings in docker-compose.yml. The runner only talks to them, and
+# falls back to local files when the library or project server is not there.
+EXPOSE 3001
+
+# Headless: no terminal is attached, so no chat CLI — it would read EOF and exit.
 #
-# The Agent Template Library copies these into the data folder on startup
-# wherever they are missing, and every runner reads them from there or from
-# the library, so there is one copy however many runners there are. Speech is
-# built from the stage above instead: it never touches an avatar.
-FROM services-base AS services
+# Everything that must outlive the container goes under the mounted data
+# directory; anything else here is lost when it is recreated.
+#   HATS_SETTINGS_FILE  what the Settings panel saves (it wrote /app/.env,
+#                       which nothing reloaded — a setting lasted one run)
+#   XDG_STATE_HOME      MCP servers' own state — email-mcp keeps scheduled
+#   XDG_CACHE_HOME      sends and its mail cache there, under ~/.local/state
+#                       and ~/.cache by default
+ENV NODE_ENV=production \
+    RUNTIME_DIR=/app/runtime_data \
+    HATS_DEFAULTS_DIR=/app/defaults \
+    HATS_HEADLESS=1 \
+    HATS_SETTINGS_FILE=/app/runtime_data/config/settings.env \
+    XDG_STATE_HOME=/app/runtime_data/state \
+    XDG_CACHE_HOME=/app/runtime_data/cache
 
-COPY hats-runner/runtime_data/avatars/ ./defaults/avatars/
-ENV HATS_DEFAULTS_DIR=/workspace/HATS/defaults
-
-
-# ─── Stage 3: the speech service ─────────────────────────────────────────────
-#
-# Its own stage because it is the only one that is not just Node: it spawns
-# `python -m piper.http_server` per voice model. Putting Piper in the shared
-# image would make six services carry a Python runtime they never call.
-#
-# Python and Piper go in before the code, not on top of services-base: built
-# that way, every source edit threw them away and downloaded them again.
-FROM node-base AS speech
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-      python3 python3-pip \
-    && rm -rf /var/lib/apt/lists/*
-
-# --break-system-packages is required on Debian 12 and later, where the
-# system Python refuses pip installs without it.
-RUN pip3 install --no-cache-dir --break-system-packages piper-tts flask
-
-# The code and its dependencies, exactly as the other services have them.
-COPY --from=services-base /workspace /workspace
-
-# voice-manager.ts spawns this; without it the default "python" is not on PATH
-# in a slim image and every voice fails to start with ENOENT.
-ENV PYTHON_BIN=python3 \
-    PIPER_VOICES_DIR=/workspace/HATS/runtime_data/piper_voices
-
-# Only the service itself. The Piper servers it spawns listen on 5100
-# upwards, but nothing outside this container talks to them.
-EXPOSE 3050
-
-CMD ["node", "--import", "tsx/esm", "apps/speech-service/src/main.ts"]
+# The compilation root is the repo (the server imports packages/), so the
+# emitted entry point keeps its server/src/ path inside dist.
+CMD ["node", "server/dist/server/src/team-runner.js"]

@@ -1,0 +1,46 @@
+# Ignore rules for Dockerfile.services. BuildKit looks for
+# <dockerfile>.dockerignore beside it, so the runner's image keeps its own
+# .dockerignore.
+
+# Never ship an install. It is platform-specific, and the image builds its
+# own; copying one in is how a Windows binary ends up in a Linux container.
+**/node_modules
+
+**/.git
+**/.gitignore
+**/.github
+
+# Secrets and local state. Compose passes .env at run time instead.
+**/.env
+**/.env.*
+!**/.env.example
+**/dist
+**/dist-desktop
+**/build
+
+# The runner has its own image. Leaving it out keeps the context small and
+# makes it impossible to bake the runner into a services image.
+server
+apps/web
+packages/avatar-camera
+runtime_data
+
+# Except the default avatars and backgrounds, which the services carry so
+# that runners do not each need a copy. Listed by type, so nothing else that
+# lands in that folder on a developer's machine gets in.
+!runtime_data/avatars/*.glb
+!runtime_data/avatars/*.vrm
+!runtime_data/avatars/avatars.json
+!runtime_data/avatars/backgrounds/*.png
+
+# Not part of any service.
+apps/flutter
+apps/electron
+docs
+tools
+**/*.md
+**/*.log
+**/.claude
+**/.vscode
+**/.idea
+**/.dart_tool

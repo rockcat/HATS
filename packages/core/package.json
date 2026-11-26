@@ -1,0 +1,20 @@
+{
+  "name": "@hats/core",
+  "version": "0.1.0",
+  "description": "Hat definitions, the prompt generator, the MCP catalogue and the provider list.",
+  "type": "module",
+  "exports": {
+    "./package.json": "./package.json",
+    "./*": {
+      "types": "./src/*.ts",
+      "default": "./src/*.ts"
+    }
+  },
+  "files": [
+    "src",
+    "schemas",
+    "openapi",
+    "README.md"
+  ],
+  "license": "SEE LICENSE IN LICENSE.txt"
+}

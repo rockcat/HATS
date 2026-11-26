@@ -1,0 +1,62 @@
+# The two runners for the visit demo: one for Website, one for Insights.
+# See README.md beside this file, and docs/MULTIPLE-PROJECTS.md.
+#
+# Run from the root of the repository, so the paths below are read from there:
+#
+#   docker compose --project-directory . -f docs/visit-demo/docker-compose.visit-demo.yml up -d --build
+#
+# Both use the services already running on this machine: the Project Server
+# (which holds the visits), the Agent Template Library and the Speech Service.
+# Ports 3071 and 3072 keep clear of the usual runner on 3001.
+#
+# A project name of its own: run from the root of the repository, Compose
+# would otherwise name it after the folder, as the main docker-compose.yml is,
+# and each would warn that the other's containers are orphans.
+
+name: hats-visit-demo
+
+x-runner: &runner
+  build: .
+  image: hats:latest
+  restart: unless-stopped
+  env_file: [.env]
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+
+x-runner-env: &runner-env
+  NODE_ENV: production
+  RUNTIME_DIR: /app/runtime_data
+  TZ: ${TZ:-UTC}
+  HATS_PROJECT_LOCKED: "1"
+  HATS_HOST_DATA: ${HATS_DATA:-./runtime_data}
+  OLLAMA_BASE_URL: ${DOCKER_OLLAMA_BASE_URL:-http://host.docker.internal:11434/v1}
+  SPEECH_SERVICE_URL: ${DOCKER_SPEECH_SERVICE_URL:-http://host.docker.internal:3050}
+  AGENT_LIBRARY_URL: ${DOCKER_AGENT_LIBRARY_URL:-http://host.docker.internal:3010}
+  PROJECT_SERVER_URL: ${DOCKER_PROJECT_SERVER_URL:-http://host.docker.internal:3020}
+  # How agents find other teams: discover_teams asks the runner manager, and
+  # without it neither discover_teams nor request_visit is offered.
+  RUNNER_MANAGER_URL: ${DOCKER_RUNNER_MANAGER_URL-http://host.docker.internal:3080}
+  HATS_ENV_LOCKED: RUNTIME_DIR,OLLAMA_BASE_URL,SPEECH_SERVICE_URL,AGENT_LIBRARY_URL,PROJECT_SERVER_URL,RUNNER_MANAGER_URL,TEAM_PROJECT,HATS_PROJECT_LOCKED
+
+services:
+  runner-website:
+    <<: *runner
+    ports: ["3071:3071"]
+    environment:
+      <<: *runner-env
+      TEAM_RUNNER_PORT: 3071
+      TEAM_PROJECT: website
+    volumes:
+      - ${HATS_RUNNERS:-./runners}/website:/app/runtime_data
+      - ${HATS_DATA:-./runtime_data}/projects/website:/app/runtime_data/projects/website
+
+  runner-insights:
+    <<: *runner
+    ports: ["3072:3072"]
+    environment:
+      <<: *runner-env
+      TEAM_RUNNER_PORT: 3072
+      TEAM_PROJECT: insights
+    volumes:
+      - ${HATS_RUNNERS:-./runners}/insights:/app/runtime_data
+      - ${HATS_DATA:-./runtime_data}/projects/insights:/app/runtime_data/projects/insights

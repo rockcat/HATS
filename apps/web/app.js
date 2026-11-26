@@ -1,0 +1,88 @@
+// ── Entry point — wires all modules together ──────────────────────────────────
+// This file is loaded as <script type="module"> and does nothing except import
+// modules and call their init functions in dependency order.
+
+import { checkAuth }                                   from './modules/auth.js';
+import { loadSpecialisations }                         from './modules/specialisations.js';
+import { initTelemetry, initTelScopeToggle,
+         applyTelemetrySummary }                       from './modules/telemetry.js';
+import { fetchFiles, startFilesRefresh, initFileUpload } from './modules/files.js';
+import { initFileViewer }                            from './modules/file-preview.js';
+import { initGenBgModal }                            from './modules/backgrounds.js';
+import { fetchCalendar, initCalendar,
+         initImpromptuMeeting }                        from './modules/calendar.js';
+import { updateGoalBar, initGoalBar,
+         initProjectBadge, initProject }               from './modules/project.js';
+import { initKanban }                                  from './modules/kanban.js';
+import { initSettings }                                from './modules/settings.js';
+import { initAddAgent, openLibraryEdit } from './modules/add-agent.js';
+import { initLibraryTab, fetchGlobalAgents }           from './modules/library.js';
+import { initSchedulesTab }                            from './modules/schedules.js';
+import { initServiceStatus }                           from './modules/services.js';
+import { initMCPEditor }                               from './modules/mcp.js';
+import { initAgentDetail, closeAgentDetail }           from './modules/agent-detail.js';
+import { initCLI }                                     from './modules/cli.js';
+import { notify }                                      from './modules/notice.js';
+import { initGoogleReturn }                            from './modules/google-return.js';
+import { initAllowlist }                               from './modules/allowlist.js';
+import { initMicButtons }                             from './modules/panels.js';
+import { initNav, showView }                           from './modules/nav.js';
+import { initTheme }                                   from './modules/theme.js';
+import { initListen }                                  from './modules/listen.js';
+import { connect, fetchTools, applyState }             from './modules/sse.js';
+
+if (!await checkAuth()) throw new Error('Not authenticated');
+
+// ── Cross-module dependency injection ─────────────────────────────────────────
+// These break import cycles by handing each module the functions it depends on
+// at startup rather than at import time.
+
+initProject({
+  applyState,
+  fetchTools,
+  fetchFiles,
+  startFilesRefresh,
+  fetchCalendar,
+  applyTelemetrySummary,
+  closeAgentDetail,
+});
+
+initKanban({ updateGoalBar });
+
+initLibraryTab({ openLibraryEdit });
+
+initAddAgent({ fetchGlobalAgentsOverride: fetchGlobalAgents });
+
+// ── Sequential startup ────────────────────────────────────────────────────────
+
+initProjectBadge();
+initGoalBar();
+initSettings();
+initTheme();
+initListen();
+loadSpecialisations();
+initMCPEditor();
+initImpromptuMeeting();
+initCalendar();
+initMicButtons();
+initNav();
+initTelemetry();
+initTelScopeToggle();
+initFileUpload();
+initFileViewer();
+initGenBgModal();
+initSchedulesTab();
+initServiceStatus();
+
+// A sign-in that ran in this tab rather than a popup comes back with its
+// result in the query string, and nobody listening for the message that a
+// popup would have sent.
+initGoogleReturn({
+  announce: (text) => notify(text),
+  showMcpTab: () => showView('mcp'),
+});
+
+// connect() opens the SSE stream; the 'init' event fires
+// initKanbanDrag(), initTicketEditing(), initCLI(), initAgentDetail(),
+// initAllowlist() — those need the DOM and state, so they run after SSE init.
+connect();

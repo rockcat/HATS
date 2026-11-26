@@ -1,0 +1,161 @@
+// Names identify agents, so the same name arriving twice is one agent, not
+// two. Teams saved while project switching leaked agents hold several copies;
+// restoring one must keep the first and drop the rest.
+
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { mkdtemp, readFile, rm, writeFile } from 'fs/promises';
+import { tmpdir } from 'os';
+import * as path from 'path';
+import { TeamOrchestrator } from './orchestrator.js';
+import { AgentStore } from '../api/agent-store.js';
+import { MockProvider } from '../providers/mock.js';
+import { HatType } from '../../../packages/core/src/hats/types.js';
+import { closeAllProjectDbs } from '../store/project-db.js';
+import { projectCopy } from '../api/project-agents.js';
+
+let dir = '';
+let orch: TeamOrchestrator;
+const provider = new MockProvider({ content: 'ok' });
+
+const poppy = (id: string) => ({
+  id, identity: { name: 'Poppy', visualDescription: 'An assistant.' },
+  hatType: [HatType.Blue], provider, model: 'mock-model',
+});
+
+beforeEach(async () => {
+  dir = await mkdtemp(path.join(tmpdir(), 'hats-register-'));
+  orch = new TeamOrchestrator({ storePath: path.join(dir, 'events.jsonl'), projectsRoot: dir });
+  await orch.init();
+});
+
+afterEach(async () => {
+  closeAllProjectDbs();
+  await rm(dir, { recursive: true, force: true });
+});
+
+describe('the same agent arriving twice', () => {
+  it('is not added a second time', () => {
+    const first = orch.registerAgent(poppy('poppy-1'));
+    const second = orch.registerAgent(poppy('poppy-2'));
+    expect(second).toBe(first);
+    expect(orch.listAgents()).toHaveLength(1);
+  });
+
+  it('is dropped from a saved team, keeping the first copy and its history', async () => {
+    const store = new AgentStore(path.join(dir, 'agents.json'));
+    await store.load();
+    for (const id of ['poppy-1', 'poppy-2', 'poppy-3']) {
+      await store.addOrUpdate({ id, identity: { name: 'Poppy', visualDescription: 'x' }, hatType: [HatType.Blue],
+        model: 'mock-model', providerName: 'anthropic', scheduledActionIds: [] });
+    }
+    orch.setAgentStore(store);
+    const state = path.join(dir, 'team-state.json');
+    const said = (text: string) => [{ role: 'user', content: text, timestamp: '2026-01-01T00:00:00Z' }];
+    await writeFile(state, JSON.stringify({
+      version: 2, savedAt: '2026-01-01', humanName: 'Boss',
+      agentIds: ['poppy-1', 'poppy-2', 'poppy-3'],
+      agentHistories: { 'poppy-1': said('first'), 'poppy-2': said('second'), 'poppy-3': said('third') },
+      tasks: [], meetings: [], mcpServers: [],
+    }));
+
+    await orch.loadState(state, () => provider);
+
+    expect(orch.listAgents().map(a => a.id)).toEqual(['poppy-1']);
+    expect(orch.listAgents()[0]!.getHistory()[0]?.content).toBe('first');
+  });
+});
+
+async function restored(state: string, store: AgentStore): Promise<TeamOrchestrator> {
+  const again = new TeamOrchestrator({ storePath: path.join(dir, 'events2.jsonl'), projectsRoot: dir });
+  await again.init();
+  again.setAgentStore(store);
+  await again.loadState(state, () => provider);
+  return again;
+}
+
+describe('an agent\'s limits', () => {
+  it('survive a save and a restore', async () => {
+    const store = new AgentStore(path.join(dir, 'agents.json'));
+    await store.load();
+    orch.setAgentStore(store);
+    orch.registerAgent({ ...poppy('poppy-1'), maxCostPerHour: 0.5, maxContextTokens: 8000 });
+    const state = path.join(dir, 'team-state.json');
+    await orch.saveState(state);
+
+    const again = await restored(state, store);
+    expect(again.getAgent('Poppy')?.config).toMatchObject({ maxCostPerHour: 0.5, maxContextTokens: 8000 });
+  });
+});
+
+describe('an agent\'s prompt settings', () => {
+  it('survive a save and a restore', async () => {
+    const store = new AgentStore(path.join(dir, 'agents.json'));
+    await store.load();
+    orch.setAgentStore(store);
+    orch.registerAgent(poppy('poppy-1'));
+    orch.updateAgentPromptSettings('Poppy', 'Reply in French.', 'condensed');
+    const state = path.join(dir, 'team-state.json');
+    await orch.saveState(state);
+
+    const again = await restored(state, store);
+    expect(again.getAgent('Poppy')?.config).toMatchObject({ instructions: 'Reply in French.', promptMode: 'condensed' });
+  });
+});
+
+describe('an agent copied from the library into a project', () => {
+  it('keeps its project changes through a restore and leaves the template alone', async () => {
+    const store = new AgentStore(path.join(dir, 'agents.json'));
+    await store.load();
+    const template = await store.addOrUpdate({ id: 'tpl', identity: { name: 'Poppy', visualDescription: 'x' },
+      hatType: [HatType.Blue], model: 'mock-model', providerName: 'anthropic', scheduledActionIds: [], maxCostPerHour: 0.5 });
+    orch.setAgentStore(store);
+    orch.registerAgent(projectCopy(template, provider, 'poppy-in-project'));
+    orch.updateAgentMaxCostPerHour('Poppy', 2);
+    orch.updateAgentSpecialisation('Poppy', 'Inbox triage');
+    const state = path.join(dir, 'team-state.json');
+    await orch.saveState(state);
+
+    const again = await restored(state, store);
+    expect(again.getAgent('Poppy')?.id).toBe('poppy-in-project');
+    expect(again.getAgent('Poppy')?.config).toMatchObject({
+      templateId: 'tpl', maxCostPerHour: 2, identity: { specialisation: 'Inbox triage' },
+    });
+    expect(store.get('tpl')).toMatchObject({ maxCostPerHour: 0.5, identity: { name: 'Poppy' } });
+    expect(store.get('tpl')?.identity.specialisation).toBeUndefined();
+    expect(store.list()).toHaveLength(1);
+  });
+});
+
+describe("an agent's credentials", () => {
+  const creds = { 'no-such-server': { PASSWORD: 'hunter22' } };
+
+  it('are kept out of the saved project, and come back from this machine on restore', async () => {
+    const file = new AgentStore(path.join(dir, 'agents.json'));
+    await file.load();
+    const secrets = new Map<string, object>();
+    const store = Object.assign(file, {
+      secretsFor: (id: string) => secrets.get(id) ?? {},
+      setSecrets: async (id: string, s: object) => { secrets.set(id, s); },
+    });
+    orch.setAgentStore(store);
+    orch.registerAgent({ ...poppy('poppy-1'), personalMcpCredentials: creds });
+    const state = path.join(dir, 'team-state.json');
+    await orch.saveState(state);
+
+    expect(await readFile(state, 'utf8')).not.toContain('hunter22');
+    const again = await restored(state, store);
+    expect(again.getAgent('Poppy')?.config.personalMcpCredentials).toEqual(creds);
+  });
+
+  it('stay in the project when the store has nowhere else to keep them', async () => {
+    const store = new AgentStore(path.join(dir, 'agents.json'));
+    await store.load();
+    orch.setAgentStore(store);
+    orch.registerAgent({ ...poppy('poppy-1'), personalMcpCredentials: creds });
+    const state = path.join(dir, 'team-state.json');
+    await orch.saveState(state);
+
+    const again = await restored(state, store);
+    expect(again.getAgent('Poppy')?.config.personalMcpCredentials).toEqual(creds);
+  });
+});

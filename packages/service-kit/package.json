@@ -1,0 +1,20 @@
+{
+  "name": "@hats/service-kit",
+  "version": "0.1.0",
+  "description": "The small HTTP service harness each HATS service is built on.",
+  "type": "module",
+  "exports": {
+    "./package.json": "./package.json",
+    "./*": {
+      "types": "./src/*.ts",
+      "default": "./src/*.ts"
+    }
+  },
+  "files": [
+    "src",
+    "schemas",
+    "openapi",
+    "README.md"
+  ],
+  "license": "SEE LICENSE IN LICENSE.txt"
+}

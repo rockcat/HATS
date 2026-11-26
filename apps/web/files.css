@@ -1,0 +1,108 @@
+/* ── Project Files: an explorer, with a preview on the right ──────────────────
+   Drawn by modules/files.js. Previews share the file viewer's styles in
+   style.css (.file-viewer-*), so the pane and the full-screen view match. */
+
+.files-pane { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+
+/* ── Toolbar: up, where you are, how to show it, and what to do ── */
+.files-toolbar {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 8px 12px; border-bottom: 1px solid var(--border);
+}
+.files-toolbar-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-left: auto; }
+
+.files-btn {
+  display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 10px;
+  font-size: 12px; color: var(--text-muted); text-decoration: none; cursor: pointer;
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px;
+}
+.files-btn:hover:not(:disabled) { color: var(--text); border-color: var(--border-hover); }
+.files-btn:disabled { opacity: 0.4; cursor: default; }
+.files-btn .svg-icon { width: 12px; height: 12px; }
+.files-btn--icon { width: 28px; padding: 0; justify-content: center; font-size: 14px; }
+.files-btn--primary { background: #1f6feb; border-color: #388bfd40; color: #fff; font-weight: 600; }
+.files-btn--primary:hover { color: #fff; opacity: 0.9; }
+.files-btn--danger:hover:not(:disabled) { color: var(--hat-red); border-color: var(--hat-red); }
+.files-btn[aria-pressed="true"] { color: var(--text); border-color: var(--hat-blue); background: rgba(88, 166, 255, 0.15); }
+
+.files-view-switch { display: inline-flex; gap: 2px; }
+
+.files-crumbs { display: flex; align-items: center; gap: 2px; min-width: 0; flex: 1 1 200px; font-size: 13px; overflow: hidden; }
+.files-crumb {
+  background: none; border: none; color: var(--text-muted); cursor: pointer;
+  padding: 3px 6px; border-radius: 4px; font: inherit; white-space: nowrap;
+}
+.files-crumb:hover { color: var(--text); background: var(--surface-2); }
+.files-crumb--here { color: var(--text); font-weight: 600; padding: 3px 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.files-crumb-sep { color: var(--text-muted); }
+
+.files-open-folder-note { padding: 6px 12px; font-size: 12px; color: var(--text-muted); border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
+.files-open-folder-note[hidden] { display: none; }
+.files-open-folder-copy {
+  margin-left: 6px; padding: 1px 8px; font-size: 11px; cursor: pointer;
+  color: var(--text-muted); background: var(--surface-2); border: 1px solid var(--border); border-radius: 4px;
+}
+.files-open-folder-copy:hover { color: var(--text); }
+
+/* ── Files on the left, the preview on the right ── */
+.files-split { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 42%); }
+
+.files-items { min-height: 0; overflow: auto; padding: 6px; }
+.files-empty { padding: 24px 12px; color: var(--text-muted); font-size: 13px; text-align: center; }
+
+.files-item { cursor: pointer; border-radius: 6px; border: 1px solid transparent; outline: none; user-select: none; }
+.files-item:hover { background: var(--surface-2); }
+.files-item:focus-visible { border-color: var(--hat-blue); }
+.files-item--selected, .files-item--selected:hover { background: rgba(88, 166, 255, 0.15); border-color: rgba(88, 166, 255, 0.45); }
+.files-item-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* List: name, modified, type, size */
+.files-items--list .files-list-head,
+.files-items--list .files-item {
+  display: grid; grid-template-columns: minmax(0, 1fr) 150px 110px 80px; gap: 12px; align-items: center;
+  padding: 5px 8px; font-size: 13px;
+}
+.files-list-head { color: var(--text-muted); font-size: 11px !important; text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid var(--border); margin-bottom: 4px; }
+.files-col-name { display: flex; align-items: center; gap: 8px; min-width: 0; color: var(--text); }
+.files-icon { flex-shrink: 0; width: 18px; text-align: center; }
+.files-col-date, .files-col-kind, .files-col-size { color: var(--text-muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.files-col-size, .files-list-head span:last-child { text-align: right; }
+
+/* Icons: tiles, with pictures shown as themselves */
+.files-items--icons { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 6px; align-content: start; }
+.files-items--icons .files-item { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 6px 8px; text-align: center; min-width: 0; }
+.files-big-icon { font-size: 40px; line-height: 64px; height: 64px; }
+.files-thumb { width: 88px; height: 64px; object-fit: cover; border-radius: 4px; background: var(--surface-2); }
+.files-items--icons .files-item-name { max-width: 100%; font-size: 12px; color: var(--text); }
+.files-item-sub { font-size: 11px; color: var(--text-muted); }
+
+/* ── Preview ── */
+.files-preview { min-height: 0; display: flex; flex-direction: column; border-left: 1px solid var(--border); background: var(--surface); }
+.files-preview-head { padding: 10px 12px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 4px; }
+.files-preview-title { font-weight: 600; font-size: 14px; color: var(--text); overflow-wrap: anywhere; }
+.files-preview-meta { font-size: 12px; color: var(--text-muted); }
+.files-preview-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+.files-preview-hint { padding: 24px 12px; color: var(--text-muted); font-size: 13px; text-align: center; }
+.files-preview-body .file-viewer-iframe { height: 100%; min-height: 60vh; }
+
+.file-preview-note { padding: 8px 12px; font-size: 12px; color: var(--text-muted); }
+.file-preview-table-wrap { overflow: auto; padding: 0 12px 12px; }
+.file-preview-table { border-collapse: collapse; font-size: 12px; font-family: ui-monospace, monospace; }
+.file-preview-table th, .file-preview-table td { padding: 4px 10px; border: 1px solid var(--border); text-align: left; white-space: nowrap; }
+.file-preview-table th { position: sticky; top: 0; background: var(--surface-2); color: var(--text); }
+.file-preview-table td { color: var(--text-muted); }
+
+/* Narrow: the preview goes under the files; list columns drop to name and size. */
+@media (max-width: 900px) {
+  .files-split { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); }
+  .files-preview { border-left: none; border-top: 1px solid var(--border); }
+  .files-items--list .files-list-head,
+  .files-items--list .files-item { grid-template-columns: minmax(0, 1fr) 70px; }
+  .files-col-date, .files-col-kind, .files-list-head span:nth-child(2), .files-list-head span:nth-child(3) { display: none; }
+}
+
+/* An HTML page: sandboxed, still until asked (modules/html-preview.js). */
+.file-preview-bar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+.file-preview-bar-note { flex: 1 1 200px; font-size: 12px; color: var(--text-muted); }
+.file-preview-html { background: #fff; }
+.file-preview-html[hidden] { display: none; }

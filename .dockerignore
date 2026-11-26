@@ -1,0 +1,28 @@
+# The image installs its own Linux node_modules; the host's (Windows) ones
+# would be slow to send and wrong to run.
+node_modules
+**/node_modules
+
+# Built inside the image.
+server/dist
+
+# Not part of the runner; it has its own dependencies.
+packages/avatar-camera
+
+# Mounted at runtime, never baked in — except the defaults the repository
+# ships, which the runner copies into a new installation's data directory.
+# Allowed one by one so local state (users, tokens, projects) never gets in.
+# The avatars are not among them: they ship with the services image, and the
+# runner serves them from the shared data folder or the Agent Template Library.
+runtime_data/*
+!runtime_data/config
+runtime_data/config/*
+!runtime_data/config/mcp-catalogue.json
+!runtime_data/data
+runtime_data/data/*
+!runtime_data/data/model-pricing.json
+
+# Secrets reach the container through env_file, not the image.
+.env
+
+.git

@@ -1,0 +1,36 @@
+# Development override: run the container from your source, no rebuild.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up --watch
+#
+# Saving a file under server/src or packages restarts the runner with the new
+# code. Changes to apps/web need only a hard refresh in the browser (Ctrl+F5).
+# Changes to package.json rebuild the image, since node_modules lives in it.
+
+services:
+  hats:
+    # Source through tsx instead of the compiled build baked into the image.
+    command: ["node", "--import", "tsx/esm", "server/src/team-runner.ts"]
+    volumes:
+      - ./server/src:/app/server/src
+      - ./packages:/app/packages
+      - ./apps/web:/app/apps/web
+      - ./scripts:/app/scripts
+      - ./tsconfig.json:/app/tsconfig.json:ro
+      # The host's node_modules is a Windows install; keep the image's own.
+      - /app/packages/contracts/node_modules
+    tmpfs:
+      # Hide the compiled build. Built-in MCP servers (kanban, calendar) prefer
+      # it when it exists, and it would be the stale code from the last build.
+      - /app/server/dist
+    develop:
+      watch:
+        - path: ./server/src
+          action: restart
+          ignore: ["**/*.test.ts"]
+        - path: ./packages
+          action: restart
+          ignore: ["**/*.test.ts", "**/node_modules/**"]
+        - path: ./package.json
+          action: rebuild
+        - path: ./package-lock.json
+          action: rebuild

@@ -1,0 +1,1450 @@
+import * as nodePath from 'path';
+import { readFile, writeFile, rename, mkdir } from 'fs/promises';
+import { log } from '../../../packages/core/src/logger.js';
+import { Agent } from '../agent/agent.js';
+import { ExternalAgent, EXTERNAL_PROVIDER } from '../agent/external-agent.js';
+import { IAgent } from '../agent/iagent.js';
+import { AgentConfig } from '../agent/types.js';
+import { HatType } from '../../../packages/core/src/hats/types.js';
+import type { PromptMode } from '../../../packages/core/src/prompt/types.js';
+import { getToolsForHat, getAllToolsForHat } from '../../../packages/core/src/tools/definitions.js';
+import { AIProvider } from '../providers/types.js';
+import { EventStore } from '../store/event-store.js';
+import { MCPRegistry } from '../mcp/mcp-registry.js';
+import { splitToolSet, unmatchedSelectors, type AvailableTools, type AgentToolSet } from '../tools/tool-exposure.js';
+import { DEVICE_PREFIX } from '../device/device-tool-bridge.js';
+import type { DeviceToolBridge } from '../device/device-tool-bridge.js';
+
+/**
+ * The tool a device declares when it can turn a face into a vector itself.
+ *
+ * Named here rather than in the people module because it is a contract with
+ * the embodiment clients — the Flutter app and the browser companion both
+ * declare exactly this name.
+ */
+const FACE_TOOL = 'embed_face';
+import { MCPServerDef } from '../mcp/mcp-client.js';
+import { portableConfig } from '../../../packages/core/src/mcp/saved-config.js';
+import { Semaphore } from '../providers/semaphore.js';
+import { TeamSnapshot, TeamSnapshotV1, TeamSnapshotV2, AgentSnapshot, AgentDefinition, HistoryEntry } from '../store/team-snapshot.js';
+import { AgentDefinitionStore } from '../api/agent-store.js';
+import { assignedActionIds, configFrom, definitionOf, serializeMessages, serializeThreads } from './agent-definition.js';
+import { MeetingRoom } from './meeting-room.js';
+import { TeamMessage, Task, Meeting, MeetingTurn, ScheduledMeeting, MeetingType } from './types.js';
+import { MeetingStore } from './meeting-store.js';
+import { buildMessage } from './orchestrator-utils.js';
+import {
+  deliverToAgent as deliverToAgentFn,
+  findBlueHat as findBlueHatFn,
+  createTask as createTaskFn,
+  resolveAgentPath as resolveAgentPathFn,
+} from './orchestrator-helpers.js';
+import { buildToolExecutor, ToolCallContext } from './tool-executor.js';
+import { EmailAllowlistStore } from '../api/email-allowlist-store.js';
+import { AgendaStore } from '../api/agenda-store.js';
+import { AgendaRunner, type RunOutcome } from './agenda-runner.js';
+import { resolvePersonalConfig, isAgentMcp } from '../../../packages/core/src/mcp/mcp-catalogue.js';
+import { parseMemoryGraph, type MemoryGraph } from '../mcp/memory-graph.js';
+import { PeopleStore } from '../people/store.js';
+import { KanbanStore } from '../mcp/kanban/store.js';
+import { closeAllProjectDbs, closeProjectDb, dbPathFor } from '../store/project-db.js';
+import {
+  KANBAN_TOOL_NAMES, UPFRONT_KANBAN_TOOLS, handleKanbanCall, kanbanTools,
+} from '../mcp/kanban/tools.js';
+import {
+  PEOPLE_TOOL_NAMES, handlePeopleCall, peopleTools, type PeopleToolsContext,
+} from '../people/tools.js';
+import { canonicalModel, configFromEnv, createEmbedder, type FaceEmbedder } from '../people/embedder.js';
+import { getCatalogue, recordDiscoveredTools, RETIRED_SERVER_IDS } from '../../../packages/core/src/mcp/catalogue-store.js';
+import {
+  startMeeting as startMeetingFn,
+  makeResponseHandler as makeResponseHandlerFn,
+} from './meeting-runner.js';
+import * as sm from './scheduled-meetings.js';
+import { drainAgents } from './drain.js';
+import {
+  DISCOVER_TEAMS, FINISH_VISIT, REQUEST_VISIT, TEAMS_TOOL_NAMES,
+} from '../../../packages/core/src/tools/teams.js';
+import type { ToolDefinition } from '../../../packages/core/src/tools/types.js';
+import { formatTeams, type TeamDirectory } from '../teams/team-directory.js';
+
+/** What the orchestrator asks of the runner's visit coordinator. */
+export interface VisitTools {
+  /** Is this agent here on a visit from another team? */
+  isVisitor(agentName: string): boolean;
+  request(agentName: string, args: Record<string, unknown>): Promise<string>;
+  finish(agentName: string, args: Record<string, unknown>): Promise<string>;
+}
+import { needsNotice, serversIn, unmetNeeds } from '../teams/tool-needs.js';
+
+export type ProviderFactory = (providerName: string) => AIProvider;
+
+export interface OrchestratorConfig {
+  storePath?: string;
+  humanName?: string;
+  maxTasksPerAgent?: number;
+  projectsRoot?: string;
+  llmConcurrency?: number;
+  llmCallIntervalMs?: number;
+}
+
+/** Above this, a personal MCP server is worth warning the operator about. */
+const LARGE_PERSONAL_SERVER = 40;
+
+export class TeamOrchestrator {
+  private agents: Map<string, IAgent> = new Map();
+  private tasks: Map<string, Task> = new Map();
+  private meetings: Map<string, Meeting> = new Map();
+  private activeMeetingRooms: Map<string, MeetingRoom> = new Map();
+  private scheduledMeetingStore: MeetingStore | null = null;
+  private store: EventStore;
+  private humanName: string;
+  private projectsRoot: string;
+  private projectDir: string | null = null;
+  private projectGoal: string | null = null;
+  private onHumanEscalation: ((from: string, message: string, urgency: string) => void) | null = null;
+  private onHumanMeetingTurn: ((meetingId: string, turns: MeetingTurn[], topic: string) => Promise<string | null>) | null = null;
+  private onMeetingTurnPaced: ((meetingId: string, participant: string) => Promise<void>) | null = null;
+  /** Mutable ref so the store can be set/replaced after agents are registered. */
+  private emailAllowlistRef: { store: EmailAllowlistStore | null } = { store: null };
+  /** Per-agent personal MCP registries, keyed by lowercase agent name. */
+  private personalMcpByAgent = new Map<string, MCPRegistry>();
+  private agendaStoreRef: { store: AgendaStore | null } = { store: null };
+  private agendaRunner: AgendaRunner | null = null;
+
+  private agentStore: AgentDefinitionStore | null = null;
+  private rebuildTimer: ReturnType<typeof setTimeout> | null = null;
+  private ticketCommentHandler: ((agentName: string, text: string) => Promise<void>) | null = null;
+  private agentTicketIdResolver: ((agentName: string) => string | undefined) | null = null;
+  private agentTicketClearer: ((agentName: string) => void) | null = null;
+  private mcp = new MCPRegistry();
+  /** Tools that run on a connected device. Absent until a client registers one. */
+  private deviceTools: DeviceToolBridge | null = null;
+  /** Other teams this one could visit. Absent without a runner manager. */
+  private teamDirectory: TeamDirectory | null = null;
+
+  /**
+   * Who the team knows by sight.
+   *
+   * One register per project rather than per agent — "who is this" is a fact
+   * about the world, not about one agent's relationship with somebody. Built
+   * lazily because most projects never ask.
+   */
+  /**
+   * The project's board.
+   *
+   * One store, held here, because there used to be two: a subprocess with a
+   * KanbanStore and the API server with its own copy of the file handling,
+   * plus a watcher so each could notice the other's writes. One writer needs
+   * none of that.
+   */
+  private kanban: KanbanStore | null = null;
+  private kanbanLoaded: Promise<void> | null = null;
+
+  private people: PeopleStore | null = null;
+  private faceEmbedder: FaceEmbedder | null = null;
+  private faceEmbedderTried = false;
+  private llmSemaphore: Semaphore;
+  private lastSenderByAgent = new Map<string, string>();
+  private telemetryRecorder: ((entry: { agent: string; provider: string; model: string; promptLength: number; inputTokens: number; outputTokens: number; cost: number }) => void) | null = null;
+
+  constructor(config: OrchestratorConfig = {}) {
+    this.store = new EventStore(config.storePath ?? './team-events.jsonl');
+    this.humanName = config.humanName ?? 'Human';
+    this.projectsRoot = nodePath.resolve(config.projectsRoot ?? './projects');
+    this.llmSemaphore = new Semaphore(
+      config.llmConcurrency    ?? 2,
+      config.llmCallIntervalMs ?? 3000,
+    );
+  }
+
+  async init(): Promise<void> {
+    await this.store.init();
+    await mkdir(this.projectsRoot, { recursive: true });
+    await this.store.append('session_start', { humanName: this.humanName });
+  }
+
+  async initMeetingStore(filePath: string): Promise<void> {
+    this.scheduledMeetingStore = new MeetingStore(filePath);
+    await this.scheduledMeetingStore.load();
+  }
+
+  async initAgendaStore(filePath: string): Promise<void> {
+    const store = new AgendaStore(filePath);
+    await store.load();
+    this.agendaStoreRef.store = store;
+    this.agendaRunner?.stop();
+    this.agendaRunner = new AgendaRunner(
+      store,
+      (name, msg) => {
+        // Delivery to nobody only logs; for a scheduled run that is a failure to retry.
+        if (!this.hasAgentWithName(name)) return Promise.reject(new Error(`there is no agent "${name}" in this team`));
+        this.deliverToAgent(name, msg);
+        return Promise.resolve();
+      },
+      this.mcp,
+      (agentName) => this.personalMcpByAgent.get(agentName.toLowerCase()) ?? null,
+      undefined,
+      (agentName) => ({ human: this.humanName, email: this.getAgent(agentName)?.config.identity.email }),
+    );
+    this.agendaRunner.setWaiting((agentName) => this.isAway(agentName));
+    this.agendaRunner.start();
+  }
+
+  getAgendaStore(): AgendaStore | null { return this.agendaStoreRef.store; }
+
+  stopAgendaRunner(): void { this.agendaRunner?.stop(); }
+
+  /** Fire one agenda entry now, to try it — see AgendaRunner.runNow. */
+  runAgendaEntry(id: string): Promise<RunOutcome> {
+    if (!this.agendaRunner) return Promise.reject(new Error('The agenda is not running'));
+    return this.agendaRunner.runNow(id);
+  }
+
+  setAgentStore(store: AgentDefinitionStore): void { this.agentStore = store; }
+  getAgentStore(): AgentDefinitionStore | null { return this.agentStore; }
+
+  async addMCPServer(def: MCPServerDef): Promise<void> {
+    // Saved state and old definitions still name servers that are retired.
+    if (RETIRED_SERVER_IDS.includes(def.name)) {
+      log.info(`[MCP] "${def.name}" is no longer offered as a server — not starting it.`);
+      return;
+    }
+    await this.mcp.add(def);
+    await this.noteDiscoveredTools(def.name, this.mcp.getToolsForServers([def.name]));
+    await this.store.append('mcp_server_added', { name: def.name });
+    this.rebuildTeamContext();
+  }
+
+  /**
+   * Write a server's tool list back to the shared MCP catalogue.
+   *
+   * The runner is the only process that starts MCP servers, so it is the
+   * only one that can know what they offer. The Agent Library reads the same
+   * file, which is how its "what goes in the prompt" picker can list real
+   * tools without starting anything.
+   */
+  private async noteDiscoveredTools(serverId: string, tools: { name: string; description: string }[]): Promise<void> {
+    const prefix = `mcp__${serverId}__`;
+    await recordDiscoveredTools(serverId, tools.map(t => ({
+      name: t.name.startsWith(prefix) ? t.name.slice(prefix.length) : t.name,
+      description: t.description,
+    }))).catch((err: Error) => log.warn(`[MCP] Could not record tools for "${serverId}": ${err.message}`));
+  }
+
+  async removeMCPServer(name: string): Promise<void> {
+    await this.mcp.disconnect(name);
+    await this.store.append('mcp_server_removed', { name });
+  }
+
+  hasMCPServer(name: string): boolean {
+    return this.mcp.has(name);
+  }
+
+  setDeviceTools(bridge: DeviceToolBridge): void { this.deviceTools = bridge; }
+
+  /** The project's board, or null when there is no project yet. */
+  kanbanStore(): KanbanStore | null {
+    if (!this.projectDir) return null;
+    if (!this.kanban) {
+      this.kanban = new KanbanStore(nodePath.join(this.projectDir, 'kanban-board.json'));
+      this.kanbanLoaded = this.kanban.load();
+    }
+    return this.kanban;
+  }
+
+  /** Is this one of the board tools, and is there a board to run it against? */
+  isKanbanTool(name: string): boolean {
+    return KANBAN_TOOL_NAMES.includes(name) && this.kanbanStore() !== null;
+  }
+
+  /** Run one of the board tools. */
+  async callKanbanTool(name: string, args: Record<string, unknown>): Promise<string> {
+    const store = this.kanbanStore();
+    if (!store) return 'There is no project open, so there is no board.';
+    await this.kanbanLoaded;
+    const result = await handleKanbanCall(name, args, store);
+    return typeof result === 'string' ? result : JSON.stringify(result, null, 2);
+  }
+
+  /** The project's register of people, or null when there is no project yet. */
+  peopleStore(): PeopleStore | null {
+    if (!this.projectDir) return null;
+    if (!this.people) this.people = new PeopleStore(nodePath.join(this.projectDir, 'people.json'));
+    return this.people;
+  }
+
+  /**
+   * What an agent needs to recognise somebody.
+   *
+   * Returns null when no face model is configured, so the tools are simply not
+   * offered rather than offered and always failing.
+   */
+  private peopleContext(agentName: string): PeopleToolsContext | null {
+    const store = this.peopleStore();
+    const config = configFromEnv();
+    const model = canonicalModel(config);
+    if (!store || !model) return null;
+
+    // Only offered when something is actually connected that can embed a
+    // face. Without this, identify_person with no arguments would reach for
+    // a device that is not there and fail in a way the agent cannot act on.
+    const devices = this.deviceTools;
+    const canAsk = devices?.isDeviceTool(`${DEVICE_PREFIX}${FACE_TOOL}`) ?? false;
+
+    return {
+      store, model, config, agentName, embedder: this.faceEmbedder,
+      ...(canAsk ? { askDevice: () => devices!.askForData<number[]>(FACE_TOOL) } : {}),
+    };
+  }
+
+  /** Can the runner turn a photo into a face vector itself? */
+  canEmbedFaces(): boolean { return this.faceEmbedder !== null; }
+
+  /** Load the runner's own face embedder once, if one is configured. */
+  async prepareFaceEmbedder(): Promise<void> {
+    if (this.faceEmbedderTried) return;
+    this.faceEmbedderTried = true;
+    this.faceEmbedder = await createEmbedder(configFromEnv());
+  }
+
+  /** Run one of the people tools for an agent. */
+  async callPeopleTool(agentName: string, name: string, args: Record<string, unknown> = {}): Promise<string> {
+    const context = this.peopleContext(agentName);
+    if (!context) return 'Face recognition is not set up on this runner.';
+    return handlePeopleCall(context, name, args);
+  }
+
+  /**
+   * Is this one of the people tools, and can this runner actually run it?
+   *
+   * Both halves matter: the name alone would swallow a call on a runner
+   * with no face model, where it should fall through and be reported as an
+   * unknown tool rather than silently doing nothing.
+   */
+  isPeopleTool(name: string): boolean {
+    return (PEOPLE_TOOL_NAMES as readonly string[]).includes(name)
+      && this.peopleContext('') !== null;
+  }
+  getDeviceTools(): DeviceToolBridge | null { return this.deviceTools; }
+
+  /** Where to find other teams; null without a runner manager. */
+  setTeamDirectory(directory: TeamDirectory | null): void { this.teamDirectory = directory; }
+
+  /** Visits to other teams and from them; null without a Project Server to coordinate them. */
+  private visitTools: VisitTools | null = null;
+  setVisitTools(tools: VisitTools | null): void { this.visitTools = tools; }
+
+  /** The teams tools `agentName` has now: finding and visiting teams at home, finishing a visit on one. */
+  private teamsToolsFor(agentName: string): ToolDefinition[] {
+    if (this.visitTools?.isVisitor(agentName)) return [FINISH_VISIT];
+    if (!this.teamDirectory?.available()) return [];
+    return this.visitTools ? [DISCOVER_TEAMS, REQUEST_VISIT] : [DISCOVER_TEAMS];
+  }
+
+  /** Is this a teams tool, and may this team use it now? Its visit policy can change while it runs. */
+  isTeamsTool(name: string): boolean {
+    if (!(TEAMS_TOOL_NAMES as readonly string[]).includes(name)) return false;
+    return name === FINISH_VISIT.name ? Boolean(this.visitTools) : Boolean(this.teamDirectory?.available());
+  }
+
+  private async callTeamsTool(agentName: string, name: string, args: Record<string, unknown>): Promise<string> {
+    if (!this.teamsToolsFor(agentName).some((t) => t.name === name)) {
+      return name === FINISH_VISIT.name
+        ? 'You are not on a visit, so there is nothing to finish.'
+        : `${name} is not available to you here.`;
+    }
+    try {
+      if (name === DISCOVER_TEAMS.name) return formatTeams(await this.teamDirectory!.discover(String(args['intent'] ?? '')));
+      if (name === REQUEST_VISIT.name) return await this.visitTools!.request(agentName, args);
+      return await this.visitTools!.finish(agentName, args);
+    } catch (err) {
+      return `${name} did not work: ${(err as Error).message}. Try again later.`;
+    }
+  }
+
+  /** The project's board, once it has loaded; null when no project is open. */
+  async readyBoard(): Promise<KanbanStore | null> {
+    const store = this.kanbanStore();
+    if (!store) return null;
+    await this.kanbanLoaded;
+    return store;
+  }
+
+  /** Names of the shared MCP servers currently connected for the team. */
+  mcpServerNames(): string[] {
+    return this.mcp.serverNames();
+  }
+
+  clearTeam(): void {
+    this.agents.clear();
+    this.tasks.clear();
+    this.meetings.clear();
+  }
+
+  async shutdown(snapshotPath?: string): Promise<void> {
+    if (snapshotPath) await this.saveState(snapshotPath);
+    for (const agent of this.agents.values()) agent.stop();
+    this.agendaRunner?.stop();
+    await this.mcp.disconnectAll();
+    await Promise.all(Array.from(this.personalMcpByAgent.values()).map(r => r.disconnectAll()));
+    this.personalMcpByAgent.clear();
+    await this.store.append('session_end', {});
+    // Last, and after that final append: the event store writes into it.
+    closeAllProjectDbs();
+  }
+
+  // ── State persistence ──────────────────────────────────────────────────────
+
+  async saveState(filePath: string): Promise<void> {
+    if (this.agentStore) {
+      // V2: each agent's config goes in the project file with its history. It
+      // used to go back into the library, which kept every project's copy of an
+      // agent identical to its template — no project could tailor one.
+      const agentIds: string[]                      = [];
+      const agents: Record<string, AgentDefinition> = {};
+      const agentHistories: Record<string, HistoryEntry[]> = {};
+      const agentThreads: Record<string, Record<string, HistoryEntry[]>> = {};
+      const keepsSecrets = !!(this.agentStore.setSecrets && this.agentStore.secretsFor);
+      for (const agent of this.agents.values()) {
+        agentIds.push(agent.id);
+        const threads = serializeThreads(agent);
+        agentHistories[agent.id] = threads['general'] ?? [];
+        agentThreads[agent.id]   = threads;
+        const assigned = assignedActionIds(this.agendaStoreRef.store, agent.name);
+        // Only a store without a secrets file keeps credentials in the project.
+        const def = definitionOf(agent, assigned, { withCredentials: !keepsSecrets });
+        agents[agent.id] = def;
+        // Credentials stay on this machine; a restore, and a team built from
+        // the project definition, pick them up from here by instance id.
+        await this.keepSecrets(agent);
+      }
+      const snapshot: TeamSnapshotV2 = {
+        version: 2,
+        savedAt: new Date().toISOString(),
+        humanName: this.humanName,
+        agentIds,
+        agents,
+        agentHistories,
+        agentThreads,
+        tasks: Array.from(this.tasks.values()),
+        meetings: Array.from(this.meetings.values()),
+        mcpServers: this.portableServerDefs(),
+      };
+      const tmp = filePath + '.tmp';
+      await writeFile(tmp, JSON.stringify(snapshot, null, 2), 'utf-8');
+      await rename(tmp, filePath);
+      await this.store.append('state_saved', { path: filePath, agentCount: agentIds.length });
+    } else {
+      // V1: all data in one file (legacy / no global store wired)
+      const agentSnapshots: AgentSnapshot[] = Array.from(this.agents.values()).map((agent) => ({
+        id: agent.id,
+        identity: agent.config.identity,
+        hatType: agent.config.hatType,
+        model: agent.config.model,
+        providerName: agent.config.provider.name,
+        teamContext: agent.config.teamContext,
+        enabledMcpServers: agent.config.enabledMcpServers,
+        personalMcpCredentials: agent.config.personalMcpCredentials,
+        history: serializeMessages(agent.getHistory()),
+      }));
+      const snapshot: TeamSnapshotV1 = {
+        version: 1,
+        savedAt: new Date().toISOString(),
+        humanName: this.humanName,
+        agents: agentSnapshots,
+        tasks: Array.from(this.tasks.values()),
+        meetings: Array.from(this.meetings.values()),
+        mcpServers: this.portableServerDefs(),
+      };
+      const tmp = filePath + '.tmp';
+      await writeFile(tmp, JSON.stringify(snapshot, null, 2), 'utf-8');
+      await rename(tmp, filePath);
+      await this.store.append('state_saved', { path: filePath, agentCount: agentSnapshots.length });
+    }
+    log.info(`\n[Team] State saved to ${filePath}`);
+  }
+
+  async loadState(filePath: string, providerFactory: ProviderFactory): Promise<MCPServerDef[]> {
+    const raw = await readFile(filePath, 'utf-8');
+    let snapshot: TeamSnapshot;
+    try {
+      snapshot = JSON.parse(raw) as TeamSnapshot;
+    } catch (err) {
+      throw new Error(`State file "${filePath}" is corrupt (${(err as Error).message}). Delete it to start fresh.`);
+    }
+
+    if (snapshot.version !== 1 && snapshot.version !== 2) {
+      throw new Error(`Unsupported snapshot version: ${(snapshot as TeamSnapshot).version}`);
+    }
+
+    if (snapshot.version === 1) {
+      // V1: load embedded agent configs + histories
+      for (const snap of (snapshot as TeamSnapshotV1).agents) {
+        const provider = providerFactory(snap.providerName);
+        const config: AgentConfig = {
+          id: snap.id,
+          identity: snap.identity,
+          hatType: Array.isArray(snap.hatType) ? snap.hatType : [snap.hatType as HatType],
+          provider,
+          model: snap.model,
+          teamContext: snap.teamContext,
+          enabledMcpServers: snap.enabledMcpServers,
+          personalMcpCredentials: snap.personalMcpCredentials,
+        };
+        const agent = this.registerAgent(config);
+        agent.setHistory(snap.history);
+      }
+      // The next save writes a v2 snapshot, which carries these configs itself.
+      const s = snapshot as TeamSnapshotV1;
+      for (const task of s.tasks) this.tasks.set(task.id, task);
+      for (const meeting of s.meetings) this.meetings.set(meeting.id, meeting);
+      if (s.humanName) this.humanName = s.humanName;
+      await this.store.append('state_loaded', { path: filePath, agentCount: s.agents.length });
+      log.info(`[Team] State restored from ${filePath} (v1, saved ${s.savedAt})`);
+      return s.mcpServers;
+    }
+
+    // V2: configs and histories from the snapshot; older snapshots kept their
+    // configs in the store
+    const s = snapshot as TeamSnapshotV2;
+    let loadedCount = 0;
+    for (const agentId of s.agentIds) {
+      const def = s.agents?.[agentId] ?? this.agentStore?.get(agentId);
+      if (!def) {
+        log.warn(`[Team] Agent "${agentId}" not found in the snapshot or the store — skipping`);
+        continue;
+      }
+      // A copy saved under another id: skip it whole rather than let its
+      // history overwrite the first one's. The next save drops it.
+      if (this.findByName(def.identity.name)) {
+        log.warn(`[Team] Dropping a duplicate of "${def.identity.name}" (${agentId}) from the saved team`);
+        continue;
+      }
+      const isExternal = !!def.externalEndpoint;
+      const provider = isExternal ? EXTERNAL_PROVIDER : providerFactory(def.providerName);
+      // Older snapshots carry credentials; newer ones leave them in the secrets file.
+      const config = configFrom(def, provider, def.personalMcpCredentials
+        ?? this.agentStore?.secretsFor?.(def.id, def.templateId).personalMcpCredentials);
+      const agent = this.registerAgent(config);
+      if (s.agentThreads?.[agentId]) {
+        agent.setAllThreadHistories(s.agentThreads[agentId]);
+      } else {
+        agent.setHistory(s.agentHistories[agentId] ?? []);
+      }
+      loadedCount++;
+    }
+    for (const task of s.tasks) this.tasks.set(task.id, task);
+    for (const meeting of s.meetings) this.meetings.set(meeting.id, meeting);
+    if (s.humanName) this.humanName = s.humanName;
+
+    // For external agents whose history is empty (e.g. saved before history
+    // serialisation was fixed), reconstruct from events since the last save.
+    await this.backfillExternalAgentHistory(s.savedAt);
+
+    await this.store.append('state_loaded', { path: filePath, agentCount: loadedCount });
+    log.info(`[Team] State restored from ${filePath} (v2, saved ${s.savedAt})`);
+    return s.mcpServers;
+  }
+
+  /**
+   * For any external agent whose history is empty after state load, replay
+   * events from the event log that arrived after `savedAt` to recover
+   * messages that were recorded but not yet persisted.
+   */
+  private async backfillExternalAgentHistory(savedAt: string): Promise<void> {
+    const externalAgents = [...this.agents.values()].filter(
+      a => a.config.externalEndpoint && a.getHistory().length === 0
+    );
+    if (externalAgents.length === 0) return;
+
+    const events = await this.store.readAll();
+    const unsaved = events.filter(e => e.ts > savedAt);
+
+    for (const agent of externalAgents) {
+      const name = agent.name;
+      const relevant = unsaved.filter(e =>
+        (e.type === 'human_message'  && e['to']   === name) ||
+        (e.type === 'direct_message' && e['to']   === name) ||
+        (e.type === 'agent_response' && e['from'] === name)
+      );
+      if (relevant.length === 0) continue;
+
+      const history: HistoryEntry[] = relevant.map(e => {
+        if (e.type === 'agent_response') {
+          return { role: 'assistant' as const, content: String(e['content'] ?? ''), timestamp: e.ts };
+        }
+        const from    = String(e['from'] ?? 'human');
+        const content = String(e['content'] ?? '');
+        const prefix  = from !== 'human' ? `[MESSAGE from ${from}] ` : '';
+        return { role: 'user' as const, content: prefix + content, timestamp: e.ts };
+      });
+
+      agent.setHistory(history);
+      log.info(`[Team] Backfilled ${history.length} messages for ${name} from event log`);
+    }
+  }
+
+  // ── Agent registration ─────────────────────────────────────────────────────
+
+  setTelemetryRecorder(fn: NonNullable<typeof this.telemetryRecorder>): void {
+    this.telemetryRecorder = fn;
+    for (const agent of this.agents.values()) agent.setTelemetryRecorder(fn);
+  }
+
+  setHumanMeetingTurnHandler(fn: NonNullable<typeof this.onHumanMeetingTurn>): void {
+    this.onHumanMeetingTurn = fn;
+  }
+
+  setMeetingTurnPacer(fn: NonNullable<typeof this.onMeetingTurnPaced>): void {
+    this.onMeetingTurnPaced = fn;
+  }
+
+  setEmailAllowlistStore(store: EmailAllowlistStore | null): void {
+    this.emailAllowlistRef.store = store;
+  }
+
+  setTicketCommentHandler(
+    handler: (agentName: string, text: string) => Promise<void>,
+    resolver: (agentName: string) => string | undefined,
+    clearer: (agentName: string) => void,
+  ): void {
+    this.ticketCommentHandler = handler;
+    this.agentTicketIdResolver = resolver;
+    this.agentTicketClearer = clearer;
+  }
+
+  async enablePersonalMcp(agentName: string, serverId: string, credentials: Record<string, string>): Promise<void> {
+    const agent = this.requireAgent(agentName);
+    const entry = getCatalogue().find(e => e.id === serverId && isAgentMcp(e));
+    if (!entry) throw new Error(`"${serverId}" is not a personal MCP catalogue entry.`);
+    if (!agent.config.personalMcpCredentials) agent.config.personalMcpCredentials = {};
+    agent.config.personalMcpCredentials[serverId] = credentials;
+    // Remove from disabled list so it (re-)starts
+    agent.config.disabledPersonalMcpServers = (agent.config.disabledPersonalMcpServers ?? []).filter(id => id !== serverId);
+    // Force reconnect — user may have updated credentials
+    await this.startPersonalMcp(agentName, serverId, credentials, true);
+  }
+
+  async disablePersonalMcp(agentName: string, serverId: string): Promise<void> {
+    const agent = this.requireAgent(agentName);
+    // Mark as disabled but keep credentials so they can be restored on re-enable
+    if (!agent.config.disabledPersonalMcpServers) agent.config.disabledPersonalMcpServers = [];
+    if (!agent.config.disabledPersonalMcpServers.includes(serverId)) {
+      agent.config.disabledPersonalMcpServers.push(serverId);
+    }
+    const personalMcp = this.personalMcpByAgent.get(agentName.toLowerCase());
+    if (personalMcp?.has(serverId)) await personalMcp.disconnect(serverId);
+  }
+
+  getPersonalMcpCredentials(agentName: string): Record<string, Record<string, string>> {
+    return this.findByName(agentName)?.config.personalMcpCredentials ?? {};
+  }
+
+  getDisabledPersonalMcpServers(agentName: string): Set<string> {
+    return new Set(this.findByName(agentName)?.config.disabledPersonalMcpServers ?? []);
+  }
+
+  /**
+   * Lend the calendar the agent's own email settings.
+   *
+   * Sending an invitation needs SMTP, which the agent has already given to its
+   * email server. Declaring the same variables on the calendar would mean
+   * typing the same host and password twice and keeping them in step
+   * afterwards, so they are borrowed instead. Anything set on the calendar
+   * itself wins, for an agent whose diary sends from a different address.
+   */
+  private withBorrowedMail(
+    agentName: string, serverId: string, credentials: Record<string, string>,
+  ): Record<string, string> {
+    if (serverId !== 'calendar') return credentials;
+    const all = this.findByName(agentName)?.config.personalMcpCredentials ?? {};
+    const mail = all['email-imap'] ?? all['email-pop3'];
+    if (!mail) return credentials;
+
+    const borrowed = Object.fromEntries(
+      Object.entries(mail).filter(([k]) => k.startsWith('MCP_EMAIL_')),
+    );
+    return { ...borrowed, ...credentials };
+  }
+
+  private async startPersonalMcp(agentName: string, serverId: string, credentials: Record<string, string>, force = false): Promise<void> {
+    const entry = getCatalogue().find(e => e.id === serverId);
+    if (!entry) return;
+    const key = agentName.toLowerCase();
+    if (!this.personalMcpByAgent.has(key)) this.personalMcpByAgent.set(key, new MCPRegistry());
+    const personalMcp = this.personalMcpByAgent.get(key)!;
+    // HTTP MCPs have no local process — skip reconnect if already live (unless credentials changed)
+    if (!force && entry.config.transport === 'http' && personalMcp.has(serverId)) {
+      log.info(`[Team] Personal HTTP MCP "${serverId}" already connected for ${agentName} — skipping`);
+      return;
+    }
+    if (personalMcp.has(serverId)) await personalMcp.disconnect(serverId);
+    const agentDir = this.agentDir(agentName);
+    // The memory server writes its file but will not create the folder, so a
+    // first run would fail on a path that has never existed.
+    if (agentDir) await mkdir(agentDir, { recursive: true }).catch(() => {});
+    else if (JSON.stringify(entry.config).includes('{AGENT_DIR}')) {
+      log.warn(`[Team] Personal MCP "${serverId}" for ${agentName} keeps per-agent files, but there is no `
+        + 'agent folder (no project open?) — what it saves will not be kept with the project.');
+    }
+    const config = resolvePersonalConfig(entry, this.withBorrowedMail(agentName, serverId, credentials), agentDir);
+    const credKeys = Object.keys(credentials);
+    log.info(`[Team] Personal MCP "${serverId}" starting for ${agentName} — credential keys: [${credKeys.join(', ')}]`);
+    await personalMcp.add({ name: serverId, config, toolArgMappings: entry.toolArgMappings });
+    const discovered = personalMcp.getToolsForServers([serverId]);
+    await this.noteDiscoveredTools(serverId, discovered);
+    const toolCount = discovered.length;
+    const curated = this.findByName(agentName)?.config.upfrontTools !== undefined;
+    log.info(`[Team] Personal MCP "${serverId}" started for ${agentName} — ${toolCount} tool(s)`);
+    if (!curated && toolCount > LARGE_PERSONAL_SERVER) {
+      log.warn(`[Team] "${serverId}" is large: ${toolCount} tool schemas ride on every one of ${agentName}'s requests.`
+        + ' Set "tools sent to the model" on the agent template to send only the ones it uses.');
+    }
+  }
+
+  /** Shared servers as saved: nothing in them that came from this runner's environment. */
+  private portableServerDefs(): MCPServerDef[] {
+    return this.mcp.getServerDefs().map((d) => ({ ...d, config: portableConfig(d.config) }));
+  }
+
+  /** File an agent's credentials and team context in this machine's secrets, when they changed. */
+  private async keepSecrets(agent: IAgent): Promise<void> {
+    const store = this.agentStore;
+    if (!store?.setSecrets) return;
+    const wanted = {
+      ...(agent.config.personalMcpCredentials && { personalMcpCredentials: agent.config.personalMcpCredentials }),
+      ...(agent.config.teamContext && { teamContext: agent.config.teamContext }),
+    };
+    const held = store.secretsFor?.(agent.id) ?? {};
+    if (Object.keys(wanted).length === 0 && Object.keys(held).length === 0) return;
+    if (JSON.stringify(wanted) === JSON.stringify(held)) return;
+    await store.setSecrets(agent.id, wanted);
+  }
+
+  /** Every MCP tool this agent can reach, by where it comes from. */
+  private availableToolsFor(agent: IAgent): AvailableTools {
+    const ids = agent.config.enabledMcpServers;
+
+    // Split by which list they go in rather than by asking every project
+    // to configure selectors: personal is upfront, shared is searchable.
+    const board = this.kanbanStore();
+    const kanban = board ? kanbanTools().map((t) => ({
+      name: t.name, description: t.description, parameters: t.inputSchema,
+    })) : [];
+    const upfrontKanban = new Set<string>(UPFRONT_KANBAN_TOOLS);
+
+    const shared = [
+      ...(ids == null ? this.mcp.getAllTools() : this.mcp.getToolsForServers(ids)),
+      ...kanban.filter((t) => !upfrontKanban.has(t.name)),
+    ];
+
+    // A device tool counts as personal: it belongs to this user's own
+    // phone, there are few of them, and an agent that has to discover
+    // the camera will not think to look.
+    const context = this.peopleContext(agent.name);
+
+    const personal = [
+      ...(this.personalMcpByAgent.get(agent.name.toLowerCase())?.getAllTools() ?? []),
+      ...(this.deviceTools?.toolDefinitions() ?? []),
+      // Knowing who you are speaking to is not something to go looking
+      // for mid-conversation, so these sit upfront with the device tools.
+      ...(context ? peopleTools(context).map((t) => ({
+        name: t.name, description: t.description, parameters: t.inputSchema,
+      })) : []),
+      // Upfront too: an agent that has never heard other teams exist will
+      // not think to search for a way to find one.
+      ...this.teamsToolsFor(agent.name),
+    ];
+
+    // Reading the board and moving a ticket across it are the hot path,
+    // so they are sent whatever the template selects. The rest —
+    // blockers, deletion, reassignment — are occasional, and tool search
+    // finds them when they are wanted.
+    const always = kanban.filter((t) => upfrontKanban.has(t.name));
+    return { personal, shared, always };
+  }
+
+  /**
+   * What an agent can reach, and what goes in every call — with the
+   * selection it has, or with `selectors` to see what a change would do.
+   */
+  agentToolSet(name: string, selectors?: string[] | null): { available: AvailableTools; split: AgentToolSet } {
+    const agent = this.requireAgent(name);
+    const available = this.availableToolsFor(agent);
+    const chosen = selectors === undefined ? agent.config.upfrontTools : (selectors ?? undefined);
+    return { available, split: splitToolSet(available, chosen) };
+  }
+
+  /**
+   * Where one agent's own files live — its memory, and whatever else only it
+   * owns. Keyed by instance id rather than name, so renaming an agent does
+   * not lose what it remembered.
+   */
+  agentDir(agentName: string): string | undefined {
+    if (!this.projectDir) return undefined;
+    const id = this.findByName(agentName)?.id;
+    return id ? nodePath.join(this.projectDir, 'agents', id) : undefined;
+  }
+
+  /**
+   * Read an agent's memory graph, by asking the memory server it owns.
+   *
+   * Live rather than off disk: the server holds the graph in memory between
+   * writes, so the file lags behind what the agent actually knows.
+   */
+  async readAgentMemory(agentName: string): Promise<MemoryGraph | null> {
+    const personal = this.personalMcpByAgent.get(agentName.toLowerCase());
+    if (!personal?.has('memory')) return null;
+    try {
+      return parseMemoryGraph(await personal.callTool('mcp__memory__read_graph', {}));
+    } catch (err) {
+      log.warn(`[Team] Could not read ${agentName}'s memory: ${(err as Error).message}`);
+      return null;
+    }
+  }
+
+  /** Where the current project keeps its files, if there is one. */
+  getProjectDir(): string | null { return this.projectDir; }
+
+  setProjectDir(dir: string | null): void {
+    // The register lives in the project, so moving project has to drop it —
+    // otherwise the team carries the last project's faces into this one.
+    if (dir !== this.projectDir) {
+      if (this.projectDir) {
+        closeProjectDb(dbPathFor(nodePath.join(this.projectDir, 'team-events.jsonl')));
+      }
+      this.people = null;
+      this.kanban = null;
+      this.kanbanLoaded = null;
+    }
+    this.projectDir = dir;
+    for (const agent of this.agents.values()) agent.updateProjectDir(dir);
+  }
+
+  setProjectGoal(goal: string | null): void {
+    this.projectGoal = goal;
+    for (const agent of this.agents.values()) agent.updateProjectGoal(goal);
+  }
+
+  setHumanName(name: string): void {
+    this.humanName = name || 'Human';
+    this.rebuildTeamContext();
+  }
+
+  getProjectGoal(): string | null { return this.projectGoal; }
+  getHumanName(): string { return this.humanName; }
+
+  registerAgent(config: AgentConfig): IAgent {
+    // Names identify agents everywhere — messages, mentions, findByName — so a
+    // second agent of the same name is the same agent arriving twice, not a
+    // new one. That is how one agent became five across project switches.
+    const existing = this.findByName(config.identity.name);
+    if (existing) {
+      log.warn(`[Team] "${config.identity.name}" is already in the team — not adding it again.`);
+      return existing;
+    }
+    if (this.projectDir) config = { ...config, projectDir: this.projectDir };
+    if (this.projectGoal) config = { ...config, projectGoal: this.projectGoal };
+
+    const agent: IAgent = config.externalEndpoint
+      ? new ExternalAgent(config)
+      : new Agent(config);
+
+    agent.setResponseHandler(makeResponseHandlerFn({
+      store: this.store,
+      deliverToAgent: (name, msg) => this.deliverToAgent(name, msg),
+      buildMessage,
+    }));
+
+    if (!config.externalEndpoint) {
+      agent.setToolExecutor(buildToolExecutor(this.makeToolCallContext(), this.mcp));
+      let warnedSelectors = false;
+      agent.setExtraToolsProvider(() => {
+        const available = this.availableToolsFor(agent);
+        const { personal, shared, always } = available;
+
+        // Checked here rather than at registration because this is the first
+        // point where the servers have actually connected and reported.
+        if (!warnedSelectors && (personal.length || shared.length)) {
+          warnedSelectors = true;
+          const missing = unmatchedSelectors({ personal, shared, always }, agent.config.upfrontTools);
+          if (missing.length) {
+            log.warn(`[Team] ${agent.name} asks for tools that do not exist: ${missing.join(', ')}.`
+              + ' They will never be sent to the model.');
+          }
+        }
+        this.checkNeeds(agent, [...personal, ...shared, ...(always ?? [])].map((t) => t.name));
+        return splitToolSet(available, agent.config.upfrontTools);
+      });
+      agent.setLLMSemaphore(this.llmSemaphore);
+      if (this.telemetryRecorder) agent.setTelemetryRecorder(this.telemetryRecorder);
+      // In the team before its servers start: startPersonalMcp finds the
+      // agent's folder by name, synchronously. Started first, it found no
+      // agent, {AGENT_DIR} was dropped, and the memory server was left with a
+      // bare "memory.json" — written inside the npx cache, shared by every
+      // agent, and gone whenever the container was recreated.
+      this.agents.set(agent.id, agent);
+      if (config.personalMcpCredentials) {
+        const disabled = new Set(config.disabledPersonalMcpServers ?? []);
+        for (const [serverId, creds] of Object.entries(config.personalMcpCredentials)) {
+          if (disabled.has(serverId)) continue;
+          this.startPersonalMcp(agent.name, serverId, creds).catch((err: Error) => {
+            log.warn(`[Team] Personal MCP "${serverId}" for ${agent.name} failed to start:`, err.message);
+          });
+        }
+      }
+    }
+
+    this.agents.set(agent.id, agent);
+    this.rebuildTeamContext();
+    return agent;
+  }
+
+  /** Deliver a callback response to an external agent. */
+  async deliverExternalCallback(agentId: string, messageId: string, response: string): Promise<void> {
+    const agent = this.agents.get(agentId);
+    if (!agent) throw new Error(`Agent "${agentId}" not found`);
+    if (typeof agent.handleExternalCallback !== 'function') {
+      throw new Error(`Agent "${agentId}" is not an external agent`);
+    }
+    await agent.handleExternalCallback(messageId, response);
+  }
+
+
+  getAgent(name: string): IAgent | undefined { return this.findByName(name); }
+  findById(id: string): IAgent | undefined { return this.agents.get(id); }
+  /** Returns the stable UUID for an agent name, or undefined if not found. */
+  agentIdForName(name: string): string | undefined { return this.findByName(name)?.id; }
+  listAgents(): IAgent[] { return Array.from(this.agents.values()); }
+
+  /** Clear tasks and agent histories while keeping agent definitions. */
+  stopAllAgents(): void {
+    for (const agent of this.agents.values()) agent.stop();
+  }
+
+  /**
+   * Stop the team for shutting down: no scheduled actions fire, no agent takes
+   * new work, and turns in progress get up to `timeoutMs` to finish. Returns
+   * the agents still busy when time ran out.
+   */
+  drain(timeoutMs: number): Promise<string[]> {
+    this.stopAgendaRunner();
+    return drainAgents([...this.agents.values()], timeoutMs);
+  }
+
+  clearProject(): void {
+    this.tasks.clear();
+    this.meetings.clear();
+    for (const agent of this.agents.values()) agent.clearAllThreads();
+  }
+
+  updateAgentConfig(name: string, provider: AIProvider, model: string): void {
+    this.requireAgent(name).setProvider(provider, model);
+  }
+
+  updateAgentMaxContextTokens(name: string, maxContextTokens: number | undefined): void {
+    this.requireAgent(name).setMaxContextTokens(maxContextTokens);
+  }
+
+  updateAgentMaxCostPerHour(name: string, maxCostPerHour: number | undefined): void {
+    this.requireAgent(name).setMaxCostPerHour(maxCostPerHour);
+  }
+
+  updateAgentUpfrontTools(name: string, selectors: string[] | undefined): void {
+    this.requireAgent(name).setUpfrontTools(selectors);
+  }
+
+  updateAgentPromptSettings(name: string, instructions: string | undefined, promptMode: PromptMode | undefined): void {
+    this.requireAgent(name).setPromptSettings(instructions, promptMode);
+  }
+
+  changeAgentHat(name: string, hatTypes: HatType[]): void {
+    this.requireAgent(name).setHat(hatTypes);
+    this.rebuildTeamContext();
+  }
+
+  /** Rename an agent; its scheduled tasks and its own MCP servers go with it. */
+  async renameAgent(oldName: string, newName: string): Promise<void> {
+    const agent = this.requireAgent(oldName);
+    const trimmed = newName.trim();
+    if (!trimmed) throw new Error('Name cannot be empty');
+    if (this.hasAgentWithName(trimmed) && trimmed !== oldName) throw new Error(`Agent "${trimmed}" already exists`);
+    agent.rename(trimmed);
+    const personalMcp = this.personalMcpByAgent.get(oldName.toLowerCase());
+    if (personalMcp) {
+      this.personalMcpByAgent.delete(oldName.toLowerCase());
+      this.personalMcpByAgent.set(trimmed.toLowerCase(), personalMcp);
+    }
+    this.rebuildTeamContext();
+    await this.agendaStoreRef.store?.renameAgent(oldName, trimmed);
+  }
+
+  updateAgentSpecialisation(name: string, specialisation: string | undefined): void {
+    this.requireAgent(name).setSpecialisation(specialisation);
+    this.rebuildTeamContext();
+  }
+
+  updateAgentIdentity(name: string, visualDescription: string | undefined, backstory: string | undefined): void {
+    this.requireAgent(name).setIdentity(visualDescription, backstory);
+  }
+
+  updateAgentAvatar(name: string, avatar: string | undefined): void { this.requireAgent(name).setAvatar(avatar); }
+  updateAgentBackground(name: string, background: string | undefined): void { this.requireAgent(name).setBackground(background); }
+  updateAgentVoice(name: string, voice: string | undefined, speakerName: string | undefined): void { this.requireAgent(name).setVoice(voice, speakerName); }
+  updateAgentEmail(name: string, email: string | undefined): void { this.requireAgent(name).config.identity.email = email || undefined; }
+
+  updateAgentMcpServers(name: string, serverIds: string[] | undefined): void {
+    this.requireAgent(name).config.enabledMcpServers = serverIds;
+  }
+
+  updateAgentDisabledPersonalMcp(name: string, serverIds: string[] | undefined): void {
+    this.requireAgent(name).config.disabledPersonalMcpServers = serverIds;
+  }
+
+  updateAgentNeeds(name: string, needs: AgentConfig['needs']): void {
+    this.requireAgent(name).config.needs = needs;
+  }
+
+  /** The required servers each agent was last told were missing, so it is told once, not every turn. */
+  private readonly toldMissing = new Map<string, string>();
+
+  /**
+   * Tell an agent, and the dashboard, when servers it cannot work without are
+   * not among the tools it has. Again only when what is missing changes.
+   */
+  private checkNeeds(agent: IAgent, toolNames: string[]): void {
+    const reachable = serversIn(toolNames);
+    for (const name of this.mcp.serverNames()) reachable.add(name.toLowerCase());
+    for (const name of this.personalMcpByAgent.get(agent.name.toLowerCase())?.serverNames() ?? []) {
+      reachable.add(name.toLowerCase());
+    }
+    const { required } = unmetNeeds(agent.config.needs, reachable);
+    const key = required.join(',');
+    if ((this.toldMissing.get(agent.id) ?? '') === key) return;
+    this.toldMissing.set(agent.id, key);
+    if (required.length === 0) return;
+    agent.notice(needsNotice(required, this.isTeamsTool(DISCOVER_TEAMS.name)));
+    log.warn(`[Team] ${agent.name} needs ${required.join(', ')}, which ${required.length === 1 ? 'is' : 'are'} not available`);
+    void this.store.append('needs_unmet', { agent: agent.name, missing: required });
+  }
+
+  /** Remove an agent, and its scheduled tasks — left behind, they kept firing for nobody. */
+  async removeAgent(name: string): Promise<void> {
+    const agent = this.takeOffTeam(name);
+    await this.agendaStoreRef.store?.removeAgent(agent.name);
+  }
+
+  /** Stop running an agent here, without touching what it has scheduled. */
+  private takeOffTeam(name: string): IAgent {
+    const agent = this.requireAgent(name);
+    agent.stop();
+    this.agents.delete(agent.id);
+    const personalMcp = this.personalMcpByAgent.get(name.toLowerCase());
+    if (personalMcp) {
+      personalMcp.disconnectAll().catch(() => {});
+      this.personalMcpByAgent.delete(name.toLowerCase());
+    }
+    this.rebuildTeamContext();
+    return agent;
+  }
+
+  /** Agents away on a visit, by lower-cased name: their place is kept, and their scheduled actions wait. */
+  private readonly away = new Map<string, string>();
+
+  /**
+   * An agent leaving on a visit: it stops running here, but keeps its place.
+   * Its scheduled actions stay, waiting until it is back, and are not pruned.
+   */
+  setAside(name: string): void {
+    const agent = this.takeOffTeam(name);
+    this.away.set(agent.name.toLowerCase(), agent.name);
+  }
+
+  /** Mark agents away without their being here first, as when a team opens with them gone. */
+  markAway(names: string[]): void { for (const n of names) this.away.set(n.toLowerCase(), n); }
+
+  /** An agent back from a visit: its scheduled actions run again. */
+  welcomeBack(name: string): void { this.away.delete(name.toLowerCase()); }
+
+  isAway(name: string): boolean { return this.away.has(name.toLowerCase()); }
+
+  /**
+   * Drop scheduled tasks of agents no longer on the team. Run once the team is
+   * loaded. An empty team is left alone: that more likely means the team
+   * failed to load than that every agent was deleted. An agent away on a
+   * visit is still on it.
+   */
+  async pruneAgenda(): Promise<number> {
+    const store = this.agendaStoreRef.store;
+    const names = [...this.listAgents().map(a => a.name), ...this.away.values()];
+    if (!store || names.length === 0) return 0;
+    const removed = await store.keepOnlyAgents(names);
+    for (const e of removed) log.info(`[Agenda] Removed "${e.label}" — its agent "${e.agentName}" is no longer on the team`);
+    return removed.length;
+  }
+
+  // ── Human interface ────────────────────────────────────────────────────────
+
+  onEvent(fn: (event: import('../store/event-store.js').StoredEvent) => void): () => void {
+    return this.store.subscribe(fn);
+  }
+
+  /**
+   * Every built-in tool each agent has: those sent in every call, those it
+   * finds with search_tools (onDemand), and the teams tools it has now.
+   */
+  getToolInfo() {
+    const toolMeta = new Map<string, { description: string; onDemand: boolean; agents: string[] }>();
+    for (const agent of this.agents.values()) {
+      const always = new Set(getToolsForHat(agent.config.hatType).map((t) => t.name));
+      for (const tool of [...getAllToolsForHat(agent.config.hatType), ...this.teamsToolsFor(agent.name)]) {
+        if (!toolMeta.has(tool.name)) {
+          const onDemand = !always.has(tool.name) && !(TEAMS_TOOL_NAMES as readonly string[]).includes(tool.name);
+          toolMeta.set(tool.name, { description: tool.description, onDemand, agents: [] });
+        }
+        toolMeta.get(tool.name)!.agents.push(agent.name);
+      }
+    }
+    return {
+      builtin: Array.from(toolMeta.entries()).map(([name, meta]) => ({
+        name,
+        description: meta.description,
+        onDemand: meta.onDemand,
+        agents: meta.agents,
+      })),
+      mcp: this.mcp.getToolsByServer(),
+    };
+  }
+
+  getMCPToolSchemas(): Array<{ server: string; agentName: string | null; tools: import('../providers/types.js').ToolDefinition[] }> {
+    const shared = this.mcp.getToolSchemasForScheduler().map(e => ({ ...e, agentName: null as string | null }));
+    const personal: typeof shared = [];
+    for (const [key, registry] of this.personalMcpByAgent.entries()) {
+      // Recover the display name from the running agents map
+      const agent = Array.from(this.agents.values()).find(a => a.name.toLowerCase() === key);
+      const agentName = agent?.name ?? key;
+      for (const entry of registry.getToolSchemasForScheduler()) {
+        personal.push({ ...entry, agentName });
+      }
+    }
+    return [...shared, ...personal];
+  }
+
+  async readEvents(since?: string): Promise<import('../store/event-store.js').StoredEvent[]> {
+    return since ? this.store.readSince(since) : this.store.readAll();
+  }
+
+  onEscalation(handler: (from: string, message: string, urgency: string) => void): void {
+    this.onHumanEscalation = handler;
+  }
+
+  async humanMessage(toAgentName: string, content: string, threadId?: string): Promise<void> {
+    const msg = buildMessage('human', toAgentName, 'direct', content, { threadId });
+    await this.store.append('human_message', { to: toAgentName, content, threadId });
+    this.findByName(toAgentName)?.markHelpReceived();
+    this.deliverToAgent(toAgentName, msg);
+  }
+
+  async humanAssignTask(
+    toAgentName: string,
+    task: string,
+    context?: string,
+    projectName?: string,
+    ticketId?: string,
+    sourceThreadId?: string,
+    sourceThreadLimit?: number,
+  ): Promise<string> {
+    const taskId = await this.createTask(toAgentName, this.humanName, task, context, projectName);
+    const storedTask = this.tasks.get(taskId)!;
+    if (ticketId) storedTask.ticketId = ticketId;
+    const folderNote = storedTask.projectFolder
+      ? `\n\nA project workspace is available. Use write_file, read_file, list_files, and fetch_url to manage files. Files are stored under outputs/ — pass the ticket ID (e.g. "${storedTask.ticketId ?? storedTask.projectName?.toUpperCase() ?? 'TKT-000'}") as the ticket parameter to keep work organised.`
+      : '';
+    const content = (context ? `${task}\n\nContext: ${context}` : task) + folderNote;
+    const msg = buildMessage('human', toAgentName, 'task', content, {
+      taskId,
+      ...(sourceThreadId ? { sourceThreadId } : {}),
+      ...(sourceThreadId && sourceThreadLimit ? { sourceThreadLimit } : {}),
+    });
+    await this.store.append('task_assigned', { taskId, from: 'human', to: toAgentName, task, context, projectName: storedTask.projectName });
+    this.deliverToAgent(toAgentName, msg);
+    return taskId;
+  }
+
+  async humanReply(toAgentName: string, content: string, threadId?: string): Promise<void> {
+    const msg = buildMessage('human', toAgentName, 'human_reply', content, { threadId });
+    await this.store.append('human_reply', { to: toAgentName, content, threadId });
+    const agent = this.findByName(toAgentName);
+    if (agent) {
+      agent.markHelpReceived();
+      this.deliverToAgent(toAgentName, msg);
+    }
+  }
+
+  async broadcastHumanMessage(content: string): Promise<void> {
+    await this.store.append('human_broadcast', { content });
+    for (const agent of this.agents.values()) {
+      const msg = buildMessage('human', agent.name, 'direct', content);
+      agent.markHelpReceived();
+      agent.interrupt(msg);
+    }
+  }
+
+  /**
+   * Tell every agent some team news, such as a member joining, and record it.
+   * Unlike a broadcast it wakes nobody: each agent reads it with whatever it
+   * next works on.
+   */
+  async announce(news: string[]): Promise<void> {
+    if (news.length === 0) return;
+    await this.store.append('team_news', { news });
+    for (const agent of this.agents.values()) {
+      for (const item of news) agent.notice(item);
+    }
+  }
+
+  humanMeetingInterjection(meetingId: string, content: string): void {
+    this.activeMeetingRooms.get(meetingId)?.injectHumanMessage(content);
+  }
+
+  // ── Task / meeting getters ─────────────────────────────────────────────────
+
+  getTask(id: string): Task | undefined { return this.tasks.get(id); }
+  listTasks(): Task[] { return Array.from(this.tasks.values()); }
+
+  /**
+   * Nudge every agent with an active task to carry on with it.
+   *
+   * Three places used to do this — the runner on startup, the CLI and the
+   * API's resume command — each sending the same message and none checking
+   * the board. So a task whose ticket had been closed stayed "active" for
+   * ever and was resumed on every start: Poppy was told to continue TKT-009,
+   * closed weeks earlier, seven times in an hour, and each exchange pushed
+   * real conversation further back in her thread.
+   *
+   * A task whose ticket is closed is completed here instead of resumed.
+   * Returns what was resumed and what was retired, so callers can say so.
+   */
+  async resumeActiveTasks(): Promise<{ resumed: Task[]; retired: Task[] }> {
+    const resumed: Task[] = [];
+    const retired: Task[] = [];
+    const board = this.kanbanStore();
+    // The board loads asynchronously. Asking an unloaded one finds nothing,
+    // and a closed ticket that looked absent would be resumed anyway.
+    if (board) await this.kanbanLoaded;
+
+    for (const task of this.listTasks().filter((t) => t.status === 'active')) {
+      if (task.ticketId && !board) {
+        // Resumed anyway, as before — but said, because this is exactly how a
+        // closed ticket kept being resumed without anyone being able to see why.
+        log.warn(`[Team] Resuming ${task.ticketId} without checking it: no project board is open.`);
+      }
+      const ticket = task.ticketId && board ? await board.getTicket(task.ticketId) : undefined;
+      if (ticket?.column === 'closed') {
+        task.status = 'complete';
+        task.completedAt = new Date().toISOString();
+        task.summary ??= `Ticket ${task.ticketId} was closed (${ticket.closedReason ?? 'completed'}).`;
+        retired.push(task);
+        log.info(`[Team] Not resuming ${task.ticketId}: the ticket is closed, so the task is too.`);
+        continue;
+      }
+
+      await this.humanMessage(task.assignedTo,
+        `You have an active task to continue: ${task.description}`
+        + (task.context ? `\n\nContext: ${task.context}` : ''));
+      resumed.push(task);
+    }
+
+    return { resumed, retired };
+  }
+  getMeeting(id: string): Meeting | undefined { return this.meetings.get(id); }
+  listMeetings(): Meeting[] { return Array.from(this.meetings.values()); }
+
+  // ── Scheduled meetings ─────────────────────────────────────────────────────
+
+  async createScheduledMeeting(data: {
+    type: MeetingType; topic: string; agenda?: string;
+    facilitator: string; participants: string[];
+    scheduledFor: string; createdBy: string;
+  }): Promise<ScheduledMeeting> {
+    if (!this.scheduledMeetingStore) throw new Error('Meeting store not initialised');
+    return sm.createScheduledMeeting({ store: this.store, scheduledMeetingStore: this.scheduledMeetingStore, findByName: (n) => this.findByName(n), startMeeting: (...a) => this.startMeeting(...a) }, data);
+  }
+
+  async recordImpromptuInCalendar(data: { topic: string; agenda?: string; facilitator: string; participants: string[]; startedAt: string }): Promise<void> {
+    if (!this.scheduledMeetingStore) return;
+    return sm.recordImpromptuInCalendar(this.scheduledMeetingStore, data);
+  }
+
+  listScheduledMeetings(): ScheduledMeeting[] {
+    return this.scheduledMeetingStore ? sm.listScheduledMeetings(this.scheduledMeetingStore) : [];
+  }
+
+  async cancelScheduledMeeting(id: string): Promise<void> {
+    if (!this.scheduledMeetingStore) throw new Error('Meeting store not initialised');
+    return sm.cancelScheduledMeeting(this.scheduledMeetingStore, id);
+  }
+  async deleteScheduledMeeting(id: string): Promise<boolean> {
+    if (!this.scheduledMeetingStore) return false;
+    return sm.deleteScheduledMeeting(this.scheduledMeetingStore, id);
+  }
+  async updateScheduledMeeting(meeting: ScheduledMeeting): Promise<void> {
+    if (!this.scheduledMeetingStore) return;
+    return sm.updateScheduledMeeting(this.scheduledMeetingStore, meeting);
+  }
+
+  async launchScheduledMeeting(id: string): Promise<void> {
+    if (!this.scheduledMeetingStore) throw new Error('Meeting store not initialised');
+    return sm.launchScheduledMeeting({ store: this.store, scheduledMeetingStore: this.scheduledMeetingStore, findByName: (n) => this.findByName(n), startMeeting: (...a) => this.startMeeting(...a) }, id);
+  }
+
+  getMCPTools() { return this.mcp.getAllTools(); }
+
+  async callMcpTool(toolName: string, args: Record<string, unknown>, agentName?: string): Promise<string> {
+    const registry = agentName
+      ? (this.personalMcpByAgent.get(agentName.toLowerCase()) ?? this.mcp)
+      : this.mcp;
+    if (!registry) throw new Error('No MCP registry available');
+    log.info(`[MCP test-call] tool="${toolName}" agentName=${agentName ?? 'shared'}`);
+    try {
+      const result = await registry.callTool(toolName, args);
+      log.info(`[MCP test-call] "${toolName}" succeeded, result length=${result.length}`);
+      return result;
+    } catch (err) {
+      log.error(`[MCP test-call] "${toolName}" failed:`, (err as Error).message);
+      throw err;
+    }
+  }
+
+  async callMcpToolRaw(toolName: string, args: Record<string, unknown>, agentName?: string): Promise<unknown> {
+    const registry = agentName
+      ? (this.personalMcpByAgent.get(agentName.toLowerCase()) ?? this.mcp)
+      : this.mcp;
+    if (!registry) throw new Error('No MCP registry available');
+    log.info(`[MCP test-call] tool="${toolName}" agentName=${agentName ?? 'shared'} (raw)`);
+    return registry.callToolRaw(toolName, args);
+  }
+  cancelActiveMeeting(meetingId: string): boolean {
+    const room = this.activeMeetingRooms.get(meetingId);
+    if (!room) return false;
+    room.close();
+    return true;
+  }
+  raiseHandInMeeting(meetingId: string, participant: string, raised: boolean): void {
+    this.activeMeetingRooms.get(meetingId)?.raiseHand(participant, raised);
+  }
+  async launchImpromptuMeeting(facilitatorName: string, participants: string[], topic: string, agenda?: string): Promise<string> {
+    return this.startMeeting(facilitatorName, participants, topic, agenda);
+  }
+
+  // ── Private helpers ────────────────────────────────────────────────────────
+
+  private findByName(name: string): IAgent | undefined {
+    for (const agent of this.agents.values()) {
+      if (agent.name === name) return agent;
+    }
+    return undefined;
+  }
+
+  private requireAgent(name: string): IAgent {
+    const agent = this.findByName(name);
+    if (!agent) throw new Error(`Agent "${name}" not found`);
+    return agent;
+  }
+
+  private hasAgentWithName(name: string): boolean { return this.findByName(name) !== undefined; }
+
+  private deliverToAgent(name: string, msg: TeamMessage): void {
+    deliverToAgentFn(this.agents, this.lastSenderByAgent, name, msg);
+  }
+
+  private findBlueHat(): IAgent | undefined { return findBlueHatFn(this.agents); }
+
+  private async createTask(assignedTo: string, assignedBy: string, description: string, context?: string, projectName?: string): Promise<string> {
+    return createTaskFn(this.tasks, this.projectsRoot, assignedTo, assignedBy, description, context, projectName);
+  }
+
+  private resolveAgentPath(agentName: string, filePath: string): string {
+    return resolveAgentPathFn(this.tasks, this.projectDir, agentName, filePath);
+  }
+
+  private async startMeeting(facilitatorName: string, participants: string[], topic: string, agenda?: string): Promise<string> {
+    return startMeetingFn({
+      meetings: this.meetings,
+      activeMeetingRooms: this.activeMeetingRooms,
+      agents: this.agents,
+      store: this.store,
+      projectDir: this.projectDir,
+      onMeetingTurnPaced: this.onMeetingTurnPaced,
+      onHumanMeetingTurn: this.onHumanMeetingTurn,
+    }, facilitatorName, participants, topic, agenda);
+  }
+
+  private makeToolCallContext(): ToolCallContext {
+    return {
+      store: this.store,
+      getProjectDir: () => this.projectDir,
+      projectsRoot: this.projectsRoot,
+      tasks: this.tasks,
+      meetings: this.meetings,
+      activeMeetingRooms: this.activeMeetingRooms,
+      lastSenderByAgent: this.lastSenderByAgent,
+      scheduledMeetingStore: this.scheduledMeetingStore,
+      onHumanEscalation: this.onHumanEscalation,
+      emailAllowlistRef: this.emailAllowlistRef,
+      getPersonalMcp: (agentName) => this.personalMcpByAgent.get(agentName.toLowerCase()) ?? null,
+      getDeviceTools: () => this.deviceTools,
+      isKanbanTool: (name: string) => this.isKanbanTool(name),
+      callKanbanTool: (name: string, args: Record<string, unknown>) =>
+        this.callKanbanTool(name, args),
+      isPeopleTool: (name: string) => this.isPeopleTool(name),
+      callPeopleTool: (agent: string, name: string, args: Record<string, unknown>) =>
+        this.callPeopleTool(agent, name, args),
+      isTeamsTool: (name: string) => this.isTeamsTool(name),
+      callTeamsTool: (agent: string, name: string, args: Record<string, unknown>) => this.callTeamsTool(agent, name, args),
+      agendaStore: this.agendaStoreRef,
+      findByName: (name) => this.findByName(name),
+      findBlueHat: () => this.findBlueHat(),
+      hasAgentWithName: (name) => this.hasAgentWithName(name),
+      deliverToAgent: (name, msg) => this.deliverToAgent(name, msg),
+      createTask: (a, b, c, d, e) => this.createTask(a, b, c, d, e),
+      startMeeting: (a, b, c, d) => this.startMeeting(a, b, c, d),
+      createScheduledMeeting: (data) => this.createScheduledMeeting(data),
+      resolveAgentPath: (agentName, fp) => this.resolveAgentPath(agentName, fp),
+      getAgentThreadKey: (name) => this.findByName(name)?.getActiveThreadKey(),
+      getAgentTicketId: (name) => this.agentTicketIdResolver?.(name),
+      addTicketComment: this.ticketCommentHandler
+        ? (name, text) => this.ticketCommentHandler!(name, text)
+        : undefined,
+      clearAgentTicket: this.agentTicketClearer
+        ? (name) => this.agentTicketClearer!(name)
+        : undefined,
+    };
+  }
+
+  private rebuildTeamContext(): void {
+    if (this.rebuildTimer) clearTimeout(this.rebuildTimer);
+    this.rebuildTimer = setTimeout(() => {
+      this.rebuildTimer = null;
+      this.doRebuildTeamContext();
+    }, 50);
+  }
+
+  private doRebuildTeamContext(): void {
+    const roster = Array.from(this.agents.values())
+      .map((a) => {
+        const hats = a.config.hatType;
+        const spec = a.config.identity.specialisation;
+        const hatLabel = hats.filter(h => h !== 'none').map(h => h.charAt(0).toUpperCase() + h.slice(1)).join(' + ') || 'No Hat';
+        return `- ${a.name} (${hatLabel})${spec ? ` — ${spec}` : ''}`;
+      })
+      .join('\n');
+
+    const context = `Your team:\n${roster}\n- ${this.humanName} (Human team lead — makes final decisions)`;
+    for (const agent of this.agents.values()) {
+      agent.updateTeamContext(context);
+    }
+  }
+}
+
