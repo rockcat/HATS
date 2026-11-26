@@ -4,6 +4,10 @@ This demo shows an agent from one team **visiting** another team. It goes there 
 
 ![Wren visits the Insights team to work out the pricing-page figures, and brings back only the result](visit-demo.svg)
 
+**Watch it happen:** a 52-second recording of a real run, with Website above and Insights below. Click the picture to open the video.
+
+[![Wren asks to visit Insights, and the Insights admin approves](recording/visit-demo-poster.png)](recording/visit-demo.mp4)
+
 ## The story: "Real numbers for the pricing page"
 
 Two teams work in the same HATS installation.
@@ -167,11 +171,16 @@ The runners are recreated because the reset deletes the folders they had open. `
 
 The run takes about two minutes. While the agents think, the screen barely changes, so a long wait keeps only its first and last few seconds, with a caption such as *"2 min later"*. Add `--real-time` to keep everything, or `--side-by-side` to put the teams next to each other.
 
-It writes `docs/visit-demo/recording/`, which git ignores:
+It writes to `docs/visit-demo/recording/`:
 
-- `visit-demo.mp4`, the video;
-- the two raw recordings;
-- `timeline.json`, which records when each wait began and ended.
+- `visit-demo.mp4`, the video, which git tracks;
+- the two raw recordings and `timeline.json`, which records when each wait began and ended. Git ignores these.
+
+The picture at the top of this page is a still from the video. After a new recording, take a new one from the moment the visit is approved, about 24 seconds in:
+
+```bash
+ffmpeg -y -ss 24 -i docs/visit-demo/recording/visit-demo.mp4 -frames:v 1 -vf scale=960:-2 docs/visit-demo/recording/visit-demo-poster.png
+```
 
 It stops with a reason if a step doesn't happen in time, for example if Wren can't ask to visit because the runner manager isn't running.
 
@@ -213,6 +222,8 @@ The two runners don't have to be on the same computer. Runners never talk to eac
 | [`sales-2026-q3.csv`](sales-2026-q3.csv) | Made-up sales for one quarter: date, region, plan, monthly price, seats |
 | [`record.mjs`](record.mjs) | Plays the demo and records it as a video |
 | [`record-video.mjs`](record-video.mjs), [`record-cuts.mjs`](record-cuts.mjs) | Join the recordings, and cut the long waits |
+| [`recording/visit-demo.mp4`](recording/visit-demo.mp4) | The recorded demo |
+| [`recording/visit-demo-poster.png`](recording/visit-demo-poster.png) | A still from it, shown at the top |
 
 ## Settings used
 

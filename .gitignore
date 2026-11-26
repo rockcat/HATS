@@ -53,4 +53,6 @@ runtime_data/data/sessions.json
 
 # Per-runner data folders (docker-compose.multi.yml)
 runners/
-docs/visit-demo/recording/
+# The visit demo's video and poster are kept; its raw recordings are not
+docs/visit-demo/recording/raw-*
+docs/visit-demo/recording/timeline.json
