@@ -1,8 +1,18 @@
-# hats-runner
+# HATS
 
-The HATS Team Runner: the server in `server/src/`, the dashboard in `apps/web/`,
-and shared packages in `packages/`. See `docs/README.md` to start, and
-`docs/SERVICES.md` for how it fits with the other services.
+One repository for the whole system:
+
+- the Team Runner: the server in `server/src/`, its dashboard in `apps/web/`;
+- the services, one folder each in `apps/` (Agent Template Library, Project
+  Server, runner manager, auth, speech and the rest);
+- the shared packages in `packages/`, npm workspaces imported as `@hats/*`.
+
+See `docs/README.md` to start, `docs/SERVICES.md` for how the parts fit
+together, and `docs/repo-split.md` for why this was two repositories for a
+while and is one again.
+
+The mobile app, Poppy In Your Pocket, is private and lives in its own
+repository. Keep it out of this one.
 
 ## APIs: keep the documents in step with the code
 

@@ -33,7 +33,7 @@ $ErrorActionPreference = 'Stop'
 # downloads — voices are 60 MB each — many times slower.
 $ProgressPreference = 'SilentlyContinue'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-$Repo = 'rockcat/HATS-agents'
+$Repo = 'rockcat/HATS'
 
 function Step($text) { Write-Host "`n== $text" -ForegroundColor Cyan }
 function Fail($text) { Write-Host $text -ForegroundColor Red; exit 1 }

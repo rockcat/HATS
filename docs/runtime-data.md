@@ -1,13 +1,12 @@
 # One data directory
 
 Everything the installation accumulates lives in a single directory outside
-both repositories, named by `HATS_DATA`:
+the repository, named by `HATS_DATA`:
 
 ```
 F:\workspace\
-  HATS\          the services   — no runtime_data of its own
-  hats-runner\   the runner     — no runtime_data of its own
-  hats-data\     THE data       — mounted by both
+  HATS\          the runner and the services — runtime_data holds only shipped defaults
+  hats-data\     THE data       — mounted by the runner and every service
     projects\          team state, events, kanban, agent-credentials.json
     project-server\    project definitions
     avatars\           GLB and VRM models, backgrounds
@@ -16,14 +15,15 @@ F:\workspace\
     data\              model pricing, Google tokens, users
 ```
 
-Set it in the `.env` of both repositories:
+Set it in `.env`:
 
 ```
 HATS_DATA=F:/workspace/hats-data
 ```
 
-Both compose files fall back to a local `runtime_data` when it is unset, so a
-standalone runner on its own machine still works.
+When it is unset, `docker-compose.yml` (the runner) falls back to the
+repository's own `runtime_data`, so a standalone runner on its own machine
+still works, and `docker-compose.services.yml` to `../hats-data`.
 
 ## Why outside both repositories
 

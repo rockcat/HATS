@@ -3,9 +3,9 @@
  * Launch the HATS services together for development.
  *
  *   node scripts/dev-services.mjs                 # library + project server + designer + embodiment test
- *
- * The runner is not one of these — it runs as a container. See `npm run runner`.
  *   node scripts/dev-services.mjs library designer
+ *
+ * The runner is not one of these: start it with `npm run dev`.
  *
  * Each child's output is prefixed with its service name. Ctrl+C stops them all.
  */
@@ -33,13 +33,11 @@ const SERVICES = {
   project:   { label: 'project  ', script: 'apps/project-view/src/main.ts',     port: 3070, colour: '\x1b[96m' },
 };
 
-// The runner is deliberately not in that list. It is not built here any more:
-// it lives in its own repository and runs as a container.
+// The runner is not in that list: it is started on its own, from source or as
+// a container, so it can be restarted without taking the services down.
 //
-//   npm run runner        → docker compose up -d runner
-//
-// Starting it from source would mean keeping a copy of it here, which is the
-// duplication the split exists to remove.
+//   npm run dev           → the runner from source
+//   docker compose up -d  → the runner as a container
 
 const RESET = '\x1b[0m';
 const DEFAULT_SET = ['library', 'projects', 'designer', 'embodiment', 'speech'];

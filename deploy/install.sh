@@ -21,7 +21,7 @@ set -euo pipefail
 DIR="${HATS_DIR:-$HOME/hats}"
 VERSION="${HATS_VERSION:-latest}"
 REF="${HATS_REF:-main}"
-REPO='rockcat/HATS-agents'
+REPO='rockcat/HATS'
 VOICES="${HATS_VOICES:-en_GB-semaine-medium en_GB-vctk-medium en_GB-alan-medium en_GB-jenny_dioco-medium en_GB-northern_english_male-medium en_GB-southern_english_female-low}"
 
 step() { printf '\n== %s\n' "$1"; }

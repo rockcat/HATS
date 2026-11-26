@@ -46,7 +46,7 @@ HATS fixes that by:
 - Run a product planning meeting
 - Stress-test a startup idea
 - Explore trade-offs in architecture decisions
--Replace async brainstorming sessions
+- Replace async brainstorming sessions
 
 ## Watch 6 AI agents plan a startup and argue about it
 
@@ -89,7 +89,7 @@ Through the Model Context Protocol \(MCP), HATS ships integrations across five c
 |-|-|
 |Productivity|Kanban, Memory (knowledge graph), Slack|
 |Files & Documents|Filesystem, Excel, Word, PDF, PowerPoint|
-|Web|Brave Search, Puppeteer/Chrome|
+|Web|Brave Search, Browser (Playwright)|
 |Databases|SQLite, PostgreSQL|
 |Development|GitHub|
 
@@ -118,147 +118,36 @@ updates live as work moves through the board.
 HATS is built on Node.js with a TypeScript backend, Three.js avatar rendering, and a plain
 HTML/CSS/JS frontend requiring no build step.
 
-## Installation
-
-### Setup scripts
-
-The scripts folder contains two scripts: `setup.bat` for Windows and `setup.sh` fro linux/MacOs. These perform some of the tasks below. 
-
-## Prerequisites
-
-### Node.js
-
-Node.js 20+ is required.
+## Getting started
 
 ```bash
-npm install
-```
-
-### API Keys
-
-Copy `.env.example` to `.env` and fill in at least one LLM provider key:
-
-```bash
-cp .env.example .env
-```
-
-| Variable | Description |
-| --- | --- |
-| `ANTHROPIC_API_KEY` | Anthropic Claude (default provider) |
-| `OPENAI_API_KEY` | OpenAI GPT models |
-| `GEMINI_API_KEY` | Google Gemini models |
-| `BRAVE_API_KEY` | Brave Search (optional, for web search tool) |
-
-### Piper TTS (optional — required for avatar speech)
-
-Piper runs in one of two modes. **Server mode** (recommended) keeps voice models loaded in memory and supports one voice per agent. **Subprocess mode** is a simpler fallback using a single voice loaded on demand.
-
-Download one or more voice models (`.onnx` + `.onnx.json`) from the [Piper voices page](https://rhasspy.github.io/piper-samples/) and place them in `piper_voices/`.
-
-#### Server mode (recommended)
-
-Requires the `piper-tts` Python package. At startup the app automatically spawns one Flask server per voice model on consecutive ports — you do not need to start anything manually.
-
-```bash
-pip install piper-tts
-```
-
-```env
-PIPER_VOICES_DIR=piper_voices        # directory containing .onnx files
-PIPER_SERVER_PORT_START=5100         # first port; each voice gets the next port
-PYTHON_BIN=python                    # python executable (default: "python")
-```
-
-Each agent can be assigned its own voice from a dropdown in the UI. If a previously selected voice is no longer present at startup the agent falls back to the first available voice.
-
-#### Subprocess mode (fallback)
-
-Uses the native [Piper binary](https://github.com/rhasspy/piper/releases). The model is loaded from disk on every sentence, which adds ~0.5 s latency per sentence.
-
-1. Download the Piper release for your platform from the [Piper releases page](https://github.com/rhasspy/piper/releases).
-2. Extract to `piper/` in the project root (so the binary is at `piper/piper.exe` on Windows).
-
-```env
-PIPER_BIN=piper/piper.exe            # path to native piper binary
-PIPER_MODEL=piper_voices/en_GB-cori-high.onnx
-```
-
-The companion `.onnx.json` file must sit next to the `.onnx` file.
-
-If neither `PIPER_VOICES_DIR` nor `PIPER_MODEL` is set, avatar speech is silently disabled and agents respond text-only.
-
-### Rhubarb Lip Sync (optional — required for avatar lip sync)
-
-[Rhubarb Lip Sync](https://github.com/DanielSWolf/rhubarb-lip-sync) extracts mouth-shape timing from audio to drive avatar visemes. Required alongside Piper TTS if you want lip-synced avatars.
-
-1. Download a Rhubarb release for your platform from the [Rhubarb releases page](https://github.com/DanielSWolf/rhubarb-lip-sync/releases).
-2. Set `RHUBARB_BIN` in `.env` to the path of the executable (defaults to `rhubarb`):
-
-```env
-RHUBARB_BIN=rhubarb/rhubarb
-```
-
-The phonetic recognizer is used by default — no additional dependencies (PocketSphinx, etc.) are required.
-
-## Quick start
-
-```bash
-# 1. Clone and install
-git clone <repo-url>
+git clone https://github.com/rockcat/HATS.git
 cd HATS
 npm install
+cp .env.example .env     # add at least one LLM provider key
 
-# 2. Configure
-cp .env.example .env
-# Edit .env and add at least one LLM provider API key
-
-# 3. Run
-npm start
+npm run services         # the Agent Template Library, Project Server and the rest
+npm run dev              # the team runner, in another terminal
 ```
 
-The web UI is available at `http://localhost:3001`.
+Open the dashboard at <http://localhost:3001>. The [full guide](docs/README.md) covers voices, avatars, MCP servers and everything else.
 
-Alternatively, run the setup script which checks all dependencies:
+To install on a server from published Docker images instead, see [deploy/](deploy/README.md).
+
+## What's in this repository
+
+| Folder | What it is |
+| --- | --- |
+| `server/` | The team runner: agents, meetings, the board, tools, and the HTTP API (port 3001) |
+| `apps/web/` | The runner's dashboard |
+| `apps/` | The services, one folder each: Agent Template Library, Project Server, Project Designer, runner manager, auth, speech, companion and more |
+| `packages/` | Code they share, imported as `@hats/*`: contracts, clients, core, auth, service-kit, speech-core |
+| `deploy/` | Installers and the compose file for a machine that runs the published images |
+| `docs/` | Guides, architecture and API documents |
 
 ```bash
-# macOS / Linux / Git Bash on Windows
-bash scripts/setup.sh
-
-# Windows Command Prompt
-scripts\setup.bat
+npm test             # every test, across the runner, services and packages
+npm run typecheck
 ```
 
-## Project structure
-
-```sh
-src/
-  agent/          Agent execution loop and state machine
-  api/            HTTP + SSE + WebSocket server (port 3001)
-  hats/           Six Thinking Hat definitions and directives
-  human/          CLI interface for terminal interaction
-  mcp/            MCP tool servers (kanban, filesystem, etc.)
-  orchestrator/   Team coordination, meetings, task dispatch
-  prompt/         System prompt generation
-  providers/      LLM adapters (Anthropic, OpenAI, Gemini, Ollama, LM Studio)
-  speech/         TTS + lip-sync pipeline (Piper + Rhubarb)
-  store/          Event log, telemetry, and snapshot storage
-  tools/          Tool schema definitions available to agents
-  util/           Shared utilities (logger, etc.)
-  webui/          Web UI — HTML/CSS/JS + Three.js avatar renderer
-avatars/          GLB avatar models and avatars.json catalogue
-projects/         Per-project runtime data (kanban, meetings, agent state)
-scripts/          Setup scripts (setup.sh, setup.bat)
-tools/            Developer utilities (glb-viewer.mjs)
-rhubarb/          Install rhubarb in here
-piper_voices/     Install voices for piper tts in here
-```
-
-## Development
-
-```bash
-npm test          # run tests (vitest)
-npm run test:watch  # watch mode
-npm run build     # compile TypeScript to dist/
-```
-
-No build step is required to run the app — `npm start` uses `tsx` to run TypeScript directly.
+The HTTP APIs are documented in [docs/API.md](docs/API.md), and a running runner serves them all at `/api-docs`.

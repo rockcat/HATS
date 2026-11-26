@@ -43,7 +43,7 @@ To add other API keys later, edit `.env`, then run `docker compose up -d` in tha
 
 ## Moving a project in
 
-1. **Export it on the old machine,** from the hats-runner folder:
+1. **Export it on the old machine,** from the HATS folder:
    ```
    node --env-file=.env scripts/project-transfer.mjs export paige --credentials
    ```
@@ -68,12 +68,8 @@ To stay on one release, set `HATS_VERSION=0.1.3` in `.env`. The default is `late
 
 | Image | Built from | Visibility |
 |---|---|---|
-| `ghcr.io/rockcat/hats-runner` | HATS-runner, `.github/workflows/docker.yml` | private |
-| `ghcr.io/rockcat/hats-services` | this repository, `.github/workflows/docker.yml` | private |
-| `ghcr.io/rockcat/hats-speech` | this repository, `.github/workflows/docker.yml` | private |
+| `ghcr.io/rockcat/hats-runner` | `Dockerfile` | private |
+| `ghcr.io/rockcat/hats-services` | `Dockerfile.services`, target `services` | private |
+| `ghcr.io/rockcat/hats-speech` | `Dockerfile.services`, target `speech` | private |
 
-Each workflow builds and pushes its images on every push to `main` (tagged `latest`) and on a `v*` tag (tagged with the version).
-
-This repository's workflow checks out HATS-runner, which is private, with the `RUNNER_REPO_TOKEN` Actions secret. That secret is a fine-grained token with Contents: read on HATS-runner; renew it when it expires.
-
-The services images are built against hats-runner's `main`. After changing the shared packages in hats-runner, re-run this repository's workflow from the Actions tab so the services images pick up the change.
+`.github/workflows/docker.yml` builds and pushes all three on every push to `main` (tagged `latest`) and on a `v*` tag (tagged with the version). They come from one checkout, so a change to a shared package reaches every image in the same build.

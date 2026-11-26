@@ -19,7 +19,7 @@ places:
 | Where | Path |
 | --- | --- |
 | Browser (Companion) | `apps/companion/public/models/mobilefacenet.tflite` |
-| Phone (Poppy) | `apps/poppyinyourpocket/assets/models/mobilefacenet.tflite` |
+| Phone (Poppy) | `assets/models/mobilefacenet.tflite` in the private `poppy-in-your-pocket` repository |
 
 Until it is there, nothing breaks: the browser tab and the phone simply do not
 declare that they can embed faces, the capability exchange says so honestly,
@@ -31,7 +31,7 @@ and `forget_person` work regardless.
 Change the profile in **both** of these, and keep them identical:
 
 - `packages/ui-kit/face-embedding.js` — `MOBILEFACENET`
-- `apps/poppyinyourpocket/lib/services/face_embedding.dart` — `mobileFaceNet`
+- `lib/services/face_embedding.dart` in `poppy-in-your-pocket` — `mobileFaceNet`
 
 and tell the runner, so the vectors it stores are labelled with the right
 space:

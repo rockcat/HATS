@@ -42,7 +42,6 @@ apps/flutter/avatar_view/pubspec.lock
 # Discovered MCP tool lists are one machine's observations, not configuration.
 runtime_data/config/mcp-discovered-tools.json
 apps/flutter/**/ios/
-apps/poppyinyourpocket/ios/
 
 # Credentials the runner writes at runtime. Never in the repo: these are live
 # OAuth tokens for the user's own Google account.

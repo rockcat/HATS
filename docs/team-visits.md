@@ -49,13 +49,13 @@ coordination split between two installations instead of held by one.
 
 | Piece | Where | Used for |
 | --- | --- | --- |
-| Live team sync | `hats-runner/server/src/project/project-sync.ts`, `team-reconcile.ts` | A runner applies changes to its project's saved team within 5 seconds, without restarting agents. Leaving home, arriving and returning are each one such change. |
+| Live team sync | `server/src/project/project-sync.ts`, `team-reconcile.ts` | A runner applies changes to its project's saved team within 5 seconds, without restarting agents. Leaving home, arriving and returning are each one such change. |
 | Runner registry | `apps/runner-manager` | Every runner reports in every 30 seconds with its project and address. Becomes the team-card registry. |
-| Agent bundle | `hats-runner/server/src/agent-transfer/` | Captures an agent's settings, threads, own folder (memory, calendar), agenda and avatar; credentials optional. Becomes the travel pack. Restore always issues a new id. |
+| Agent bundle | `server/src/agent-transfer/` | Captures an agent's settings, threads, own folder (memory, calendar), agenda and avatar; credentials optional. Becomes the travel pack. Restore always issues a new id. |
 | The board | Each project's kanban | Tickets are the reasons for visits, and where results are delivered. |
 | Removing an agent cleanly | `AgentRouter.retireAgent` | Returns its open tickets to the backlog. Used for permanent moves. |
 | Per-agent credentials kept local | `AgentDefinitionStore.secretsFor` | Personal MCP logins never enter the shared project definition. They stay at home. |
-| Embeddings | `hats-runner/server/src/people/embedder.ts` | Available for searching cards by meaning. |
+| Embeddings | `server/src/people/embedder.ts` | Available for searching cards by meaning. |
 
 Today, calling a tool the agent does not have returns `Unknown tool: <name>`
 (`tool-executor.ts`) or `Tool <name> not connected.` (`agent.ts`). Phase 1

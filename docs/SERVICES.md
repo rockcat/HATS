@@ -176,7 +176,7 @@ So a device-speaking client has three options, in ascending order of effort:
    open-and-close oscillation, which reads as talking without matching.
 2. **Drive the mouth from word boundaries**, opening on each word.
 3. **Estimate mouth shapes from spelling** — which letters a word contains,
-   spread across the time it takes to say it. `apps/poppyinyourpocket`
+   spread across the time it takes to say it. Poppy In Your Pocket (private, `poppy-in-your-pocket`)
    does this in `lib/services/viseme_estimator.dart`: vowels hold the shape,
    consonants pass through, digraphs count once. English spelling is a poor
    guide to English sound, so it looks like an approximation under scrutiny —
