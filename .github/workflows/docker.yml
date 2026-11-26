@@ -24,6 +24,8 @@ jobs:
   images:
     runs-on: ubuntu-latest
     strategy:
+      # The images are independent: one failing should not cancel the others.
+      fail-fast: false
       matrix:
         include:
           - image: hats-runner
