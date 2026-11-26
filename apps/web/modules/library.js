@@ -7,6 +7,32 @@ let _openLibraryEdit = () => {};
 
 export function initLibraryTab({ openLibraryEdit }) {
   _openLibraryEdit = openLibraryEdit;
+  document.getElementById('library-refresh-btn')?.addEventListener('click', refreshLibrary);
+}
+
+/** Text for where the library's entries come from, as the refresh route reports it. */
+const describeSource = (source) =>
+  source?.kind === 'library' ? 'from the Agent Library service'
+  : source?.kind === 'local' ? 'local file — Agent Library service not answering'
+  : '';
+
+/** Ask the runner to read the library again, then redraw it. */
+async function refreshLibrary() {
+  const btn    = document.getElementById('library-refresh-btn');
+  const status = document.getElementById('library-source');
+  btn?.classList.add('is-busy');
+  if (btn) btn.disabled = true;
+  try {
+    const r    = await fetch('/api/global-agents/refresh', { method: 'POST' });
+    const body = await r.json();
+    if (status) status.textContent = r.ok ? describeSource(body.source) : (body.error ?? 'Refresh failed');
+  } catch {
+    if (status) status.textContent = 'Refresh failed — runner not answering';
+  } finally {
+    btn?.classList.remove('is-busy');
+    if (btn) btn.disabled = false;
+  }
+  await fetchGlobalAgents();
 }
 
 export async function fetchGlobalAgents() {

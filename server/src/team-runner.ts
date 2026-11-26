@@ -36,8 +36,9 @@ import { OpenAIProvider, OllamaProvider, LMStudioProvider } from './providers/op
 import { GeminiProvider } from './providers/gemini.js';
 import { HatType } from '../../packages/core/src/hats/types.js';
 import { getCatalogue, initCatalogue } from '../../packages/core/src/mcp/catalogue-store.js';
-import { AgentStore, type AgentDefinitionStore } from './api/agent-store.js';
+import { AgentStore } from './api/agent-store.js';
 import { LibraryAgentStore } from './api/library-agent-store.js';
+import { SwitchableAgentStore, type ConnectedAgentStore } from './api/switchable-agent-store.js';
 import { ScheduledActionStore } from './api/scheduled-action-store.js';
 import { seedBuiltIns } from './store/built-in-agents.js';
 import { runtimeDir } from '../../packages/core/src/runtime-dir.js';
@@ -135,8 +136,15 @@ function providerFactory(name: string) {
 
 // ── Agent library ─────────────────────────────────────────────────────────────
 
-/** Prefer the Agent Library service; fall back to the local agents.json. */
-async function makeAgentStore(): Promise<AgentDefinitionStore> {
+/**
+ * Prefer the Agent Library service; fall back to the local agents.json. Then
+ * add the built-in agents (Claude Code) when they are not present yet.
+ *
+ * Called at startup and again on every refresh, so a library that comes up
+ * after the runner is picked up without a restart.
+ */
+async function connectAgentStore(): Promise<ConnectedAgentStore> {
+  let connected: ConnectedAgentStore | null = null;
   if (AGENT_LIBRARY_URL) {
     const client = new AgentLibraryClient(AGENT_LIBRARY_URL);
     if (await client.isHealthy()) {
@@ -145,13 +153,18 @@ async function makeAgentStore(): Promise<AgentDefinitionStore> {
         path.join(PROJECTS_ROOT, 'agent-credentials.json'),
       );
       await store.load();
-      return store;
+      connected = { store, source: { kind: 'library', url: AGENT_LIBRARY_URL } };
+    } else {
+      console.log(`[Team] Agent Library at ${AGENT_LIBRARY_URL} is not answering — using the local agents.json`);
     }
-    console.log(`[Team] Agent Library at ${AGENT_LIBRARY_URL} is not answering — using the local agents.json`);
   }
-  const store = new AgentStore(path.join(PROJECTS_ROOT, 'agents.json'));
-  await store.load();
-  return store;
+  if (!connected) {
+    const store = new AgentStore(path.join(PROJECTS_ROOT, 'agents.json'));
+    await store.load();
+    connected = { store, source: { kind: 'local' } };
+  }
+  await seedBuiltIns(connected.store);
+  return connected;
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
@@ -189,12 +202,10 @@ async function main() {
   console.log(`[Team] Folder  : ${PROJECT_DIR}`);
   writeFileSync(path.join(PROJECTS_ROOT, 'last-project.json'), JSON.stringify({ id: project.projectId }));
 
-  const agentStore  = await makeAgentStore();
+  const agentStore  = new SwitchableAgentStore(connectAgentStore);
+  await agentStore.load();
   const actionStore = new ScheduledActionStore(path.join(PROJECTS_ROOT, 'scheduled-actions.json'));
   await actionStore.load();
-  // makeAgentStore() has already loaded the store; seeding adds the built-in
-  // agents (Claude Code) when they are not present yet.
-  await seedBuiltIns(agentStore);
 
   const userStore = new UserStore(runtimeDir('data', 'users.json'));
   await userStore.load();

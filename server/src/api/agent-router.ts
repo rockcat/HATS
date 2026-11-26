@@ -21,6 +21,7 @@ import { EXTERNAL_PROVIDER } from '../agent/external-agent.js';
 import { SCHEDULED_THREAD } from '../agent/agent.js';
 import { AgentStatus } from './project-manager.js';
 import { AgentDefinitionStore } from './agent-store.js';
+import { SwitchableAgentStore } from './switchable-agent-store.js';
 import { ScheduledActionStore } from './scheduled-action-store.js';
 import { propagateEdit, removeCopies, lastRunOf, isCopyOf } from './agenda-sync.js';
 import { promptModeFrom, repeatFromRequest, type Repeat } from './agenda-store.js';
@@ -790,6 +791,17 @@ export class AgentRouter {
     if (pathname === '/api/global-agents' && method === 'GET') {
       const store = this.deps.getAgentStore();
       json(res, 200, store ? store.list() : []);
+      return true;
+    }
+
+    // Read the library again: picks up templates changed elsewhere, and moves
+    // to the Agent Library service if it has come up since the runner started.
+    if (pathname === '/api/global-agents/refresh' && method === 'POST') {
+      const store = this.deps.getAgentStore();
+      if (!store) { json(res, 503, { error: 'Agent store not ready' }); return true; }
+      await store.load();
+      const source = store instanceof SwitchableAgentStore ? store.source : undefined;
+      json(res, 200, { source, count: store.list().length });
       return true;
     }
 

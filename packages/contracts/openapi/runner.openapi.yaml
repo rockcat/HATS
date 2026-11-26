@@ -758,6 +758,32 @@ paths:
                 provider: { type: string }
                 model: { type: string }
       responses: { '201': { $ref: '#/components/responses/Json' } }
+  /api/global-agents/refresh:
+    post:
+      tags: [Shared agents]
+      summary: Read the shared agents again
+      description: >-
+        Reloads the library's templates, and moves to the Agent Library service
+        if it has started answering since the runner started (or back to the
+        local agents.json if it has stopped).
+      operationId: refreshGlobalAgents
+      responses:
+        '200':
+          description: Reloaded
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [count]
+                properties:
+                  count: { type: integer, description: Shared agents now listed }
+                  source:
+                    type: object
+                    required: [kind]
+                    properties:
+                      kind: { type: string, enum: [library, local] }
+                      url: { type: string, description: The Agent Library's address, when kind is library }
+        '503': { description: The agent store is not ready yet }
   /api/global-agents/{id}:
     parameters: [{ $ref: '#/components/parameters/id' }]
     patch: { tags: [Shared agents], summary: Change a shared agent, operationId: updateGlobalAgent, requestBody: { content: { application/json: { schema: { type: object } } } }, responses: { '200': { $ref: '#/components/responses/Json' }, '404': { $ref: '#/components/responses/NotFound' } } }

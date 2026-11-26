@@ -3814,6 +3814,10 @@ header h1 {
 
 .library-pane { flex-direction: column; gap: 0; padding: 0; overflow-y: auto; }
 
+.library-source { font-weight: 400; text-transform: none; letter-spacing: 0; }
+.panel-header-action-btn.is-busy img { animation: library-spin 0.8s linear infinite; }
+@keyframes library-spin { to { transform: rotate(360deg); } }
+
 .library-agent-list { flex: 1; overflow-y: auto; }
 
 .library-agent-row {
