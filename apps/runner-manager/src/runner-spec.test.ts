@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { LABELS, containerName, parseEnvFile, projectProblem, runnerSpec } from './runner-spec.js';
 
 const spec = (over: Partial<Parameters<typeof runnerSpec>[0]> = {}) => runnerSpec({
-  project: 'paige', port: 3101, image: 'ghcr.io/rockcat/hats-runner:latest',
+  project: 'paige', port: 3101, image: 'ghcr.io/rockcat/hats/runner:latest',
   hostData: '/Users/me/hats/data/', network: 'hats_default',
   settings: { ANTHROPIC_API_KEY: 'k', TEAM_PROJECT: 'someone-else' },
   overrides: { AGENT_LIBRARY_URL: 'http://agent-library:3010' },

@@ -29,7 +29,7 @@ const config = {
   version: '1.0.0',
   port: Number(env['RUNNER_MANAGER_PORT'] ?? 3080),
   socket: env['DOCKER_SOCKET'] ?? '/var/run/docker.sock',
-  image: env['RUNNER_IMAGE'] ?? 'ghcr.io/rockcat/hats-runner:latest',
+  image: env['RUNNER_IMAGE'] ?? 'ghcr.io/rockcat/hats/runner:latest',
   projectServerUrl: env['PROJECT_SERVER_URL'] ?? 'http://localhost:3020',
   authServiceUrl: env['AUTH_SERVICE_URL'] || null,
 } as const;

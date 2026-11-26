@@ -6,7 +6,8 @@ no source checkout, Node, Python or compiler.
 ## What you need
 
 - **Docker.** Docker Desktop on Windows or Mac; Docker Engine with the compose plugin on Linux.
-- **A GitHub personal access token (classic)** with the `read:packages` and `repo` scopes. The images and this repository are private. [Create one](https://github.com/settings/tokens/new?scopes=read:packages,repo).
+
+That's all. The repository and images are public, so no GitHub account is needed.
 
 ## Install
 
@@ -22,7 +23,7 @@ Linux or Mac:
 bash install.sh
 ```
 
-The installer asks for your GitHub username and token, your Anthropic key and an admin password. It then:
+The installer asks for your Anthropic key and an admin password. It then:
 
 1. creates the installation folder, `C:\hats` or `~/hats`;
 2. downloads voices and the images;
@@ -68,8 +69,8 @@ To stay on one release, set `HATS_VERSION=0.1.3` in `.env`. The default is `late
 
 | Image | Built from | Visibility |
 |---|---|---|
-| `ghcr.io/rockcat/hats-runner` | `Dockerfile` | private |
-| `ghcr.io/rockcat/hats-services` | `Dockerfile.services`, target `services` | private |
-| `ghcr.io/rockcat/hats-speech` | `Dockerfile.services`, target `speech` | private |
+| `ghcr.io/rockcat/hats/runner` | `Dockerfile` | public |
+| `ghcr.io/rockcat/hats/services` | `Dockerfile.services`, target `services` | public |
+| `ghcr.io/rockcat/hats/speech` | `Dockerfile.services`, target `speech` | public |
 
 `.github/workflows/docker.yml` builds and pushes all three on every push to `main` (tagged `latest`) and on a `v*` tag (tagged with the version). They come from one checkout, so a change to a shared package reaches every image in the same build.

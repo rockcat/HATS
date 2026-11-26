@@ -80,7 +80,7 @@ Compose reads that file automatically, and `install.sh` leaves it alone.
 
 ```yaml
 x-runner: &runner
-  image: ghcr.io/rockcat/hats-runner:${HATS_VERSION:-latest}
+  image: ghcr.io/rockcat/hats/runner:${HATS_VERSION:-latest}
   platform: ${HATS_PLATFORM:-linux/amd64}
   restart: unless-stopped
   env_file: [.env]

@@ -2,19 +2,16 @@
 # Install HATS on this machine from the published images.
 #
 # Needs only Docker (with the compose plugin) and curl. Creates the
-# installation folder, fetches the compose file, writes .env, signs in to
-# GitHub Container Registry, downloads voices, and starts everything. Safe to
-# run again: it updates the compose file and images, and leaves .env and the
-# data folder alone.
+# installation folder, fetches the compose file, writes .env, downloads
+# voices, and starts everything. Safe to run again: it updates the compose
+# file and images, and leaves .env and the data folder alone.
 #
 #   bash install.sh                        installs into ~/hats
 #   HATS_DIR=/opt/hats HATS_VERSION=0.1.3 bash install.sh
 #
-# The images are private. You need a GitHub personal access token (classic)
-# with the read:packages and repo scopes:
-#   https://github.com/settings/tokens/new?scopes=read:packages,repo
-# Set GITHUB_USER and GITHUB_TOKEN to skip the prompts. Set HATS_VOICES to a
-# space-separated list to choose voices, HATS_NO_START=1 to only install.
+# The repository and images are public, so no GitHub account is needed.
+# Set HATS_VOICES to a space-separated list to choose voices, HATS_NO_START=1
+# to only install.
 
 set -euo pipefail
 
@@ -34,21 +31,13 @@ command -v curl >/dev/null || fail 'curl is not installed.'
 docker info >/dev/null 2>&1 || fail 'Docker is installed but not running, or this user may not use it.'
 docker compose version >/dev/null 2>&1 || fail 'This Docker has no "docker compose". Install the compose plugin.'
 
-# ── GitHub credentials ───────────────────────────────────────────────────────
-step 'GitHub sign-in (for the private images)'
-USER_NAME="${GITHUB_USER:-}"
-[ -n "$USER_NAME" ] || read -rp 'GitHub username: ' USER_NAME
-TOKEN="${GITHUB_TOKEN:-}"
-if [ -z "$TOKEN" ]; then read -rsp 'GitHub token (read:packages, repo): ' TOKEN; echo; fi
-
 # ── Files ────────────────────────────────────────────────────────────────────
 step "Installing into $DIR"
 mkdir -p "$DIR/data/piper_voices"
 
 repo_file() {
-  curl -fsSL -H "Authorization: Bearer $TOKEN" -H 'Accept: application/vnd.github.raw' \
-    "https://api.github.com/repos/$REPO/contents/$1?ref=$REF" -o "$2" \
-    || fail "Could not download $1 from $REPO. Check the token has the repo scope."
+  curl -fsSL "https://raw.githubusercontent.com/$REPO/$REF/$1" -o "$2" \
+    || fail "Could not download $1 from $REPO ($REF)."
 }
 
 COMPOSE="$DIR/docker-compose.yml"
@@ -105,9 +94,7 @@ for voice in $VOICES; do
 done
 
 # ── Images ───────────────────────────────────────────────────────────────────
-step 'Signing in to ghcr.io and pulling images'
-printf '%s' "$TOKEN" | docker login ghcr.io -u "$USER_NAME" --password-stdin \
-  || fail 'GitHub Container Registry refused the token. It needs the read:packages scope.'
+step 'Pulling images'
 docker compose -f "$COMPOSE" pull || fail 'Could not pull the images.'
 
 if [ -n "${HATS_NO_START:-}" ]; then

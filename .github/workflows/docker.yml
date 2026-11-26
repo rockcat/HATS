@@ -1,12 +1,17 @@
 # Build the images and publish them to GitHub Container Registry.
 #
-#   ghcr.io/rockcat/hats-runner     the runner                   (Dockerfile)
-#   ghcr.io/rockcat/hats-services   the Node services            (Dockerfile.services)
-#   ghcr.io/rockcat/hats-speech     the Speech Service, with Python and Piper
+#   ghcr.io/rockcat/hats/runner     the runner                   (Dockerfile)
+#   ghcr.io/rockcat/hats/services   the Node services            (Dockerfile.services)
+#   ghcr.io/rockcat/hats/speech     the Speech Service, with Python and Piper
 #
 # Tagged :latest on every push to main, :0.1.3 and :0.1 for a tag v0.1.3,
-# and :sha-abc1234 always. A new machine pulls these instead of building —
-# see deploy/.
+# and :sha-abc1234 always. They are public, so a new machine pulls them
+# without signing in — see deploy/.
+#
+# Published with this workflow's own token, so each package is linked to this
+# repository. (The hats-runner, hats-services and hats-speech packages were
+# published from the repositories this one replaced, which is why these have
+# new names.)
 
 name: Docker images
 
@@ -28,13 +33,13 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - image: hats-runner
+          - image: hats/runner
             file: Dockerfile
             target: runner
-          - image: hats-services
+          - image: hats/services
             file: Dockerfile.services
             target: services
-          - image: hats-speech
+          - image: hats/speech
             file: Dockerfile.services
             target: speech
     steps:

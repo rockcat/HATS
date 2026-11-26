@@ -19,7 +19,7 @@
 # works. HATS_PLATFORM in .env overrides this once arm64 images exist.
 
 x-service: &service
-  image: ghcr.io/rockcat/hats-services:${HATS_VERSION:-latest}
+  image: ghcr.io/rockcat/hats/services:${HATS_VERSION:-latest}
   platform: &platform ${HATS_PLATFORM:-linux/amd64}
   restart: unless-stopped
   env_file: [.env]
@@ -45,7 +45,7 @@ x-health: &health
 
 services:
   hats:
-    image: ghcr.io/rockcat/hats-runner:${HATS_VERSION:-latest}
+    image: ghcr.io/rockcat/hats/runner:${HATS_VERSION:-latest}
     platform: *platform
     restart: unless-stopped
     # On stopping, the runner lets turns in progress finish for up to 20
@@ -129,7 +129,7 @@ services:
       <<: *service-env
       AUTH_SERVICE_URL: http://auth-service:3090
       RUNNER_MANAGER_URL: http://runner-manager:3080
-      RUNNER_IMAGE: ghcr.io/rockcat/hats-runner:${HATS_VERSION:-latest}
+      RUNNER_IMAGE: ghcr.io/rockcat/hats/runner:${HATS_VERSION:-latest}
       RUNNER_PORTS: ${RUNNER_PORTS:-3101-3199}
       HATS_ENV_FILE: /hats/.env
       OLLAMA_BASE_URL: ${DOCKER_OLLAMA_BASE_URL:-http://host.docker.internal:11434/v1}
@@ -160,7 +160,7 @@ services:
 
   speech-service:
     <<: *service
-    image: ghcr.io/rockcat/hats-speech:${HATS_VERSION:-latest}
+    image: ghcr.io/rockcat/hats/speech:${HATS_VERSION:-latest}
     ports: ["3050:3050"]
     environment:
       <<: *service-env

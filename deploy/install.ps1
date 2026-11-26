@@ -4,17 +4,14 @@
 
 .DESCRIPTION
   Needs only Docker Desktop. Creates the installation folder, fetches the
-  compose file, writes .env, signs in to GitHub Container Registry, downloads
-  voices, and starts everything. Safe to run again: it updates the compose
-  file and images, and leaves .env and the data folder alone.
+  compose file, writes .env, downloads voices, and starts everything. Safe to
+  run again: it updates the compose file and images, and leaves .env and the
+  data folder alone.
 
     powershell -ExecutionPolicy Bypass -File install.ps1
     powershell -ExecutionPolicy Bypass -File install.ps1 -Dir D:\hats -Version 0.1.3
 
-  The images are private. You need a GitHub personal access token (classic)
-  with the read:packages and repo scopes:
-  https://github.com/settings/tokens/new?scopes=read:packages,repo
-  Set GITHUB_USER and GITHUB_TOKEN to skip the prompts.
+  The repository and images are public, so no GitHub account is needed.
 #>
 param(
   [string]$Dir = 'C:\hats',
@@ -48,26 +45,14 @@ if ($LASTEXITCODE -ne 0) { Fail 'Docker is installed but not running. Start Dock
 docker compose version *> $null
 if ($LASTEXITCODE -ne 0) { Fail 'This Docker has no "docker compose". Update Docker Desktop.' }
 
-# ── GitHub credentials ───────────────────────────────────────────────────────
-Step 'GitHub sign-in (for the private images)'
-$user = $env:GITHUB_USER
-if (-not $user) { $user = Read-Host 'GitHub username' }
-$token = $env:GITHUB_TOKEN
-if (-not $token) {
-  $secure = Read-Host 'GitHub token (read:packages, repo)' -AsSecureString
-  $token = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
-    [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure))
-}
-
 # ── Files ────────────────────────────────────────────────────────────────────
 Step "Installing into $Dir"
 New-Item -ItemType Directory -Force (Join-Path $Dir 'data\piper_voices') | Out-Null
 
 function Get-RepoFile($path, $dest) {
-  $headers = @{ Authorization = "Bearer $token"; Accept = 'application/vnd.github.raw' }
-  $url = "https://api.github.com/repos/$Repo/contents/$path`?ref=$Ref"
-  try { Invoke-WebRequest -Uri $url -Headers $headers -OutFile $dest -UseBasicParsing }
-  catch { Fail "Could not download $path from $Repo ($($_.Exception.Message)). Check the token has the repo scope." }
+  $url = "https://raw.githubusercontent.com/$Repo/$Ref/$path"
+  try { Invoke-WebRequest -Uri $url -OutFile $dest -UseBasicParsing }
+  catch { Fail "Could not download $path from $Repo ($Ref): $($_.Exception.Message)" }
 }
 
 $compose = Join-Path $Dir 'docker-compose.yml'
@@ -127,9 +112,7 @@ foreach ($voice in $Voices) {
 }
 
 # ── Images ───────────────────────────────────────────────────────────────────
-Step 'Signing in to ghcr.io and pulling images'
-$token | docker login ghcr.io -u $user --password-stdin
-if ($LASTEXITCODE -ne 0) { Fail 'GitHub Container Registry refused the token. It needs the read:packages scope.' }
+Step 'Pulling images'
 docker compose -f $compose pull
 if ($LASTEXITCODE -ne 0) { Fail 'Could not pull the images.' }
 
