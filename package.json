@@ -27,6 +27,8 @@
     "start:standalone": "node --env-file=.env --import tsx/esm server/src/team-runner.ts --standalone",
     "update-pricing": "tsx --env-file=.env server/src/tools/pricing-updater.ts",
     "services": "node --env-file=.env scripts/dev-services.mjs",
+    "docker:up": "node scripts/docker-up.mjs up",
+    "docker:down": "node scripts/docker-up.mjs down",
     "agent-library": "node --env-file=.env --import tsx/esm apps/agent-library/src/main.ts",
     "project-server": "node --env-file=.env --import tsx/esm apps/project-server/src/main.ts",
     "project-designer": "node --env-file=.env --import tsx/esm apps/project-designer/src/main.ts",
