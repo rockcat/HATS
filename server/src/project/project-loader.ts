@@ -53,7 +53,8 @@ export function deployedSince(definition: ProjectDefinition, running: { id: stri
 export function makeProjectLoader(deps: ProjectLoaderDeps): ProjectLoader {
   const { agentStore, providerFactory } = deps;
 
-  return async (projectDir: string, kanbanFile: string, stateFile: string) => {
+  // The board file is opened by the runner's own KanbanStore, not by anything here.
+  return async (projectDir: string, _kanbanFile: string, stateFile: string) => {
     const source = await deps.sourceFor(path.basename(projectDir));
     const { definition } = source;
 
@@ -77,7 +78,8 @@ export function makeProjectLoader(deps: ProjectLoaderDeps): ProjectLoader {
       console.log(`[Team] Restoring conversation state from ${stateFile}`);
       const mcpDefs = await orchestrator.loadState(stateFile, providerFactory);
       for (const saved of mcpDefs) {
-        const def = savedServerForHere(saved, kanbanFile);
+        const def = savedServerForHere(saved);
+        if (!def) continue;
 
         // One server failing must not stop the runner starting. An expired
         // credential on an optional MCP — a Google token nobody has refreshed
@@ -103,7 +105,7 @@ export function makeProjectLoader(deps: ProjectLoaderDeps): ProjectLoader {
       if (resumed.length > 0) console.log(`[Team] Resumed ${resumed.length} active task(s)`);
     } else if (definition && definition.team.length > 0) {
       assembleFromDefinition(orchestrator, definition, providerFactory);
-      await attachDefinitionMcpServers(orchestrator, definition, kanbanFile);
+      await attachDefinitionMcpServers(orchestrator, definition);
     } else {
       console.log(`[Team] No team defined for ${projectDir} — assembling a default team.`);
       const names = assembleDefaultTeam(orchestrator, providerFactory, 'anthropic', deps.defaultModel);

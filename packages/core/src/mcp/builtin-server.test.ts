@@ -25,28 +25,28 @@ describe('naming one of our own servers', () => {
 
 describe('deciding how to start it', () => {
   it('uses the compiled file when the checkout has been built', () => {
-    const { command, args } = builtinServerCommand('mcp/kanban/server', always);
+    const { command, args } = builtinServerCommand('calendar/server', always);
 
     expect(command).toBe('node');
     expect(args).toHaveLength(1);
-    expect(args[0]).toMatch(/server[\\/]dist[\\/]server[\\/]src[\\/]mcp[\\/]kanban[\\/]server\.js$/);
+    expect(args[0]).toMatch(/server[\\/]dist[\\/]server[\\/]src[\\/]calendar[\\/]server\.js$/);
   });
 
   it('runs the source through tsx when it has not', () => {
     // The normal case: npm run dev and npm start both run the runner itself
     // from source, so there is no compiled output at all.
-    const { command, args } = builtinServerCommand('mcp/kanban/server', never);
+    const { command, args } = builtinServerCommand('calendar/server', never);
 
     expect(command).toBe('node');
     expect(args.slice(0, 2)).toEqual(['--import', 'tsx/esm']);
-    expect(args[2]).toMatch(/server[\\/]src[\\/]mcp[\\/]kanban[\\/]server\.ts$/);
+    expect(args[2]).toMatch(/server[\\/]src[\\/]calendar[\\/]server\.ts$/);
   });
 
   it('gives an absolute path either way', () => {
     // A relative path is right only when the runner was started from the repo
     // root, and silently wrong the moment anything starts it elsewhere.
     for (const exists of [always, never]) {
-      const { args } = builtinServerCommand('mcp/kanban/server', exists);
+      const { args } = builtinServerCommand('calendar/server', exists);
       expect(path.isAbsolute(args[args.length - 1]!)).toBe(true);
     }
   });
@@ -55,7 +55,7 @@ describe('deciding how to start it', () => {
     // The whole bug: the catalogue named dist/mcp/kanban/server.js, which no
     // current build writes, and it worked only because a stale copy from an
     // older layout was still lying around.
-    const { args } = builtinServerCommand('mcp/kanban/server');
+    const { args } = builtinServerCommand('diary/server');
     expect(existsSync(args[args.length - 1]!)).toBe(true);
   });
 
@@ -96,26 +96,26 @@ describe('expanding the marker in a config', () => {
   });
 
   it('keeps whatever follows the marker', () => {
-    // This is how the board file and the project directory reach their server.
+    // This is how a data file and the project directory reach their server.
     const expanded = expandBuiltin(
-      { command: 'node', args: [builtin('mcp/kanban/server'), 'board.json'] }, always);
+      { command: 'node', args: [builtin('calendar/server'), 'calendar.json'] }, always);
 
-    expect(expanded?.args?.[expanded.args.length - 1]).toBe('board.json');
+    expect(expanded?.args?.[expanded.args.length - 1]).toBe('calendar.json');
   });
 
   it('puts the appended argument after the tsx flags, not among them', () => {
     const expanded = expandBuiltin(
-      { command: 'node', args: [builtin('mcp/kanban/server'), 'board.json'] }, never);
+      { command: 'node', args: [builtin('calendar/server'), 'calendar.json'] }, never);
 
     expect(expanded?.args?.slice(0, 2)).toEqual(['--import', 'tsx/esm']);
-    expect(expanded?.args?.[3]).toBe('board.json');
+    expect(expanded?.args?.[3]).toBe('calendar.json');
   });
 });
 
 describe('through resolveConfig, which is what actually runs', () => {
   it('turns a built-in entry into something runnable', () => {
     const resolved = resolveConfig({
-      transport: 'stdio', command: 'node', args: [builtin('mcp/kanban/server')],
+      transport: 'stdio', command: 'node', args: [builtin('calendar/server')],
     });
 
     expect(resolved.transport).toBe('stdio');
@@ -135,30 +135,34 @@ describe('through resolveConfig, which is what actually runs', () => {
 
 describe('repointing a saved server definition', () => {
   it('rescues a definition written before the build layout moved', () => {
-    // paige.json still says dist/mcp/kanban/server.js. Trusting it means the
-    // catalogue can be fixed and the board still start from a stale file,
-    // because this path never consults the catalogue at all.
-    const saved = { transport: 'stdio', command: 'node', args: ['dist/mcp/kanban/server.js'] };
-    const fixed = repointBuiltinServer('kanban', saved, '/projects/paige/kanban-board.json');
+    // A saved definition names whatever path was right on the day. Trusting
+    // it means the catalogue can be fixed and the server still start from a
+    // stale file, because this path never consults the catalogue at all.
+    const saved = { transport: 'stdio', command: 'node', args: ['dist/calendar/server.js'] };
+    const fixed = repointBuiltinServer('calendar', saved, '/projects/paige/calendar.json');
 
     expect(fixed).not.toBeNull();
-    expect(fixed!.args.some((a) => a.includes('dist/mcp/kanban'))).toBe(false);
+    expect(fixed!.args.some((a) => a.includes('dist/calendar'))).toBe(false);
     expect(existsSync(fixed!.args[fixed!.args.length - 2] ?? fixed!.args[0]!)
       || existsSync(fixed!.args[0]!)).toBe(true);
   });
 
-  it('puts this project\'s board file on the end', () => {
-    const saved = { transport: 'stdio', args: ['dist/mcp/kanban/server.js', 'someone-elses.json'] };
-    const fixed = repointBuiltinServer('kanban', saved, '/projects/paige/board.json');
+  it('puts this project\'s data file on the end', () => {
+    const saved = { transport: 'stdio', args: ['dist/calendar/server.js', 'someone-elses.json'] };
+    const fixed = repointBuiltinServer('calendar', saved, '/projects/paige/calendar.json');
 
-    expect(fixed!.args[fixed!.args.length - 1]).toBe('/projects/paige/board.json');
+    expect(fixed!.args[fixed!.args.length - 1]).toBe('/projects/paige/calendar.json');
     expect(fixed!.args).not.toContain('someone-elses.json');
   });
 
-  it('also covers the calendar', () => {
-    const fixed = repointBuiltinServer('calendar', { transport: 'stdio', args: ['old/path.js'] });
+  it('also covers the diary', () => {
+    const fixed = repointBuiltinServer('diary', { transport: 'stdio', args: ['old/path.js'] });
     expect(fixed).not.toBeNull();
     expect(fixed!.args.some((a) => a.includes('old/path.js'))).toBe(false);
+  });
+
+  it('no longer counts the board as one: it runs inside the runner', () => {
+    expect(repointBuiltinServer('kanban', { transport: 'stdio', args: ['dist/mcp/kanban/server.js'] })).toBeNull();
   });
 
   it('leaves a server that is not ours completely alone', () => {
@@ -169,6 +173,6 @@ describe('repointing a saved server definition', () => {
   });
 
   it('leaves an http server alone, built-in name or not', () => {
-    expect(repointBuiltinServer('kanban', { transport: 'http' })).toBeNull();
+    expect(repointBuiltinServer('calendar', { transport: 'http' })).toBeNull();
   });
 });

@@ -45,24 +45,29 @@ export function assembleFromDefinition(
 
 /**
  * A saved shared server, made to run here. It carries whatever was right when
- * it was written — the launcher, our own servers' paths, the board, the keys —
- * and any of those may have changed or come from another machine.
+ * it was written — the launcher, our own servers' paths, the keys — and any
+ * of those may have changed or come from another machine.
+ *
+ * Null for a server that is now part of the runner: projects saved while the
+ * board ran as its own server still list it, and its file no longer exists.
  */
-export function savedServerForHere(saved: MCPServerDef, kanbanFile: string): MCPServerDef {
+export function savedServerForHere(saved: MCPServerDef): MCPServerDef | null {
+  if (PART_OF_THE_RUNNER.has(saved.name)) return null;
   const config = forThisMachine(saved.config);
-  const builtinServer = repointBuiltinServer(saved.name, config,
-    saved.name === 'kanban' ? kanbanFile : undefined);
+  const builtinServer = repointBuiltinServer(saved.name, config);
   return { ...saved, config: builtinServer ? { ...config, ...builtinServer } as MCPServerDef['config'] : config };
 }
 
-/** Attach the shared MCP servers a definition asks for, repointing kanban at this project's board. */
+const PART_OF_THE_RUNNER = new Set(['kanban']);
+
+/** Attach the shared MCP servers a definition asks for. */
 export async function attachDefinitionMcpServers(
   orchestrator: TeamOrchestrator,
   definition: ProjectDefinition,
-  kanbanFile: string,
 ): Promise<void> {
   for (const server of definition.mcpServers ?? []) {
-    const def = savedServerForHere({ name: server.name, config: server.config } as MCPServerDef, kanbanFile);
+    const def = savedServerForHere({ name: server.name, config: server.config } as MCPServerDef);
+    if (!def) continue;
     await orchestrator.addMCPServer(def).catch((err: Error) =>
       log.warn(`[Team] MCP server "${def.name}" failed to start: ${err.message}`));
   }

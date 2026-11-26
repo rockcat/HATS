@@ -83,9 +83,11 @@ export function builtinServerCommand(
   };
 }
 
-/** Servers that live in this repo, by the name a saved definition calls them. */
+/**
+ * Servers that live in this repo, by the name a saved definition calls them.
+ * Not kanban: the board runs inside the runner now, with no server to start.
+ */
 const BUILTIN_BY_NAME: Record<string, string> = {
-  kanban: 'mcp/kanban/server',
   calendar: 'calendar/server',
   diary: 'diary/server',
 };
