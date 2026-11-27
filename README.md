@@ -2,6 +2,8 @@
 
 Don't ask one AI. Run a team.
 
+> **[Just want to run a team? Click here](docs/RUN-A-TEAM.md)** for the installer: no programming, about 15 minutes, everything in Docker.
+
 HATS gives you a team of AI agents, each with its own role, personality, model, memory and tools. They plan work on a Kanban board, hold meetings with faces and voices, argue on purpose, and get things done. You lead the team, and they ask you when they need you.
 
 Run one team on your laptop, or many teams across machines, each in its own project. When one team needs something only another team has, an agent can **visit** that team, do the work there, and come home with the answer.
@@ -146,6 +148,8 @@ Every service publishes an OpenAPI document, and a running runner shows them all
 More detail: [SERVICES.md](docs/SERVICES.md), [ARCHITECTURE.md](docs/ARCHITECTURE.md) and [API.md](docs/API.md).
 
 ## Getting started
+
+To use HATS rather than work on it, [run a team with the installer](docs/RUN-A-TEAM.md): it needs only Docker. The rest of this section is for running it from the source code.
 
 You need Node.js 22.13 or later (24 is recommended: the email tools need it), and a key for at least one model provider, or a local model through Ollama or LM Studio.
 
