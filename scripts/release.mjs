@@ -25,13 +25,14 @@ const DRY_RUN = process.argv.includes('--dry-run');
 
 /** Run a command in the repo root. Returns its trimmed stdout; throws on failure unless `allowFail`. */
 function run(cmd, args, { allowFail = false, inherit = false } = {}) {
-  const result = spawnSync(cmd, args, {
-    cwd: REPO_ROOT,
-    encoding: 'utf-8',
-    stdio: inherit ? 'inherit' : 'pipe',
-    // npm and npx are .cmd files on Windows, which need a shell to start.
-    shell: process.platform === 'win32' && (cmd === 'npm' || cmd === 'npx'),
-  });
+  const options = { cwd: REPO_ROOT, encoding: 'utf-8', stdio: inherit ? 'inherit' : 'pipe' };
+  // npx is a .cmd file on Windows, which needs a shell to start. Node warns
+  // about args passed alongside a shell, so it gets one string; its args here
+  // are fixed words, with nothing to quote.
+  const viaShell = process.platform === 'win32' && cmd === 'npx';
+  const result = viaShell
+    ? spawnSync([cmd, ...args].join(' '), { ...options, shell: true })
+    : spawnSync(cmd, args, options);
   if (result.error && !allowFail) throw result.error;
   if (result.status !== 0 && !allowFail) {
     throw new Error(`${cmd} ${args.join(' ')} failed${result.stderr ? `:\n${result.stderr.trim()}` : ''}`);
