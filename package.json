@@ -29,6 +29,7 @@
     "services": "node --env-file=.env scripts/dev-services.mjs",
     "docker:up": "node scripts/docker-up.mjs up",
     "docker:down": "node scripts/docker-up.mjs down",
+    "release": "node scripts/release.mjs",
     "agent-library": "node --env-file=.env --import tsx/esm apps/agent-library/src/main.ts",
     "project-server": "node --env-file=.env --import tsx/esm apps/project-server/src/main.ts",
     "project-designer": "node --env-file=.env --import tsx/esm apps/project-designer/src/main.ts",
